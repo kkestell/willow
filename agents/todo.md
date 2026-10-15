@@ -10,16 +10,16 @@ Section numbers refer to that document.
   - [x] `examples/hello.wlo` and `examples/sums.wlo` (the §2 program)
   - [x] Extend `tests/run.lua` and `make test` to cover `tests/unit/` and `tests/programs/`; program tests pair a `.wlo` file with expected stdout, exit status, and diagnostics
 
-- [ ] Lexer (§3, §4)
-  - [ ] Validate UTF-8; accept LF and CRLF; reject bare CR anywhere, including comments and strings
-  - [ ] Spans with one-based line, code-point column, and byte offsets
-  - [ ] Indentation: four-space levels producing `INDENT`, `NEWLINE`, `DEDENT`; tabs rejected outside strings and comments; blank and comment-only lines ignored; open levels closed before `EOF`; missing final newline terminates the last line
-  - [ ] Newlines inside parentheses produce no `NEWLINE`, `INDENT`, or `DEDENT`
-  - [ ] ASCII identifiers, the reserved-word list, and reserved type names `int`, `bool`, `str`
-  - [ ] Integer literals: decimal only, leading zeros rejected, range checked on the digit string before conversion to a number
-  - [ ] String literals: single and double quotes, escapes `\\ \' \" \n \r \t`, unknown escapes rejected, physical newline rejected, non-ASCII passed through
-  - [ ] Operators and punctuation; unsupported tokens (`/`, `//`, `%`, `**`, `+=`, `:=`, bitwise) rejected with an unsupported-operation error
-  - [ ] Diagnostics shaped `file:line:col: error: message`; stop at the first error
+- [x] Lexer (§3, §4)
+  - [x] Validate UTF-8; accept LF and CRLF; reject bare CR anywhere, including comments and strings
+  - [x] Spans with one-based line, code-point column, and byte offsets
+  - [x] Indentation: four-space levels producing `INDENT`, `NEWLINE`, `DEDENT`; tabs rejected outside strings and comments; blank and comment-only lines ignored; open levels closed before `EOF`; missing final newline terminates the last line
+  - [x] Newlines inside parentheses produce no `NEWLINE`, `INDENT`, or `DEDENT`
+  - [x] ASCII identifiers, the reserved-word list, and reserved type names `int`, `bool`, `str`
+  - [x] Integer literals: decimal only, leading zeros rejected, range checked on the digit string before conversion to a number
+  - [x] String literals: single and double quotes, escapes `\\ \' \" \n \r \t`, unknown escapes rejected, physical newline rejected, non-ASCII passed through
+  - [x] Operators and punctuation; unsupported tokens (`/`, `//`, `%`, `**`, `+=`, `:=`, bitwise) rejected with an unsupported-operation error
+  - [x] Diagnostics shaped `file:line:col: error: message`; stop at the first error
 
 - [ ] Parser (§3, §5)
   - [ ] AST nodes describing Willow with a span on every node
