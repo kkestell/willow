@@ -236,8 +236,12 @@ function M.lex(source)
   end
 
   local eof = #source + 1
-  for _ = 1, level do
-    add("DEDENT", eof, eof - 1)
+  -- A file that ends inside parentheses gets no DEDENTs, so the parser reports
+  -- the unclosed expression at end of file.
+  if depth == 0 then
+    for _ = 1, level do
+      add("DEDENT", eof, eof - 1)
+    end
   end
   add("EOF", eof, eof - 1)
   return tokens

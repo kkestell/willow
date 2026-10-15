@@ -21,16 +21,16 @@ Section numbers refer to that document.
   - [x] Operators and punctuation; unsupported tokens (`/`, `//`, `%`, `**`, `+=`, `:=`, bitwise) rejected with an unsupported-operation error
   - [x] Diagnostics shaped `file:line:col: error: message`; stop at the first error
 
-- [ ] Parser (§3, §5)
-  - [ ] AST nodes describing Willow with a span on every node
-  - [ ] File scope holds only `def`; parameter and return annotations mandatory; trailing commas allowed; annotation types limited to `int`, `bool`, `str`, `None`
-  - [ ] Statements: assignment, annotated assignment with required initializer, call statement, `return` with and without a value, `pass`, `break`, `continue`, `if`/`elif`/`else`, `while`; blocks require at least one statement
-  - [ ] Non-call expression statements rejected; chained, destructuring, augmented, and walrus assignment rejected
-  - [ ] Precedence levels per §5, left associative; comparison operands restricted to arithmetic level so `not a == b` parses and `a == not b` is a syntax error
-  - [ ] Comparison chains rejected at parse time
-  - [ ] Call targets are bare identifiers; `(f)(x)` rejected
-  - [ ] Multiline expressions inside parentheses
-  - [ ] Reserved words without a supported construct (`for`, `class`, `import`, `lambda`, `is`, `in`, `try`, `with`, ...) rejected explicitly
+- [x] Parser (§3, §5)
+  - [x] AST nodes describing Willow with a span on every node
+  - [x] File scope holds only `def`; parameter and return annotations mandatory; trailing commas allowed; annotation types limited to `int`, `bool`, `str`, `None`
+  - [x] Statements: assignment, annotated assignment with required initializer, call statement, `return` with and without a value, `pass`, `break`, `continue`, `if`/`elif`/`else`, `while`; blocks require at least one statement
+  - [x] Non-call expression statements rejected; chained, destructuring, augmented, and walrus assignment rejected
+  - [x] Precedence levels per §5, left associative; comparison operands restricted to arithmetic level so `not a == b` parses and `a == not b` is a syntax error
+  - [x] Comparison chains rejected at parse time
+  - [x] Call targets are bare identifiers; `(f)(x)` rejected
+  - [x] Multiline expressions inside parentheses
+  - [x] Reserved words without a supported construct (`for`, `class`, `import`, `lambda`, `is`, `in`, `try`, `with`, ...) rejected explicitly
 
 - [ ] Bind (§6, §7)
   - [ ] Collect all file-level signatures before bodies; duplicate function and parameter names are errors; defining `print` is an error
