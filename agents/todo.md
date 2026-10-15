@@ -129,3 +129,15 @@ Section numbers refer to that document.
   - [x] Emit: one standalone file for all modules; per-module name mangling; source map and site entries carrying file paths
   - [x] CLI: `check`, `run`, and `build` process every reachable module; any module error prevents execution and output; the overwrite check covers every module
   - [x] Tests: multi-file program fixtures, cycles, private names, missing modules, errors reported in imported files, runtime frames across files, standalone built output; the §18 example
+
+## Third slice
+
+- [ ] Exceptions (§19)
+  - [ ] Parser: `class Name(Exception):` with fields or `pass`; `raise expression` and bare `raise`; `try` with `except Class`, `except module.Class`, and `as name` clauses and `finally`; bare `except:`, class lists, `except*`, `try`/`else`, and `raise ... from` rejected
+  - [ ] Bind: `Exception` and the built-in exception classes as built-in names; exception classes in the file-level namespace with records; `as` names as function locals; bare `raise` only inside `except`
+  - [ ] Check: `message` as the first field and constructor argument; declared `message` fields and non-`Exception` bases rejected; exception classes assignable to `Exception`; `raise` operand types; clauses after `except Exception` or repeating a class rejected; `return`, `break`, and `continue` directly inside `finally` rejected
+  - [ ] Check: `raise` and `try` as control transfers; definite assignment and narrowing into `except` and `finally` clauses and joined after the `try`; `as` name typing
+  - [ ] Runtime: exception values carrying class, fields, location, and frames recorded at the raise; runtime failures raising the built-in classes; bare `raise` keeping the original location and frames; host failures left uncatchable
+  - [ ] Lower and emit: `try` bodies under protected calls with clause matching in order; `finally` on fall-through, `return`, `break`, `continue`, and exceptions; `return` values evaluated before `finally`; one call per line and frame mapping inside protected bodies
+  - [ ] Uncaught exceptions reported as `ClassName: message` with recorded frames; update existing runtime-failure expectations
+  - [ ] Tests: catching user and built-in exceptions, clause order, propagation through calls and modules, `finally` with each departure and with a replacing exception, bare `raise` frames, static flow rejections and joins, the §19 example
