@@ -1,0 +1,13 @@
+import shapes
+
+def describe(shape: shapes.Shape | None) -> str:
+    if shape is None:
+        return "no shape"
+    if isinstance(shape, shapes.Circle):
+        return f"circle of radius {shape.radius}"
+    return f"square of area {shapes.area(shape)}"
+
+def main() -> None:
+    items: list[shapes.Shape | None] = [shapes.Circle(2.0), shapes.Square(3.0), None]
+    for item in items:
+        print(describe(item))

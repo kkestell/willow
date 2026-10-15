@@ -1,5 +1,6 @@
 -- Resolves names and collects function signatures, annotating the tree in place.
 local diag = require("compiler.diag")
+local types = require("compiler.types")
 
 local M = {}
 
@@ -17,6 +18,7 @@ local builtins = {
   exit = { kind = "Builtin", name = "exit" },
   ord = { kind = "Builtin", name = "ord" },
   chr = { kind = "Builtin", name = "chr" },
+  isinstance = { kind = "Builtin", name = "isinstance" },
 }
 
 -- The built-in exception classes, records with only a `message` field.
@@ -28,8 +30,9 @@ for name in ("Exception OverflowError ZeroDivisionError ValueError IndexError Ke
     name = name,
     type_name = name,
     exception = true,
-    fields = { { name = "message", type = { name = "str", records = {} } } },
+    fields = { { name = "message", type = types.str } },
   }
+  exceptions[name].type = types.record(exceptions[name])
 end
 
 -- Gives the function one symbol per parameter and per assigned or loop name,
@@ -77,14 +80,14 @@ local function collect_symbols(fn)
   return scope
 end
 
-local TYPE_WORDS = { int = true, float = true, bool = true, str = true, None = true, list = true, dict = true }
+local SCALARS = { int = types.int, float = types.float, bool = types.bool, str = types.str, None = types.None }
 
 -- Returns declaration `name` of `module` as seen from module `from`. Names that
 -- begin with `_` are private to their module.
 local function lookup(from, module, name, span)
   local declaration = module.declarations[name]
   if not declaration then
-    diag.error(span, "module '" .. module.name .. "' has no function or record '" .. name .. "'")
+    diag.error(span, "module '" .. module.name .. "' has no function, record, or alias '" .. name .. "'")
   end
   if name:sub(1, 1) == "_" and module ~= from then
     diag.error(span, "'" .. name .. "' is private to module '" .. module.name .. "'")
@@ -92,10 +95,11 @@ local function lookup(from, module, name, span)
   return declaration
 end
 
--- Returns the record that `ref`, a `{ name, module, span }` in a type or an
--- `except` clause, names. Records are found through file-level declarations,
--- imports, and built-in exception classes, which locals never shadow.
-local function resolve_record(ref, module)
+-- Returns the record or alias that `ref`, a `{ name, module, span }` in a type,
+-- an `except` clause, or `isinstance`, names. These are found through
+-- file-level declarations, imports, and built-in exception classes, which
+-- locals never shadow.
+local function resolve_named(ref, module)
   local declaration
   if ref.module then
     local imported = module.imported[ref.module]
@@ -106,27 +110,94 @@ local function resolve_record(ref, module)
   else
     declaration = module.declarations[ref.name] or exceptions[ref.name]
   end
-  if not (declaration and declaration.kind == "Record") then
+  if not (declaration and (declaration.kind == "Record" or declaration.kind == "Alias")) then
     diag.error(ref.span, "unknown type '" .. (ref.module and ref.module .. "." or "") .. ref.name .. "'")
   end
   return declaration
 end
 
--- Rewrites `type.name` to use each record's `type_name`.
-local function resolve_type(type, module)
-  local names = {}
-  for i, ref in ipairs(type.records) do
-    names[i] = resolve_record(ref, module).type_name
-  end
-  -- Every identifier in a type string other than a type keyword names a record,
-  -- in the order of `type.records`.
-  local i = 0
-  type.name = (type.name:gsub("[%a_][%w_.]*", function(word)
-    if not TYPE_WORDS[word] then
-      i = i + 1
-      return names[i]
+-- Lazy list elements and dict values waiting to be resolved.
+local pending = {}
+
+-- The source text of type `node`, with declarations named by their type_name.
+local function type_text(node, module)
+  if node.kind == "UnionType" then
+    local names = {}
+    for i, member in ipairs(node.members) do
+      names[i] = type_text(member, module)
     end
-  end))
+    return table.concat(names, " | ")
+  elseif node.name == "list" then
+    return "list[" .. type_text(node.args[1], module) .. "]"
+  elseif node.name == "dict" then
+    return "dict[" .. type_text(node.args[1], module) .. ", " .. type_text(node.args[2], module) .. "]"
+  elseif SCALARS[node.name] then
+    return node.name
+  end
+  return resolve_named(node, module).type_name
+end
+
+local resolve_type
+
+local function lazy(node, module)
+  local t = { kind = "lazy", name = type_text(node, module), node = node, module = module }
+  pending[#pending + 1] = t
+  return t
+end
+
+-- Resolves every lazy type; resolving one may queue more.
+local function force_pending()
+  while #pending > 0 do
+    local t = table.remove(pending)
+    t.type = resolve_type(t.node, t.module)
+  end
+end
+
+-- Sets `decl.type` to the type alias `decl` names. Its list elements and dict
+-- values are lazy, so only other positions can reach an alias being resolved.
+local function resolve_alias(decl)
+  if not decl.type then
+    decl.resolving = true
+    local name = decl.value.kind == "UnionType" and decl.type_name or nil
+    decl.type = resolve_type(decl.value, decl.module, name)
+    decl.resolving = nil
+  end
+  return decl.type
+end
+
+-- Returns the type object for type node `node`. `name` names a union.
+resolve_type = function(node, module, name)
+  if node.kind == "UnionType" then
+    local members = {}
+    for _, member in ipairs(node.members) do
+      for _, m in ipairs(types.members(resolve_type(member, module))) do
+        local message = types.conflict(members, m)
+        if message then
+          diag.error(member.span, message)
+        end
+        members[#members + 1] = m
+      end
+    end
+    return types.union(members, name)
+  elseif node.name == "list" then
+    return types.list(lazy(node.args[1], module))
+  elseif node.name == "dict" then
+    local key = resolve_type(node.args[1], module)
+    if key ~= types.int and key ~= types.str then
+      diag.error(node.args[1].span, "dictionary keys must be int or str")
+    end
+    return types.dict(key, lazy(node.args[2], module))
+  elseif SCALARS[node.name] then
+    return SCALARS[node.name]
+  end
+  local declaration = resolve_named(node, module)
+  if declaration.kind == "Alias" then
+    if declaration.resolving then
+      diag.error(node.span, "alias '" .. declaration.name .. "' expands to itself")
+    end
+    return resolve_alias(declaration)
+  end
+  return declaration.type
 end
 
 local function resolve_function(fn, scope, module)
@@ -142,6 +213,8 @@ local function resolve_function(fn, scope, module)
           diag.error(node.span, "module '" .. node.name .. "' cannot be used as a value")
         elseif declaration and declaration.kind == "Record" or exceptions[node.name] then
           diag.error(node.span, "record '" .. node.name .. "' cannot be used as a value")
+        elseif declaration and declaration.kind == "Alias" then
+          diag.error(node.span, "alias '" .. node.name .. "' cannot be used as a value")
         elseif declaration or builtins[node.name] then
           diag.error(node.span, "function '" .. node.name .. "' cannot be used as a value")
         end
@@ -154,6 +227,8 @@ local function resolve_function(fn, scope, module)
       node.target = declarations[node.name] or builtins[node.name] or exceptions[node.name]
       if not node.target then
         diag.error(node.span, "unknown function '" .. node.name .. "'")
+      elseif node.target.kind == "Alias" then
+        diag.error(node.span, "alias '" .. node.name .. "' cannot be called")
       end
       for _, arg in ipairs(node.args) do
         resolve_expression(arg)
@@ -165,12 +240,28 @@ local function resolve_function(fn, scope, module)
       node.kind = "Call"
       node.target = lookup(module, imported, node.name, node.span)
       node.name = node.object.name .. "." .. node.name
+      if node.target.kind == "Alias" then
+        diag.error(node.span, "alias '" .. node.name .. "' cannot be called")
+      end
       node.object = nil
       for _, arg in ipairs(node.args) do
         resolve_expression(arg)
       end
     elseif kind == "Unary" or kind == "Is" then
       resolve_expression(node.operand)
+    elseif kind == "IsInstance" then
+      if scope.isinstance then
+        diag.error(node.span, "cannot call local variable 'isinstance'")
+      end
+      resolve_expression(node.operand)
+      local class = node.class
+      if class.module or not SCALARS[class.name] and class.name ~= "list" and class.name ~= "dict" then
+        local declaration = resolve_named(class, module)
+        if declaration.kind == "Alias" then
+          diag.error(class.span, "alias '" .. class.name .. "' cannot be used in isinstance")
+        end
+        class.record = declaration
+      end
     elseif kind == "Binary" then
       resolve_expression(node.left)
       resolve_expression(node.right)
@@ -208,7 +299,7 @@ local function resolve_function(fn, scope, module)
         resolve_expression(statement.value)
         statement.symbol = scope[statement.name]
         if statement.annotation then
-          resolve_type(statement.annotation, module)
+          statement.annotation = resolve_type(statement.annotation, module)
         end
       elseif kind == "FieldAssign" then
         resolve_expression(statement.value)
@@ -246,7 +337,7 @@ local function resolve_function(fn, scope, module)
       elseif kind == "Try" then
         resolve_block(statement.body, handling)
         for _, handler in ipairs(statement.handlers) do
-          handler.record = resolve_record(handler.class, module)
+          handler.record = resolve_named(handler.class, module)
           if not handler.record.exception then
             diag.error(handler.class.span, "'" .. handler.record.name .. "' is not an exception class")
           end
@@ -275,7 +366,7 @@ local function check_unique(items, what)
   end
 end
 
--- Collects one module's imports, functions, and records, which share one
+-- Collects one module's imports, functions, records, and aliases, which share one
 -- namespace; clashes are reported in source order.
 local function declare(module, modules_by_name, entry)
   local ordered = {}
@@ -288,6 +379,9 @@ local function declare(module, modules_by_name, entry)
   end
   for _, record in ipairs(module.records) do
     ordered[#ordered + 1] = record
+  end
+  for _, alias in ipairs(module.aliases) do
+    ordered[#ordered + 1] = alias
   end
   table.sort(ordered, function(a, b)
     return a.span.first < b.span.first
@@ -312,8 +406,11 @@ local function declare(module, modules_by_name, entry)
       declaration.module = module
       module.declarations[name] = declaration
     end
-    if declaration.kind == "Record" then
+    if declaration.kind == "Record" or declaration.kind == "Alias" then
       declaration.type_name = module == entry and name or module.name .. "." .. name
+    end
+    if declaration.kind == "Record" then
+      declaration.type = types.record(declaration)
     end
   end
 end
@@ -329,28 +426,36 @@ function M.bind(modules)
     declare(module, modules_by_name, entry)
   end
 
+  pending = {}
+  for _, module in ipairs(modules) do
+    for _, alias in ipairs(module.aliases) do
+      resolve_alias(alias)
+    end
+  end
   for _, module in ipairs(modules) do
     for _, record in ipairs(module.records) do
       check_unique(record.fields, "field")
       for _, field in ipairs(record.fields) do
-        resolve_type(field.type, module)
+        field.type = resolve_type(field.type, module)
       end
     end
     for _, fn in ipairs(module.functions) do
       check_unique(fn.params, "parameter")
       for _, param in ipairs(fn.params) do
-        resolve_type(param.type, module)
+        param.type = resolve_type(param.type, module)
       end
-      resolve_type(fn.return_type, module)
+      fn.return_type = resolve_type(fn.return_type, module)
     end
   end
+  force_pending()
 
   local main = entry.declarations.main
   if not (main and main.kind == "Function") then
     diag.error(entry.span, "program has no main function")
   end
   local params = main.params
-  if #params > 1 or #params == 1 and params[1].type.name ~= "list[str]" or main.return_type.name ~= "None" then
+  if #params > 1 or #params == 1 and not types.same(params[1].type, types.list(types.str))
+    or main.return_type ~= types.None then
     diag.error(main.span, "main must take no parameters or one list[str] parameter and return None")
   end
 
@@ -359,6 +464,7 @@ function M.bind(modules)
       resolve_function(fn, collect_symbols(fn), module)
     end
   end
+  force_pending()
 end
 
 return M

@@ -15,13 +15,12 @@ end
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
-assert async await case del from global lambda match nonlocal type with yield
+assert async await case del from global lambda match nonlocal with yield
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
 local type_names = set("int float bool str None list dict")
 local expression_starts = set("NAME INT FLOAT STRING FSTRING True False None int float str ( [ { - + not")
-local UNIONS = "unions other than 'T | None' are not supported"
 local simple_statements = { pass = "Pass", ["break"] = "Break", continue = "Continue" }
 
 local descriptions = {
@@ -78,56 +77,47 @@ function M.parse(tokens)
     return accept(kind) or unexpected(expected or "'" .. kind .. "'")
   end
 
-  -- A type's `records` lists the record names it mentions, for bind to check.
-  local function parse_type()
+  -- A member is a `Type` node: a type keyword or a possibly module-qualified
+  -- name, with `args` holding a list's element or a dict's key and value.
+  local parse_type
+
+  local function parse_member()
     local token = peek()
     if not type_names[token.kind] and token.kind ~= "NAME" then
       unexpected("a type")
     end
     advance()
-    local name = token.kind
-    local records = {}
-    local function inner()
-      local node = parse_type()
-      for _, record in ipairs(node.records) do
-        records[#records + 1] = record
-      end
-      return node
-    end
-    if name == "NAME" then
-      name = token.value
-      local record = { name = name, span = token.span }
+    local node = ast.node("Type", token.span, { name = token.kind })
+    if token.kind == "NAME" then
+      node.name = token.value
       if accept(".") then
-        record.module = name
-        record.name = expect("NAME", "a record name").value
-        name = name .. "." .. record.name
+        node.module = node.name
+        node.name = expect("NAME", "a type name").value
       end
-      records[1] = record
-    elseif name == "list" then
+    elseif token.kind == "list" then
       expect("[")
-      name = "list[" .. inner().name .. "]"
+      node.args = { parse_type() }
       expect("]")
-    elseif name == "dict" then
+    elseif token.kind == "dict" then
       expect("[")
-      local key = inner()
-      if key.name ~= "int" and key.name ~= "str" then
-        diag.error(key.span, "dictionary keys must be int or str")
-      end
+      local key = parse_type()
       expect(",")
-      name = "dict[" .. key.name .. ", " .. inner().name .. "]"
+      node.args = { key, parse_type() }
       expect("]")
     end
-    if token.kind ~= "None" and accept("|") then
-      if peek().kind ~= "None" then
-        diag.error(peek().span, UNIONS)
-      end
-      advance()
-      name = name .. " | None"
+    return node
+  end
+
+  parse_type = function()
+    local first = parse_member()
+    if peek().kind ~= "|" then
+      return first
     end
-    if peek().kind == "|" then
-      diag.error(peek().span, UNIONS)
+    local members = { first }
+    while accept("|") do
+      members[#members + 1] = parse_member()
     end
-    return ast.node("Type", token.span, { name = name, records = records })
+    return ast.node("UnionType", first.span, { members = members })
   end
 
   local parse_expression
@@ -187,6 +177,24 @@ function M.parse(tokens)
     elseif kind == "None" then
       advance()
       node = ast.node("None", token.span, {})
+    elseif kind == "NAME" and token.value == "isinstance" and tokens[pos + 1].kind == "(" then
+      advance()
+      advance()
+      local operand = parse_expression()
+      expect(",", "','")
+      local name = peek()
+      if name.kind ~= "NAME" and (name.kind == "None" or not type_names[name.kind]) then
+        unexpected("a class name")
+      end
+      advance()
+      local class = { name = name.kind == "NAME" and name.value or name.kind, span = name.span }
+      if name.kind == "NAME" and accept(".") then
+        class.module = class.name
+        class.name = expect("NAME", "a class name").value
+      end
+      accept(",")
+      expect(")", "')'")
+      node = ast.node("IsInstance", token.span, { operand = operand, class = class })
     elseif kind == "NAME" then
       advance()
       if accept("(") then
@@ -515,7 +523,7 @@ function M.parse(tokens)
       expect(")")
       exception = true
       fields[1] = ast.node("FieldDecl", name.span,
-        { name = "message", type = ast.node("Type", name.span, { name = "str", records = {} }) })
+        { name = "message", type = ast.node("Type", name.span, { name = "str" }) })
     end
     expect(":")
     expect("NEWLINE", "end of line")
@@ -549,7 +557,7 @@ function M.parse(tokens)
     imports[#imports + 1] = { name = name.value, span = name.span }
   end
 
-  local functions, records = {}, {}
+  local functions, records, aliases = {}, {}, {}
   while peek().kind ~= "EOF" do
     local token = peek()
     if token.kind == "import" then
@@ -558,14 +566,20 @@ function M.parse(tokens)
       functions[#functions + 1] = parse_function()
     elseif token.kind == "class" then
       records[#records + 1] = parse_record()
+    elseif token.kind == "type" then
+      advance()
+      local name = expect("NAME", "an alias name")
+      expect("=")
+      aliases[#aliases + 1] = ast.node("Alias", name.span, { name = name.value, value = parse_type() })
+      expect("NEWLINE", "end of line")
     else
       reject_unsupported(token)
-      diag.error(token.span, "only function and class definitions are allowed at file scope")
+      diag.error(token.span, "only function, class, and type declarations are allowed at file scope")
     end
   end
   local path = peek().span.path
   return ast.node("Program", span.new(1, 1, 1, 0, path),
-    { imports = imports, functions = functions, records = records })
+    { imports = imports, functions = functions, records = records, aliases = aliases })
 end
 
 return M

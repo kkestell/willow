@@ -58,6 +58,16 @@ show = function(node)
     return "(" .. node.op .. " " .. show(node.operand) .. ")"
   elseif kind == "Is" then
     return "(" .. show(node.operand) .. " " .. node.op .. " None)"
+  elseif kind == "IsInstance" then
+    local class = node.class
+    return "isinstance(" .. show(node.operand) .. ", " .. (class.module and class.module .. "." or "") .. class.name .. ")"
+  elseif kind == "Type" then
+    local name = (node.module and node.module .. "." or "") .. node.name
+    return node.args and name .. "[" .. show_list(node.args, ", ") .. "]" or name
+  elseif kind == "UnionType" then
+    return show_list(node.members, " | ")
+  elseif kind == "Alias" then
+    return "type " .. node.name .. " = " .. show(node.value)
   elseif kind == "ListDisplay" then
     return "[" .. show_list(node.elements, ", ") .. "]"
   elseif kind == "DictDisplay" then
@@ -79,7 +89,7 @@ show = function(node)
   elseif kind == "Record" then
     local fields = {}
     for i, field in ipairs(node.fields) do
-      fields[i] = field.name .. ": " .. field.type.name
+      fields[i] = field.name .. ": " .. show(field.type)
     end
     return "class " .. node.name .. " { " .. table.concat(fields, "; ") .. " }"
   elseif kind == "IndexAssign" then
@@ -89,12 +99,12 @@ show = function(node)
   elseif kind == "Binary" then
     return "(" .. show(node.left) .. " " .. node.op .. " " .. show(node.right) .. ")"
   elseif kind == "Param" then
-    return node.name .. ": " .. node.type.name
+    return node.name .. ": " .. show(node.type)
   elseif kind == "Function" then
     return "def " .. node.name .. "(" .. show_list(node.params, ", ") .. ") -> "
-      .. node.return_type.name .. " " .. show_block(node.body)
+      .. show(node.return_type) .. " " .. show_block(node.body)
   elseif kind == "Assign" then
-    return node.name .. (node.annotation and ": " .. node.annotation.name or "") .. " = " .. show(node.value)
+    return node.name .. (node.annotation and ": " .. show(node.annotation) or "") .. " = " .. show(node.value)
   elseif kind == "CallStmt" then
     return show(node.call)
   elseif kind == "Return" then
@@ -156,9 +166,9 @@ return {
   end,
 
   file_scope_holds_only_declarations = function()
-    eq("1:1: only function and class definitions are allowed at file scope", parse_error("x = 1\n"))
+    eq("1:1: only function, class, and type declarations are allowed at file scope", parse_error("x = 1\n"))
     eq("1:1: 'from' is not supported", parse_error("from os import path\n"))
-    eq("1:5: only function and class definitions are allowed at file scope",
+    eq("1:5: only function, class, and type declarations are allowed at file scope",
       parse_error("    def f() -> None:\n        pass\n"))
   end,
 
@@ -219,13 +229,30 @@ return {
     eq("((((((a * b) / c) // d) % e) + f) - g)", expr("a * b / c // d % e + f - g"))
   end,
 
-  optional_annotations = function()
+  union_annotations = function()
     local source = "def f(x: int | None) -> str | None:\n    y: bool | None = None\n    return None\n"
     eq("def f(x: int | None) -> str | None { y: bool | None = None; return None }", show(parse(source).functions[1]))
-    local message = "unions other than 'T | None' are not supported"
-    eq("1:15: " .. message, parse_error("def f(x: None | int) -> None:\n    pass\n"))
-    eq("1:16: " .. message, parse_error("def f(x: int | str) -> None:\n    pass\n"))
-    eq("1:21: " .. message, parse_error("def f(x: int | None | None) -> None:\n    pass\n"))
+    source = "def f(x: None | int, y: int | str | list[int | float]) -> None:\n    pass\n"
+    eq("def f(x: None | int, y: int | str | list[int | float]) -> None { pass }", show(parse(source).functions[1]))
+    eq("1:16: expected a type, found ')'", parse_error("def f(x: int | ) -> None:\n    pass\n"))
+  end,
+
+  aliases = function()
+    local program = parse("import shapes\ntype Json = None | bool | list[Json] | dict[str, Json]\ntype S = shapes.Shape\n")
+    eq("type Json = None | bool | list[Json] | dict[str, Json]", show(program.aliases[1]))
+    eq("type S = shapes.Shape", show(program.aliases[2]))
+    eq("2:6", program.aliases[1].span.line .. ":" .. program.aliases[1].span.col)
+    eq("1:7: expected '=', found ':'", parse_error("type T: int\n"))
+    eq("2:5: expected a statement, found 'type'", parse_error("def f() -> None:\n    type T = int\n"))
+  end,
+
+  isinstance = function()
+    eq("isinstance(x, int)", expr("isinstance(x, int)"))
+    eq("(isinstance(x, list) and isinstance(y, Point))", expr("isinstance(x, list) and isinstance(y, Point,)"))
+    eq("(not isinstance(f(x), shapes.Circle))", expr("not isinstance(f(x), shapes.Circle)"))
+    eq("2:23: expected a class name, found 'None'", body_error("x = isinstance(y, None)"))
+    eq("2:21: expected ',', found ')'", body_error("x = isinstance(y)"))
+    eq("2:27: expected ')', found '['", body_error("x = isinstance(y, list[int])"))
   end,
 
   is_none = function()
@@ -244,7 +271,6 @@ return {
     local source = "def f(x: list[int], y: dict[str, int | None]) -> list[list[str]] | None:\n    return None\n"
     eq("def f(x: list[int], y: dict[str, int | None]) -> list[list[str]] | None { return None }",
       show(parse(source).functions[1]))
-    eq("1:15: dictionary keys must be int or str", parse_error("def f(x: dict[float, int]) -> None:\n    pass\n"))
   end,
 
   displays = function()
@@ -268,9 +294,9 @@ return {
     local program = parse("import geometry\nimport util\n" .. "def f(p: geometry.Point) -> list[geometry.Point] | None:\n    return None\n")
     eq("geometry util", program.imports[1].name .. " " .. program.imports[2].name)
     local type = program.functions[1].return_type
-    eq("list[geometry.Point] | None", type.name)
-    eq("geometry Point 3:34", type.records[1].module .. " " .. type.records[1].name .. " "
-      .. type.records[1].span.line .. ":" .. type.records[1].span.col)
+    eq("list[geometry.Point] | None", show(type))
+    local point = type.members[1].args[1]
+    eq("geometry Point 3:34", point.module .. " " .. point.name .. " " .. point.span.line .. ":" .. point.span.col)
     eq("3:1: imports must come before declarations", parse_error("def f() -> None:\n    pass\nimport x\n"))
     eq("1:9: expected end of line, found '.'", parse_error("import a.b\n"))
   end,
@@ -278,9 +304,6 @@ return {
   records = function()
     local program = parse("class Node:\n    value: int\n    next: Node | None\n    tags: list[Tag] | None\n")
     eq("class Node { value: int; next: Node | None; tags: list[Tag] | None }", show(program.records[1]))
-    local types = program.records[1].fields[3].type.records
-    eq(1, #types)
-    eq("Tag 4:16", types[1].name .. " " .. types[1].span.line .. ":" .. types[1].span.col)
     local message = "record bodies hold only field declarations"
     eq("2:5: " .. message, parse_error("class A:\n    pass\n"))
     eq("2:5: " .. message, parse_error("class A:\n    x = 1\n"))

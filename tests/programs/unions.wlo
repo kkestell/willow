@@ -1,0 +1,92 @@
+type Json = None | bool | int | float | str | list[Json] | dict[str, Json]
+type Number = int | float
+
+class Cat:
+    name: str
+
+class Dog:
+    name: str
+    tricks: int
+
+def describe(value: int | str | None) -> str:
+    if value is None:
+        return "nothing"
+    if isinstance(value, int):
+        return f"number {value + 1}"
+    return "text " + value
+
+def render(value: Json) -> str:
+    if value is None:
+        return "null"
+    elif isinstance(value, bool):
+        if value:
+            return "true"
+        return "false"
+    elif isinstance(value, int):
+        return str(value)
+    elif isinstance(value, float):
+        return f"{value}"
+    elif isinstance(value, str):
+        return value
+    elif isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            parts.append(render(item))
+        return "[" + ", ".join(parts) + "]"
+    parts = []
+    for key in value:
+        parts.append(key + ": " + render(value[key]))
+    return "{" + ", ".join(parts) + "}"
+
+def greet(pet: Cat | Dog) -> str:
+    if isinstance(pet, Dog):
+        return f"{pet.name} knows {pet.tricks} tricks"
+    return pet.name + " ignores you"
+
+def same(a: Number, b: Number) -> bool:
+    return a == b
+
+def contains(value: Number, items: list[float]) -> bool:
+    return value in items
+
+def main() -> None:
+    print(describe(41))
+    print(describe("x"))
+    print(describe(None))
+
+    one: Number = 1
+    one_float: Number = 1.0
+    numbers: list[Number] = [one, one_float, -0.0, 2.5, float("nan")]
+    for n in numbers:
+        print(n)
+        print(f"{n} {str(n)}")
+    print(same(one, one_float))
+    print(same(one, 1))
+    print(same(one_float, 1.0))
+    print(same(numbers[4], numbers[4]))
+    print(one_float == 1.0)
+    print(1.0 in numbers)
+    print(3 in numbers)
+    floats = [1.0, 2.0]
+    print(contains(1, floats))
+    print(contains(2.0, floats))
+
+    pets: list[Cat | Dog] = [Cat("Tom"), Dog("Rex", 3)]
+    for pet in pets:
+        print(greet(pet))
+
+    data: Json = {"name": "willow", "tags": ["small", "typed"], "version": 1, "ratio": 0.5,
+                  "nested": {"ok": True, "none": None, "empty": []}}
+    print(render(data))
+    if isinstance(data, dict):
+        data["version"] = 2.0
+    print(render(data))
+
+    maybe: int | str | None = None
+    if maybe is not None:
+        print("unreachable")
+    maybe = "text"
+    print(maybe + "!")
+    if not isinstance(maybe, str):
+        return
+    print(len(maybe))

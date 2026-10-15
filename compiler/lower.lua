@@ -1,4 +1,6 @@
 -- Lowers the checked tree into explicit evaluation order and control flow.
+local types = require("compiler.types")
+
 local M = {}
 
 -- Runtime helpers for binary operations, keyed by operator and result type.
@@ -14,20 +16,54 @@ local binary_helpers = {
 
 local function binary_helper(node)
   local helpers = binary_helpers[node.op]
-  return helpers and helpers[node.type]
+  return helpers and helpers[node.type.kind]
 end
 
 -- The prefix of the runtime helpers for operations on a string, list, or
 -- dictionary of `type`.
 local function prefix(type)
-  if type == "str" then
-    return "str_"
-  end
-  return type:sub(1, 5) == "list[" and "list_" or "dict_"
+  return type.kind .. "_"
 end
 
+-- True when the numbers a value of `type` holds are floats.
 local function is_float(type)
-  return type == "float" or type == "float | None"
+  return types.has(type, "float") and not types.has(type, "int")
+end
+
+-- A runtime call that cannot fail, emitted inline without a site. It takes the
+-- span of its first argument, so a statement still maps to a call it wraps.
+local function pure(name, args)
+  return { kind = "Pure", name = name, args = args, span = args[1].span }
+end
+
+-- Converts `value` from the representation of type `from` to that of `to`,
+-- boxing or unboxing floats where only one of them is boxed.
+local function convert(value, from, to)
+  if not to or types.boxed(to) == types.boxed(from) then
+    return value
+  elseif types.boxed(to) and types.has(from, "float") then
+    return pure("box", { value })
+  elseif types.boxed(from) and types.has(to, "float") then
+    return pure("unbox", { value })
+  end
+  return value
+end
+
+-- The kind string __wlo_isinstance tests for `member` of a value of `type`.
+local function instance_kind(member, type)
+  local kind = member.kind
+  if kind == "int" or kind == "float" and not types.boxed(type) then
+    return "number"
+  elseif kind == "float" then
+    return "box"
+  elseif kind == "bool" then
+    return "boolean"
+  elseif kind == "str" then
+    return "string"
+  elseif kind == "record" then
+    return member.record.type_name
+  end
+  return kind
 end
 
 -- True when evaluating `node` can neither call anything nor fail, so it can be
@@ -46,8 +82,8 @@ local function is_pure(node)
   elseif kind == "Call" or kind == "Index" or kind == "MethodCall" or kind == "Field" then
     return false
   elseif kind == "Unary" then
-    return not (node.op == "-" and node.type == "int") and is_pure(node.operand)
-  elseif kind == "Is" then
+    return not (node.op == "-" and node.type == types.int) and is_pure(node.operand)
+  elseif kind == "Is" or kind == "IsInstance" then
     return is_pure(node.operand)
   elseif kind == "Binary" then
     return not binary_helper(node) and node.op ~= "in" and node.op ~= "not in"
@@ -102,11 +138,11 @@ local function lower_function(fn, sites)
     return { kind = "Helper", name = name, args = args, site = #sites, span = span }
   end
 
-  local lower_value, lower_operand, lower_object
+  local lower_node, lower_value, lower_operand, lower_object
 
   -- The text of an evaluated operand of a printable type, as print writes it.
   local function text(operand, type)
-    if type == "str" then
+    if type == types.str then
       return operand
     end
     return { kind = "Str", value = operand, float = is_float(type) }
@@ -142,16 +178,16 @@ local function lower_function(fn, sites)
     return result
   end
 
-  -- Returns an expression whose operands contain no calls; the expression
-  -- itself may be one call or helper call.
-  lower_value = function(node)
+  -- Returns an expression of `node`'s own type whose operands contain no
+  -- calls; the expression itself may be one call or helper call.
+  lower_node = function(node)
     local kind = node.kind
     if kind == "Int" or kind == "Float" or kind == "String" or kind == "Bool" then
       return { kind = "Literal", value = node.value }
     elseif kind == "None" then
       return { kind = "Literal" }
     elseif kind == "Name" then
-      return { kind = "Local", symbol = node.symbol }
+      return convert({ kind = "Local", symbol = node.symbol }, node.symbol.type, node.type)
     elseif kind == "Unary" then
       if node.op == "+" then
         return lower_value(node.operand)
@@ -159,13 +195,16 @@ local function lower_function(fn, sites)
       local operand = lower_operand(node.operand)
       if node.op == "not" then
         return { kind = "Not", operand = operand }
-      elseif node.type == "float" then
+      elseif node.type == types.float then
         return { kind = "Neg", operand = operand }
       end
       return helper("neg", { operand }, node.span)
     elseif kind == "Is" then
       local op = node.op == "is" and "==" or "!="
       return { kind = "Binary", op = op, left = lower_operand(node.operand), right = { kind = "Literal" } }
+    elseif kind == "IsInstance" then
+      local kind_string = instance_kind(node.member, node.operand.type)
+      return pure("isinstance", { lower_operand(node.operand), { kind = "Literal", value = kind_string } })
     elseif kind == "Binary" then
       if (node.op == "and" or node.op == "or") and not is_pure(node.right) then
         return lower_short_circuit(node)
@@ -173,22 +212,36 @@ local function lower_function(fn, sites)
       local mark = depth
       local left = lower_operand(node.left)
       local right = lower_operand(node.right)
+      local left_type, right_type = node.left.type, node.right.type
       if node.op == "in" or node.op == "not in" then
-        local name = prefix(node.right.type) .. "contains"
+        local name = prefix(right_type) .. "contains"
+        if right_type.kind == "list" then
+          local element = types.expand(right_type.element)
+          if types.boxed(left_type) and not types.boxed(element) and types.has(element, "float") then
+            name = "list_contains_boxed"
+          else
+            left = convert(left, left_type, element)
+          end
+        end
         local contains = helper(name, { right, left }, node.span)
         if node.op == "in" then
           return contains
         end
         return { kind = "Not", operand = spill(contains, mark) }
       end
+      if (node.op == "==" or node.op == "!=") and (types.boxed(left_type) or types.boxed(right_type)) then
+        local wide = types.boxed(left_type) and left_type or right_type
+        local equal = pure("equal", { convert(left, left_type, wide), convert(right, right_type, wide) })
+        return node.op == "==" and equal or { kind = "Not", operand = equal }
+      end
       local name = binary_helper(node)
       if name then
         return helper(name, { left, right }, node.span)
       end
-      local op = node.type == "str" and "concat" or node.op
+      local op = node.type == types.str and "concat" or node.op
       return { kind = "Binary", op = op, left = left, right = right }
     elseif kind == "Call" then
-      if node.name == "float" and node.args[1].type == "int" then
+      if node.name == "float" and node.args[1].type == types.int then
         -- A Willow integer is already the same Lua number as a float.
         return lower_value(node.args[1])
       end
@@ -201,15 +254,20 @@ local function lower_function(fn, sites)
         for i, field in ipairs(node.target.fields) do
           names[i] = field.name
         end
-        local class = node.target.exception and node.target.type_name
-        return { kind = "Construct", names = names, values = args, class = class }
+        return {
+          kind = "Construct",
+          names = names,
+          values = args,
+          class = node.target.type_name,
+          exception = node.target.exception,
+        }
       elseif node.target.kind == "Builtin" then
         local name = node.name
         if name == "str" then
           return text(args[1], node.args[1].type)
         elseif (name == "print" or name == "eprint") and is_float(node.args[1].type) then
           name = name .. "_float"
-        elseif (name == "int" or name == "float") and node.args[1].type == "str" then
+        elseif (name == "int" or name == "float") and node.args[1].type == types.str then
           name = "parse_" .. name
         end
         return helper(name, args, node.span)
@@ -255,15 +313,20 @@ local function lower_function(fn, sites)
     end
   end
 
+  -- Returns an expression of the type `node` was checked against, if any.
+  lower_value = function(node)
+    return convert(lower_node(node), node.type, node.expected_type)
+  end
+
   -- Returns an expression with no calls or field reads, moving a call, helper
   -- call, or field read into a temporary first.
   lower_operand = function(node)
     local mark = depth
-    local value = lower_value(node)
-    if value.kind ~= "Call" and value.kind ~= "Helper" and value.kind ~= "Field" then
-      return value
+    local value = lower_node(node)
+    if value.kind == "Call" or value.kind == "Helper" or value.kind == "Field" then
+      value = spill(value, mark)
     end
-    return spill(value, mark)
+    return convert(value, node.type, node.expected_type)
   end
 
   -- Returns a local or temporary for a field's object, so a field access never
@@ -358,6 +421,7 @@ local function lower_function(fn, sites)
       labels = labels + 1
       local node = { kind = "For", label = labels, tries = #tries, span = statement.span }
       node.target = { kind = "Local", symbol = statement.symbol }
+      node.value = convert({ kind = "Item" }, statement.type, statement.expected_type)
       -- The iterator is created once, after its operands are evaluated here.
       local iterable = statement.iterable
       if iterable.kind == "Call" and iterable.name == "range" then

@@ -161,10 +161,10 @@ Section numbers refer to that document.
 
 ## Sixth slice
 
-- [ ] Unions and type aliases (docs/spec.md §3, §4, §9)
-  - [ ] Parser: `type Name = Type` declarations at file scope; unions of any members in any order; `module.Alias` in annotations
-  - [ ] Bind: aliases in the file-level namespace with functions and records; forward, self, and cross-module references; `_` aliases private; locals shadowing aliases but not annotations; `isinstance` as a built-in name
-  - [ ] Check: aliases equal to their expansions, including recursive ones; aliases that expand to themselves outside `list` or `dict` rejected; union flattening, member order ignored, members assignable to one another and second `list` or `dict` members rejected; assignability to and from unions; printable and `==` rules for unions; displays taking a union's list or dict member as the expected type; `isinstance` operands and class names
-  - [ ] Check: narrowing generalized from optionals to member sets: `is None`, `is not None`, and `isinstance` facts, joins after `if` as the union of fall-through branches, assignment of a single member, loops, and `try`
-  - [ ] Runtime: union values that distinguish `int` from `float` and records of different classes; `isinstance`; `==` false across member types; `print`, `str`, and f-strings formatting by the held value's type
-  - [ ] Tests: alias declarations and rejections, recursive JSON-shaped values built from displays, assignability and invariance, `isinstance` narrowing through `if`/`elif`/`else`, `and`, `or`, `not`, and assignment, int and float members printed and compared, records across modules; the §4 example
+- [x] Unions and type aliases (docs/spec.md §3, §4, §9)
+  - [x] Parser: `type Name = Type` declarations at file scope; unions of any members in any order; `module.Alias` in annotations
+  - [x] Bind: aliases in the file-level namespace with functions and records; forward, self, and cross-module references; `_` aliases private; locals shadowing aliases but not annotations; `isinstance` as a built-in name
+  - [x] Check: aliases equal to their expansions, including recursive ones; aliases that expand to themselves outside `list` or `dict` rejected; union flattening, member order ignored, members assignable to one another and second `list` or `dict` members rejected; assignability to and from unions; printable and `==` rules for unions; displays taking a union's list or dict member as the expected type; `isinstance` operands and class names
+  - [x] Check: narrowing generalized from optionals to member sets: `is None`, `is not None`, and `isinstance` facts, joins after `if` as the union of fall-through branches, assignment of a single member, loops, and `try`
+  - [x] Runtime: union values that distinguish `int` from `float` and records of different classes; `isinstance`; `==` false across member types; `print`, `str`, and f-strings formatting by the held value's type
+  - [x] Tests: alias declarations and rejections, recursive JSON-shaped values built from displays, assignability and invariance, `isinstance` narrowing through `if`/`elif`/`else`, `and`, `or`, `not`, and assignment, int and float members printed and compared, records across modules; the §4 example

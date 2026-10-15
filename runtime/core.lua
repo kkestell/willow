@@ -291,7 +291,46 @@ local function __wlo_write(file, text, site)
   end
 end
 
--- The text print writes for a value whose static type is not float.
+-- In a union with both int and float members, a float is boxed so that it
+-- differs from an int. Elsewhere floats are plain numbers.
+local function __wlo_box(value)
+  if type(value) == "number" then
+    return { __wlo_float = value }
+  end
+  return value
+end
+
+local function __wlo_unbox(value)
+  if type(value) == "table" and value.__wlo_float ~= nil then
+    return value.__wlo_float
+  end
+  return value
+end
+
+-- Equality of printable values where floats may be boxed; any table is a box.
+local function __wlo_equal(a, b)
+  if type(a) == "table" and type(b) == "table" then
+    return a.__wlo_float == b.__wlo_float
+  end
+  return a == b
+end
+
+-- `kind` is a Lua type name, "box", "list", "dict", "Exception", or a record's
+-- class.
+local function __wlo_isinstance(value, kind)
+  if type(value) ~= "table" then
+    return type(value) == kind
+  end
+  local class = value.__wlo_class or value.__wlo_record
+  if class then
+    return class == kind or kind == "Exception" and value.__wlo_class ~= nil
+  elseif value.__wlo_float ~= nil then
+    return kind == "box"
+  end
+  return kind == (value.n and "list" or "dict")
+end
+
+-- The text print writes for a value whose numbers are not unboxed floats.
 local function __wlo_str(value)
   if value == nil then
     return "None"
@@ -301,15 +340,18 @@ local function __wlo_str(value)
     return "False"
   elseif type(value) == "number" then
     return string.format("%d", value)
+  elseif type(value) == "table" then
+    return __wlo_format_float(value.__wlo_float)
   end
   return value
 end
 
+-- The text print writes for a value whose numbers are floats.
 local function __wlo_str_float(value)
-  if value == nil then
-    return "None"
+  if type(value) == "number" then
+    return __wlo_format_float(value)
   end
-  return __wlo_format_float(value)
+  return __wlo_str(value)
 end
 
 local function __wlo_print(value, site)
@@ -499,7 +541,17 @@ end
 
 local function __wlo_list_contains(list, value, site)
   for i = 1, list.n do
-    if list[i] == value then
+    if __wlo_equal(list[i], value) then
+      return true
+    end
+  end
+  return false
+end
+
+-- For a value with boxed floats in a list whose floats are not boxed.
+local function __wlo_list_contains_boxed(list, value, site)
+  for i = 1, list.n do
+    if __wlo_equal(__wlo_box(list[i]), value) then
       return true
     end
   end

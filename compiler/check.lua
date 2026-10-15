@@ -1,127 +1,104 @@
 -- Checks types, definite assignment, and narrowing, annotating the tree in place.
 local bind = require("compiler.bind")
 local diag = require("compiler.diag")
+local types = require("compiler.types")
 
 local M = {}
 
-local NUMBER = { int = "int", float = "float" }
+local NUMBER = { int = types.int, float = types.float }
 local unary_types = {
   ["+"] = NUMBER,
   ["-"] = NUMBER,
-  ["not"] = { bool = "bool" },
+  ["not"] = { bool = types.bool },
 }
 
--- Result types keyed by "<left type> <right type>". Equality is handled
+-- Result types keyed by "<left kind> <right kind>". Equality is handled
 -- separately.
-local ARITHMETIC = { ["int int"] = "int", ["float float"] = "float" }
-local ORDERING = { ["int int"] = "bool", ["float float"] = "bool", ["str str"] = "bool" }
+local ARITHMETIC = { ["int int"] = types.int, ["float float"] = types.float }
+local ORDERING = { ["int int"] = types.bool, ["float float"] = types.bool, ["str str"] = types.bool }
 local binary_types = {
-  ["+"] = { ["int int"] = "int", ["float float"] = "float", ["str str"] = "str" },
+  ["+"] = { ["int int"] = types.int, ["float float"] = types.float, ["str str"] = types.str },
   ["-"] = ARITHMETIC,
   ["*"] = ARITHMETIC,
-  ["/"] = { ["int int"] = "float", ["float float"] = "float" },
+  ["/"] = { ["int int"] = types.float, ["float float"] = types.float },
   ["//"] = ARITHMETIC,
   ["%"] = ARITHMETIC,
-  ["and"] = { ["bool bool"] = "bool" },
-  ["or"] = { ["bool bool"] = "bool" },
+  ["and"] = { ["bool bool"] = types.bool },
+  ["or"] = { ["bool bool"] = types.bool },
   ["<"] = ORDERING,
   ["<="] = ORDERING,
   [">"] = ORDERING,
   [">="] = ORDERING,
 }
 
+local function optional_of(type)
+  if type == types.None or types.optional(type) then
+    return type
+  end
+  return types.union({ type, types.None })
+end
+
 -- Built-in signatures. An "any" parameter is checked separately by name. range
 -- is checked only as a `for` iterable.
 local builtins = {
-  print = { params = { "any" }, result = "None" },
-  eprint = { params = { "any" }, result = "None" },
-  str = { params = { "any" }, result = "str" },
-  int = { params = { "any" }, result = "int" },
-  float = { params = { "any" }, result = "float" },
-  len = { params = { "any" }, result = "int" },
-  input = { params = {}, result = "str | None" },
-  read_file = { params = { "str" }, result = "str" },
-  write_file = { params = { "str", "str" }, result = "None" },
-  exit = { params = { "int" }, result = "None" },
-  ord = { params = { "str" }, result = "int" },
-  chr = { params = { "int" }, result = "str" },
+  print = { params = { "any" }, result = types.None },
+  eprint = { params = { "any" }, result = types.None },
+  str = { params = { "any" }, result = types.str },
+  int = { params = { "any" }, result = types.int },
+  float = { params = { "any" }, result = types.float },
+  len = { params = { "any" }, result = types.int },
+  input = { params = {}, result = optional_of(types.str) },
+  read_file = { params = { types.str }, result = types.str },
+  write_file = { params = { types.str, types.str }, result = types.None },
+  exit = { params = { types.int }, result = types.None },
+  ord = { params = { types.str }, result = types.int },
+  chr = { params = { types.int }, result = types.str },
 }
 
--- The argument types `int` and `float` convert from.
+-- The argument kinds `int` and `float` convert from.
 local conversions = {
   int = { float = true, str = true },
   float = { int = true, str = true },
 }
 
-local OPTIONAL = " | None"
-
-local function optional(type)
-  return type:sub(-#OPTIONAL) == OPTIONAL
-end
-
-local function base(type)
-  return type:sub(1, -#OPTIONAL - 1)
-end
-
--- The type names of every exception class, including `Exception`, set by M.check.
-local exception_classes = {}
-
--- Exception classes are assignable to `Exception`, and optionals follow their
--- bases.
-local function assignable(target, source)
-  if target == source or target == "Exception" and exception_classes[source] then
-    return true
-  end
-  return optional(target) and (source == "None" or assignable(base(target), optional(source) and base(source) or source))
-end
-
-local SCALARS = { int = true, float = true, bool = true, str = true, None = true }
-
--- Scalars and their optionals support `==` and printing.
-local function scalar(type)
-  return SCALARS[optional(type) and base(type) or type] == true
-end
-
 local function list_element(type)
-  return type:match("^list%[(.*)%]$")
-end
-
-local function dict_types(type)
-  return type:match("^dict%[(%a+), (.*)%]$")
+  return type.kind == "list" and types.expand(type.element) or nil
 end
 
 -- The index and item types for indexing `type`, or nil if it cannot be indexed.
 local function index_types(type)
-  local element = list_element(type)
-  if element then
-    return "int", element
+  if type.kind == "list" then
+    return types.int, types.expand(type.element)
+  elseif type.kind == "dict" then
+    return type.key, types.expand(type.value)
   end
-  return dict_types(type)
 end
 
 -- The type of the items `for` and `in` see: list elements, dictionary keys,
 -- and the one-code-point strings of a string.
 local function item_type(type)
-  if type == "str" then
-    return "str"
+  if type == types.str then
+    return types.str
+  elseif type.kind == "dict" then
+    return type.key
   end
-  return list_element(type) or (dict_types(type))
+  return list_element(type)
 end
 
 -- Parameter types and result types of the string methods.
 local STRING_METHODS = {
-  startswith = { { "str" }, "bool" },
-  endswith = { { "str" }, "bool" },
-  find = { { "str" }, "int" },
-  replace = { { "str", "str" }, "str" },
-  strip = { {}, "str" },
-  split = { { "str" }, "list[str]" },
-  join = { { "list[str]" }, "str" },
+  startswith = { { types.str }, types.bool },
+  endswith = { { types.str }, types.bool },
+  find = { { types.str }, types.int },
+  replace = { { types.str, types.str }, types.str },
+  strip = { {}, types.str },
+  split = { { types.str }, types.list(types.str) },
+  join = { { types.list(types.str) }, types.str },
 }
 
 -- Parameter types and result type of method `name` on `type`, or nil.
 local function method_signature(type, name)
-  if type == "str" then
+  if type == types.str then
     local method = STRING_METHODS[name]
     if method then
       return method[1], method[2]
@@ -129,28 +106,49 @@ local function method_signature(type, name)
     return nil
   end
   local element = list_element(type)
-  local key, value = dict_types(type)
   if element and name == "append" then
-    return { element }, "None"
+    return { element }, types.None
   elseif element and name == "pop" then
     return {}, element
-  elseif key and name == "get" then
-    return { key }, (value == "None" or optional(value)) and value or value .. OPTIONAL
-  elseif key and name == "pop" then
-    return { key }, value
+  elseif type.kind == "dict" and name == "get" then
+    return { type.key }, optional_of(types.expand(type.value))
+  elseif type.kind == "dict" and name == "pop" then
+    return { type.key }, types.expand(type.value)
   end
 end
 
+-- Records the type `node` was checked against so lowering can convert it.
 local function expect_type(node, expected, actual)
-  if not assignable(expected, actual) then
-    diag.error(node.span, "expected " .. expected .. ", received " .. actual)
+  if not types.assignable(expected, actual) then
+    diag.error(node.span, "expected " .. expected.name .. ", received " .. actual.name)
+  end
+  node.expected_type = expected
+end
+
+-- The member of `expected` of `kind` ("list" or "dict") that a display takes.
+local function display_member(expected, kind)
+  for _, m in ipairs(expected and types.members(expected) or {}) do
+    if m.kind == kind then
+      return m
+    end
   end
 end
 
 -- A flow state maps each definitely assigned symbol to its type at that point:
--- the base type where a check narrowed it, and its declared type otherwise.
--- Facts map symbols to the narrowed types a condition proves.
+-- the members of its declared type a check narrowed it to, or its declared
+-- type. Narrowed types are built from the declared type's member objects, so
+-- membership is by identity. Facts map symbols to the narrowed types a
+-- condition proves.
 local NO_FACTS = {}
+
+local function contains(type, member)
+  for _, m in ipairs(types.members(type)) do
+    if m == member then
+      return true
+    end
+  end
+  return false
+end
 
 local function copy(map)
   local result = {}
@@ -168,12 +166,17 @@ local function narrow(state, facts)
   return result
 end
 
--- Symbols assigned in both states, narrowed where both narrow them.
+-- Symbols assigned in both states, with the members either state allows.
 local function join(a, b)
   local result = {}
   for symbol, type in pairs(a) do
-    if b[symbol] then
-      result[symbol] = b[symbol] == type and type or symbol.type
+    local other = b[symbol]
+    if other == type then
+      result[symbol] = type
+    elseif other then
+      result[symbol] = types.subset(symbol.type, function(m)
+        return contains(type, m) or contains(other, m)
+      end)
     end
   end
   return result
@@ -229,13 +232,16 @@ local function forget_narrowing(state, statements)
   end
 end
 
--- Records that `symbol` holds a value of `value_type`. A value that cannot be
--- None narrows an optional local to its base.
+-- Records that `symbol` holds a value of `value_type`. A value of one type
+-- other than None narrows a union local to the member it is assignable to.
 local function assign(state, symbol, value_type)
-  if value_type == "None" or optional(value_type) or not optional(symbol.type) then
-    state[symbol] = symbol.type
-  else
-    state[symbol] = base(symbol.type)
+  state[symbol] = symbol.type
+  if symbol.type.kind == "union" and value_type.kind ~= "union" and value_type ~= types.None then
+    for _, m in ipairs(symbol.type.members) do
+      if types.assignable(m, value_type) then
+        state[symbol] = m
+      end
+    end
   end
 end
 
@@ -243,22 +249,21 @@ local function arguments(count)
   return count .. (count == 1 and " argument" or " arguments")
 end
 
-local function check_function(fn, records)
+local function check_function(fn)
   -- The type of field `node.name` on a value of `object` type.
   local function field_type(node, object)
-    local record = records[object]
-    if not record then
-      diag.error(node.span, "type " .. object .. " has no field '" .. node.name .. "'")
+    if object.kind ~= "record" then
+      diag.error(node.span, "type " .. object.name .. " has no field '" .. node.name .. "'")
     end
-    for _, field in ipairs(record.fields) do
+    for _, field in ipairs(object.record.fields) do
       if field.name == node.name then
-        return field.type.name
+        return field.type
       end
     end
-    diag.error(node.span, "record " .. object .. " has no field '" .. node.name .. "'")
+    diag.error(node.span, "record " .. object.name .. " has no field '" .. node.name .. "'")
   end
 
-  local return_type = fn.return_type.name
+  local return_type = fn.return_type
   -- The number of `finally` clauses enclosing the statement being checked.
   -- `in_loop` is this count at the innermost loop, or false outside loops.
   local finally_depth = 0
@@ -277,15 +282,15 @@ local function check_function(fn, records)
     local type
     local true_facts, false_facts = NO_FACTS, NO_FACTS
     if kind == "Int" then
-      type = "int"
+      type = types.int
     elseif kind == "Float" then
-      type = "float"
+      type = types.float
     elseif kind == "String" then
-      type = "str"
+      type = types.str
     elseif kind == "Bool" then
-      type = "bool"
+      type = types.bool
     elseif kind == "None" then
-      type = "None"
+      type = types.None
     elseif kind == "Name" then
       type = state[node.symbol]
       if not type then
@@ -293,21 +298,23 @@ local function check_function(fn, records)
       end
     elseif kind == "Unary" then
       local operand, operand_true, operand_false = check_expression(node.operand, state)
-      type = unary_types[node.op][operand]
+      type = unary_types[node.op][operand.kind]
       if not type then
-        diag.error(node.span, "operator '" .. node.op .. "' cannot be applied to " .. operand)
+        diag.error(node.span, "operator '" .. node.op .. "' cannot be applied to " .. operand.name)
       end
       if node.op == "not" then
         true_facts, false_facts = operand_false, operand_true
       end
     elseif kind == "Is" then
       local operand = check_expression(node.operand, state)
-      if not optional(operand) then
-        diag.error(node.span, "operator '" .. node.op .. "' cannot be applied to " .. operand)
+      if not types.optional(operand) then
+        diag.error(node.span, "operator '" .. node.op .. "' cannot be applied to " .. operand.name)
       end
-      type = "bool"
+      type = types.bool
       if node.operand.kind == "Name" then
-        local facts = { [node.operand.symbol] = base(operand) }
+        local facts = { [node.operand.symbol] = types.subset(operand, function(m)
+          return m ~= types.None
+        end) }
         if node.op == "is" then
           false_facts = facts
         else
@@ -327,19 +334,24 @@ local function check_function(fn, records)
       end
       local right, right_true, right_false = check_expression(node.right, right_state)
       if op == "==" or op == "!=" then
-        if scalar(left) and scalar(right) and (assignable(left, right) or assignable(right, left)) then
-          type = "bool"
+        if types.printable(left) and types.printable(right)
+          and (types.assignable(left, right) or types.assignable(right, left)) then
+          type = types.bool
         end
       elseif op == "in" or op == "not in" then
+        -- A substring test needs a str on the left, not just a str member.
         local item = item_type(right)
-        if item and scalar(left) and scalar(item) and (assignable(left, item) or assignable(item, left)) then
-          type = "bool"
+        if right == types.str then
+          type = left == types.str and types.bool or nil
+        elseif item and types.printable(left) and types.printable(item)
+          and (types.assignable(left, item) or types.assignable(item, left)) then
+          type = types.bool
         end
       else
-        type = binary_types[op][left .. " " .. right]
+        type = binary_types[op][left.kind .. " " .. right.kind]
       end
       if not type then
-        diag.error(node.span, "operator '" .. op .. "' cannot be applied to " .. left .. " and " .. right)
+        diag.error(node.span, "operator '" .. op .. "' cannot be applied to " .. left.name .. " and " .. right.name)
       end
       if op == "and" then
         true_facts = narrow(left_true, right_true)
@@ -363,7 +375,7 @@ local function check_function(fn, records)
         if builtin then
           param = builtin.params[i] ~= "any" and builtin.params[i] or nil
         else
-          param = params[i].type.name
+          param = params[i].type
         end
         local arg_type = check_expression(arg, state, param)
         if param then
@@ -371,21 +383,41 @@ local function check_function(fn, records)
         end
       end
       local arg_type = builtin and node.args[1] and node.args[1].type
-      if (node.name == "print" or node.name == "eprint") and builtin and not scalar(arg_type) then
-        diag.error(node.args[1].span, "cannot print a value of type " .. arg_type)
-      elseif node.name == "str" and builtin and not scalar(arg_type) then
-        diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type .. " to str")
-      elseif builtin and conversions[node.name] and arg_type and not conversions[node.name][arg_type] then
-        diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type .. " to " .. node.name)
-      elseif node.name == "len" and builtin and arg_type ~= "str" and not index_types(arg_type) then
-        diag.error(node.span, "'len' cannot be applied to " .. arg_type)
+      if (node.name == "print" or node.name == "eprint") and builtin and not types.printable(arg_type) then
+        diag.error(node.args[1].span, "cannot print a value of type " .. arg_type.name)
+      elseif node.name == "str" and builtin and not types.printable(arg_type) then
+        diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type.name .. " to str")
+      elseif builtin and conversions[node.name] and arg_type and not conversions[node.name][arg_type.kind] then
+        diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type.name .. " to " .. node.name)
+      elseif node.name == "len" and builtin and arg_type ~= types.str and not index_types(arg_type) then
+        diag.error(node.span, "'len' cannot be applied to " .. arg_type.name)
       end
       if builtin then
         type = builtin.result
       elseif target.kind == "Record" then
-        type = target.type_name
+        type = target.type
       else
-        type = target.return_type.name
+        type = target.return_type
+      end
+    elseif kind == "IsInstance" then
+      local operand = check_expression(node.operand, state)
+      local class = node.class
+      for _, m in ipairs(types.members(operand)) do
+        if class.record and m == class.record.type or not class.record and (m.kind == class.name) then
+          node.member = m
+        end
+      end
+      if not node.member then
+        local name = class.record and class.record.type_name or class.name
+        diag.error(class.span, "type " .. operand.name .. " has no member " .. name)
+      end
+      type = types.bool
+      if node.operand.kind == "Name" and operand.kind == "union" then
+        local symbol = node.operand.symbol
+        true_facts = { [symbol] = node.member }
+        false_facts = { [symbol] = types.subset(operand, function(m)
+          return m ~= node.member
+        end) }
       end
     elseif kind == "Field" then
       type = field_type(node, check_expression(node.object, state))
@@ -393,16 +425,16 @@ local function check_function(fn, records)
       -- Literal text is a String part.
       for _, part in ipairs(node.parts) do
         local field = check_expression(part, state)
-        if not scalar(field) then
-          diag.error(part.span, "cannot format a value of type " .. field)
+        if not types.printable(field) then
+          diag.error(part.span, "cannot format a value of type " .. field.name)
         end
       end
-      type = "str"
+      type = types.str
     elseif kind == "Index" then
       local object = check_expression(node.object, state)
       local index, item = index_types(object)
       if not index then
-        diag.error(node.span, "cannot index a value of type " .. object)
+        diag.error(node.span, "cannot index a value of type " .. object.name)
       end
       check_against(node.index, state, index)
       type = item
@@ -410,7 +442,7 @@ local function check_function(fn, records)
       local object = check_expression(node.object, state)
       local params, result = method_signature(object, node.name)
       if not params then
-        diag.error(node.span, "type " .. object .. " has no method '" .. node.name .. "'")
+        diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
       end
       if #node.args ~= #params then
         diag.error(node.span, "'" .. node.name .. "' expects " .. arguments(#params) .. ", received " .. #node.args)
@@ -420,8 +452,8 @@ local function check_function(fn, records)
       end
       type = result
     elseif kind == "ListDisplay" then
-      local want = expected and (optional(expected) and base(expected) or expected)
-      local element = want and list_element(want)
+      type = display_member(expected, "list")
+      local element = type and list_element(type)
       local elements = node.elements
       local first = 1
       if not element then
@@ -430,16 +462,16 @@ local function check_function(fn, records)
         end
         element = check_expression(elements[1], state)
         first = 2
+        type = types.list(element)
       end
       for i = first, #elements do
         check_against(elements[i], state, element)
       end
-      type = "list[" .. element .. "]"
     elseif kind == "DictDisplay" then
-      local want = expected and (optional(expected) and base(expected) or expected)
+      type = display_member(expected, "dict")
       local key, value
-      if want then
-        key, value = dict_types(want)
+      if type then
+        key, value = index_types(type)
       end
       local entries = node.entries
       local first = 1
@@ -448,17 +480,17 @@ local function check_function(fn, records)
           diag.error(node.span, "cannot infer the key and value types of an empty dict")
         end
         key = check_expression(entries[1].key, state)
-        if key ~= "int" and key ~= "str" then
+        if key ~= types.int and key ~= types.str then
           diag.error(entries[1].key.span, "dictionary keys must be int or str")
         end
         value = check_expression(entries[1].value, state)
         first = 2
+        type = types.dict(key, value)
       end
       for i = first, #entries do
         check_against(entries[i].key, state, key)
         check_against(entries[i].value, state, value)
       end
-      type = "dict[" .. key .. ", " .. value .. "]"
     end
     node.type = type
     return type, true_facts, false_facts
@@ -466,7 +498,7 @@ local function check_function(fn, records)
 
   local function check_condition(node, state)
     local type, true_facts, false_facts = check_expression(node, state)
-    expect_type(node, "bool", type)
+    expect_type(node, types.bool, type)
     return true_facts, false_facts
   end
 
@@ -486,11 +518,11 @@ local function check_function(fn, records)
     end
     local named = {}
     for _, handler in ipairs(statement.handlers) do
-      local class = handler.record.type_name
-      if named.Exception or named[class] then
+      local class = handler.record.type
+      if named[bind.exceptions.Exception] or named[handler.record] then
         diag.error(handler.span, "unreachable 'except' clause")
       end
-      named[class] = true
+      named[handler.record] = true
       local handler_state = copy(handler_entry)
       local symbol = handler.symbol
       if symbol then
@@ -552,7 +584,7 @@ local function check_function(fn, records)
     local kind = statement.kind
     if kind == "Assign" then
       local symbol = statement.symbol
-      local expected = statement.annotation and statement.annotation.name or symbol.type
+      local expected = statement.annotation or symbol.type
       local value_type = check_expression(statement.value, state, expected)
       if statement.annotation then
         if symbol.param then
@@ -562,7 +594,7 @@ local function check_function(fn, records)
         if symbol.type then
           diag.error(statement.span, "only the first assignment to '" .. statement.name .. "' can have an annotation")
         end
-        symbol.type = statement.annotation.name
+        symbol.type = statement.annotation
       end
       if symbol.type then
         expect_type(statement.value, symbol.type, value_type)
@@ -577,7 +609,7 @@ local function check_function(fn, records)
       local object = check_expression(statement.object, state)
       local index, item = index_types(object)
       if not index then
-        diag.error(statement.span, "cannot index a value of type " .. object)
+        diag.error(statement.span, "cannot index a value of type " .. object.name)
       end
       check_against(statement.index, state, index)
       check_against(statement.value, state, item)
@@ -595,7 +627,7 @@ local function check_function(fn, records)
       if statement.value then
         check_against(statement.value, state, return_type)
       else
-        expect_type(statement, return_type, "None")
+        expect_type(statement, return_type, types.None)
       end
       return true
     elseif kind == "Break" or kind == "Continue" then
@@ -608,8 +640,8 @@ local function check_function(fn, records)
     elseif kind == "Raise" then
       if statement.value then
         local type = check_expression(statement.value, state)
-        if not exception_classes[type] then
-          diag.error(statement.value.span, "expected an exception, received " .. type)
+        if not (type.kind == "record" and type.record.exception) then
+          diag.error(statement.value.span, "expected an exception, received " .. type.name)
         end
       end
       return true
@@ -646,16 +678,17 @@ local function check_function(fn, records)
           diag.error(iterable.span, "'range' expects 1 to 3 arguments, received " .. count)
         end
         for _, arg in ipairs(iterable.args) do
-          check_against(arg, state, "int")
+          check_against(arg, state, types.int)
         end
-        item = "int"
+        item = types.int
       else
         local iterable_type = check_expression(iterable, state)
         item = item_type(iterable_type)
         if not item then
-          diag.error(iterable.span, "cannot iterate over " .. iterable_type)
+          diag.error(iterable.span, "cannot iterate over " .. iterable_type.name)
         end
       end
+      statement.type = item
       local symbol = statement.symbol
       if symbol.type then
         expect_type(statement, symbol.type, item)
@@ -685,12 +718,12 @@ local function check_function(fn, records)
 
   local state = {}
   for _, param in ipairs(fn.params) do
-    param.symbol.type = param.type.name
-    state[param.symbol] = param.type.name
+    param.symbol.type = param.type
+    state[param.symbol] = param.type
   end
   -- Outside a loop only `return` transfers control at function level.
   local _, transfers = check_block(fn.body, state, false)
-  if return_type ~= "None" and not transfers then
+  if return_type ~= types.None and not transfers then
     diag.error(fn.span, "function '" .. fn.name .. "' must return a value on every path")
   end
 end
@@ -706,25 +739,10 @@ end
 -- Signatures are fixed before checking, so each function's first error is
 -- independent of the others; all of them are reported together.
 function M.check(modules)
-  local records = {}
-  for name, record in pairs(bind.exceptions) do
-    records[name] = record
-  end
-  for _, module in ipairs(modules) do
-    for _, record in ipairs(module.records) do
-      records[record.type_name] = record
-    end
-  end
-  exception_classes = {}
-  for name, record in pairs(records) do
-    if record.exception then
-      exception_classes[name] = true
-    end
-  end
   local errors = {}
   for _, module in ipairs(modules) do
     for _, fn in ipairs(module.functions) do
-      local ok, err = xpcall(check_function, capture, fn, records)
+      local ok, err = xpcall(check_function, capture, fn)
       if not ok then
         if not diag.is(err) then
           error(err, 0)

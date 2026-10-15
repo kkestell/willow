@@ -49,13 +49,13 @@ return {
       "e = print(b)",
     }, "\n"), "def f(n: int) -> str:\n    return 'n'\n"))
     local body = program.functions[1].body
-    eq("int", body[1].value.type)
-    eq("int", body[1].symbol.type)
-    eq("str", body[2].value.type)
-    eq("bool", body[3].value.type)
-    eq("int", body[3].value.operand.left.type)
-    eq("str", body[4].symbol.type)
-    eq("None", body[5].symbol.type)
+    eq("int", body[1].value.type.name)
+    eq("int", body[1].symbol.type.name)
+    eq("str", body[2].value.type.name)
+    eq("bool", body[3].value.type.name)
+    eq("int", body[3].value.operand.left.type.name)
+    eq("str", body[4].symbol.type.name)
+    eq("None", body[5].symbol.type.name)
   end,
 
   operator_type_errors = function()
@@ -84,7 +84,7 @@ return {
     }, "\n")))
     local types = {}
     for i, statement in ipairs(program.functions[1].body) do
-      types[i] = statement.value.type
+      types[i] = statement.value.type.name
     end
     eq("float float int float bool int float int float int str", table.concat(types, " "))
   end,
@@ -173,8 +173,8 @@ return {
       "d.append([])",
     }, "\n"), helpers))
     local program = check_source(in_main("x = [1, 2]\ny = {'a': [1.5]}"))
-    eq("list[int]", program.functions[1].body[1].symbol.type)
-    eq("dict[str, list[float]]", program.functions[1].body[2].symbol.type)
+    eq("list[int]", program.functions[1].body[1].symbol.type.name)
+    eq("dict[str, list[float]]", program.functions[1].body[2].symbol.type.name)
     eq("2:13: expected int, received str", check_errors(in_main("x = [1, 'a']")))
     eq("2:16: expected None, received int", check_errors(in_main("x = [None, 1]")))
     eq("2:9: cannot infer the element type of an empty list", check_errors(in_main("x = []")))
@@ -251,7 +251,7 @@ return {
       return P .. "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n"
     end
     local program = check_source(m("p = P(1, None)\nq = P(2, 3)\ny: int = p.x\nb = Bag([])\nb.items = []\np.y = None"))
-    eq("P", program.functions[1].body[1].symbol.type)
+    eq("P", program.functions[1].body[1].symbol.type.name)
     eq("7:9: 'P' expects 2 arguments, received 1", check_errors(m("p = P(1)")))
     eq("7:14: expected int | None, received str", check_errors(m("p = P(1, 'a')")))
     eq("8:7: record P has no field 'z'", check_errors(m("p = P(1, None)\np.z = 1")))
@@ -292,6 +292,10 @@ return {
     eq("3:22: expected str, received int", check_errors(in_main("s = 'a'\nx = s.join(['a', 1])")))
     eq("3:10: cannot index a value of type str", check_errors(in_main("s = 'a'\nx = s[0]")))
     eq("2:11: operator 'in' cannot be applied to int and str", check_errors(in_main("x = 1 in 'abc'")))
+    eq("2:14: operator 'in' cannot be applied to int | str and str",
+      check_errors("def f(x: int | str) -> bool:\n    return x in 'a5b'\n" .. MAIN))
+    eq("2:14: operator 'not in' cannot be applied to str | None and str",
+      check_errors("def f(x: str | None) -> bool:\n    return x not in 'abc'\n" .. MAIN))
   end,
 
   records_across_modules = function()
@@ -314,7 +318,7 @@ return {
   equality_on_all_types = function()
     local program = check_source(in_main("a = 1 == 2\nb = True != False\nc = 'x' == 'y'\nd = None == print(1)"))
     for _, statement in ipairs(program.functions[1].body) do
-      eq("bool", statement.value.type)
+      eq("bool", statement.value.type.name)
     end
   end,
 
@@ -345,7 +349,7 @@ return {
     eq("5:9: only the first assignment to 'x' can have an annotation",
       check_errors(in_main("if True:\n    x = 1\nelse:\n    x: int = 2")))
     eq("2:5: cannot annotate parameter 'a'", check_errors("def f(a: int) -> None:\n    a: int = 1\n" .. MAIN))
-    eq("None", check_source(in_main("x: None = print(1)")).functions[1].body[1].symbol.type)
+    eq("None", check_source(in_main("x: None = print(1)")).functions[1].body[1].symbol.type.name)
   end,
 
   definite_assignment = function()
@@ -394,9 +398,9 @@ return {
     local E = "class ParseError(Exception):\n    line: int\n"
     local program = check_source(E .. in_main("e = ParseError('bad', 2)\nm = e.message\nn = e.line\nb: Exception = e\nc: Exception | None = None\nc = ValueError('x')"))
     local body = program.functions[1].body
-    eq("ParseError", body[1].symbol.type)
-    eq("str", body[2].symbol.type)
-    eq("int", body[3].symbol.type)
+    eq("ParseError", body[1].symbol.type.name)
+    eq("str", body[2].symbol.type.name)
+    eq("int", body[3].symbol.type.name)
     eq("4:9: 'ParseError' expects 2 arguments, received 1", check_errors(E .. in_main("e = ParseError('bad')")))
     check_source(E .. "def f(e: ParseError | None) -> Exception | None:\n    return e\n" .. MAIN)
     eq("5:26: expected list[Exception], received list[ParseError]",
@@ -423,7 +427,7 @@ return {
     eq("6:5: unreachable 'except' clause",
       check_errors(try("except ValueError:\n    pass\nexcept ValueError:\n    pass")))
     local program = check_source(try("except KeyError as e:\n    m = e.message\nexcept Exception as other:\n    pass"))
-    eq("KeyError", program.functions[1].locals[1].type)
+    eq("KeyError", program.functions[1].locals[1].type.name)
     eq("6:5: expected KeyError, received IndexError",
       check_errors(try("except KeyError as e:\n    pass\nexcept IndexError as e:\n    pass")))
     check_source(in_main("e: Exception = ValueError('x')\ntry:\n    pass\nexcept KeyError as e:\n    pass"))
@@ -483,5 +487,74 @@ return {
     eq("2:5: 'write_file' expects 2 arguments, received 1", check_errors(in_main("write_file('a')")))
     eq("2:12: cannot print a value of type list[int]", check_errors(in_main("eprint([1])")))
     check_source(in_main("try:\n    eprint(read_file('a'))\nexcept OSError as error:\n    eprint(error.message)"))
+  end,
+
+  aliases_and_union_assignability = function()
+    local json = "type Json = None | bool | int | float | str | list[Json] | dict[str, Json]\n"
+    check_source(json .. in_main(table.concat({
+      "a: list[Json] = []",
+      "b: list[None | bool | int | float | str | list[Json] | dict[str, Json]] = a",
+      "a = b",
+      "c: list[int | str] = []",
+      "d: list[str | int] = c",
+      "e: int | str | None = 1",
+      "f: int | None = None",
+      "e = f",
+      "j: Json = {'a': [1, 2.5, None, {'b': True}]}",
+      "k: int | list[int] = []",
+      "m: dict[str, int] | None = {}",
+    }, "\n")))
+    eq("3:21: expected int | None, received int | str | None",
+      check_errors(in_main("e: int | str | None = None\nf: int | None = e")))
+    eq("3:26: expected list[int | str], received list[int]",
+      check_errors(in_main("a: list[int] = []\nb: list[int | str] = a")))
+    eq("4:15: expected Json, received list[int]", check_errors(json .. in_main("y = [1]\nx: Json = y")))
+    eq("2:13: expected int, received str", check_errors(in_main("x = [1, 'a']")))
+  end,
+
+  union_operations = function()
+    -- `f` starts on line 1 with parameters x and y.
+    local function f(statements)
+      return "def f(x: int | str, y: int | list[int]) -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
+    end
+    check_source(f("b = x == 1 or x != 'a'\nprint(x)\nz = f'{x}' + str(x)"))
+    eq("2:11: operator '==' cannot be applied to int | str and float", check_errors(f("b = x == 1.5")))
+    eq("2:11: operator '==' cannot be applied to int | str and None", check_errors(f("b = x == None")))
+    eq("2:11: cannot print a value of type int | list[int]", check_errors(f("print(y)")))
+    eq("2:11: operator '+' cannot be applied to int | str and int", check_errors(f("b = x + 1")))
+    eq("2:23: type int | str has no member float", check_errors(f("b = isinstance(x, float)")))
+    eq("2:23: type int has no member str", check_errors(in_main("y = isinstance(1, str)")))
+    check_source(in_main("y = isinstance(1, int)"))
+  end,
+
+  isinstance_narrowing = function()
+    -- `f` starts on line 1 with parameter x.
+    local function f(statements)
+      return "class P:\n    v: int\ndef f(x: int | str | list[int] | P | None) -> None:\n"
+        .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
+    end
+    local valid = {
+      "if isinstance(x, int):\n    print(x + 1)\nelif isinstance(x, str):\n    print(x + 'a')\nelif isinstance(x, list):\n"
+        .. "    x.append(1)\nelif x is not None:\n    print(x.v)",
+      "if isinstance(x, P) and x.v > 0:\n    print(x.v)",
+      "if not isinstance(x, int) or x > 0:\n    pass",
+      "if x is None or isinstance(x, list) or isinstance(x, P):\n    return\nif isinstance(x, int):\n    return\nprint(x + 'a')",
+      "x = 'a'\nprint(x + 'b')",
+      "x = [1]\nx.append(2)",
+      "x = P(1)\nprint(x.v)",
+    }
+    for _, statements in ipairs(valid) do
+      check_source(f(statements))
+    end
+    -- After the if, x has the members either falling-through branch left.
+    local program = check_source(f("if isinstance(x, int):\n    pass\nelif isinstance(x, str):\n    pass\nelse:\n    return\ny = x"))
+    eq("int | str", program.functions[1].body[2].value.type.name)
+    -- `or` has no true facts.
+    eq("5:17: operator '+' cannot be applied to int | str | list[int] | P | None and int",
+      check_errors(f("if isinstance(x, int) or isinstance(x, str):\n    print(x + 1)")))
+    eq("7:13: operator '+' cannot be applied to int | str | list[int] | P | None and int",
+      check_errors(f("if not isinstance(x, int):\n    return\nx = None\nprint(x + 1)")))
+    eq("7:17: operator '+' cannot be applied to int | str | list[int] | P | None and int",
+      check_errors(f("if not isinstance(x, int):\n    return\nwhile True:\n    print(x + 1)\n    x = None")))
   end,
 }

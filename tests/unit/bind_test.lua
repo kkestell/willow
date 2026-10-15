@@ -196,7 +196,7 @@ return {
       modules_error({ { "main", "import len\n" .. MAIN }, { "len", "def f() -> None:\n    pass\n" } }))
     eq("main.wlo:3:8: unknown module 'nope'", modules_error({ main("def main() -> None:\n    x: nope.Point = 1\n"), geo }))
     eq("main.wlo:3:8: unknown type 'geo.make'", modules_error({ main("def main() -> None:\n    x: geo.make = 1\n"), geo }))
-    eq("main.wlo:3:13: module 'geo' has no function or record 'nope'",
+    eq("main.wlo:3:13: module 'geo' has no function, record, or alias 'nope'",
       modules_error({ main("def main() -> None:\n    x = geo.nope()\n"), geo }))
     eq("main.wlo:3:13: '_hidden' is private to module 'geo'",
       modules_error({ main("def main() -> None:\n    x = geo._hidden()\n"), geo }))
@@ -283,5 +283,55 @@ return {
     eq(outer, handler[1].body[1].try)
     eq(outer, handler[2].body[1].try)
     eq(outer, handler[2].finally_body[1].try)
+  end,
+
+  aliases = function()
+    local program = bind_source("type Pair = Node | int\nclass Node:\n    next: Tree\ntype Tree = list[Tree] | None\n" .. MAIN)
+    eq("Pair", program.aliases[1].type.name)
+    eq("Tree", program.records[1].fields[1].type.name)
+    eq("list[Tree]", program.records[1].fields[1].type.members[1].name)
+    eq(program.aliases[2].type, program.records[1].fields[1].type.members[1].element.type)
+    -- A local shadows the alias, but annotations still name it.
+    program = bind_source("type N = int | None\ndef main() -> None:\n    N = 1\n    x: N = N\n")
+    eq("N", program.functions[1].body[2].annotation.name)
+    eq(program.functions[1].locals[1], program.functions[1].body[2].value.symbol)
+    eq("3:6: duplicate alias 'f'", bind_error("def f() -> None:\n    pass\ntype f = int\n" .. MAIN))
+    eq("1:6: cannot redefine built-in function 'isinstance'", bind_error("type isinstance = int\n" .. MAIN))
+    eq("1:5: cannot redefine built-in function 'isinstance'", bind_error("def isinstance() -> None:\n    pass\n" .. MAIN))
+    eq("3:9: alias 'N' cannot be used as a value", bind_error("type N = int\ndef main() -> None:\n    x = N\n"))
+    eq("3:9: alias 'N' cannot be called", bind_error("type N = int\ndef main() -> None:\n    x = N(1)\n"))
+    eq("3:23: alias 'N' cannot be used in isinstance",
+      bind_error("type N = int\ndef main() -> None:\n    x = isinstance(1, N)\n"))
+    eq("3:9: cannot call local variable 'isinstance'",
+      bind_error("def main() -> None:\n    isinstance = 1\n    x = isinstance(1, int)\n"))
+    eq("3:23: unknown type 'Nope'", bind_error("def main() -> None:\n    x = 1\n    y = isinstance(x, Nope)\n"))
+  end,
+
+  recursive_aliases = function()
+    bind_source("type J = int | list[J] | dict[str, J]\ntype K = int | list[str | K]\n" .. MAIN)
+    eq("1:19: alias 'Loop' expands to itself", bind_error("type Loop = int | Loop\n" .. MAIN))
+    eq("2:10: alias 'A' expands to itself", bind_error("type A = B\ntype B = A\n" .. MAIN))
+    eq("1:15: alias 'K' expands to itself", bind_error("type K = dict[K, int]\n" .. MAIN))
+  end,
+
+  union_members = function()
+    eq("1:16: union members int and int overlap", bind_error("type T = int | int\n" .. MAIN))
+    eq("3:22: union members Exception and E overlap",
+      bind_error("class E(Exception):\n    pass\ntype T = Exception | E\n" .. MAIN))
+    eq("1:22: a union can have only one list member", bind_error("type T = list[int] | list[str]\n" .. MAIN))
+    eq("2:14: union members None and None overlap", bind_error("type N = int | None\ntype T = N | None\n" .. MAIN))
+    eq("1:15: dictionary keys must be int or str", bind_error("def f(x: dict[float, int]) -> None:\n    pass\n" .. MAIN))
+    bind_source("type Key = str\ndef f(x: dict[Key, int]) -> None:\n    pass\n" .. MAIN)
+  end,
+
+  aliases_across_modules = function()
+    local shapes = { "shapes", "class Circle:\n    r: float\ntype Shape = Circle | None\ntype _Hidden = int\n" }
+    local modules = bind_modules({
+      { "main", "import shapes\ntype Self = list[Self]\ndef main() -> None:\n    s: shapes.Shape = None\n" }, shapes })
+    eq("shapes.Shape", modules[1].functions[1].body[1].annotation.name)
+    eq("main.wlo:2:10: '_Hidden' is private to module 'shapes'",
+      modules_error({ { "main", "import shapes\ndef f(x: shapes._Hidden) -> None:\n    pass\n" .. MAIN }, shapes }))
+    eq("main.wlo:3:16: alias 'shapes.Shape' cannot be called",
+      modules_error({ { "main", "import shapes\ndef main() -> None:\n    x = shapes.Shape(1)\n" }, shapes }))
   end,
 }

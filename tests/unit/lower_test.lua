@@ -52,6 +52,10 @@ show_expr = function(e)
     return e.target.name .. "(" .. show_list(e.args, show_expr, ", ") .. ")"
   elseif kind == "Helper" then
     return e.name .. "(" .. show_list(e.args, show_expr, ", ") .. ")#" .. e.site
+  elseif kind == "Pure" then
+    return e.name .. "(" .. show_list(e.args, show_expr, ", ") .. ")"
+  elseif kind == "Item" then
+    return "item"
   elseif kind == "Field" then
     return show_expr(e.object) .. "." .. e.name
   elseif kind == "Str" then
@@ -280,5 +284,21 @@ return {
     eq(1, main.temps)
     eq(2, lowered.sites[1].line)
     eq(5, lowered.sites[2].line)
+  end,
+
+  unions = function()
+    local function lower_f(statements)
+      local source = "def f(x: int | float, y: float | str) -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
+      return show_body(lower_source(source).functions[1])
+    end
+    eq("x = box(1.5); z = unbox(x)", lower_f("x = 1.5\nz = x"))
+    eq("x = box(y)", lower_f("if isinstance(y, float):\n    x = y"):match("x = [^ ;}]*"))
+    eq("b = equal(x, box(1.5)); c = (not equal(x, 1))", lower_f("b = x == 1.5\nc = x != 1"))
+    eq('b = isinstance(x, "box"); c = isinstance(y, "number"); d = isinstance(y, "string")',
+      lower_f("b = isinstance(x, float)\nc = isinstance(y, float)\nd = isinstance(y, str)"))
+    eq("if isinstance(x, \"box\") { z = float_mul(unbox(x), 2.5) }",
+      lower_f("if isinstance(x, float):\n    z = x * 2.5"):gsub("#%d+", ""))
+    eq("xs = [1.5]; b = list_contains_boxed(xs, x)#1; ys = [x]; c = list_contains(ys, box(1.5))#2",
+      lower_f("xs = [1.5]\nb = x in xs\nys = [x]\nc = 1.5 in ys"))
   end,
 }

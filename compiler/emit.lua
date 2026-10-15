@@ -158,6 +158,10 @@ function M.emit(lowered)
       return function_name(e.target) .. "(" .. args(e.args) .. ")"
     elseif kind == "Helper" then
       return "__wlo_" .. e.name .. "(" .. args(e.args, e.site) .. ")"
+    elseif kind == "Pure" then
+      return "__wlo_" .. e.name .. "(" .. args(e.args) .. ")"
+    elseif kind == "Item" then
+      return "__wlo_item"
     elseif kind == "Str" then
       return (e.float and "__wlo_str_float(" or "__wlo_str(") .. expr(e.value) .. ")"
     elseif kind == "Concat" then
@@ -170,10 +174,9 @@ function M.emit(lowered)
     elseif kind == "Field" then
       return expr(e.object) .. "." .. M.mangle(e.name)
     elseif kind == "Construct" then
-      local parts = {}
-      if e.class then
-        parts[1] = "__wlo_class = " .. M.quote(e.class)
-      end
+      -- Exceptions carry their class in __wlo_class and other records in
+      -- __wlo_record, so that `isinstance(e, Exception)` tests one field.
+      local parts = { (e.exception and "__wlo_class = " or "__wlo_record = ") .. M.quote(e.class) }
       for i, name in ipairs(e.names) do
         parts[#parts + 1] = M.mangle(name) .. " = " .. expr(e.values[i])
       end
@@ -293,7 +296,7 @@ function M.emit(lowered)
       line(depth, "end")
     elseif kind == "For" then
       line(depth, "for _, __wlo_item in " .. expr(s.iterator) .. " do", s.iterator.span)
-      line(depth + 1, expr(s.target) .. " = __wlo_item", s.span)
+      line(depth + 1, expr(s.target) .. " = " .. expr(s.value), s.span)
       loop_body(s, depth + 1)
       line(depth, "end")
     end
