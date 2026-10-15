@@ -5,6 +5,7 @@
 local __wlo_source = debug.getinfo(1, "S").source
 local __wlo_MAX_INT = 9007199254740991
 local __wlo_MAX_FRAMES = 20
+local __wlo_argv
 
 -- The Willow frames on the stack, innermost first. Only lines of translated
 -- Willow code are in __wlo_lines, so runtime and wrapper frames drop out.
@@ -768,20 +769,22 @@ local function __wlo_report(err)
   return table.concat(lines, "\n")
 end
 
--- The program arguments as a Willow list, checked before main runs.
-local function __wlo_args(...)
-  local args = __wlo_list({ ... }, select("#", ...))
-  for i = 1, args.n do
-    if not __wlo_valid_utf8(args[i]) then
-      io.stderr:write("error: argument ", i, " is not valid UTF-8\n")
-      os.exit(1)
+-- A new list of the program arguments. They are validated here, on each call,
+-- so a malformed argument raises where the program asks for it.
+local function __wlo_args(site)
+  local args = {}
+  for i = 1, __wlo_argv.n do
+    if not __wlo_valid_utf8(__wlo_argv[i]) then
+      __wlo_fail("ValueError", "invalid UTF-8", site)
     end
+    args[i] = __wlo_argv[i]
   end
-  return args
+  return __wlo_list(args, __wlo_argv.n)
 end
 
 local function __wlo_run(main, ...)
-  local ok, err = xpcall(main, __wlo_catch, ...)
+  __wlo_argv = { n = select("#", ...), ... }
+  local ok, err = xpcall(main, __wlo_catch)
   if not ok then
     io.stderr:write(__wlo_report(err), "\n")
     os.exit(1)

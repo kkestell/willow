@@ -77,11 +77,31 @@ return {
 
   main_required = function()
     eq("1:1: program has no main function", bind_error("def f() -> None:\n    pass\n"))
-    bind_source("def main(args: list[str]) -> None:\n    pass\n")
-    local message = "1:5: main must take no parameters or one list[str] parameter and return None"
+    local message = "1:5: main must take no parameters and return None"
+    eq(message, bind_error("def main(args: list[str]) -> None:\n    pass\n"))
     eq(message, bind_error("def main(x: int) -> None:\n    pass\n"))
-    eq(message, bind_error("def main(a: list[str], b: int) -> None:\n    pass\n"))
     eq(message, bind_error("def main() -> int:\n    return 0\n"))
+  end,
+
+  standard_modules = function()
+    local program = bind_source(table.concat({
+      "import sys",
+      "import fs",
+      "def main() -> None:",
+      "    a = sys.args()",
+      "    sys.exit(0)",
+      "    b = fs.read_file('a')",
+      "",
+    }, "\n"))
+    local body = program.functions[1].body
+    eq("Builtin", body[1].value.target.kind)
+    eq("args", body[1].value.target.name)
+    eq("exit", body[2].call.target.name)
+    eq("read_file", body[3].value.target.name)
+    eq("3:9: module 'sys' has no function, record, or alias 'missing'",
+      bind_error("import sys\ndef main() -> None:\n    sys.missing()\n"))
+    eq("3:11: module 'sys' cannot be used as a value", bind_error("import sys\ndef main() -> None:\n    print(sys)\n"))
+    bind_source("def exit(status: int) -> None:\n    pass\ndef eprint(x: int) -> None:\n    exit(x)\n" .. MAIN)
   end,
 
   locals_cover_the_whole_body = function()

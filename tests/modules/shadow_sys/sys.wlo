@@ -1,0 +1,5 @@
+def exit(status: int) -> None:
+    print(f"exit {status}")
+
+def args() -> str:
+    return "local sys"

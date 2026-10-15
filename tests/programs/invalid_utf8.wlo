@@ -1,3 +1,5 @@
+import fs
+
 def main() -> None:
     print(input())
     try:
@@ -5,11 +7,11 @@ def main() -> None:
     except ValueError as error:
         print(error.message)
     try:
-        read_file("invalid_utf8.in")
+        fs.read_file("invalid_utf8.in")
     except ValueError as error:
         print(error.message)
     try:
-        read_file("missing.txt")
+        fs.read_file("missing.txt")
     except OSError as failure:
         print(failure.message)
-    read_file("missing.txt")
+    fs.read_file("missing.txt")

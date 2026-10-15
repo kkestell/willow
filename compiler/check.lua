@@ -48,6 +48,7 @@ local builtins = {
   float = { params = { "any" }, result = types.float },
   len = { params = { "any" }, result = types.int },
   input = { params = {}, result = optional_of(types.str) },
+  args = { params = {}, result = types.list(types.str) },
   read_file = { params = { types.str }, result = types.str },
   write_file = { params = { types.str, types.str }, result = types.None },
   exit = { params = { types.int }, result = types.None },
@@ -383,13 +384,14 @@ local function check_function(fn)
         end
       end
       local arg_type = builtin and node.args[1] and node.args[1].type
-      if (node.name == "print" or node.name == "eprint") and builtin and not types.printable(arg_type) then
+      local name = target.name
+      if (name == "print" or name == "eprint") and builtin and not types.printable(arg_type) then
         diag.error(node.args[1].span, "cannot print a value of type " .. arg_type.name)
-      elseif node.name == "str" and builtin and not types.printable(arg_type) then
+      elseif name == "str" and builtin and not types.printable(arg_type) then
         diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type.name .. " to str")
-      elseif builtin and conversions[node.name] and arg_type and not conversions[node.name][arg_type.kind] then
-        diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type.name .. " to " .. node.name)
-      elseif node.name == "len" and builtin and arg_type ~= types.str and not index_types(arg_type) then
+      elseif builtin and conversions[name] and arg_type and not conversions[name][arg_type.kind] then
+        diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type.name .. " to " .. name)
+      elseif name == "len" and builtin and arg_type ~= types.str and not index_types(arg_type) then
         diag.error(node.span, "'len' cannot be applied to " .. arg_type.name)
       end
       if builtin then

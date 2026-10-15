@@ -1,0 +1,14 @@
+import fs
+import sys
+
+def main() -> None:
+    args = sys.args()
+    if len(args) != 1:
+        sys.eprint("usage: chars <file>")
+        sys.exit(2)
+    try:
+        text = fs.read_file(args[0])
+    except OSError as error:
+        sys.eprint(error.message)
+        sys.exit(1)
+    print(len(text))

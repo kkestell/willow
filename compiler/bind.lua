@@ -12,13 +12,29 @@ local builtins = {
   len = { kind = "Builtin", name = "len" },
   range = { kind = "Builtin", name = "range" },
   input = { kind = "Builtin", name = "input" },
-  eprint = { kind = "Builtin", name = "eprint" },
-  read_file = { kind = "Builtin", name = "read_file" },
-  write_file = { kind = "Builtin", name = "write_file" },
-  exit = { kind = "Builtin", name = "exit" },
   ord = { kind = "Builtin", name = "ord" },
   chr = { kind = "Builtin", name = "chr" },
   isinstance = { kind = "Builtin", name = "isinstance" },
+}
+
+-- The compiler-provided modules. They have no source: their declarations are
+-- built-in targets, and a program's own `sys.wlo` or `fs.wlo` shadows them.
+M.modules = {
+  sys = {
+    name = "sys",
+    declarations = {
+      args = { kind = "Builtin", name = "args" },
+      eprint = { kind = "Builtin", name = "eprint" },
+      exit = { kind = "Builtin", name = "exit" },
+    },
+  },
+  fs = {
+    name = "fs",
+    declarations = {
+      read_file = { kind = "Builtin", name = "read_file" },
+      write_file = { kind = "Builtin", name = "write_file" },
+    },
+  },
 }
 
 -- The built-in exception classes, records with only a `message` field.
@@ -401,7 +417,7 @@ local function declare(module, modules_by_name, entry)
     end
     taken[name] = true
     if declaration.kind == "Import" then
-      module.imported[name] = modules_by_name[name]
+      module.imported[name] = modules_by_name[name] or M.modules[name]
     else
       declaration.module = module
       module.declarations[name] = declaration
@@ -453,10 +469,8 @@ function M.bind(modules)
   if not (main and main.kind == "Function") then
     diag.error(entry.span, "program has no main function")
   end
-  local params = main.params
-  if #params > 1 or #params == 1 and not types.same(params[1].type, types.list(types.str))
-    or main.return_type ~= types.None then
-    diag.error(main.span, "main must take no parameters or one list[str] parameter and return None")
+  if #main.params > 0 or main.return_type ~= types.None then
+    diag.error(main.span, "main must take no parameters and return None")
   end
 
   for _, module in ipairs(modules) do

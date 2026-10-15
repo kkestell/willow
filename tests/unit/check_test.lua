@@ -479,14 +479,20 @@ return {
   end,
 
   io_builtins = function()
-    eq("3:5: unreachable statement", check_errors(in_main("exit(0)\nprint(1)")))
-    check_source("def f() -> int:\n    exit(1)\n" .. MAIN)
+    local function with_modules(source)
+      return "import sys\nimport fs\n" .. source
+    end
+    eq("5:5: unreachable statement", check_errors(with_modules(in_main("sys.exit(0)\nprint(1)"))))
+    check_source(with_modules("def f() -> int:\n    sys.exit(1)\n" .. MAIN))
+    check_source("def exit(status: int) -> None:\n    pass\n" .. in_main("exit(0)\nprint(1)"))
     eq("3:9: 'len' cannot be applied to str | None", check_errors(in_main("line = input()\nn = len(line)")))
-    check_source(in_main("line = input()\nif line is not None:\n    write_file('out.txt', read_file(line))"))
-    eq("2:10: expected int, received str", check_errors(in_main("exit('x')")))
-    eq("2:5: 'write_file' expects 2 arguments, received 1", check_errors(in_main("write_file('a')")))
-    eq("2:12: cannot print a value of type list[int]", check_errors(in_main("eprint([1])")))
-    check_source(in_main("try:\n    eprint(read_file('a'))\nexcept OSError as error:\n    eprint(error.message)"))
+    local program = check_source(with_modules(in_main("args = sys.args()")))
+    eq("list[str]", program.functions[1].body[1].symbol.type.name)
+    check_source(with_modules(in_main("line = input()\nif line is not None:\n    fs.write_file('out.txt', fs.read_file(line))")))
+    eq("4:14: expected int, received str", check_errors(with_modules(in_main("sys.exit('x')"))))
+    eq("4:8: 'fs.write_file' expects 2 arguments, received 1", check_errors(with_modules(in_main("fs.write_file('a')"))))
+    eq("4:16: cannot print a value of type list[int]", check_errors(with_modules(in_main("sys.eprint([1])"))))
+    check_source(with_modules(in_main("try:\n    sys.eprint(fs.read_file('a'))\nexcept OSError as error:\n    sys.eprint(error.message)")))
   end,
 
   aliases_and_union_assignability = function()

@@ -1,15 +1,19 @@
-def main(args: list[str]) -> None:
+import fs
+import sys
+
+def main() -> None:
+    args = sys.args()
     if len(args) != 1:
-        eprint("usage: number <output>")
-        exit(2)
+        sys.eprint("usage: number <output>")
+        sys.exit(2)
     numbered: list[str] = []
     line = input()
     while line is not None:
         numbered.append(f"{len(numbered) + 1}: {line}\n")
         line = input()
     try:
-        write_file(args[0], "".join(numbered))
+        fs.write_file(args[0], "".join(numbered))
     except OSError as error:
-        eprint(error.message)
-        exit(1)
+        sys.eprint(error.message)
+        sys.exit(1)
     print(f"wrote {len(numbered)} lines")

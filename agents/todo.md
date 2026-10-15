@@ -179,10 +179,10 @@ Section numbers refer to that document.
 
 ## Eighth slice
 
-- [ ] `sys` and `fs` modules (docs/spec.md §1, §11, §14)
-  - [ ] Loader and bind: `sys` and `fs` as compiler-provided modules, checked right after the entry file's directory without probing `lib/`, with member signatures declared in the compiler like built-ins; a program's own `sys.wlo` or `fs.wlo` shadows them
-  - [ ] Bind: `eprint`, `read_file`, `write_file`, and `exit` no longer built-in names; `main(args: list[str])` rejected, leaving `main() -> None` as the only entry signature
-  - [ ] Check: `sys.args`, `sys.eprint` accepting printable values like `print`, `sys.exit`, `fs.read_file`, and `fs.write_file`; a statement calling the standard `sys.exit` transfers control, a shadowing module's `exit` does not
-  - [ ] Runtime: `sys.args()` returning a new list of the arguments on each call and raising `ValueError` `invalid UTF-8` for a malformed argument; no validation before `main` runs; existing helpers reused for the moved functions
-  - [ ] Update `examples/number.wlo` and the existing tests to the new names
-  - [ ] Tests: each moved function under its module name, the old built-in names now free for user declarations, `main(args)` rejected, `sys.args()` through `run`, compiled, and built output, a malformed argument raising from `sys.args()`, `sys.exit` as a transfer, shadowing `sys` with a local module; the §14 `sys` example
+- [x] `sys` and `fs` modules (docs/spec.md §1, §11, §14)
+  - [x] Loader and bind: `sys` and `fs` as compiler-provided modules, checked right after the entry file's directory without probing `lib/`, with member signatures declared in the compiler like built-ins; a program's own `sys.wlo` or `fs.wlo` shadows them
+  - [x] Bind: `eprint`, `read_file`, `write_file`, and `exit` no longer built-in names; `main(args: list[str])` rejected, leaving `main() -> None` as the only entry signature
+  - [x] Check: `sys.args`, `sys.eprint` accepting printable values like `print`, `sys.exit`, `fs.read_file`, and `fs.write_file`; a statement calling the standard `sys.exit` transfers control, a shadowing module's `exit` does not
+  - [x] Runtime: `sys.args()` returning a new list of the arguments on each call and raising `ValueError` `invalid UTF-8` for a malformed argument; no validation before `main` runs; existing helpers reused for the moved functions
+  - [x] Update `examples/number.wlo` and the existing tests to the new names
+  - [x] Tests: each moved function under its module name, the old built-in names now free for user declarations, `main(args)` rejected, `sys.args()` through `run`, compiled, and built output, a malformed argument raising from `sys.args()`, `sys.exit` as a transfer, shadowing `sys` with a local module; the §14 `sys` example

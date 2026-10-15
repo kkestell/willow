@@ -1,2 +1,2 @@
-invalid_utf8.wlo:15:5: error: OSError: cannot read missing.txt: No such file or directory
-  in main at invalid_utf8.wlo:15:5
+invalid_utf8.wlo:17:8: error: OSError: cannot read missing.txt: No such file or directory
+  in main at invalid_utf8.wlo:17:8

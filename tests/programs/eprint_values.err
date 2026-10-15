@@ -2,5 +2,5 @@
 2.5
 text
 None
-eprint_values.wlo:6:5: error: ValueError: done
-  in main at eprint_values.wlo:6:5
+eprint_values.wlo:8:5: error: ValueError: done
+  in main at eprint_values.wlo:8:5

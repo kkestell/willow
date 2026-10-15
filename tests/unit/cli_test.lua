@@ -248,9 +248,18 @@ return {
     end)
   end,
 
-  arguments_reach_main = function()
+  arguments_reach_sys_args = function()
     in_temp_dir(function(dir)
-      write(dir .. "/prog.wlo", "def main(args: list[str]) -> None:\n    print(len(args))\n    for a in args:\n        print(a)\n")
+      write(dir .. "/prog.wlo", table.concat({
+        "import sys",
+        "def main() -> None:",
+        "    first = sys.args()",
+        "    args = sys.args()",
+        "    print(len(args))",
+        "    for a in args:",
+        "        print(a)",
+        "",
+      }, "\n"))
       local args = " a -o --x 'b c'"
       local expected = "4\na\n-o\n--x\nb c\n"
       local status, stdout = willow(dir, "run prog.wlo" .. args)
@@ -269,17 +278,27 @@ return {
 
   invalid_utf8_argument = function()
     in_temp_dir(function(dir)
-      write(dir .. "/prog.wlo", "def main(args: list[str]) -> None:\n    print(1)\n")
+      write(dir .. "/prog.wlo", table.concat({
+        "import sys",
+        "def main() -> None:",
+        "    print(1)",
+        "    try:",
+        "        sys.args()",
+        "    except ValueError as error:",
+        "        print(error.message)",
+        "    sys.args()",
+        "",
+      }, "\n"))
       local status, stdout, stderr = willow(dir, "run prog.wlo ok \"$(printf '\\377')\"")
       eq(1, status)
-      eq("", stdout)
-      eq("error: argument 2 is not valid UTF-8\n", stderr)
+      eq("1\ninvalid UTF-8\n", stdout)
+      eq("prog.wlo:8:9: error: ValueError: invalid UTF-8\n  in main at prog.wlo:8:9\n", stderr)
     end)
   end,
 
   exit_status = function()
     in_temp_dir(function(dir)
-      write(dir .. "/three.wlo", "def main() -> None:\n    print(1)\n    exit(3)\n")
+      write(dir .. "/three.wlo", "import sys\ndef main() -> None:\n    print(1)\n    sys.exit(3)\n")
       local status, stdout, stderr = willow(dir, "run three.wlo")
       eq(3, status)
       eq("1\n", stdout)
@@ -288,15 +307,15 @@ return {
       status, stdout = sh(dir, "./three")
       eq(3, status)
       eq("1\n", stdout)
-      write(dir .. "/finally.wlo", "def main() -> None:\n    try:\n        exit(0)\n    finally:\n        print(1)\n")
+      write(dir .. "/finally.wlo", "import sys\ndef main() -> None:\n    try:\n        sys.exit(0)\n    finally:\n        print(1)\n")
       status, stdout = willow(dir, "run finally.wlo")
       eq(0, status)
       eq("", stdout)
       for _, value in ipairs({ "256", "-1" }) do
-        write(dir .. "/range.wlo", "def main() -> None:\n    exit(" .. value .. ")\n")
+        write(dir .. "/range.wlo", "import sys\ndef main() -> None:\n    sys.exit(" .. value .. ")\n")
         status, stdout, stderr = willow(dir, "run range.wlo")
         eq(1, status)
-        eq("range.wlo:2:5: error: ValueError: exit status out of range\n  in main at range.wlo:2:5\n", stderr)
+        eq("range.wlo:3:9: error: ValueError: exit status out of range\n  in main at range.wlo:3:9\n", stderr)
       end
     end)
   end,
@@ -305,12 +324,13 @@ return {
     in_temp_dir(function(dir)
       local text = "caf\195\169\r\nline\n"
       write(dir .. "/prog.wlo", table.concat({
+        "import fs",
         "def main() -> None:",
         "    text = 'caf\\u00e9\\r\\nline\\n'",
-        "    write_file('out.txt', text)",
-        "    print(read_file('out.txt') == text)",
+        "    fs.write_file('out.txt', text)",
+        "    print(fs.read_file('out.txt') == text)",
         "    try:",
-        "        write_file('missing/out.txt', text)",
+        "        fs.write_file('missing/out.txt', text)",
         "    except OSError as error:",
         "        print(error.message.startswith('cannot write missing/out.txt: '))",
       }, "\n"))
@@ -332,6 +352,24 @@ return {
       status, stdout, stderr = willow(dir, "run " .. example .. " </dev/null")
       eq(2, status)
       eq("usage: number <output>\n", stderr)
+    end)
+  end,
+
+  chars_example = function()
+    in_temp_dir(function(dir)
+      local example = quote(ROOT .. "/examples/chars.wlo")
+      local status, stdout, stderr = willow(dir, "run " .. example)
+      eq(2, status)
+      eq("", stdout)
+      eq("usage: chars <file>\n", stderr)
+      status, stdout, stderr = willow(dir, "run " .. example .. " missing.txt")
+      eq(1, status)
+      eq("cannot read missing.txt: No such file or directory\n", stderr)
+      write(dir .. "/text.txt", "h\195\169llo\n")
+      status, stdout, stderr = willow(dir, "run " .. example .. " text.txt")
+      eq(0, status)
+      eq("6\n", stdout)
+      eq("", stderr)
     end)
   end,
 
