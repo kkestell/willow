@@ -1,4 +1,4 @@
--- Checks types and definite assignment, annotating the tree in place.
+-- Checks types, definite assignment, and narrowing, annotating the tree in place.
 local diag = require("compiler.diag")
 
 local M = {}
@@ -10,15 +10,9 @@ local unary_types = {
   ["not"] = { bool = "bool" },
 }
 
--- Result types keyed by "<left type> <right type>".
+-- Result types keyed by "<left type> <right type>". Equality is handled
+-- separately.
 local ARITHMETIC = { ["int int"] = "int", ["float float"] = "float" }
-local EQUALITY = {
-  ["int int"] = "bool",
-  ["float float"] = "bool",
-  ["bool bool"] = "bool",
-  ["str str"] = "bool",
-  ["None None"] = "bool",
-}
 local ORDERING = { ["int int"] = "bool", ["float float"] = "bool" }
 local binary_types = {
   ["+"] = { ["int int"] = "int", ["float float"] = "float", ["str str"] = "str" },
@@ -29,8 +23,6 @@ local binary_types = {
   ["%"] = ARITHMETIC,
   ["and"] = { ["bool bool"] = "bool" },
   ["or"] = { ["bool bool"] = "bool" },
-  ["=="] = EQUALITY,
-  ["!="] = EQUALITY,
   ["<"] = ORDERING,
   ["<="] = ORDERING,
   [">"] = ORDERING,
@@ -44,24 +36,82 @@ local builtins = {
   float = { param = "int", result = "float" },
 }
 
+local OPTIONAL = " | None"
+
+local function optional(type)
+  return type:sub(-#OPTIONAL) == OPTIONAL
+end
+
+local function base(type)
+  return type:sub(1, -#OPTIONAL - 1)
+end
+
+local function assignable(target, source)
+  return target == source or optional(target) and (source == "None" or source == base(target))
+end
+
 local function expect_type(node, expected, actual)
-  if actual ~= expected then
+  if not assignable(expected, actual) then
     diag.error(node.span, "expected " .. expected .. ", received " .. actual)
   end
 end
 
-local function copy(set)
+-- A flow state maps each definitely assigned symbol to its type at that point:
+-- the base type where a check narrowed it, and its declared type otherwise.
+-- Facts map symbols to the narrowed types a condition proves.
+local NO_FACTS = {}
+
+local function copy(map)
   local result = {}
-  for key in pairs(set) do
-    result[key] = true
+  for key, value in pairs(map) do
+    result[key] = value
   end
   return result
 end
 
-local function add_all(set, other)
-  for key in pairs(other) do
-    set[key] = true
+local function narrow(state, facts)
+  local result = copy(state)
+  for symbol, type in pairs(facts) do
+    result[symbol] = type
   end
+  return result
+end
+
+-- Symbols assigned in both states, narrowed where both narrow them.
+local function join(a, b)
+  local result = {}
+  for symbol, type in pairs(a) do
+    if b[symbol] then
+      result[symbol] = b[symbol] == type and type or symbol.type
+    end
+  end
+  return result
+end
+
+local function replace(state, result)
+  for symbol in pairs(state) do
+    state[symbol] = nil
+  end
+  for symbol, type in pairs(result) do
+    state[symbol] = type
+  end
+end
+
+-- Adds the symbol of every assignment in `body`, including nested blocks.
+local function assigned_symbols(body, result)
+  for _, statement in ipairs(body) do
+    if statement.kind == "Assign" then
+      result[statement.symbol] = true
+    elseif statement.kind == "If" then
+      assigned_symbols(statement.body, result)
+      if statement.else_body then
+        assigned_symbols(statement.else_body, result)
+      end
+    elseif statement.kind == "While" then
+      assigned_symbols(statement.body, result)
+    end
+  end
+  return result
 end
 
 local function arguments(count)
@@ -71,10 +121,12 @@ end
 local function check_function(fn)
   local return_type = fn.return_type.name
 
-  -- `assigned` is the set of symbols definitely assigned before `node` runs.
-  local function check_expression(node, assigned)
+  -- Returns the type of `node` in `state`, then the facts that hold when it is
+  -- true and when it is false.
+  local function check_expression(node, state)
     local kind = node.kind
     local type
+    local true_facts, false_facts = NO_FACTS, NO_FACTS
     if kind == "Int" then
       type = "int"
     elseif kind == "Float" then
@@ -86,22 +138,59 @@ local function check_function(fn)
     elseif kind == "None" then
       type = "None"
     elseif kind == "Name" then
-      if not assigned[node.symbol] then
+      type = state[node.symbol]
+      if not type then
         diag.error(node.span, "variable '" .. node.name .. "' may be used before assignment")
       end
-      type = node.symbol.type
     elseif kind == "Unary" then
-      local operand = check_expression(node.operand, assigned)
+      local operand, operand_true, operand_false = check_expression(node.operand, state)
       type = unary_types[node.op][operand]
       if not type then
         diag.error(node.span, "operator '" .. node.op .. "' cannot be applied to " .. operand)
       end
+      if node.op == "not" then
+        true_facts, false_facts = operand_false, operand_true
+      end
+    elseif kind == "Is" then
+      local operand = check_expression(node.operand, state)
+      if not optional(operand) then
+        diag.error(node.span, "operator '" .. node.op .. "' cannot be applied to " .. operand)
+      end
+      type = "bool"
+      if node.operand.kind == "Name" then
+        local facts = { [node.operand.symbol] = base(operand) }
+        if node.op == "is" then
+          false_facts = facts
+        else
+          true_facts = facts
+        end
+      end
     elseif kind == "Binary" then
-      local left = check_expression(node.left, assigned)
-      local right = check_expression(node.right, assigned)
-      type = binary_types[node.op][left .. " " .. right]
+      local op = node.op
+      local left, left_true, left_false = check_expression(node.left, state)
+      -- The right operand of `and` runs only when the left is true, and of `or`
+      -- only when it is false.
+      local right_state = state
+      if op == "and" then
+        right_state = narrow(state, left_true)
+      elseif op == "or" then
+        right_state = narrow(state, left_false)
+      end
+      local right, right_true, right_false = check_expression(node.right, right_state)
+      if op == "==" or op == "!=" then
+        if assignable(left, right) or assignable(right, left) then
+          type = "bool"
+        end
+      else
+        type = binary_types[op][left .. " " .. right]
+      end
       if not type then
-        diag.error(node.span, "operator '" .. node.op .. "' cannot be applied to " .. left .. " and " .. right)
+        diag.error(node.span, "operator '" .. op .. "' cannot be applied to " .. left .. " and " .. right)
+      end
+      if op == "and" then
+        true_facts = narrow(left_true, right_true)
+      elseif op == "or" then
+        false_facts = narrow(left_false, right_false)
       end
     elseif kind == "Call" then
       local target = node.target
@@ -111,7 +200,7 @@ local function check_function(fn)
         diag.error(node.span, "'" .. node.name .. "' expects " .. arguments(count) .. ", received " .. #node.args)
       end
       for i, arg in ipairs(node.args) do
-        local arg_type = check_expression(arg, assigned)
+        local arg_type = check_expression(arg, state)
         local param
         if builtin then
           param = builtin.param
@@ -125,17 +214,23 @@ local function check_function(fn)
       type = builtin and builtin.result or target.return_type.name
     end
     node.type = type
-    return type
+    return type, true_facts, false_facts
+  end
+
+  local function check_condition(node, state)
+    local type, true_facts, false_facts = check_expression(node, state)
+    expect_type(node, "bool", type)
+    return true_facts, false_facts
   end
 
   local check_block
 
-  -- Checks one statement, adding to `assigned`; returns true if it transfers
+  -- Checks one statement, updating `state`; returns true if it transfers
   -- control so that the next statement cannot run.
-  local function check_statement(statement, assigned, in_loop)
+  local function check_statement(statement, state, in_loop)
     local kind = statement.kind
     if kind == "Assign" then
-      local value_type = check_expression(statement.value, assigned)
+      local value_type = check_expression(statement.value, state)
       local symbol = statement.symbol
       if statement.annotation then
         if symbol.param then
@@ -152,12 +247,17 @@ local function check_function(fn)
       else
         symbol.type = value_type
       end
-      assigned[symbol] = true
+      -- Assigning a value that cannot be None narrows an optional local.
+      if value_type == "None" or optional(value_type) then
+        state[symbol] = symbol.type
+      else
+        state[symbol] = value_type
+      end
     elseif kind == "CallStmt" then
-      check_expression(statement.call, assigned)
+      check_expression(statement.call, state)
     elseif kind == "Return" then
       if statement.value then
-        expect_type(statement.value, return_type, check_expression(statement.value, assigned))
+        expect_type(statement.value, return_type, check_expression(statement.value, state))
       else
         expect_type(statement, return_type, "None")
       end
@@ -168,53 +268,55 @@ local function check_function(fn)
       end
       return true
     elseif kind == "If" then
-      expect_type(statement.condition, "bool", check_expression(statement.condition, assigned))
-      local body_assigned, body_transfers = check_block(statement.body, assigned, in_loop)
-      local else_assigned, else_transfers = assigned, false
+      local true_facts, false_facts = check_condition(statement.condition, state)
+      local body_state, body_transfers = check_block(statement.body, narrow(state, true_facts), in_loop)
+      local else_state, else_transfers = narrow(state, false_facts), false
       if statement.else_body then
-        else_assigned, else_transfers = check_block(statement.else_body, assigned, in_loop)
+        else_state, else_transfers = check_block(statement.else_body, else_state, in_loop)
       end
-      -- Branch results contain the entry set, so joining only adds to it.
       if body_transfers and else_transfers then
         return true
       elseif body_transfers then
-        add_all(assigned, else_assigned)
+        replace(state, else_state)
       elseif else_transfers then
-        add_all(assigned, body_assigned)
+        replace(state, body_state)
       else
-        for symbol in pairs(body_assigned) do
-          if else_assigned[symbol] then
-            assigned[symbol] = true
-          end
-        end
+        replace(state, join(body_state, else_state))
       end
     elseif kind == "While" then
-      expect_type(statement.condition, "bool", check_expression(statement.condition, assigned))
+      -- Narrowing before the loop holds in the condition, the body, and after
+      -- the loop only for locals the body does not assign.
+      for symbol in pairs(assigned_symbols(statement.body, {})) do
+        if state[symbol] then
+          state[symbol] = symbol.type
+        end
+      end
+      local true_facts = check_condition(statement.condition, state)
       -- The body may run zero times, so its assignments are not definite after the loop.
-      check_block(statement.body, assigned, true)
+      check_block(statement.body, narrow(state, true_facts), true)
     end
     return false
   end
 
   check_block = function(body, entry, in_loop)
-    local assigned = copy(entry)
+    local state = copy(entry)
     local transfers = false
     for _, statement in ipairs(body) do
       if transfers then
         diag.error(statement.span, "unreachable statement")
       end
-      transfers = check_statement(statement, assigned, in_loop)
+      transfers = check_statement(statement, state, in_loop)
     end
-    return assigned, transfers
+    return state, transfers
   end
 
-  local assigned = {}
+  local state = {}
   for _, param in ipairs(fn.params) do
     param.symbol.type = param.type.name
-    assigned[param.symbol] = true
+    state[param.symbol] = param.type.name
   end
   -- Outside a loop only `return` transfers control at function level.
-  local _, transfers = check_block(fn.body, assigned, false)
+  local _, transfers = check_block(fn.body, state, false)
   if return_type ~= "None" and not transfers then
     diag.error(fn.span, "function '" .. fn.name .. "' must return a value on every path")
   end

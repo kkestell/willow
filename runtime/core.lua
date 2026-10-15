@@ -213,7 +213,7 @@ local function __wlo_print(value, site)
 end
 
 local function __wlo_print_float(value, site)
-  __wlo_write(__wlo_format_float(value), site)
+  __wlo_write(value == nil and "None" or __wlo_format_float(value), site)
 end
 
 local function __wlo_where(location)

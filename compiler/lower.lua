@@ -26,6 +26,8 @@ local function is_pure(node)
     return false
   elseif kind == "Unary" then
     return not (node.op == "-" and node.type == "int") and is_pure(node.operand)
+  elseif kind == "Is" then
+    return is_pure(node.operand)
   elseif kind == "Binary" then
     return not binary_helper(node) and is_pure(node.left) and is_pure(node.right)
   end
@@ -101,6 +103,9 @@ local function lower_function(fn, sites)
         return { kind = "Neg", operand = operand }
       end
       return helper("neg", { operand }, node.span)
+    elseif kind == "Is" then
+      local op = node.op == "is" and "==" or "!="
+      return { kind = "Binary", op = op, left = lower_operand(node.operand), right = { kind = "Literal" } }
     elseif kind == "Binary" then
       if (node.op == "and" or node.op == "or") and not is_pure(node.right) then
         return lower_short_circuit(node)
@@ -124,7 +129,8 @@ local function lower_function(fn, sites)
       end
       if node.target.kind == "Builtin" then
         local name = node.name
-        if name == "print" and node.args[1].type == "float" then
+        local arg_type = node.args[1].type
+        if name == "print" and (arg_type == "float" or arg_type == "float | None") then
           name = "print_float"
         end
         return helper(name, args, node.span)

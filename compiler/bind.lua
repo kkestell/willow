@@ -61,7 +61,7 @@ local function resolve_function(fn, scope, functions)
       for _, arg in ipairs(node.args) do
         resolve_expression(arg)
       end
-    elseif kind == "Unary" then
+    elseif kind == "Unary" or kind == "Is" then
       resolve_expression(node.operand)
     elseif kind == "Binary" then
       resolve_expression(node.left)

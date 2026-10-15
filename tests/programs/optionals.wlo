@@ -1,0 +1,54 @@
+def describe(name: str | None) -> str:
+    if name is None:
+        return "anonymous"
+    return "user " + name
+
+def find(limit: int) -> int | None:
+    if limit > 3:
+        return limit * 2
+    return None
+
+def show(i: int | None, f: float | None, s: str | None, b: bool | None) -> None:
+    print(i)
+    print(f)
+    print(s)
+    print(b)
+
+def main() -> None:
+    count: int | None = None
+    print(describe(None))           # anonymous
+    print(describe("ada"))          # user ada
+    if count is not None and count > 0:
+        print(count)
+    print(count)                    # None
+
+    show(1, 2.5, "s", True)
+    show(None, None, None, None)
+    show(-3, -0.0, "", False)
+
+    found = find(5)
+    print(found)
+    print(find(1))
+    print(found == 10)
+    print(found != None)
+    print(find(1) == None)
+    print(None == find(2))
+    print(found is None)
+    print(found is not None)
+    print(find(1) is None)
+    print(not found is None)
+
+    total = 0
+    limit = 0
+    next: int | None = find(limit)
+    while next is None:
+        limit = limit + 1
+        next = find(limit)
+    if next is not None:
+        total = total + next
+    print(total)
+
+    best: str | None = None
+    if best is None or best == "x":
+        best = "chosen"
+    print(best + "!")

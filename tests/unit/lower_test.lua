@@ -166,6 +166,10 @@ return {
     eq("t1 = int_floordiv(7, 2)#1; t2 = int_mod(7, 2)#2; x = add(t1, t2)#3", lower_main("x = 7 // 2 + 7 % 2"))
   end,
 
+  is_none_compares_with_nil = function()
+    eq("x = None; y = (x == None); z = (x != None)", lower_main("x: int | None = None\ny = x is None\nz = x is not None"))
+  end,
+
   conversions = function()
     eq("x = f(1); y = int(1.5)#1", lower_main("x = float(f(1))\ny = int(1.5)", INT_HELPERS))
     eq("f(1)", lower_main("float(f(1))", INT_HELPERS))

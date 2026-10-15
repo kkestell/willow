@@ -56,6 +56,8 @@ show = function(node)
     return node.name .. "(" .. show_list(node.args, ", ") .. ")"
   elseif kind == "Unary" then
     return "(" .. node.op .. " " .. show(node.operand) .. ")"
+  elseif kind == "Is" then
+    return "(" .. show(node.operand) .. " " .. node.op .. " None)"
   elseif kind == "Binary" then
     return "(" .. show(node.left) .. " " .. node.op .. " " .. show(node.right) .. ")"
   elseif kind == "Param" then
@@ -180,6 +182,27 @@ return {
     eq("((((((a * b) / c) // d) % e) + f) - g)", expr("a * b / c // d % e + f - g"))
   end,
 
+  optional_annotations = function()
+    local source = "def f(x: int | None) -> str | None:\n    y: bool | None = None\n    return None\n"
+    eq("def f(x: int | None) -> str | None { y: bool | None = None; return None }", show(parse(source).functions[1]))
+    local message = "unions other than 'T | None' are not supported"
+    eq("1:15: " .. message, parse_error("def f(x: None | int) -> None:\n    pass\n"))
+    eq("1:16: " .. message, parse_error("def f(x: int | str) -> None:\n    pass\n"))
+    eq("1:21: " .. message, parse_error("def f(x: int | None | None) -> None:\n    pass\n"))
+  end,
+
+  is_none = function()
+    eq("(x is None)", expr("x is None"))
+    eq("(not (x is None))", expr("not x is None"))
+    eq("((x is not None) and ((x + 1) is None))", expr("x is not None and x + 1 is None"))
+    eq("2:14: expected 'None', found integer", body_error("x = a is 3"))
+    eq("2:19: comparison chains are not supported", body_error("x = a is None == b"))
+    eq("2:16: comparison chains are not supported", body_error("x = a == b is None"))
+    eq("2:11: unsupported operator '|'", body_error("x = a | b"))
+    eq("2:16: unsupported operator '|'", body_error("x = a == b | c"))
+    eq("2:19: unsupported operator '|'", body_error("x = a is None | b"))
+  end,
+
   conversions_are_calls = function()
     eq("int(x)", expr("int(x)"))
     eq("(float(1) / 0.5)", expr("float(1) / 0.5"))
@@ -221,7 +244,6 @@ return {
     eq("2:5: 'for' is not supported", body_error("for x in y:\n    pass"))
     eq("2:5: 'try' is not supported", body_error("try:\n    pass"))
     eq("2:9: 'lambda' is not supported", body_error("x = lambda"))
-    eq("2:11: 'is' is not supported", body_error("x = a is b"))
     eq("2:13: 'in' is not supported", body_error("while x in y:\n    pass"))
     eq("2:5: nested functions are not supported", body_error("def g() -> None:\n    pass"))
   end,

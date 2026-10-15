@@ -89,13 +89,13 @@ Section numbers refer to that document.
   - [x] Float formatting matching Python `repr`: shortest round-trip digits, fixed or scientific notation by exponent, `-0.0`, `inf`, `-inf`, `nan`
   - [x] Tests: literal forms and rejections, mixed `int`/`float` errors, sign cases for `//` and `%` checked against Python, zero divisors, conversion boundaries, formatting; a float example
 
-- [ ] Optional types (§14)
-  - [ ] Parser: `T | None` annotations; `None | T`, other unions, and nested optionals rejected; `is None` and `is not None` at the comparison level
-  - [ ] Check: `T` and `None` assignable to `T | None`; a local's first assignment fixes its type and later assignments must be assignable to it
-  - [ ] Check: `is` only on an optional operand against literal `None`; `==` and `!=` when one operand type is assignable to the other; other operations on unnarrowed optionals rejected
-  - [ ] Check: narrowing facts from `is None`, `is not None`, `not`, `and`, and `or`, flowing through `if`/`elif`/`else` joins, `while` bodies, assignments, and loops as §14 describes
-  - [ ] Emit and runtime: `is None` and `is not None` as `nil` comparisons; printing optionals
-  - [ ] Tests: annotation forms and rejections, assignability, reassignment rules, narrowing after early return, in `elif`/`else`, through `and`/`or`/`not`, ended by assignment, and cleared by loop assignments; field and index expressions that do not narrow
+- [x] Optional types (§14)
+  - [x] Parser: `T | None` annotations; `None | T`, other unions, and nested optionals rejected; `is None` and `is not None` at the comparison level
+  - [x] Check: `T` and `None` assignable to `T | None`; a local's first assignment fixes its type and later assignments must be assignable to it
+  - [x] Check: `is` only on an optional operand against literal `None`; `==` and `!=` when one operand type is assignable to the other; other operations on unnarrowed optionals rejected
+  - [x] Check: narrowing facts from `is None`, `is not None`, `not`, `and`, and `or`, flowing through `if`/`elif`/`else` joins, `while` bodies, assignments, and loops as §14 describes
+  - [x] Emit and runtime: `is None` and `is not None` as `nil` comparisons; printing optionals
+  - [x] Tests: annotation forms and rejections, assignability, reassignment rules, narrowing after early return, in `elif`/`else`, through `and`/`or`/`not`, ended by assignment, and cleared by loop assignments
 
 - [ ] Lists, dictionaries, and `for` (§12, §15)
   - [ ] Lexer: `[`, `]`, `{`, `}`, `.`; newlines inside brackets and braces produce no `NEWLINE`, `INDENT`, or `DEDENT`
@@ -105,14 +105,14 @@ Section numbers refer to that document.
   - [ ] Check: `for` over lists, dictionaries, and `range`; `range` only as a `for` iterable; loop name typing; loop names not definitely assigned after the loop; `break` and `continue` in `for`
   - [ ] Runtime: lists with an explicit length that store `None`; dictionaries in insertion order with stored `None` distinct from missing keys; helpers for indexing, index assignment, `append`, `pop`, `get`, `pop(k)`, and `in`, raising the §15 messages
   - [ ] Lower and emit: display evaluation order; index assignment evaluating the right-hand side, the object, then the index; `for` evaluating its iterable once, rechecking list length each step, and detecting dictionary key changes; loop names keeping their last value; zero `range` step rejected
-  - [ ] Tests: display inference and rejections, invariance, stored `None`, out-of-range and negative indexes, missing keys, empty `pop`, dictionary order after replace and reinsert, iteration while appending and while changing keys, `range` forms, evaluation order; a collections example
+  - [ ] Tests: display inference and rejections, invariance, stored `None`, out-of-range and negative indexes, missing keys, empty `pop`, dictionary order after replace and reinsert, iteration while appending and while changing keys, `range` forms, evaluation order, index expressions that do not narrow; a collections example
 
 - [ ] Records (§16)
   - [ ] Parser: `class Name:` with one or more `name: Type` fields and nothing else; file scope holds `def` and `class`; field access and field assignment targets
   - [ ] Bind: record names in the file-level namespace with functions and built-ins; duplicate record and field names rejected; forward and self references; constructors as call targets; locals shadowing constructors but not annotations
   - [ ] Check: nominal record types; constructor arity and argument assignability; field read and write types; unknown fields rejected; `==` and `print` reject records
   - [ ] Emit and runtime: records as Lua tables; constructor arguments evaluated left to right; field assignment evaluation order
-  - [ ] Tests: construction, mutation through aliases, recursive records with optional fields and narrowing, constructor arity and type errors, unknown fields; the §16 example
+  - [ ] Tests: construction, mutation through aliases, recursive records with optional fields and narrowing, constructor arity and type errors, unknown fields, field expressions that do not narrow; the §16 example
 
 - [ ] Richer strings (§17)
   - [ ] Lexer: triple-quoted strings with line breaks as `\n` and bare CR still rejected; `\x`, `\u`, `\U` escapes with surrogates and values above U+10FFFF rejected; f-strings with `{{`, `}}`, the field restrictions, and accurate spans inside fields

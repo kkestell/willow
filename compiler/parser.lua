@@ -16,12 +16,13 @@ end
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
 as assert async await case class del except finally for from global import in
-is lambda match nonlocal raise try type with yield
+lambda match nonlocal raise try type with yield
 ]])
 
-local compare_ops = set("== != < <= > >=")
+local compare_ops = set("== != < <= > >= is")
 local type_names = set("int float bool str None")
 local expression_starts = set("NAME INT FLOAT STRING True False None int float ( - + not")
+local UNIONS = "unions other than 'T | None' are not supported"
 local simple_statements = { pass = "Pass", ["break"] = "Break", continue = "Continue" }
 
 local descriptions = {
@@ -82,7 +83,18 @@ function M.parse(tokens)
       unexpected("a type")
     end
     advance()
-    return ast.node("Type", token.span, { name = token.kind })
+    local name = token.kind
+    if token.kind ~= "None" and accept("|") then
+      if peek().kind ~= "None" then
+        diag.error(peek().span, UNIONS)
+      end
+      advance()
+      name = name .. " | None"
+    end
+    if peek().kind == "|" then
+      diag.error(peek().span, UNIONS)
+    end
+    return ast.node("Type", token.span, { name = name })
   end
 
   local parse_expression
@@ -163,14 +175,36 @@ function M.parse(tokens)
   local parse_product = binary_level(set("* / // %"), parse_unary)
   local parse_sum = binary_level(set("+ -"), parse_product)
 
+  -- An expression before `|` ends at a comparison operand, so this is where
+  -- bitwise or is reported.
+  local function reject_bitwise_or()
+    if peek().kind == "|" then
+      diag.error(peek().span, "unsupported operator '|'")
+    end
+  end
+
+  local function parse_operand()
+    local node = parse_sum()
+    reject_bitwise_or()
+    return node
+  end
+
   -- Comparison operands are sums, so `a == not b` fails and chains are rejected.
   local function parse_comparison()
-    local left = parse_sum()
+    local left = parse_operand()
     if not compare_ops[peek().kind] then
       return left
     end
     local token = advance()
-    local node = ast.node("Binary", token.span, { op = token.kind, left = left, right = parse_sum() })
+    local node
+    if token.kind == "is" then
+      local op = accept("not") and "is not" or "is"
+      expect("None", "'None'")
+      reject_bitwise_or()
+      node = ast.node("Is", token.span, { op = op, operand = left })
+    else
+      node = ast.node("Binary", token.span, { op = token.kind, left = left, right = parse_operand() })
+    end
     if compare_ops[peek().kind] then
       diag.error(peek().span, "comparison chains are not supported")
     end

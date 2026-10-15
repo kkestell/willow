@@ -95,6 +95,64 @@ return {
     eq("2:9: 'float' expects 1 argument, received 0", check_errors(in_main("x = float()")))
   end,
 
+  optional_assignability = function()
+    local g = "def g(a: int | None) -> int | None:\n    if a is None:\n        return\n    return 1\n"
+    check_source(in_main("x = g(1)\ny = g(None)\nz: int | None = g(x)", g))
+    eq("2:12: expected int, received int | None",
+      check_errors("def h(a: int | None) -> int:\n    return a\n" .. MAIN))
+    eq("2:7: expected int | None, received str", check_errors(in_main("g('a')", g)))
+    eq("2:23: expected float | None, received int | None",
+      check_errors(in_main("x: float | None = g(1)", g)))
+  end,
+
+  optional_reassignment = function()
+    check_source(in_main("x: int | None = None\nx = 3\nx = None"))
+    eq("3:9: expected None, received int", check_errors(in_main("x = None\nx = 3")))
+    eq("3:9: expected int, received None", check_errors(in_main("x = 1\nx = None")))
+  end,
+
+  optional_operations = function()
+    local function errors(statements)
+      return check_errors(in_main("x: int | None = None\nif x is None:\n    pass\n" .. statements))
+    end
+    eq("5:11: operator '+' cannot be applied to int | None and int", errors("y = x + 1"))
+    eq("5:11: operator '<' cannot be applied to int | None and int", errors("y = x < 1"))
+    eq("5:8: expected bool, received int | None", errors("if x:\n    pass"))
+    eq("5:11: operator '==' cannot be applied to int | None and str", errors("y = x == 'a'"))
+    eq("3:11: operator 'is' cannot be applied to int", check_errors(in_main("x = 1\ny = x is None")))
+    eq("2:14: operator 'is not' cannot be applied to None", check_errors(in_main("y = None is not None")))
+    check_source(in_main("x: int | None = None\nif x is None:\n    pass\na = x == 1\nb = None != x\nprint(x)"))
+  end,
+
+  narrowing = function()
+    -- `f` starts on line 1 with optional parameters x and y.
+    local function f(statements)
+      return "def f(x: int | None, y: int | None) -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
+    end
+    local valid = {
+      "if x is None:\n    return\nprint(x + 1)",
+      "if x is None:\n    pass\nelif y is None:\n    print(x + 1)\nelse:\n    print(x + y)",
+      "if x is not None and x > 0:\n    print(x + 1)",
+      "if x is None or y is None:\n    return\nprint(x + y)",
+      "ok = x is None or x > 0",
+      "if not x is None:\n    print(x + 1)",
+      "if not (x is not None):\n    return\nprint(x + 1)",
+      "if x is None:\n    x = 1\nprint(x + 1)",
+      "while x is not None:\n    print(x + 1)\n    x = None",
+      "if x is None:\n    return\nwhile False:\n    print(x + 1)\nprint(x + 1)",
+    }
+    for _, statements in ipairs(valid) do
+      check_source(f(statements))
+    end
+    local unnarrowed = "operator '+' cannot be applied to int | None and int"
+    eq("4:13: " .. unnarrowed, check_errors(f("if x is not None:\n    pass\nprint(x + 1)")))
+    eq("5:13: " .. unnarrowed, check_errors(f("if x is None:\n    return\nx = y\nprint(x + 1)")))
+    eq("2:27: operator '>' cannot be applied to int | None and int",
+      check_errors(f("if x is not None or x > 0:\n    pass")))
+    eq("5:17: " .. unnarrowed, check_errors(f("if x is None:\n    return\nwhile True:\n    print(x + 1)\n    x = None")))
+    eq("6:13: " .. unnarrowed, check_errors(f("if x is None:\n    return\nwhile False:\n    x = None\nprint(x + 1)")))
+  end,
+
   equality_on_all_types = function()
     local program = check_source(in_main("a = 1 == 2\nb = True != False\nc = 'x' == 'y'\nd = None == print(1)"))
     for _, statement in ipairs(program.functions[1].body) do

@@ -18,9 +18,9 @@ elif else except finally for from global if import in is lambda match nonlocal
 not or pass raise return try type while with yield int float bool str
 ]])
 
-local operators = set("-> == != <= >= < > = + - * / // % ( ) , :")
+local operators = set("-> == != <= >= < > = + - * / // % | ( ) , :")
 
-local unsupported = set("**= //= <<= >>= ** << >> += -= *= /= %= &= |= ^= := & | ^ ~")
+local unsupported = set("**= //= <<= >>= ** << >> += -= *= /= %= &= |= ^= := & ^ ~")
 
 local escapes = { ["\\"] = "\\", ["'"] = "'", ['"'] = '"', n = "\n", r = "\r", t = "\t" }
 

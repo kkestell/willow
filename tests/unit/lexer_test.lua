@@ -147,12 +147,12 @@ return {
   end,
 
   operators = function()
-    local text = "-> == != <= >= < > = + - * / // % ( ) , :"
+    local text = "-> == != <= >= < > = + - * / // % | ( ) , :"
     eq(text .. " NEWLINE EOF", kinds(text))
   end,
 
   unsupported_operators = function()
-    for operator in ("/= //= %= ** += := & | ^ ~ << >>"):gmatch("%S+") do
+    for operator in ("/= //= %= |= ** += := & ^ ~ << >>"):gmatch("%S+") do
       eq("1:3: unsupported operator '" .. operator .. "'", lex_error("a " .. operator .. " b\n"))
     end
   end,
