@@ -3,19 +3,30 @@ local diag = require("compiler.diag")
 
 local M = {}
 
+local NUMBER = { int = "int", float = "float" }
 local unary_types = {
-  ["+"] = { int = "int" },
-  ["-"] = { int = "int" },
+  ["+"] = NUMBER,
+  ["-"] = NUMBER,
   ["not"] = { bool = "bool" },
 }
 
 -- Result types keyed by "<left type> <right type>".
-local EQUALITY = { ["int int"] = "bool", ["bool bool"] = "bool", ["str str"] = "bool", ["None None"] = "bool" }
-local ORDERING = { ["int int"] = "bool" }
+local ARITHMETIC = { ["int int"] = "int", ["float float"] = "float" }
+local EQUALITY = {
+  ["int int"] = "bool",
+  ["float float"] = "bool",
+  ["bool bool"] = "bool",
+  ["str str"] = "bool",
+  ["None None"] = "bool",
+}
+local ORDERING = { ["int int"] = "bool", ["float float"] = "bool" }
 local binary_types = {
-  ["+"] = { ["int int"] = "int", ["str str"] = "str" },
-  ["-"] = { ["int int"] = "int" },
-  ["*"] = { ["int int"] = "int" },
+  ["+"] = { ["int int"] = "int", ["float float"] = "float", ["str str"] = "str" },
+  ["-"] = ARITHMETIC,
+  ["*"] = ARITHMETIC,
+  ["/"] = { ["int int"] = "float", ["float float"] = "float" },
+  ["//"] = ARITHMETIC,
+  ["%"] = ARITHMETIC,
   ["and"] = { ["bool bool"] = "bool" },
   ["or"] = { ["bool bool"] = "bool" },
   ["=="] = EQUALITY,
@@ -24,6 +35,13 @@ local binary_types = {
   ["<="] = ORDERING,
   [">"] = ORDERING,
   [">="] = ORDERING,
+}
+
+-- Built-in signatures. Each takes one argument; print accepts every type.
+local builtins = {
+  print = { result = "None" },
+  int = { param = "float", result = "int" },
+  float = { param = "int", result = "float" },
 }
 
 local function expect_type(node, expected, actual)
@@ -59,6 +77,8 @@ local function check_function(fn)
     local type
     if kind == "Int" then
       type = "int"
+    elseif kind == "Float" then
+      type = "float"
     elseif kind == "String" then
       type = "str"
     elseif kind == "Bool" then
@@ -85,19 +105,24 @@ local function check_function(fn)
       end
     elseif kind == "Call" then
       local target = node.target
-      local builtin = target.kind == "Builtin"
+      local builtin = target.kind == "Builtin" and builtins[target.name]
       local count = builtin and 1 or #target.params
       if #node.args ~= count then
         diag.error(node.span, "'" .. node.name .. "' expects " .. arguments(count) .. ", received " .. #node.args)
       end
       for i, arg in ipairs(node.args) do
         local arg_type = check_expression(arg, assigned)
-        -- The only built-in, print, accepts every type.
-        if not builtin then
-          expect_type(arg, target.params[i].type.name, arg_type)
+        local param
+        if builtin then
+          param = builtin.param
+        else
+          param = target.params[i].type.name
+        end
+        if param then
+          expect_type(arg, param, arg_type)
         end
       end
-      type = builtin and "None" or target.return_type.name
+      type = builtin and builtin.result or target.return_type.name
     end
     node.type = type
     return type

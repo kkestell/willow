@@ -3,7 +3,11 @@ local diag = require("compiler.diag")
 
 local M = {}
 
-local PRINT = { kind = "Builtin", name = "print" }
+local builtins = {
+  print = { kind = "Builtin", name = "print" },
+  int = { kind = "Builtin", name = "int" },
+  float = { kind = "Builtin", name = "float" },
+}
 
 -- Gives the function one symbol per parameter and per assigned name, recording
 -- non-parameter symbols in `fn.locals` in order of first assignment.
@@ -41,7 +45,7 @@ local function resolve_function(fn, scope, functions)
     if kind == "Name" then
       node.symbol = scope[node.name]
       if not node.symbol then
-        if functions[node.name] or node.name == "print" then
+        if functions[node.name] or builtins[node.name] then
           diag.error(node.span, "function '" .. node.name .. "' cannot be used as a value")
         end
         diag.error(node.span, "unknown name '" .. node.name .. "'")
@@ -50,7 +54,7 @@ local function resolve_function(fn, scope, functions)
       if scope[node.name] then
         diag.error(node.span, "cannot call local variable '" .. node.name .. "'")
       end
-      node.target = functions[node.name] or (node.name == "print" and PRINT)
+      node.target = functions[node.name] or builtins[node.name]
       if not node.target then
         diag.error(node.span, "unknown function '" .. node.name .. "'")
       end

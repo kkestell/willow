@@ -1,7 +1,9 @@
 # TODO
 
-Milestones and tasks for implementing the first slice described in `willow.md`.
+Milestones and tasks for implementing the slices described in `willow.md`.
 Section numbers refer to that document.
+
+## First slice
 
 - [x] Scaffold
   - [x] `willow` launcher that locates its installation and runs `compiler/cli.lua` on `vendor/luajit/src/luajit`
@@ -75,3 +77,55 @@ Section numbers refer to that document.
   - [x] Program tests: integer boundaries, overflow on each operation, `-0.0`, string round trips, `None == None` evaluation order, argument evaluation order on failure, short-circuit effects, `continue` with temporaries, more than 200 temporaries in one function, recursion, exact output, column-accurate failures on multi-call lines and return-call sites
   - [x] CLI tests: `check` does not execute, `run` and built output agree, invalid source preserves output, input overwrite via path and symlink rejected, paths with spaces, standalone output runs outside the checkout
   - [x] Examples check, build, and run; README covers CLI usage; exercised platforms recorded
+
+## Second slice
+
+- [x] Floats and division (§12, §13)
+  - [x] Lexer: float literals with a fraction, an exponent, or both; digits on both sides of `.`; the integer leading-zero rule; literals that round to infinity rejected; `/`, `//`, `%` tokens
+  - [x] Parser: `/`, `//`, `%` at the `*` level; `float` as a reserved type name; `int(...)` and `float(...)` as conversion calls
+  - [x] Check: `float` type; same-type operands for arithmetic, equality, and ordering; `/` yields `float`; `//` and `%` keep the operand type; `float(int)` and `int(float)`
+  - [x] Runtime: `/` on ints and floats; integer `//` and `%` with floor semantics; float `//` and `%` matching Python; `division by zero` for zero divisors, including `-0.0`; `int(float)` truncation raising `cannot convert float to int`
+  - [x] Emit: unchecked IEEE `+ - *` and negation on floats; `print` selects integer or float formatting from the static type
+  - [x] Float formatting matching Python `repr`: shortest round-trip digits, fixed or scientific notation by exponent, `-0.0`, `inf`, `-inf`, `nan`
+  - [x] Tests: literal forms and rejections, mixed `int`/`float` errors, sign cases for `//` and `%` checked against Python, zero divisors, conversion boundaries, formatting; a float example
+
+- [ ] Optional types (§14)
+  - [ ] Parser: `T | None` annotations; `None | T`, other unions, and nested optionals rejected; `is None` and `is not None` at the comparison level
+  - [ ] Check: `T` and `None` assignable to `T | None`; a local's first assignment fixes its type and later assignments must be assignable to it
+  - [ ] Check: `is` only on an optional operand against literal `None`; `==` and `!=` when one operand type is assignable to the other; other operations on unnarrowed optionals rejected
+  - [ ] Check: narrowing facts from `is None`, `is not None`, `not`, `and`, and `or`, flowing through `if`/`elif`/`else` joins, `while` bodies, assignments, and loops as §14 describes
+  - [ ] Emit and runtime: `is None` and `is not None` as `nil` comparisons; printing optionals
+  - [ ] Tests: annotation forms and rejections, assignability, reassignment rules, narrowing after early return, in `elif`/`else`, through `and`/`or`/`not`, ended by assignment, and cleared by loop assignments; field and index expressions that do not narrow
+
+- [ ] Lists, dictionaries, and `for` (§12, §15)
+  - [ ] Lexer: `[`, `]`, `{`, `}`, `.`; newlines inside brackets and braces produce no `NEWLINE`, `INDENT`, or `DEDENT`
+  - [ ] Parser: `list[T]` and `dict[K, V]` annotations; list and dict displays with trailing commas; postfix indexing and method calls; index assignment targets; `in` and `not in`; `for name in expression:`
+  - [ ] Bind: `len` and `range` as built-in names that file-level declarations cannot use and locals shadow; `for` names as function locals
+  - [ ] Check: display typing with and without an expected type; empty displays without one rejected; invariance; `int` and `str` keys only; operation types from the §15 table, including `get` on optional values; `in` on lists only for element types with `==`; `==` and `print` reject collections
+  - [ ] Check: `for` over lists, dictionaries, and `range`; `range` only as a `for` iterable; loop name typing; loop names not definitely assigned after the loop; `break` and `continue` in `for`
+  - [ ] Runtime: lists with an explicit length that store `None`; dictionaries in insertion order with stored `None` distinct from missing keys; helpers for indexing, index assignment, `append`, `pop`, `get`, `pop(k)`, and `in`, raising the §15 messages
+  - [ ] Lower and emit: display evaluation order; index assignment evaluating the right-hand side, the object, then the index; `for` evaluating its iterable once, rechecking list length each step, and detecting dictionary key changes; loop names keeping their last value; zero `range` step rejected
+  - [ ] Tests: display inference and rejections, invariance, stored `None`, out-of-range and negative indexes, missing keys, empty `pop`, dictionary order after replace and reinsert, iteration while appending and while changing keys, `range` forms, evaluation order; a collections example
+
+- [ ] Records (§16)
+  - [ ] Parser: `class Name:` with one or more `name: Type` fields and nothing else; file scope holds `def` and `class`; field access and field assignment targets
+  - [ ] Bind: record names in the file-level namespace with functions and built-ins; duplicate record and field names rejected; forward and self references; constructors as call targets; locals shadowing constructors but not annotations
+  - [ ] Check: nominal record types; constructor arity and argument assignability; field read and write types; unknown fields rejected; `==` and `print` reject records
+  - [ ] Emit and runtime: records as Lua tables; constructor arguments evaluated left to right; field assignment evaluation order
+  - [ ] Tests: construction, mutation through aliases, recursive records with optional fields and narrowing, constructor arity and type errors, unknown fields; the §16 example
+
+- [ ] Richer strings (§17)
+  - [ ] Lexer: triple-quoted strings with line breaks as `\n` and bare CR still rejected; `\x`, `\u`, `\U` escapes with surrogates and values above U+10FFFF rejected; f-strings with `{{`, `}}`, the field restrictions, and accurate spans inside fields
+  - [ ] Parser: f-string fields as expressions
+  - [ ] Check: printable field types; `str(...)`; string ordering; `len`, `in`, and the §17 methods; `for` over strings
+  - [ ] Runtime: one formatting routine shared by `print`, `str(...)`, and f-strings; code-point length and iteration; `startswith`, `endswith`, `find` by code-point index, `replace` including an empty `old`, ASCII `strip`, `split` raising `empty separator`, and `join`, matching Python
+  - [ ] Tests: triple-quoted line endings, numeric escape boundaries, f-string evaluation order and rejections, non-ASCII length, ordering, and method results checked against Python; a strings example
+
+- [ ] Modules (§18)
+  - [ ] Parser: `import name` before declarations; `module.name` in calls, constructors, and annotations
+  - [ ] Loader: resolve `name.wlo` in the entry file's directory; load each module once; allow cycles; report a missing module at its import; order modules by first import, depth first
+  - [ ] Bind: a file scope per module; import name conflicts; local shadowing of module names; `_` names private to their module; `main` required only in the entry file
+  - [ ] Check: collect signatures and records from every module before checking bodies
+  - [ ] Emit: one standalone file for all modules; per-module name mangling; source map and site entries carrying file paths
+  - [ ] CLI: `check`, `run`, and `build` process every reachable module; any module error prevents execution and output; the overwrite check covers every module
+  - [ ] Tests: multi-file program fixtures, cycles, private names, missing modules, errors reported in imported files, runtime frames across files, standalone built output; the §18 example

@@ -37,7 +37,167 @@ local function __wlo_neg(a, site)
   return __wlo_check(-a, site)
 end
 
+-- LuaJIT's dual-number mode multiplies integer-valued operands as integers,
+-- so a zero product of opposite signs needs its sign restored.
+local function __wlo_float_mul(a, b, site)
+  local value = a * b
+  if value == 0 and (a < 0 or 1 / a < 0) ~= (b < 0 or 1 / b < 0) then
+    return -0.0
+  end
+  return value
+end
+
+-- Fails on a zero divisor, including -0.0.
+local function __wlo_div(a, b, site)
+  if b == 0 then
+    __wlo_fail("division", "division by zero", site)
+  end
+  return a / b
+end
+
+-- Floor quotient and remainder by CPython's float_divmod. For integers in range
+-- fmod and the subtraction are exact, so the results are too.
+local function __wlo_divmod(a, b, site)
+  if b == 0 then
+    __wlo_fail("division", "division by zero", site)
+  end
+  local mod = math.fmod(a, b)
+  local div = (a - mod) / b
+  if mod ~= 0 then
+    if (b < 0) ~= (mod < 0) then
+      mod = mod + b
+      div = div - 1
+    end
+  else
+    mod = b < 0 and -0.0 or 0.0
+  end
+  if div ~= 0 then
+    local floor = math.floor(div)
+    if div - floor > 0.5 then
+      floor = floor + 1
+    end
+    div = floor
+  else
+    -- 1 / q is negative when q is -0.0.
+    local q = a / b
+    div = (q < 0 or 1 / q < 0) and -0.0 or 0.0
+  end
+  return div, mod
+end
+
+local function __wlo_floordiv(a, b, site)
+  local div = __wlo_divmod(a, b, site)
+  return div
+end
+
+local function __wlo_mod(a, b, site)
+  local _, mod = __wlo_divmod(a, b, site)
+  return mod
+end
+
+local function __wlo_int_floordiv(a, b, site)
+  local div = __wlo_divmod(a, b, site)
+  if div == 0 then
+    return 0
+  end
+  return div
+end
+
+local function __wlo_int_mod(a, b, site)
+  local _, mod = __wlo_divmod(a, b, site)
+  if mod == 0 then
+    return 0
+  end
+  return mod
+end
+
+-- Truncates toward zero.
+local function __wlo_int(x, site)
+  local value = x < 0 and math.ceil(x) or math.floor(x)
+  if value ~= value or value > __wlo_MAX_INT or value < -__wlo_MAX_INT then
+    __wlo_fail("conversion", "cannot convert float to int", site)
+  end
+  if value == 0 then
+    return 0
+  end
+  return value
+end
+
+-- Adds one to the last digit of a string of decimal digits.
+local function __wlo_digits_up(digits)
+  local i = #digits
+  while i > 0 and digits:sub(i, i) == "9" do
+    i = i - 1
+  end
+  if i == 0 then
+    return "1" .. ("0"):rep(#digits)
+  end
+  return digits:sub(1, i - 1) .. string.char(digits:byte(i) + 1) .. ("0"):rep(#digits - i)
+end
+
+-- Formats a float as Python's repr does: the fewest digits that read back as
+-- the same value, in scientific notation when the exponent is below -4 or at
+-- least 16.
+local function __wlo_format_float(x)
+  if x ~= x then
+    return "nan"
+  end
+  -- 1 / x is negative when x is -0.0.
+  local sign = (x < 0 or 1 / x < 0) and "-" or ""
+  x = math.abs(x)
+  if x == math.huge then
+    return sign .. "inf"
+  end
+  local digits, exponent
+  for precision = 0, 16 do
+    local text = string.format("%." .. precision .. "e", x)
+    local first, rest, e = text:match("^(%d)%.?(%d*)e(.*)$")
+    digits, exponent = first .. rest, tonumber(e)
+    local value = tonumber(text)
+    if value == x then
+      break
+    end
+    -- Next to a power of two the rounding interval below x is half as wide as
+    -- the one above, so the decimal above can read back when the nearest
+    -- decimal, below x, does not.
+    if value < x then
+      local up = __wlo_digits_up(digits)
+      local up_exponent = exponent + #up - #digits
+      if tonumber(up:sub(1, 1) .. "." .. up:sub(2) .. "e" .. up_exponent) == x then
+        digits, exponent = up, up_exponent
+        break
+      end
+    end
+  end
+  digits = digits:gsub("0+$", "")
+  if digits == "" then
+    digits = "0"
+  end
+  local text
+  if exponent < -4 or exponent >= 16 then
+    text = digits:sub(1, 1) .. (#digits > 1 and "." .. digits:sub(2) or "")
+      .. string.format("e%s%02d", exponent < 0 and "-" or "+", math.abs(exponent))
+  elseif exponent < 0 then
+    text = "0." .. ("0"):rep(-exponent - 1) .. digits
+  else
+    digits = digits .. ("0"):rep(exponent + 1 - #digits)
+    local fraction = digits:sub(exponent + 2)
+    text = digits:sub(1, exponent + 1) .. "." .. (fraction == "" and "0" or fraction)
+  end
+  return sign .. text
+end
+
 -- Flushes every line so a write failure is reported at the print that hit it.
+local function __wlo_write(text, site)
+  local ok, err = io.stdout:write(text, "\n")
+  if ok then
+    ok, err = io.stdout:flush()
+  end
+  if not ok then
+    __wlo_fail("io", "cannot write output: " .. tostring(err), site)
+  end
+end
+
 local function __wlo_print(value, site)
   local text = value
   if value == nil then
@@ -49,13 +209,11 @@ local function __wlo_print(value, site)
   elseif type(value) == "number" then
     text = string.format("%d", value)
   end
-  local ok, err = io.stdout:write(text, "\n")
-  if ok then
-    ok, err = io.stdout:flush()
-  end
-  if not ok then
-    __wlo_fail("io", "cannot write output: " .. tostring(err), site)
-  end
+  __wlo_write(text, site)
+end
+
+local function __wlo_print_float(value, site)
+  __wlo_write(__wlo_format_float(value), site)
 end
 
 local function __wlo_where(location)

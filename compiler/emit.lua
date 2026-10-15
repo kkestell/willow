@@ -25,6 +25,9 @@ local binary_ops = {
   ["<="] = "<=",
   [">"] = ">",
   [">="] = ">=",
+  ["+"] = "+",
+  ["-"] = "-",
+  ["*"] = "*",
   ["and"] = "and",
   ["or"] = "or",
   concat = "..",
@@ -49,6 +52,20 @@ function M.mangle(name)
     return name .. "_"
   end
   return name
+end
+
+-- Integers print as integers; other numbers use the fewest significant digits
+-- that read back as the same value.
+local function number(value)
+  if value == math.floor(value) and math.abs(value) <= 9007199254740991 then
+    return string.format("%d", value)
+  end
+  for precision = 1, 17 do
+    local text = string.format("%." .. precision .. "g", value)
+    if tonumber(text) == value then
+      return text
+    end
+  end
 end
 
 function M.emit(lowered, path)
@@ -80,7 +97,7 @@ function M.emit(lowered, path)
     local kind = e.kind
     if kind == "Literal" then
       if type(e.value) == "number" then
-        return string.format("%d", e.value)
+        return number(e.value)
       elseif type(e.value) == "string" then
         return M.quote(e.value)
       end
@@ -91,6 +108,9 @@ function M.emit(lowered, path)
       return "__wlo_t" .. e.index
     elseif kind == "Not" then
       return "not " .. expr(e.operand, true)
+    elseif kind == "Neg" then
+      local text = "-" .. expr(e.operand, true)
+      return nested and "(" .. text .. ")" or text
     elseif kind == "Binary" then
       local text = expr(e.left, true) .. " " .. binary_ops[e.op] .. " " .. expr(e.right, true)
       return nested and "(" .. text .. ")" or text

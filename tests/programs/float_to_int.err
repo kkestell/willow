@@ -1,0 +1,2 @@
+float_to_int.wlo:4:11: error: cannot convert float to int
+  in main at float_to_int.wlo:4:11

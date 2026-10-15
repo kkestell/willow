@@ -42,6 +42,8 @@ show = function(node)
   local kind = node.kind
   if kind == "Int" then
     return string.format("%d", node.value)
+  elseif kind == "Float" then
+    return string.format("%.17g", node.value)
   elseif kind == "String" then
     return string.format("%q", node.value)
   elseif kind == "Bool" then
@@ -175,6 +177,14 @@ return {
     eq("((- a) * b)", expr("-a * b"))
     eq("((a + b) * c)", expr("(a + b) * c"))
     eq("(not (not True))", expr("not not True"))
+    eq("((((((a * b) / c) // d) % e) + f) - g)", expr("a * b / c // d % e + f - g"))
+  end,
+
+  conversions_are_calls = function()
+    eq("int(x)", expr("int(x)"))
+    eq("(float(1) / 0.5)", expr("float(1) / 0.5"))
+    eq("{ x: float = 2.5; float(1) }", body("x: float = 2.5\nfloat(1)"))
+    eq("2:9: expected an expression, found 'int'", body_error("x = int"))
   end,
 
   binary_span_is_the_operator = function()

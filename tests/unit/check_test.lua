@@ -68,6 +68,33 @@ return {
     eq("2:11: operator '==' cannot be applied to int and str", check_errors(in_main("x = 1 == 'a'")))
   end,
 
+  float_types = function()
+    local program = check_source(in_main(table.concat({
+      "a = 1.5 * -2.0 + 0.5 - 1.0",
+      "b = 7 / 2",
+      "c = 7 // 2 + 7 % 2",
+      "d = 7.0 // 2.0 + 7.0 % 2.0",
+      "e = a < b and a != b",
+      "f = int(a)",
+      "g = float(f)",
+    }, "\n")))
+    local types = {}
+    for i, statement in ipairs(program.functions[1].body) do
+      types[i] = statement.value.type
+    end
+    eq("float float int float bool int float", table.concat(types, " "))
+  end,
+
+  float_type_errors = function()
+    eq("2:11: operator '+' cannot be applied to int and float", check_errors(in_main("x = 1 + 1.5")))
+    eq("2:11: operator '==' cannot be applied to int and float", check_errors(in_main("x = 1 == 1.0")))
+    eq("2:11: operator '<' cannot be applied to int and float", check_errors(in_main("x = 1 < 1.5")))
+    eq("2:13: operator '/' cannot be applied to str and str", check_errors(in_main("x = 'a' / 'b'")))
+    eq("2:13: expected float, received int", check_errors(in_main("x = int(1)")))
+    eq("2:15: expected int, received float", check_errors(in_main("x = float(1.5)")))
+    eq("2:9: 'float' expects 1 argument, received 0", check_errors(in_main("x = float()")))
+  end,
+
   equality_on_all_types = function()
     local program = check_source(in_main("a = 1 == 2\nb = True != False\nc = 'x' == 'y'\nd = None == print(1)"))
     for _, statement in ipairs(program.functions[1].body) do

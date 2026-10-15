@@ -35,7 +35,7 @@ show_expr = function(e)
     elseif type(e.value) == "string" then
       return string.format("%q", e.value)
     elseif type(e.value) == "number" then
-      return string.format("%d", e.value)
+      return string.format(e.value == math.floor(e.value) and "%d" or "%.17g", e.value)
     end
     return tostring(e.value)
   elseif kind == "Local" then
@@ -44,6 +44,8 @@ show_expr = function(e)
     return "t" .. e.index
   elseif kind == "Not" then
     return "(not " .. show_expr(e.operand) .. ")"
+  elseif kind == "Neg" then
+    return "(-" .. show_expr(e.operand) .. ")"
   elseif kind == "Binary" then
     return "(" .. show_expr(e.left) .. " " .. e.op .. " " .. show_expr(e.right) .. ")"
   elseif kind == "Call" then
@@ -154,6 +156,20 @@ return {
 
   print_is_a_helper = function()
     eq("t1 = f(1); print(t1)#1", lower_main("print(f(1))", INT_HELPERS))
+  end,
+
+  float_operations = function()
+    eq("a = 1.5; x = ((a + (-a)) - 0.5); t1 = float_mul(a, 2)#1; y = (x < t1)",
+      lower_main("a = 1.5\nx = a + -a - 0.5\ny = x < a * 2.0"))
+    eq("x = div(7, 2)#1; t1 = floordiv(1.5, 0.5)#2; t2 = mod(1.5, 0.5)#3; y = (t1 + t2)",
+      lower_main("x = 7 / 2\ny = 1.5 // 0.5 + 1.5 % 0.5"))
+    eq("t1 = int_floordiv(7, 2)#1; t2 = int_mod(7, 2)#2; x = add(t1, t2)#3", lower_main("x = 7 // 2 + 7 % 2"))
+  end,
+
+  conversions = function()
+    eq("x = f(1); y = int(1.5)#1", lower_main("x = float(f(1))\ny = int(1.5)", INT_HELPERS))
+    eq("f(1)", lower_main("float(f(1))", INT_HELPERS))
+    eq("print_float(1)#1; print(1)#2", lower_main("print(float(1))\nprint(1)"))
   end,
 
   loops_and_transfers = function()

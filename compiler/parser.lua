@@ -20,8 +20,8 @@ is lambda match nonlocal raise try type with yield
 ]])
 
 local compare_ops = set("== != < <= > >=")
-local type_names = set("int bool str None")
-local expression_starts = set("NAME INT STRING True False None ( - + not")
+local type_names = set("int float bool str None")
+local expression_starts = set("NAME INT FLOAT STRING True False None int float ( - + not")
 local simple_statements = { pass = "Pass", ["break"] = "Break", continue = "Continue" }
 
 local descriptions = {
@@ -30,6 +30,7 @@ local descriptions = {
   INDENT = "indent",
   DEDENT = "dedent",
   INT = "integer",
+  FLOAT = "float",
   STRING = "string",
 }
 
@@ -105,6 +106,9 @@ function M.parse(tokens)
     if kind == "INT" or kind == "STRING" then
       advance()
       node = ast.node(kind == "INT" and "Int" or "String", token.span, { value = token.value })
+    elseif kind == "FLOAT" then
+      advance()
+      node = ast.node("Float", token.span, { value = token.value })
     elseif kind == "True" or kind == "False" then
       advance()
       node = ast.node("Bool", token.span, { value = kind == "True" })
@@ -118,6 +122,10 @@ function M.parse(tokens)
       else
         node = ast.node("Name", token.span, { name = token.value })
       end
+    elseif (kind == "int" or kind == "float") and tokens[pos + 1].kind == "(" then
+      advance()
+      advance()
+      node = ast.node("Call", token.span, { name = kind, args = parse_args() })
     elseif kind == "(" then
       advance()
       node = parse_expression()
@@ -152,7 +160,7 @@ function M.parse(tokens)
     end
   end
 
-  local parse_product = binary_level(set("*"), parse_unary)
+  local parse_product = binary_level(set("* / // %"), parse_unary)
   local parse_sum = binary_level(set("+ -"), parse_product)
 
   -- Comparison operands are sums, so `a == not b` fails and chains are rejected.

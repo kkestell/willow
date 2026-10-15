@@ -1,7 +1,21 @@
 -- Lowers the checked tree into explicit evaluation order and control flow.
 local M = {}
 
-local helpers = { ["+"] = "add", ["-"] = "sub", ["*"] = "mul" }
+-- Runtime helpers for binary operations, keyed by operator and result type.
+-- Other operations are plain Lua operators.
+local binary_helpers = {
+  ["+"] = { int = "add" },
+  ["-"] = { int = "sub" },
+  ["*"] = { int = "mul", float = "float_mul" },
+  ["/"] = { float = "div" },
+  ["//"] = { int = "int_floordiv", float = "floordiv" },
+  ["%"] = { int = "int_mod", float = "mod" },
+}
+
+local function binary_helper(node)
+  local helpers = binary_helpers[node.op]
+  return helpers and helpers[node.type]
+end
 
 -- True when evaluating `node` can neither call anything nor fail, so it can be
 -- evaluated wherever its value is used. Callees cannot change a caller's
@@ -11,10 +25,9 @@ local function is_pure(node)
   if kind == "Call" then
     return false
   elseif kind == "Unary" then
-    return node.op ~= "-" and is_pure(node.operand)
+    return not (node.op == "-" and node.type == "int") and is_pure(node.operand)
   elseif kind == "Binary" then
-    -- A binary operation of type int is checked arithmetic.
-    return node.type ~= "int" and is_pure(node.left) and is_pure(node.right)
+    return not binary_helper(node) and is_pure(node.left) and is_pure(node.right)
   end
   return true
 end
@@ -71,7 +84,7 @@ local function lower_function(fn, sites)
   -- itself may be one call or helper call.
   lower_value = function(node)
     local kind = node.kind
-    if kind == "Int" or kind == "String" or kind == "Bool" then
+    if kind == "Int" or kind == "Float" or kind == "String" or kind == "Bool" then
       return { kind = "Literal", value = node.value }
     elseif kind == "None" then
       return { kind = "Literal" }
@@ -84,6 +97,8 @@ local function lower_function(fn, sites)
       local operand = lower_operand(node.operand)
       if node.op == "not" then
         return { kind = "Not", operand = operand }
+      elseif node.type == "float" then
+        return { kind = "Neg", operand = operand }
       end
       return helper("neg", { operand }, node.span)
     elseif kind == "Binary" then
@@ -92,18 +107,27 @@ local function lower_function(fn, sites)
       end
       local left = lower_operand(node.left)
       local right = lower_operand(node.right)
-      if node.type == "int" then
-        return helper(helpers[node.op], { left, right }, node.span)
+      local name = binary_helper(node)
+      if name then
+        return helper(name, { left, right }, node.span)
       end
-      local op = node.op == "+" and "concat" or node.op
+      local op = node.type == "str" and "concat" or node.op
       return { kind = "Binary", op = op, left = left, right = right }
     elseif kind == "Call" then
+      if node.name == "float" then
+        -- A Willow integer is already the same Lua number as a float.
+        return lower_value(node.args[1])
+      end
       local args = {}
       for i, arg in ipairs(node.args) do
         args[i] = lower_operand(arg)
       end
       if node.target.kind == "Builtin" then
-        return helper("print", args, node.span)
+        local name = node.name
+        if name == "print" and node.args[1].type == "float" then
+          name = "print_float"
+        end
+        return helper(name, args, node.span)
       end
       return { kind = "Call", target = node.target, args = args, span = node.span }
     end
@@ -132,8 +156,11 @@ local function lower_function(fn, sites)
     if kind == "Assign" then
       set({ kind = "Local", symbol = statement.symbol }, lower_value(statement.value), statement.span)
     elseif kind == "CallStmt" then
+      -- float(x) lowers to x, which leaves nothing to evaluate as a statement.
       local value = lower_value(statement.call)
-      emit({ kind = "Eval", value = value, span = value.span })
+      if value.kind == "Call" or value.kind == "Helper" then
+        emit({ kind = "Eval", value = value, span = value.span })
+      end
     elseif kind == "Return" then
       -- A returned value never contains a call, so no return is a tail call.
       local value = statement.value and lower_operand(statement.value)

@@ -104,8 +104,8 @@ return {
   end,
 
   keywords_and_names = function()
-    eq("while True and not NAME int bool str None lambda NAME NAME NEWLINE EOF",
-      kinds("while True and not x_1 int bool str None lambda print _\n"))
+    eq("while True and not NAME int float bool str None lambda NAME NAME NEWLINE EOF",
+      kinds("while True and not x_1 int float bool str None lambda print _\n"))
   end,
 
   integer_literals = function()
@@ -114,9 +114,25 @@ return {
     eq("1:5: integer literal has leading zeros", lex_error("x = 007\n"))
     eq("1:5: integer literal out of range", lex_error("x = 9007199254740992\n"))
     eq("1:5: integer literal out of range", lex_error("x = 12345678901234567890\n"))
-    eq("1:5: invalid integer literal '1.5'", lex_error("x = 1.5\n"))
-    eq("1:5: invalid integer literal '0x1F'", lex_error("x = 0x1F\n"))
-    eq("1:5: invalid integer literal '1_000'", lex_error("x = 1_000\n"))
+    eq("1:5: invalid number literal '0x1F'", lex_error("x = 0x1F\n"))
+    eq("1:5: invalid number literal '1_000'", lex_error("x = 1_000\n"))
+  end,
+
+  float_literals = function()
+    eq("FLOAT", single("1.0").kind)
+    eq(1, single("1.0").value)
+    eq(0.25, single("0.25").value)
+    eq(1e9, single("1e9").value)
+    eq(2.5e-3, single("2.5e-3").value)
+    eq(1e5, single("1E+5").value)
+    eq(0.1, single("0.1").value)
+    eq("1:5: invalid number literal '1.'", lex_error("x = 1.\n"))
+    eq("1:5: invalid number literal '1.e5'", lex_error("x = 1.e5\n"))
+    eq("1:5: invalid number literal '1e'", lex_error("x = 1e\n"))
+    eq("1:5: invalid number literal '1.5.2'", lex_error("x = 1.5.2\n"))
+    eq("1:5: float literal has leading zeros", lex_error("x = 01.5\n"))
+    eq("1:5: float literal has leading zeros", lex_error("x = 00e1\n"))
+    eq("1:5: float literal out of range", lex_error("x = 1e400\n"))
   end,
 
   string_literals = function()
@@ -131,12 +147,12 @@ return {
   end,
 
   operators = function()
-    local text = "-> == != <= >= < > = + - * ( ) , :"
+    local text = "-> == != <= >= < > = + - * / // % ( ) , :"
     eq(text .. " NEWLINE EOF", kinds(text))
   end,
 
   unsupported_operators = function()
-    for operator in ("/ // % ** += := & | ^ ~ << >>"):gmatch("%S+") do
+    for operator in ("/= //= %= ** += := & | ^ ~ << >>"):gmatch("%S+") do
       eq("1:3: unsupported operator '" .. operator .. "'", lex_error("a " .. operator .. " b\n"))
     end
   end,

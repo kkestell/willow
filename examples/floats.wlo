@@ -1,0 +1,23 @@
+def average(total: int, count: int) -> float:
+    return total / count
+
+def compound(principal: float, rate: float, years: int) -> float:
+    balance = principal
+    year = 0
+    while year < years:
+        balance = balance * (1.0 + rate)
+        year = year + 1
+    return balance
+
+def main() -> None:
+    print(average(17, 4))
+    print(17 // 4)
+    print(17 % 4)
+    print(-17 // 4)
+    print(-17 % 4)
+    balance = compound(1000.0, 0.05, 10)
+    print(balance)
+    print(int(balance))
+    print(float(int(balance * 100.0)) / 100.0)
+    print(1.0 / 3.0)
+    print(2.0e-7)

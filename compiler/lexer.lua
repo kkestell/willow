@@ -15,12 +15,12 @@ end
 local keywords = set([[
 False None True and as assert async await break case class continue def del
 elif else except finally for from global if import in is lambda match nonlocal
-not or pass raise return try type while with yield int bool str
+not or pass raise return try type while with yield int float bool str
 ]])
 
-local operators = set("-> == != <= >= < > = + - * ( ) , :")
+local operators = set("-> == != <= >= < > = + - * / // % ( ) , :")
 
-local unsupported = set("**= //= <<= >>= ** // << >> += -= *= /= %= &= |= ^= := / % & | ^ ~")
+local unsupported = set("**= //= <<= >>= ** << >> += -= *= /= %= &= |= ^= := & | ^ ~")
 
 local escapes = { ["\\"] = "\\", ["'"] = "'", ['"'] = '"', n = "\n", r = "\r", t = "\t" }
 
@@ -147,18 +147,30 @@ function M.lex(source)
         end
         pos = pos + #word
       elseif c:match("%d") then
-        local text = source:match("^[%w_.]+", pos)
-        if text:find("%D") then
-          fail(pos, "invalid integer literal '" .. text .. "'")
+        local digits = source:match("^%d+", pos)
+        local text = source:match("^%d+%.%d+", pos) or digits
+        text = text .. (source:match("^[eE][-+]?%d+", pos + #text) or "")
+        local rest = source:match("^[%w_.]*", pos + #text)
+        if rest ~= "" then
+          fail(pos, "invalid number literal '" .. text .. rest .. "'")
         end
-        if #text > 1 and text:sub(1, 1) == "0" then
-          fail(pos, "integer literal has leading zeros")
+        local kind = text == digits and "integer" or "float"
+        if #digits > 1 and digits:sub(1, 1) == "0" then
+          fail(pos, kind .. " literal has leading zeros")
         end
-        -- Compare digit strings so out-of-range values are never rounded.
-        if #text > #MAX_INT or (#text == #MAX_INT and text > MAX_INT) then
-          fail(pos, "integer literal out of range")
+        local value = tonumber(text)
+        if kind == "float" then
+          if value == math.huge then
+            fail(pos, "float literal out of range")
+          end
+          add("FLOAT", pos, pos + #text - 1, value)
+        else
+          -- Compare digit strings so out-of-range values are never rounded.
+          if #text > #MAX_INT or (#text == #MAX_INT and text > MAX_INT) then
+            fail(pos, "integer literal out of range")
+          end
+          add("INT", pos, pos + #text - 1, value)
         end
-        add("INT", pos, pos + #text - 1, tonumber(text))
         pos = pos + #text
       elseif c == "'" or c == '"' then
         pos = read_string(pos, last)
