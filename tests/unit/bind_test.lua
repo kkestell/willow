@@ -11,7 +11,7 @@ end
 
 local function bind_source(source)
   local program = parser.parse(lexer.lex(source))
-  bind.bind(program)
+  bind.bind({ program })
   return program
 end
 
@@ -27,6 +27,31 @@ local function bind_error(source)
 end
 
 local MAIN = "def main() -> None:\n    pass\n"
+
+-- Parses a list of { name, source } pairs into a module list, entry first.
+local function bind_modules(sources)
+  local modules = {}
+  for i, source in ipairs(sources) do
+    local path = source[1] .. ".wlo"
+    local program = parser.parse(lexer.lex(source[2], path))
+    program.name, program.path = source[1], path
+    modules[i] = program
+  end
+  bind.bind(modules)
+  return modules
+end
+
+local function modules_error(sources)
+  local ok, err = pcall(bind_modules, sources)
+  if ok then
+    error("expected a binding error", 2)
+  end
+  if not diag.is(err) then
+    error(err, 0)
+  end
+  local d = err[1]
+  return string.format("%s:%d:%d: %s", d.span.path, d.span.line, d.span.col, d.message)
+end
 
 return {
   signatures_collected_before_bodies = function()
@@ -135,6 +160,50 @@ return {
     eq("5:9: cannot call local variable 'P'", bind_error(P .. "def main() -> None:\n    P = 1\n    p = P(1)\n"))
     bind_source(P .. "def main() -> None:\n    P = 1\n    q: P | None = None\n")
     eq("4:9: record 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
+  end,
+
+  modules = function()
+    local geo = { "geo", table.concat({
+      "class Point:",
+      "    x: int",
+      "def make(x: int) -> Point:",
+      "    return Point(x)",
+      "def _hidden() -> int:",
+      "    return 1",
+      "class _Secret:",
+      "    x: int",
+      "def use() -> int:",
+      "    return _hidden()",
+      "def main() -> int:",
+      "    return 2",
+    }, "\n") .. "\n" }
+    local function main(source)
+      return { "main", "import geo\n" .. source }
+    end
+    local modules = bind_modules({ main("def main() -> None:\n    p: geo.Point = geo.make(1)\n    q = geo.Point(2)\n"), geo })
+    local body = modules[1].functions[1].body
+    eq(modules[2].declarations.make, body[1].value.target)
+    eq(modules[2].declarations.Point, body[2].value.target)
+    eq("geo.Point", body[1].annotation.name)
+    eq("geo.Point", modules[2].functions[1].return_type.name)
+    eq("main.wlo:2:5: duplicate function 'geo'", modules_error({ main("def geo() -> None:\n    pass\n" .. MAIN), geo }))
+    eq("main.wlo:2:7: duplicate record 'geo'", modules_error({ main("class geo:\n    x: int\n" .. MAIN), geo }))
+    eq("main.wlo:2:8: duplicate import 'geo'", modules_error({ main("import geo\n" .. MAIN), geo }))
+    eq("main.wlo:1:8: cannot redefine built-in function 'len'",
+      modules_error({ { "main", "import len\n" .. MAIN }, { "len", "def f() -> None:\n    pass\n" } }))
+    eq("main.wlo:3:8: unknown module 'nope'", modules_error({ main("def main() -> None:\n    x: nope.Point = 1\n"), geo }))
+    eq("main.wlo:3:8: unknown type 'geo.make'", modules_error({ main("def main() -> None:\n    x: geo.make = 1\n"), geo }))
+    eq("main.wlo:3:13: module 'geo' has no function or record 'nope'",
+      modules_error({ main("def main() -> None:\n    x = geo.nope()\n"), geo }))
+    eq("main.wlo:3:13: '_hidden' is private to module 'geo'",
+      modules_error({ main("def main() -> None:\n    x = geo._hidden()\n"), geo }))
+    eq("main.wlo:2:10: '_Secret' is private to module 'geo'",
+      modules_error({ main("def f(s: geo._Secret) -> None:\n    pass\n" .. MAIN), geo }))
+    eq("main.wlo:3:9: module 'geo' cannot be used as a value", modules_error({ main("def main() -> None:\n    x = geo\n"), geo }))
+    -- A local shadows the module name, so this is a method call on an int.
+    local shadowed = bind_modules({ main("def main() -> None:\n    geo = 1\n    x = geo.make(1)\n"), geo })
+    eq("MethodCall", shadowed[1].functions[1].body[2].value.kind)
+    eq("main.wlo:4:1: imports must come before declarations", modules_error({ { "main", "import geo\n" .. MAIN .. "import x\n" }, geo }))
   end,
 
   collection_builtins = function()

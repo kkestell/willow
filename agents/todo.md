@@ -121,11 +121,11 @@ Section numbers refer to that document.
   - [x] Runtime: one formatting routine shared by `print`, `str(...)`, and f-strings; code-point length and iteration; `startswith`, `endswith`, `find` by code-point index, `replace` including an empty `old`, ASCII `strip`, `split` raising `empty separator`, and `join`, matching Python
   - [x] Tests: triple-quoted line endings, numeric escape boundaries, f-string evaluation order and rejections, non-ASCII length, ordering, and method results checked against Python; a strings example
 
-- [ ] Modules (§18)
-  - [ ] Parser: `import name` before declarations; `module.name` in calls, constructors, and annotations
-  - [ ] Loader: resolve `name.wlo` in the entry file's directory; load each module once; allow cycles; report a missing module at its import; order modules by first import, depth first
-  - [ ] Bind: a file scope per module; import name conflicts; local shadowing of module names; `_` names private to their module; `main` required only in the entry file
-  - [ ] Check: collect signatures and records from every module before checking bodies
-  - [ ] Emit: one standalone file for all modules; per-module name mangling; source map and site entries carrying file paths
-  - [ ] CLI: `check`, `run`, and `build` process every reachable module; any module error prevents execution and output; the overwrite check covers every module
-  - [ ] Tests: multi-file program fixtures, cycles, private names, missing modules, errors reported in imported files, runtime frames across files, standalone built output; the §18 example
+- [x] Modules (§18)
+  - [x] Parser: `import name` before declarations; `module.name` in calls, constructors, and annotations
+  - [x] Loader: resolve `name.wlo` in the entry file's directory; load each module once; allow cycles; report a missing module at its import; order modules by first import, depth first
+  - [x] Bind: a file scope per module; import name conflicts; local shadowing of module names; `_` names private to their module; `main` required only in the entry file
+  - [x] Check: collect signatures and records from every module before checking bodies
+  - [x] Emit: one standalone file for all modules; per-module name mangling; source map and site entries carrying file paths
+  - [x] CLI: `check`, `run`, and `build` process every reachable module; any module error prevents execution and output; the overwrite check covers every module
+  - [x] Tests: multi-file program fixtures, cycles, private names, missing modules, errors reported in imported files, runtime frames across files, standalone built output; the §18 example

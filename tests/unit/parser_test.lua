@@ -148,7 +148,7 @@ return {
 
   file_scope_holds_only_declarations = function()
     eq("1:1: only function and class definitions are allowed at file scope", parse_error("x = 1\n"))
-    eq("1:1: 'import' is not supported", parse_error("import os\n"))
+    eq("1:1: 'from' is not supported", parse_error("from os import path\n"))
     eq("1:5: only function and class definitions are allowed at file scope",
       parse_error("    def f() -> None:\n        pass\n"))
   end,
@@ -253,6 +253,17 @@ return {
     eq("2:16: call target must be a function name", body_error("x = xs.f(1)(2)"))
     eq("2:10: only a name can have an annotation", body_error("xs[0]: int = 1"))
     eq("2:7: only calls can be used as statements", body_error("xs[0]"))
+  end,
+
+  imports = function()
+    local program = parse("import geometry\nimport util\n" .. "def f(p: geometry.Point) -> list[geometry.Point] | None:\n    return None\n")
+    eq("geometry util", program.imports[1].name .. " " .. program.imports[2].name)
+    local type = program.functions[1].return_type
+    eq("list[geometry.Point] | None", type.name)
+    eq("geometry Point 3:34", type.records[1].module .. " " .. type.records[1].name .. " "
+      .. type.records[1].span.line .. ":" .. type.records[1].span.col)
+    eq("3:1: imports must come before declarations", parse_error("def f() -> None:\n    pass\nimport x\n"))
+    eq("1:9: expected end of line, found '.'", parse_error("import a.b\n"))
   end,
 
   records = function()

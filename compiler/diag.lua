@@ -17,8 +17,8 @@ function M.is(value)
   return getmetatable(value) == Diagnostics
 end
 
-function M.format(path, d)
-  return string.format("%s:%d:%d: error: %s", path, d.span.line, d.span.col, d.message)
+function M.format(d)
+  return string.format("%s:%d:%d: error: %s", d.span.path, d.span.line, d.span.col, d.message)
 end
 
 return M

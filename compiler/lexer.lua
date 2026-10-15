@@ -59,7 +59,7 @@ end
 
 -- Rejects malformed UTF-8 and bare CRs anywhere in the file, including comments
 -- and strings, so tokenizing can treat every CR as the start of a CRLF.
-local function validate(source)
+local function validate(source, path)
   local line, line_start, pos = 1, 1, 1
   while pos <= #source do
     local char = char_at(source, pos)
@@ -70,7 +70,7 @@ local function validate(source)
       message = "bare carriage return; line endings must be LF or CRLF"
     end
     if message then
-      diag.error(span.new(line, column(source, line_start, pos), pos, pos), message)
+      diag.error(span.new(line, column(source, line_start, pos), pos, pos, path), message)
     end
     if char == "\n" then
       line, line_start = line + 1, pos + 1
@@ -104,15 +104,15 @@ local function line_end(source, pos)
   return stop, newline
 end
 
-function M.lex(source)
-  validate(source)
+function M.lex(source, path)
+  validate(source, path)
 
   local tokens = {}
   local line, line_start = 1, 1
   local level, depth = 0, 0
 
   local function span_at(first, last)
-    return span.new(line, column(source, line_start, first), first, last)
+    return span.new(line, column(source, line_start, first), first, last, path)
   end
 
   local function fail(pos, message)
@@ -273,7 +273,7 @@ function M.lex(source)
         pos = pos + 1
       end
     end
-    local token_span = span.new(opening.line, opening.col, first, pos + #close - 1)
+    local token_span = span.new(opening.line, opening.col, first, pos + #close - 1, path)
     if formatted then
       parts[#parts + 1] = table.concat(text)
       tokens[#tokens + 1] = { kind = "FSTRING", value = parts, span = token_span }

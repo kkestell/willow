@@ -12,9 +12,9 @@ end
 
 local function lower_source(source)
   local program = parser.parse(lexer.lex(source))
-  bind.bind(program)
-  check.check(program)
-  return lower.lower(program)
+  bind.bind({ program })
+  check.check({ program })
+  return lower.lower({ program })
 end
 
 local show_expr, show_block

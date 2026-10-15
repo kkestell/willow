@@ -1,0 +1,10 @@
+import geometry
+
+def main() -> None:
+    origin = geometry.Point(0.0, 0.0)
+    corner = geometry.Point(3.0, 4.0)
+    print(geometry.distance_squared(origin, corner))    # 25.0
+    points = [corner, geometry.Point(-1.0, 2.0), geometry.Point(6.0, 0.5)]
+    closest = geometry.nearest(origin, points)
+    if closest is not None:
+        print(geometry.describe(closest))               # (-1.0, 2.0)

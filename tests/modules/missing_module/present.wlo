@@ -1,0 +1,4 @@
+import absent
+
+def value() -> int:
+    return 1

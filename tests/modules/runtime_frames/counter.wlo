@@ -1,0 +1,5 @@
+def grow(n: int) -> int:
+    return _step(n) + _step(n)
+
+def _step(n: int) -> int:
+    return n + 1

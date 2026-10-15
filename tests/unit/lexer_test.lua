@@ -191,6 +191,14 @@ return {
     eq("1:10: unterminated string literal", lex_error("x = f\"\"\"{'a\nb'}\"\"\"\n"))
   end,
 
+  spans_carry_the_path = function()
+    local tokens = lexer.lex("x = 1\n", "dir/a.wlo")
+    eq("dir/a.wlo", tokens[3].span.path)
+    local ok, err = pcall(lexer.lex, "x = $\n", "dir/a.wlo")
+    eq(false, ok)
+    eq("dir/a.wlo", err[1].span.path)
+  end,
+
   operators = function()
     local text = "-> == != <= >= < > = + - * / // % | ( ) , :"
     eq(text .. " NEWLINE EOF", kinds(text))

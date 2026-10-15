@@ -1,0 +1,25 @@
+import shapes
+import util
+
+class Tag:
+    label: str
+
+def helper(n: int) -> int:
+    return n * 10
+
+def is_even(n: int) -> bool:
+    if n == 0:
+        return True
+    return util.is_odd(n - 1)
+
+def main() -> None:
+    s = shapes.square(3)
+    print(shapes.area(s))
+    print(is_even(10))
+    print(util.is_odd(7))
+    print(util.call_back(4))
+    t: Tag = util.tagged("x")
+    print(t.label)
+    print(shapes.main())
+    squares: list[shapes.Square] = [s, shapes.Square(2)]
+    print(shapes.area(squares[1]))

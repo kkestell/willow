@@ -15,8 +15,8 @@ end
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
-as assert async await case del except finally from global import lambda match
-nonlocal raise try type with yield
+as assert async await case del except finally from global lambda match nonlocal
+raise try type with yield
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
@@ -97,7 +97,13 @@ function M.parse(tokens)
     end
     if name == "NAME" then
       name = token.value
-      records[1] = { name = name, span = token.span }
+      local record = { name = name, span = token.span }
+      if accept(".") then
+        record.module = name
+        record.name = expect("NAME", "a record name").value
+        name = name .. "." .. record.name
+      end
+      records[1] = record
     elseif name == "list" then
       expect("[")
       name = "list[" .. inner().name .. "]"
@@ -463,10 +469,20 @@ function M.parse(tokens)
     return ast.node("Record", name.span, { name = name.value, fields = fields })
   end
 
+  local imports = {}
+  while peek().kind == "import" do
+    advance()
+    local name = expect("NAME", "a module name")
+    expect("NEWLINE", "end of line")
+    imports[#imports + 1] = { name = name.value, span = name.span }
+  end
+
   local functions, records = {}, {}
   while peek().kind ~= "EOF" do
     local token = peek()
-    if token.kind == "def" then
+    if token.kind == "import" then
+      diag.error(token.span, "imports must come before declarations")
+    elseif token.kind == "def" then
       functions[#functions + 1] = parse_function()
     elseif token.kind == "class" then
       records[#records + 1] = parse_record()
@@ -475,7 +491,9 @@ function M.parse(tokens)
       diag.error(token.span, "only function and class definitions are allowed at file scope")
     end
   end
-  return ast.node("Program", span.new(1, 1, 1, 0), { functions = functions, records = records })
+  local path = peek().span.path
+  return ast.node("Program", span.new(1, 1, 1, 0, path),
+    { imports = imports, functions = functions, records = records })
 end
 
 return M

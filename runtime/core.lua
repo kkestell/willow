@@ -1,6 +1,6 @@
 -- Runtime helpers, inlined by the emitter into every generated program. The
--- emitter defines __wlo_path before this text and assigns __wlo_sites and
--- __wlo_lines before calling __wlo_run.
+-- emitter declares __wlo_paths, __wlo_sites, and __wlo_lines before this text
+-- and assigns them before calling __wlo_run.
 
 local __wlo_source = debug.getinfo(1, "S").source
 local __wlo_MAX_INT = 9007199254740991
@@ -468,7 +468,7 @@ local function __wlo_range(start, stop, step, site)
 end
 
 local function __wlo_where(location)
-  return __wlo_path .. ":" .. location[1] .. ":" .. location[2]
+  return __wlo_paths[location[3]] .. ":" .. location[1] .. ":" .. location[2]
 end
 
 -- Formats a failure with its Willow frames, innermost first. Only lines of
@@ -496,7 +496,7 @@ local function __wlo_report(err)
       lines[#lines + 1] = "  ... " .. (#frames - __wlo_MAX_FRAMES) .. " more frames"
       break
     end
-    lines[#lines + 1] = (i == 1 and "  in " or "  called from ") .. frame[3] .. " at " .. __wlo_where(frame)
+    lines[#lines + 1] = (i == 1 and "  in " or "  called from ") .. frame[4] .. " at " .. __wlo_where(frame)
   end
   return table.concat(lines, "\n")
 end

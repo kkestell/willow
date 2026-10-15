@@ -130,6 +130,39 @@ return {
     end)
   end,
 
+  modules_build_matches_run = function()
+    in_temp_dir(function(dir, base)
+      write(dir .. "/util.wlo", "def twice(n: int) -> int:\n    return n * 2\n")
+      write(dir .. "/prog.wlo", "import util\ndef main() -> None:\n    print(util.twice(21))\n")
+      local run_status, run_out = willow(dir, "run prog.wlo")
+      eq(0, run_status)
+      eq("42\n", run_out)
+      eq(0, (willow(dir, "build prog.wlo -o out.lua")))
+      local elsewhere = base .. "/elsewhere"
+      os.execute("mkdir " .. quote(elsewhere))
+      write(elsewhere .. "/copy.lua", read(dir .. "/out.lua"))
+      local status, stdout = sh(elsewhere, quote(LUAJIT) .. " copy.lua")
+      eq(0, status)
+      eq(run_out, stdout)
+      local module = read(dir .. "/util.wlo")
+      local stderr
+      status, _, stderr = willow(dir, "build prog.wlo -o util.wlo")
+      eq(1, status)
+      eq("error: output util.wlo is the module file util.wlo\n", stderr)
+      eq(module, read(dir .. "/util.wlo"))
+    end)
+  end,
+
+  unreadable_module = function()
+    in_temp_dir(function(dir)
+      os.execute("mkdir " .. quote(dir .. "/util.wlo"))
+      write(dir .. "/prog.wlo", "import util\ndef main() -> None:\n    pass\n")
+      local status, _, stderr = willow(dir, "check prog.wlo")
+      eq(1, status)
+      eq("prog.wlo:1:8: error: cannot load module 'util': util.wlo: Is a directory\n", stderr)
+    end)
+  end,
+
   failed_build_preserves_output = function()
     in_temp_dir(function(dir)
       write(dir .. "/out.lua", "old")

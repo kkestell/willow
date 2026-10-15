@@ -1,0 +1,4 @@
+counter.wlo:5:14: error: integer overflow
+  in _step at counter.wlo:5:14
+  called from grow at counter.wlo:2:12
+  called from main at main.wlo:4:19

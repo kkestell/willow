@@ -1,0 +1,4 @@
+import shapes
+
+def main() -> None:
+    print(shapes.double(2))

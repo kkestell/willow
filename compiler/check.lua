@@ -345,7 +345,7 @@ local function check_function(fn, records)
       if builtin then
         type = builtin.result
       elseif target.kind == "Record" then
-        type = target.name
+        type = target.type_name
       else
         type = target.return_type.name
       end
@@ -573,19 +573,23 @@ end
 
 -- Signatures are fixed before checking, so each function's first error is
 -- independent of the others; all of them are reported together.
-function M.check(program)
+function M.check(modules)
   local records = {}
-  for _, record in ipairs(program.records) do
-    records[record.name] = record
+  for _, module in ipairs(modules) do
+    for _, record in ipairs(module.records) do
+      records[record.type_name] = record
+    end
   end
   local errors = {}
-  for _, fn in ipairs(program.functions) do
-    local ok, err = xpcall(check_function, capture, fn, records)
-    if not ok then
-      if not diag.is(err) then
-        error(err, 0)
+  for _, module in ipairs(modules) do
+    for _, fn in ipairs(module.functions) do
+      local ok, err = xpcall(check_function, capture, fn, records)
+      if not ok then
+        if not diag.is(err) then
+          error(err, 0)
+        end
+        errors[#errors + 1] = err[1]
       end
-      errors[#errors + 1] = err[1]
     end
   end
   if #errors > 0 then

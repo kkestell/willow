@@ -12,10 +12,10 @@ local function eq(expected, actual)
 end
 
 local function emit_source(source)
-  local program = parser.parse(lexer.lex(source))
-  bind.bind(program)
-  check.check(program)
-  return emit.emit(lower.lower(program), "test.wlo")
+  local program = parser.parse(lexer.lex(source, "test.wlo"))
+  bind.bind({ program })
+  check.check({ program })
+  return emit.emit(lower.lower({ program }))
 end
 
 local willow = (arg[0]:match("^(.*)/tests/[^/]*$") or ".") .. "/willow"

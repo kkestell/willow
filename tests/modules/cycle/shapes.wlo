@@ -1,0 +1,15 @@
+import util
+
+class Square:
+    side: int
+
+def square(side: int) -> Square:
+    return Square(side)
+
+def area(s: Square) -> int:
+    return s.side * s.side
+
+def main() -> str:
+    if util.is_odd(1):
+        return "shapes main"
+    return "unreachable"

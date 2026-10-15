@@ -1,0 +1,8 @@
+class Point:
+    x: float
+    y: float
+
+def distance_squared(a: Point, b: Point) -> float:
+    dx = a.x - b.x
+    dy = a.y - b.y
+    return dx * dx + dy * dy

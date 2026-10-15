@@ -12,8 +12,8 @@ end
 
 local function check_source(source)
   local program = parser.parse(lexer.lex(source))
-  bind.bind(program)
-  check.check(program)
+  bind.bind({ program })
+  check.check({ program })
   return program
 end
 
@@ -285,6 +285,23 @@ return {
     eq("3:22: expected str, received int", check_errors(in_main("s = 'a'\nx = s.join(['a', 1])")))
     eq("3:10: cannot index a value of type str", check_errors(in_main("s = 'a'\nx = s[0]")))
     eq("2:11: operator 'in' cannot be applied to int and str", check_errors(in_main("x = 1 in 'abc'")))
+  end,
+
+  records_across_modules = function()
+    local function check_modules(main_source)
+      local modules = {}
+      for i, source in ipairs({ { "main", "import geo\n" .. main_source }, { "geo", "class Point:\n    x: int\n" } }) do
+        local program = parser.parse(lexer.lex(source[2], source[1] .. ".wlo"))
+        program.name, program.path = source[1], source[1] .. ".wlo"
+        modules[i] = program
+      end
+      bind.bind(modules)
+      check.check(modules)
+    end
+    check_modules("def main() -> None:\n    p = geo.Point(1)\n    q: geo.Point = p\n    print(q.x + 1)\n")
+    local ok, err = pcall(check_modules, "class Point:\n    x: int\ndef main() -> None:\n    p: Point = geo.Point(1)\n")
+    eq(false, ok)
+    eq("5:20: expected Point, received geo.Point", err[1].span.line .. ":" .. err[1].span.col .. ": " .. err[1].message)
   end,
 
   equality_on_all_types = function()

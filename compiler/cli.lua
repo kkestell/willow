@@ -5,8 +5,7 @@ package.path = root .. "/?.lua"
 
 local ffi = require("ffi")
 local diag = require("compiler.diag")
-local lexer = require("compiler.lexer")
-local parser = require("compiler.parser")
+local loader = require("compiler.loader")
 local bind = require("compiler.bind")
 local check = require("compiler.check")
 local lower = require("compiler.lower")
@@ -109,16 +108,17 @@ local function write_output(output, text)
   end
 end
 
--- Checks the whole program and, for run and build, returns the generated Lua
--- and its loaded chunk.
+-- Checks the whole program and returns its modules and, for run and build,
+-- the generated Lua and its loaded chunk.
 local function compile(command, path, source)
-  local program = parser.parse(lexer.lex(source))
-  bind.bind(program)
-  check.check(program)
+  local modules = loader.load(path, source)
+  bind.bind(modules)
+  check.check(modules)
   if command ~= "check" then
-    local text = emit.emit(lower.lower(program), path)
-    return text, assert(load(text, "=" .. path))
+    local text = emit.emit(lower.lower(modules))
+    return modules, text, assert(load(text, "=" .. path))
   end
+  return modules
 end
 
 local function report(err)
@@ -149,19 +149,24 @@ if output and same_file(path, output) then
   fail("error: output " .. output .. " is the input file")
 end
 
-local ok, text, chunk = xpcall(compile, report, command, path, source)
+local ok, modules, text, chunk = xpcall(compile, report, command, path, source)
 if not ok then
-  if not diag.is(text) then
-    fail(text)
+  if not diag.is(modules) then
+    fail(modules)
   end
   local lines = {}
-  for i, d in ipairs(text) do
-    lines[i] = diag.format(path, d)
+  for i, d in ipairs(modules) do
+    lines[i] = diag.format(d)
   end
   fail(table.concat(lines, "\n"))
 end
 if command == "run" then
   chunk()
 elseif command == "build" then
+  for i = 2, #modules do
+    if same_file(modules[i].path, output) then
+      fail("error: output " .. output .. " is the module file " .. modules[i].path)
+    end
+  end
   write_output(output, text)
 end

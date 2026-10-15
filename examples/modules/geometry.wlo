@@ -1,0 +1,24 @@
+class Point:
+    x: float
+    y: float
+
+def distance_squared(a: Point, b: Point) -> float:
+    dx = a.x - b.x
+    dy = a.y - b.y
+    return dx * dx + dy * dy
+
+def nearest(origin: Point, points: list[Point]) -> Point | None:
+    best: Point | None = None
+    best_distance = 0.0
+    for point in points:
+        distance = distance_squared(origin, point)
+        if best is None or distance < best_distance:
+            best = point
+            best_distance = distance
+    return best
+
+def describe(p: Point) -> str:
+    return f"({_format(p.x)}, {_format(p.y)})"
+
+def _format(value: float) -> str:
+    return str(value)

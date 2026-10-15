@@ -370,16 +370,27 @@ local function lower_function(fn, sites)
     params[i] = param.symbol
   end
   local body = lower_block(fn.body)
-  return { name = fn.name, span = fn.span, params = params, locals = fn.locals, temps = temps, body = body }
+  return {
+    name = fn.name,
+    module = fn.module,
+    span = fn.span,
+    params = params,
+    locals = fn.locals,
+    temps = temps,
+    body = body,
+  }
 end
 
-function M.lower(program)
+-- Lowers every function of `modules`, the entry module first.
+function M.lower(modules)
   local sites = {}
   local functions = {}
-  for i, fn in ipairs(program.functions) do
-    functions[i] = lower_function(fn, sites)
+  for _, module in ipairs(modules) do
+    for _, fn in ipairs(module.functions) do
+      functions[#functions + 1] = lower_function(fn, sites)
+    end
   end
-  return { functions = functions, sites = sites }
+  return { modules = modules, functions = functions, sites = sites }
 end
 
 return M

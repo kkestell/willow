@@ -1,0 +1,4 @@
+import present
+
+def main() -> None:
+    print(present.value())
