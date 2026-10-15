@@ -5,9 +5,9 @@ to readable Lua and runs on LuaJIT. Source files use the `.wlo` extension. The
 command is `willow`.
 
 This document describes the first slice (§1–§11), the second slice that extends
-it (§12–§18), and the third slice (§19): their language, compiler, runtime,
-command-line interface, output, and acceptance criteria. It is a design to implement, not a claim about
-the current repository. It deliberately replaces the scope of the earlier, broader
+it (§12–§18), the third slice (§19), and the fourth slice (§20): their language,
+compiler, runtime, command-line interface, output, and acceptance criteria. It is
+a design to implement, not a claim about the current repository. It deliberately replaces the scope of the earlier, broader
 roadmap with something much smaller.
 
 ## 1. The first slice
@@ -29,9 +29,10 @@ It includes:
 
 It does not include collections, records, modules, exceptions, floating-point
 arithmetic, file I/O, HTTP, JSON, or a package system. The second slice (§12) adds
-floats, optional types, collections, records, richer strings, and modules, and the
-third slice (§19) adds exceptions. The rest are future language features, not
-hidden requirements for any slice.
+floats, optional types, collections, records, richer strings, and modules, the
+third slice (§19) adds exceptions, and the fourth slice (§20) adds program
+arguments, standard input and error, and whole-file I/O. The rest are future
+language features, not hidden requirements for any slice.
 
 The compiler and runtime are initially written in plain Lua targeting bundled
 LuaJIT 2.1 (with LuaJIT `ffi` permitted in the CLI for host filesystem
@@ -381,8 +382,8 @@ types; it does not introduce a public `any` type or user-defined overloads.
 Output uses stdout and UTF-8 for text. An observed write or flush failure
 terminates the program with a runtime diagnostic. Successful writes do not
 promise durable storage. There is no input, argument access, process-control API,
-or other standard library in this slice. There is no implicit access to Lua
-globals or `require`.
+or other standard library in this slice; §20 adds arguments, input, files, and
+exit status. There is no implicit access to Lua globals or `require`.
 
 ## 8. Command-line interface and artifacts
 
@@ -405,8 +406,9 @@ self-contained executable. The `-o <path>` output option is required for `compil
 and `build`; there is no project-directory discovery or implicit output directory
 in this slice.
 
-Reject extra arguments and unknown options. Program arguments and compiler
-configuration files can be added later with explicit syntax.
+Reject extra arguments and unknown options. §20 passes the arguments after the
+source path of `run` to the program. Compiler configuration files can be added
+later with explicit syntax.
 
 Success returns exit status 0. Source errors, invalid CLI usage, output failures,
 and runtime failures return a nonzero status; use 1 initially. Diagnostics go to
@@ -1210,7 +1212,91 @@ main.wlo:7:9: error: ParseError: not a digit: x
 Runtime failures from earlier sections report the same way, as in
 `error: OverflowError: integer overflow`. Host failures keep the §10 form.
 
-## 20. Growth without premature machinery
+## 20. Input and output
+
+The fourth slice lets programs read their arguments, standard input, and files,
+write standard error and files, and choose their exit status. The rules of
+§1–§19 hold unless this section changes them, and completion follows §12.
+
+```python
+def main(args: list[str]) -> None:
+    if len(args) != 1:
+        eprint("usage: number <output>")
+        exit(2)
+    numbered: list[str] = []
+    line = input()
+    while line is not None:
+        numbered.append(f"{len(numbered) + 1}: {line}\n")
+        line = input()
+    try:
+        write_file(args[0], "".join(numbered))
+    except OSError as error:
+        eprint(error.message)
+        exit(1)
+    print(f"wrote {len(numbered)} lines")
+```
+
+```sh
+printf 'apple\nbanana\n' | willow run number.wlo out.txt
+```
+
+This prints `wrote 2 lines` and writes `out.txt`:
+
+```text
+1: apple
+2: banana
+```
+
+### Program arguments
+
+The entry file's `main` may take the program's arguments instead of no
+parameters:
+
+```python
+def main(args: list[str]) -> None:
+```
+
+`args` is a new list of the arguments in order, without the program or source
+name. `willow run prog.wlo a b` passes everything after the source path to the
+program verbatim, including arguments that begin with `-`. `check`, `compile`,
+and `build` still reject extra arguments. Compiled Lua receives the arguments
+given to `luajit prog.lua`, and a built executable receives its own. An argument
+that is not valid UTF-8 terminates the program with status 1 before `main` runs.
+
+### Built-in functions
+
+| Function | Meaning |
+| --- | --- |
+| `input() -> str \| None` | The next line of stdin without its line ending, or `None` at end of input |
+| `eprint(value) -> None` | Write a printable value to stderr, as `print` writes to stdout |
+| `read_file(path: str) -> str` | The contents of the file |
+| `write_file(path: str, text: str) -> None` | Create the file, or replace its contents, with `text` |
+| `exit(status: int) -> None` | End the program with exit status `status` |
+
+These join `print`, `len`, and `range` as built-in names (§12).
+
+A line of input ends at `\n`; `input` removes the `\n` and a `\r` just before
+it. A final line without a line ending is still returned. `read_file` and
+`write_file` read and write text exactly, without line-ending translation.
+`write_file` does not replace the file atomically. Relative paths resolve
+against the current working directory, not the source file's directory.
+
+Text read by `input` or `read_file` must be valid UTF-8; otherwise they raise
+`ValueError` with the message `invalid UTF-8`. When `read_file` or `write_file`
+cannot open, read, or write a file, it raises `OSError` with the message
+`cannot read <path>: <reason>` or `cannot write <path>: <reason>`, where the
+host supplies the reason. `OSError` joins the built-in exception classes of §19
+with only the `message` field. A read failure on stdin, like a write failure on
+stdout or stderr, is not an exception and terminates the program.
+
+`exit` accepts a status from 0 through 255 and otherwise raises `ValueError` with
+the message `exit status out of range`. It ends the program at once: pending
+`finally` clauses do not run. A statement that calls `exit` transfers control
+like `raise` (§19): statements after it are unreachable, and a path that ends in
+it needs no `return`. Returning from `main` still exits with status 0, and an
+uncaught exception with status 1.
+
+## 21. Growth without premature machinery
 
 Preserve these boundaries now:
 
@@ -1222,9 +1308,7 @@ Preserve these boundaries now:
 - Unsupported syntax is rejected rather than assigned provisional semantics.
 - Emitted runtime helpers are private implementation details.
 
-These choices allow later work without implementing it early. A likely addition
-after the third slice is a small I/O library. It should arrive with its own
-semantics and examples.
+These choices allow later work without implementing it early.
 
 Do not reserve architecture for a package manager, plugin system, optimizer,
 self-hosted compiler, full Python object model, or language server. Ordinary
