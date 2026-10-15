@@ -69,9 +69,9 @@ Section numbers refer to that document.
   - [x] `build` writes a temporary sibling, flushes, and renames atomically; a failed build leaves existing output intact
   - [x] Output paths that alias the input rejected via `ffi` `stat` device and inode comparison
 
-- [ ] Tests and completion (§11)
-  - [ ] Lexer/parser tests: indentation, tabs, blank and comment-only lines, bare CR, missing final newline, UTF-8, escapes, precedence, chained comparisons, parenthesized call targets, multiline calls, malformed blocks, unsupported syntax
-  - [ ] Static tests: inference, annotations on non-first assignments, whole-function shadowing, forward calls, mutual recursion, arity, operand types, missing returns after `while True`, definite assignment, unreachable code, incompatible branch assignments, loop transfer misuse
-  - [ ] Program tests: integer boundaries, overflow on each operation, `-0.0`, string round trips, `None == None` evaluation order, argument evaluation order on failure, short-circuit effects, `continue` with temporaries, more than 200 temporaries in one function, recursion, exact output, column-accurate failures on multi-call lines and return-call sites
-  - [ ] CLI tests: `check` does not execute, `run` and built output agree, invalid source preserves output, input overwrite via path and symlink rejected, paths with spaces, standalone output runs outside the checkout
-  - [ ] Examples check, build, and run; README covers CLI usage; exercised platforms recorded
+- [x] Tests and completion (§11)
+  - [x] Lexer/parser tests: indentation, tabs, blank and comment-only lines, bare CR, missing final newline, UTF-8, escapes, precedence, chained comparisons, parenthesized call targets, multiline calls, malformed blocks, unsupported syntax
+  - [x] Static tests: inference, annotations on non-first assignments, whole-function shadowing, forward calls, mutual recursion, arity, operand types, missing returns after `while True`, definite assignment, unreachable code, incompatible branch assignments, loop transfer misuse
+  - [x] Program tests: integer boundaries, overflow on each operation, `-0.0`, string round trips, `None == None` evaluation order, argument evaluation order on failure, short-circuit effects, `continue` with temporaries, more than 200 temporaries in one function, recursion, exact output, column-accurate failures on multi-call lines and return-call sites
+  - [x] CLI tests: `check` does not execute, `run` and built output agree, invalid source preserves output, input overwrite via path and symlink rejected, paths with spaces, standalone output runs outside the checkout
+  - [x] Examples check, build, and run; README covers CLI usage; exercised platforms recorded

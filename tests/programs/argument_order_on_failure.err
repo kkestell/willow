@@ -1,0 +1,3 @@
+argument_order_on_failure.wlo:6:14: error: integer overflow
+  in boom at argument_order_on_failure.wlo:6:14
+  called from main at argument_order_on_failure.wlo:12:18
