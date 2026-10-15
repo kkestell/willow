@@ -1,0 +1,47 @@
+def show_int(text: str) -> None:
+    try:
+        print(int(text))
+    except ValueError as e:
+        print(e.message)
+
+def show_float(text: str) -> None:
+    try:
+        print(float(text))
+    except ValueError as e:
+        print(e.message)
+
+def show_ord(text: str) -> None:
+    try:
+        print(ord(text))
+    except ValueError as e:
+        print(e.message)
+
+def show_chr(n: int) -> None:
+    try:
+        c = chr(n)
+        print(ord(c) == n)
+    except ValueError as e:
+        print(e.message)
+
+def main() -> None:
+    for text in ["0", "-0", "+7", "007", "-9007199254740991", "9007199254740991"]:
+        show_int(text)
+    for text in ["9007199254740992", "-9007199254740992", "12345678901234567890", "", "+", " 1", "1_000", "1.0", "0x10"]:
+        show_int(text)
+
+    for text in ["7", "2.5", ".5", "5.", "1e-3", "-1E+3", "+0.0", "-0.0", "inf", "-Infinity", "NaN", "0.1"]:
+        show_float(text)
+    for text in ["9007199254740993", "1.7976931348623157e308", "1e309", "1e99999999999", "1e-400", "1e-99999999999", "5e-324"]:
+        show_float(text)
+    for text in ["", ".", "e5", "1e", " 1", "1_0", "0x10", "infinit", "1e5.0"]:
+        show_float(text)
+
+    for text in ["a", "é", "€", "😀"]:
+        n = ord(text)
+        print(f"{n} {chr(n)}")
+    show_ord("")
+    show_ord("ab")
+    for n in [0, 127, 128, 2047, 2048, 65535, 65536, 1114111]:
+        show_chr(n)
+    for n in [-1, 55296, 57343, 1114112]:
+        show_chr(n)

@@ -153,11 +153,11 @@ Section numbers refer to that document.
 
 ## Fifth slice
 
-- [ ] Text conversions (docs/spec.md §6, §7)
-  - [ ] Bind: `ord` and `chr` as built-in names
-  - [ ] Check: `int(str)` and `float(str)` alongside the numeric conversions; `ord(str) -> int` and `chr(int) -> str`
-  - [ ] Runtime: `int(str)` accepting a sign and decimal digits, rejecting other text and out-of-range values with `cannot convert str to int`; `float(str)` accepting the decimal forms, `inf`, `infinity`, and `nan` in any case, rounding to nearest and overflowing to infinity, rejecting other text (including whitespace, underscores, and hexadecimal) with `cannot convert str to float`; `ord` raising `expected one character`; `chr` raising `invalid code point` for surrogates and values outside 0 through 0x10FFFF
-  - [ ] Tests: accepted and rejected forms for each conversion checked against Python, `int` range boundaries, float rounding and overflow, non-ASCII `ord` and `chr` round trips, surrogate and out-of-range `chr`
+- [x] Text conversions (docs/spec.md §6, §7)
+  - [x] Bind: `ord` and `chr` as built-in names
+  - [x] Check: `int(str)` and `float(str)` alongside the numeric conversions; `ord(str) -> int` and `chr(int) -> str`
+  - [x] Runtime: `int(str)` accepting a sign and decimal digits, rejecting other text and out-of-range values with `cannot convert str to int`; `float(str)` accepting the decimal forms, `inf`, `infinity`, and `nan` in any case, rounding to nearest and overflowing to infinity, rejecting other text (including whitespace, underscores, and hexadecimal) with `cannot convert str to float`; `ord` raising `expected one character`; `chr` raising `invalid code point` for surrogates and values outside 0 through 0x10FFFF
+  - [x] Tests: accepted and rejected forms for each conversion checked against Python, `int` range boundaries, float rounding and overflow, non-ASCII `ord` and `chr` round trips, surrogate and out-of-range `chr`
 
 ## Sixth slice
 

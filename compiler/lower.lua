@@ -188,7 +188,7 @@ local function lower_function(fn, sites)
       local op = node.type == "str" and "concat" or node.op
       return { kind = "Binary", op = op, left = left, right = right }
     elseif kind == "Call" then
-      if node.name == "float" then
+      if node.name == "float" and node.args[1].type == "int" then
         -- A Willow integer is already the same Lua number as a float.
         return lower_value(node.args[1])
       end
@@ -209,6 +209,8 @@ local function lower_function(fn, sites)
           return text(args[1], node.args[1].type)
         elseif (name == "print" or name == "eprint") and is_float(node.args[1].type) then
           name = name .. "_float"
+        elseif (name == "int" or name == "float") and node.args[1].type == "str" then
+          name = "parse_" .. name
         end
         return helper(name, args, node.span)
       end

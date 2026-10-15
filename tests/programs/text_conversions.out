@@ -1,0 +1,61 @@
+0
+0
+7
+7
+-9007199254740991
+9007199254740991
+cannot convert str to int
+cannot convert str to int
+cannot convert str to int
+cannot convert str to int
+cannot convert str to int
+cannot convert str to int
+cannot convert str to int
+cannot convert str to int
+cannot convert str to int
+7.0
+2.5
+0.5
+5.0
+0.001
+-1000.0
+0.0
+-0.0
+inf
+-inf
+nan
+0.1
+9007199254740992.0
+1.7976931348623157e+308
+inf
+inf
+0.0
+0.0
+5e-324
+cannot convert str to float
+cannot convert str to float
+cannot convert str to float
+cannot convert str to float
+cannot convert str to float
+cannot convert str to float
+cannot convert str to float
+cannot convert str to float
+cannot convert str to float
+97 a
+233 é
+8364 €
+128512 😀
+expected one character
+expected one character
+True
+True
+True
+True
+True
+True
+True
+True
+invalid code point
+invalid code point
+invalid code point
+invalid code point

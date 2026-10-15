@@ -36,13 +36,21 @@ local builtins = {
   print = { params = { "any" }, result = "None" },
   eprint = { params = { "any" }, result = "None" },
   str = { params = { "any" }, result = "str" },
-  int = { params = { "float" }, result = "int" },
-  float = { params = { "int" }, result = "float" },
+  int = { params = { "any" }, result = "int" },
+  float = { params = { "any" }, result = "float" },
   len = { params = { "any" }, result = "int" },
   input = { params = {}, result = "str | None" },
   read_file = { params = { "str" }, result = "str" },
   write_file = { params = { "str", "str" }, result = "None" },
   exit = { params = { "int" }, result = "None" },
+  ord = { params = { "str" }, result = "int" },
+  chr = { params = { "int" }, result = "str" },
+}
+
+-- The argument types `int` and `float` convert from.
+local conversions = {
+  int = { float = true, str = true },
+  float = { int = true, str = true },
 }
 
 local OPTIONAL = " | None"
@@ -367,6 +375,8 @@ local function check_function(fn, records)
         diag.error(node.args[1].span, "cannot print a value of type " .. arg_type)
       elseif node.name == "str" and builtin and not scalar(arg_type) then
         diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type .. " to str")
+      elseif builtin and conversions[node.name] and arg_type and not conversions[node.name][arg_type] then
+        diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type .. " to " .. node.name)
       elseif node.name == "len" and builtin and arg_type ~= "str" and not index_types(arg_type) then
         diag.error(node.span, "'len' cannot be applied to " .. arg_type)
       end

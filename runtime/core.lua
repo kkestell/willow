@@ -180,6 +180,42 @@ local function __wlo_int(x, site)
   return value
 end
 
+-- Without leading zeros, more than 16 digits is out of range, and tonumber is
+-- exact up to 2^53 while rounding every larger 16-digit value to at least 2^53.
+local function __wlo_parse_int(text, site)
+  local sign, digits = text:match("^([-+]?)0*(%d+)$")
+  if not digits or #digits > 16 or tonumber(digits) > __wlo_MAX_INT then
+    __wlo_fail("ValueError", "cannot convert str to int", site)
+  end
+  local value = tonumber(digits)
+  if sign == "-" and value ~= 0 then
+    return -value
+  end
+  return value
+end
+
+-- LuaJIT's tonumber rounds decimal text to nearest as Python does, but rejects
+-- exponents of 2^20 or more, so the exponent is clamped first. The clamp
+-- changes no result unless the mantissa has hundreds of thousands of digits.
+local function __wlo_parse_float(text, site)
+  local sign, rest = text:match("^([-+]?)(.*)$")
+  local word = rest:lower()
+  if word == "inf" or word == "infinity" then
+    return sign == "-" and -math.huge or math.huge
+  elseif word == "nan" then
+    return 0 / 0
+  end
+  local mantissa, exponent = rest:match("^(%d*%.?%d*)[eE]([-+]?%d+)$")
+  if not mantissa then
+    mantissa, exponent = rest:match("^%d*%.?%d*$"), "0"
+  end
+  if not mantissa or not mantissa:find("%d") then
+    __wlo_fail("ValueError", "cannot convert str to float", site)
+  end
+  exponent = math.min(math.max(tonumber(exponent), -999999), 999999)
+  return tonumber(string.format("%s%se%d", sign, mantissa, exponent))
+end
+
 -- Adds one to the last digit of a string of decimal digits.
 local function __wlo_digits_up(digits)
   local i = #digits
@@ -607,6 +643,36 @@ end
 
 local function __wlo_str_join(sep, items, site)
   return table.concat(items, sep, 1, items.n)
+end
+
+local function __wlo_ord(text, site)
+  if __wlo_code_points(text) ~= 1 then
+    __wlo_fail("ValueError", "expected one character", site)
+  end
+  local value = text:byte(1)
+  if #text > 1 then
+    -- The lead byte of an n-byte sequence carries 7 - n value bits.
+    value = value % 2 ^ (7 - #text)
+    for i = 2, #text do
+      value = value * 64 + text:byte(i) % 64
+    end
+  end
+  return value
+end
+
+-- Surrogates are U+D800 through U+DFFF, and U+10FFFF is the last code point.
+local function __wlo_chr(n, site)
+  if n < 0 or n > 1114111 or (n >= 55296 and n <= 57343) then
+    __wlo_fail("ValueError", "invalid code point", site)
+  end
+  if n < 128 then
+    return string.char(n)
+  elseif n < 2048 then
+    return string.char(192 + math.floor(n / 64), 128 + n % 64)
+  elseif n < 65536 then
+    return string.char(224 + math.floor(n / 4096), 128 + math.floor(n / 64) % 64, 128 + n % 64)
+  end
+  return string.char(240 + math.floor(n / 262144), 128 + math.floor(n / 4096) % 64, 128 + math.floor(n / 64) % 64, 128 + n % 64)
 end
 
 local function __wlo_range(start, stop, step, site)

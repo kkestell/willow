@@ -232,6 +232,8 @@ return {
     eq("x = f(1); y = int(1.5)#1", lower_main("x = float(f(1))\ny = int(1.5)", INT_HELPERS))
     eq("f(1)", lower_main("float(f(1))", INT_HELPERS))
     eq("print_float(1)#1; print(1)#2", lower_main("print(float(1))\nprint(1)"))
+    eq('s = "1"; x = parse_int(s)#1; y = parse_float(s)#2', lower_main("s = '1'\nx = int(s)\ny = float(s)"))
+    eq('x = ord("a")#1; y = chr(97)#2', lower_main("x = ord('a')\ny = chr(97)"))
   end,
 
   loops_and_transfers = function()

@@ -77,12 +77,16 @@ return {
       "e = a < b and a != b",
       "f = int(a)",
       "g = float(f)",
+      "h = int('7')",
+      "i = float('7')",
+      "j = ord('a')",
+      "k = chr(97)",
     }, "\n")))
     local types = {}
     for i, statement in ipairs(program.functions[1].body) do
       types[i] = statement.value.type
     end
-    eq("float float int float bool int float", table.concat(types, " "))
+    eq("float float int float bool int float int float int str", table.concat(types, " "))
   end,
 
   float_type_errors = function()
@@ -90,8 +94,11 @@ return {
     eq("2:11: operator '==' cannot be applied to int and float", check_errors(in_main("x = 1 == 1.0")))
     eq("2:11: operator '<' cannot be applied to int and float", check_errors(in_main("x = 1 < 1.5")))
     eq("2:13: operator '/' cannot be applied to str and str", check_errors(in_main("x = 'a' / 'b'")))
-    eq("2:13: expected float, received int", check_errors(in_main("x = int(1)")))
-    eq("2:15: expected int, received float", check_errors(in_main("x = float(1.5)")))
+    eq("2:13: cannot convert a value of type int to int", check_errors(in_main("x = int(1)")))
+    eq("2:15: cannot convert a value of type float to float", check_errors(in_main("x = float(1.5)")))
+    eq("2:13: cannot convert a value of type bool to int", check_errors(in_main("x = int(True)")))
+    eq("2:13: expected str, received int", check_errors(in_main("x = ord(1)")))
+    eq("2:13: expected int, received str", check_errors(in_main("x = chr('a')")))
     eq("2:9: 'float' expects 1 argument, received 0", check_errors(in_main("x = float()")))
   end,
 

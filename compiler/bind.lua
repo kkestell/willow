@@ -15,6 +15,8 @@ local builtins = {
   read_file = { kind = "Builtin", name = "read_file" },
   write_file = { kind = "Builtin", name = "write_file" },
   exit = { kind = "Builtin", name = "exit" },
+  ord = { kind = "Builtin", name = "ord" },
+  chr = { kind = "Builtin", name = "chr" },
 }
 
 -- The built-in exception classes, records with only a `message` field.
