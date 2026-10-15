@@ -1,0 +1,14 @@
+def end(local: int) -> int:
+    nil = local + 1
+    then = nil * 2
+    return then
+
+def main() -> None:
+    repeat = end(4)
+    print(repeat)
+    x_ = 1
+    x = 2
+    print(x_ + x)
+    print(end(1))
+    __wlo_t1 = 7
+    print(__wlo_t1 + end(0))

@@ -54,14 +54,14 @@ Section numbers refer to that document.
   - [x] `return call()` assigns to a temporary before returning; every call yields exactly one value
   - [x] `break` and `continue` as labeled loop transfers; `print` as a built-in call
 
-- [ ] Emit and runtime (§8, §9, §10)
-  - [ ] Forward-declare every user function as a local at file top; mangle user names; `__wlo_` prefix for helpers, temporaries, and labels
-  - [ ] At most one user call or fallible helper call per generated line; statement temporaries wrapped in `do ... end`; loop body wrapped in `do ... end` ahead of the `continue` label
-  - [ ] String literal escaping routine with round-trip tests for escapes and non-ASCII
-  - [ ] Deterministic output for identical source and recorded path
-  - [ ] Embedded source map from Lua line to Willow `(line, column, function)`; entry invocation of `main` after all definitions
-  - [ ] Runtime helpers inlined into the output: checked integer ops rejecting non-finite and out-of-range results and normalizing `-0.0`; `print` formatting for all four types; write and flush failures reported as runtime errors
-  - [ ] Structured errors `{category, message, location}`; `xpcall` handler prints `file:line:col: error: message` plus Willow caller frames, hides runtime and wrapper frames, and wraps raw VM string errors with the innermost Willow frame
+- [x] Emit and runtime (§8, §9, §10)
+  - [x] Forward-declare every user function as a local at file top; mangle user names; `__wlo_` prefix for helpers, temporaries, and labels
+  - [x] At most one user call or fallible helper call per generated line; temporaries recycled as function-level locals; loop body wrapped in `do ... end` ahead of the `continue` label
+  - [x] String literal escaping routine with round-trip tests for escapes and non-ASCII
+  - [x] Deterministic output for identical source and recorded path
+  - [x] Embedded source map from Lua line to Willow `(line, column, function)`; entry invocation of `main` after all definitions
+  - [x] Runtime helpers inlined into the output: checked integer ops rejecting non-finite and out-of-range results and normalizing `-0.0`; `print` formatting for all four types; write and flush failures reported as runtime errors
+  - [x] Structured errors `{category, message, location}`; `xpcall` handler prints `file:line:col: error: message` plus Willow caller frames, hides runtime and wrapper frames, and wraps raw VM string errors with the innermost Willow frame
 
 - [ ] CLI (§8)
   - [ ] `check`, `run`, `build -o <path>`; unknown options and extra arguments rejected; exit 0 on success and 1 otherwise; diagnostics on stderr, program output on stdout

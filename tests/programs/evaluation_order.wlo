@@ -1,0 +1,21 @@
+def say(n: int) -> int:
+    print(n)
+    return n
+
+def flag(name: str, value: bool) -> bool:
+    print(name)
+    return value
+
+def log(text: str) -> None:
+    print(text)
+
+def add3(a: int, b: int, c: int) -> int:
+    return a + b + c
+
+def main() -> None:
+    print(add3(say(1), say(2), say(3)))
+    print(flag("left", False) and flag("skipped", True))
+    print(flag("left", True) or flag("skipped", False))
+    print(flag("left", True) and flag("right", False))
+    print(log("a") == log("b"))
+    print(say(10) - say(4) * say(2))
