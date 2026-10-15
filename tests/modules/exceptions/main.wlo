@@ -1,0 +1,10 @@
+import errors
+
+def main() -> None:
+    try:
+        errors.check("", 1)
+    except errors.ParseError as error:
+        print(f"{error.message} at {error.line}")
+    failure: Exception = errors.ParseError("unused", 0)
+    print(failure.message)
+    errors.check("", 2)

@@ -235,4 +235,50 @@ return {
     eq(f, outer.target)
     eq(f, outer.args[1].target)
   end,
+
+  exception_classes = function()
+    eq("1:7: cannot redefine built-in class 'ValueError'", bind_error("class ValueError(Exception):\n    pass\n" .. MAIN))
+    eq("2:9: record 'KeyError' cannot be used as a value", bind_error("def main() -> None:\n    x = KeyError\n"))
+    local program = bind_source("def main() -> None:\n    e: Exception | None = ValueError('x')\n")
+    eq("Exception | None", program.functions[1].body[1].annotation.name)
+    eq("3:21: cannot call local variable 'ValueError'",
+      bind_error("def main() -> None:\n    ValueError = 1\n    e: ValueError = ValueError('x')\n"))
+  end,
+
+  except_classes = function()
+    local function clause(class)
+      return "def f() -> None:\n    pass\nclass P:\n    x: int\ndef main() -> None:\n    try:\n        pass\n    except "
+        .. class .. ":\n        pass\n"
+    end
+    eq("8:12: unknown type 'Missing'", bind_error(clause("Missing")))
+    eq("8:12: unknown type 'f'", bind_error(clause("f")))
+    eq("8:12: 'P' is not an exception class", bind_error(clause("P")))
+    local program = bind_source(clause("IndexError as e"))
+    local handler = program.functions[2].body[1].handlers[1]
+    eq("IndexError", handler.record.type_name)
+    eq(program.functions[2].locals[1], handler.symbol)
+  end,
+
+  bare_raise_only_in_except = function()
+    local message = "bare 'raise' is only allowed in an 'except' clause"
+    eq("2:5: " .. message, bind_error("def main() -> None:\n    raise\n"))
+    eq("3:9: " .. message, bind_error("def main() -> None:\n    try:\n        raise\n    finally:\n        pass\n"))
+    local program = bind_source(table.concat({
+      "def main() -> None:",
+      "    try:",
+      "        pass",
+      "    except Exception:",
+      "        if True:",
+      "            raise",
+      "        try:",
+      "            raise",
+      "        finally:",
+      "            raise",
+    }, "\n"))
+    local outer = program.functions[1].body[1]
+    local handler = outer.handlers[1].body
+    eq(outer, handler[1].body[1].try)
+    eq(outer, handler[2].body[1].try)
+    eq(outer, handler[2].finally_body[1].try)
+  end,
 }

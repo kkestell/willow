@@ -1,0 +1,34 @@
+7
+line 2: not a digit: x
+done
+OverflowError: integer overflow
+ZeroDivisionError: division by zero
+other: cannot convert float to int
+IndexError: list index out of range
+KeyError: key not found
+other: dictionary changed size during iteration
+other: empty separator
+ParseError 1
+Empty
+Exception v
+unwind 1
+unwind 2
+not a digit: ?
+return value
+finally after return
+12
+body 0
+finally 0
+finally 1
+body 2
+finally 2
+finally 3
+after loop
+second
+nested finally 3
+3
+handling
+inner finally
+reraised 4
+finally after handler
+two

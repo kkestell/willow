@@ -1,3 +1,3 @@
-range_zero_step.wlo:2:14: error: range step must not be zero
+range_zero_step.wlo:2:14: error: ValueError: range step must not be zero
   in count at range_zero_step.wlo:2:14
   called from main at range_zero_step.wlo:7:5

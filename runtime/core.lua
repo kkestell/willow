@@ -6,14 +6,71 @@ local __wlo_source = debug.getinfo(1, "S").source
 local __wlo_MAX_INT = 9007199254740991
 local __wlo_MAX_FRAMES = 20
 
-local function __wlo_fail(category, message, site)
-  error({ category = category, message = message, location = __wlo_sites[site] }, 0)
+-- The Willow frames on the stack, innermost first. Only lines of translated
+-- Willow code are in __wlo_lines, so runtime and wrapper frames drop out.
+local function __wlo_frames()
+  local frames = {}
+  local level = 1
+  local info = debug.getinfo(level, "Sl")
+  while info do
+    local frame = info.source == __wlo_source and __wlo_lines[info.currentline]
+    if frame then
+      frames[#frames + 1] = frame
+    end
+    level = level + 1
+    info = debug.getinfo(level, "Sl")
+  end
+  return frames
+end
+
+-- An exception is a record table with __wlo_class; raising records where it
+-- happened. A host failure has no __wlo_class and cannot be caught.
+local function __wlo_raise(exception, site)
+  exception.__wlo_location = __wlo_sites[site]
+  exception.__wlo_frames = __wlo_frames()
+  error(exception, 0)
+end
+
+local function __wlo_reraise(exception, site)
+  error(exception, 0)
+end
+
+local function __wlo_fail(class, message, site)
+  __wlo_raise({ __wlo_class = class, message = message }, site)
+end
+
+local function __wlo_host_fail(message, site)
+  error({ message = message, __wlo_location = __wlo_sites[site], __wlo_frames = __wlo_frames() }, 0)
+end
+
+-- The xpcall message handler. It runs where the error happened, so a raw VM
+-- error such as stack overflow gets the frames active at that point.
+local function __wlo_catch(err)
+  if type(err) ~= "table" then
+    local frames = __wlo_frames()
+    local message = tostring(err):gsub("^.-:%d+: ", "")
+    err = { message = message, __wlo_location = frames[1], __wlo_frames = frames }
+  end
+  return err
+end
+
+-- Runs a protected block. Returns the block's departure code and value, or
+-- "raise" and the exception; host failures propagate.
+local function __wlo_try(body)
+  local ok, code, value = xpcall(body, __wlo_catch)
+  if ok then
+    return code, value
+  end
+  if not code.__wlo_class then
+    error(code, 0)
+  end
+  return "raise", code
 end
 
 -- Rejects results outside the integer range and normalizes -0.0 to 0.
 local function __wlo_check(value, site)
   if value ~= value or value > __wlo_MAX_INT or value < -__wlo_MAX_INT then
-    __wlo_fail("overflow", "integer overflow", site)
+    __wlo_fail("OverflowError", "integer overflow", site)
   end
   if value == 0 then
     return 0
@@ -50,7 +107,7 @@ end
 -- Fails on a zero divisor, including -0.0.
 local function __wlo_div(a, b, site)
   if b == 0 then
-    __wlo_fail("division", "division by zero", site)
+    __wlo_fail("ZeroDivisionError", "division by zero", site)
   end
   return a / b
 end
@@ -59,7 +116,7 @@ end
 -- fmod and the subtraction are exact, so the results are too.
 local function __wlo_divmod(a, b, site)
   if b == 0 then
-    __wlo_fail("division", "division by zero", site)
+    __wlo_fail("ZeroDivisionError", "division by zero", site)
   end
   local mod = math.fmod(a, b)
   local div = (a - mod) / b
@@ -115,7 +172,7 @@ end
 local function __wlo_int(x, site)
   local value = x < 0 and math.ceil(x) or math.floor(x)
   if value ~= value or value > __wlo_MAX_INT or value < -__wlo_MAX_INT then
-    __wlo_fail("conversion", "cannot convert float to int", site)
+    __wlo_fail("ValueError", "cannot convert float to int", site)
   end
   if value == 0 then
     return 0
@@ -194,7 +251,7 @@ local function __wlo_write(text, site)
     ok, err = io.stdout:flush()
   end
   if not ok then
-    __wlo_fail("io", "cannot write output: " .. tostring(err), site)
+    __wlo_host_fail("cannot write output: " .. tostring(err), site)
   end
 end
 
@@ -272,7 +329,7 @@ end
 
 local function __wlo_check_index(list, i, site)
   if i < 0 or i >= list.n then
-    __wlo_fail("index", "list index out of range", site)
+    __wlo_fail("IndexError", "list index out of range", site)
   end
 end
 
@@ -295,7 +352,7 @@ end
 local function __wlo_list_pop(list, site)
   local n = list.n
   if n == 0 then
-    __wlo_fail("index", "pop from empty list", site)
+    __wlo_fail("IndexError", "pop from empty list", site)
   end
   local value = list[n]
   list[n] = nil
@@ -314,7 +371,7 @@ end
 
 local function __wlo_dict_index(dict, key, site)
   if not dict.positions[key] then
-    __wlo_fail("key", "key not found", site)
+    __wlo_fail("KeyError", "key not found", site)
   end
   return dict.values[key]
 end
@@ -326,7 +383,7 @@ end
 local function __wlo_dict_pop(dict, key, site)
   local position = dict.positions[key]
   if not position then
-    __wlo_fail("key", "key not found", site)
+    __wlo_fail("KeyError", "key not found", site)
   end
   local value = dict.values[key]
   local keys = dict.keys
@@ -360,7 +417,7 @@ local function __wlo_dict_items(dict, site)
   local i, version = 0, dict.version
   return function()
     if dict.version ~= version then
-      __wlo_fail("value", "dictionary changed size during iteration", site)
+      __wlo_fail("RuntimeError", "dictionary changed size during iteration", site)
     end
     if i < #dict.keys then
       i = i + 1
@@ -431,7 +488,7 @@ end
 
 local function __wlo_str_split(text, sep, site)
   if sep == "" then
-    __wlo_fail("value", "empty separator", site)
+    __wlo_fail("ValueError", "empty separator", site)
   end
   local items = __wlo_list({}, 0)
   local start = 1
@@ -453,7 +510,7 @@ end
 
 local function __wlo_range(start, stop, step, site)
   if step == 0 then
-    __wlo_fail("value", "range step must not be zero", site)
+    __wlo_fail("ValueError", "range step must not be zero", site)
   end
   local value, started = start, false
   return function()
@@ -471,26 +528,17 @@ local function __wlo_where(location)
   return __wlo_paths[location[3]] .. ":" .. location[1] .. ":" .. location[2]
 end
 
--- Formats a failure with its Willow frames, innermost first. Only lines of
--- translated Willow code are in __wlo_lines, so runtime and wrapper frames
--- drop out.
+-- Formats an uncaught failure with its recorded frames, innermost first.
+-- LuaJIT skips the message handler for memory errors, so `err` may be a raw
+-- string with no Willow frame left to locate it.
 local function __wlo_report(err)
-  local frames = {}
-  local level = 1
-  local info = debug.getinfo(level, "Sl")
-  while info do
-    local frame = info.source == __wlo_source and __wlo_lines[info.currentline]
-    if frame then
-      frames[#frames + 1] = frame
-    end
-    level = level + 1
-    info = debug.getinfo(level, "Sl")
-  end
   if type(err) ~= "table" then
-    local message = tostring(err):gsub("^.-:%d+: ", "")
-    err = { category = "vm", message = message, location = frames[1] }
+    err = __wlo_catch(err)
   end
-  local lines = { __wlo_where(err.location) .. ": error: " .. err.message }
+  local class = err.__wlo_class and err.__wlo_class .. ": " or ""
+  local where = err.__wlo_location and __wlo_where(err.__wlo_location) .. ": " or ""
+  local lines = { where .. "error: " .. class .. err.message }
+  local frames = err.__wlo_frames
   for i, frame in ipairs(frames) do
     if i > __wlo_MAX_FRAMES then
       lines[#lines + 1] = "  ... " .. (#frames - __wlo_MAX_FRAMES) .. " more frames"
@@ -502,9 +550,9 @@ local function __wlo_report(err)
 end
 
 local function __wlo_run(main)
-  local ok, report = xpcall(main, __wlo_report)
+  local ok, err = xpcall(main, __wlo_catch)
   if not ok then
-    io.stderr:write(report, "\n")
+    io.stderr:write(__wlo_report(err), "\n")
     os.exit(1)
   end
 end

@@ -78,6 +78,9 @@ local function lower_function(fn, sites)
   local out
   local depth, temps, labels = 0, 0, 0
   local loop
+  -- The Try nodes whose protected blocks enclose the statement being lowered,
+  -- and the index of each Try statement for a bare `raise`.
+  local tries, try_indexes = {}, {}
 
   local function emit(statement)
     out[#out + 1] = statement
@@ -198,7 +201,8 @@ local function lower_function(fn, sites)
         for i, field in ipairs(node.target.fields) do
           names[i] = field.name
         end
-        return { kind = "Construct", names = names, values = args }
+        local class = node.target.exception and node.target.type_name
+        return { kind = "Construct", names = names, values = args, class = class }
       elseif node.target.kind == "Builtin" then
         local name = node.name
         if name == "str" then
@@ -274,6 +278,33 @@ local function lower_function(fn, sites)
 
   local lower_block
 
+  -- Departures from a protected block leave its closure with a code. Each
+  -- crossed Try resumes the departure after its finally clause.
+  local function departure(kind, value, span)
+    local first = kind == "Return" and 1 or loop.tries + 1
+    for i = first, #tries do
+      tries[i][kind:lower() .. "s"] = true
+    end
+    local node = { kind = kind, value = value, exits = #tries >= first, span = span }
+    if kind == "Continue" then
+      loop.continues = true
+      node.label = loop.label
+    end
+    emit(node)
+  end
+
+  -- Lowers a block that runs as a closure under `__wlo_try`, with its own
+  -- temporaries.
+  local function protect(body, node)
+    local outer_temps = temps
+    temps = 0
+    tries[#tries + 1] = node
+    local result = { body = lower_block(body), temps = temps }
+    tries[#tries] = nil
+    temps = outer_temps
+    return result
+  end
+
   local function lower_statement(statement)
     depth = 0
     local kind = statement.kind
@@ -302,7 +333,7 @@ local function lower_function(fn, sites)
     elseif kind == "Return" then
       -- A returned value never contains a call, so no return is a tail call.
       local value = statement.value and lower_operand(statement.value)
-      emit({ kind = "Return", value = value, span = statement.span })
+      departure("Return", value, statement.span)
     elseif kind == "If" then
       local condition = lower_operand(statement.condition)
       local body = lower_block(statement.body)
@@ -310,7 +341,7 @@ local function lower_function(fn, sites)
       emit({ kind = "If", condition = condition, body = body, else_body = else_body, span = statement.span })
     elseif kind == "While" then
       labels = labels + 1
-      local node = { kind = "While", label = labels, span = statement.span }
+      local node = { kind = "While", label = labels, tries = #tries, span = statement.span }
       local outer = out
       out = {}
       node.condition = lower_operand(statement.condition)
@@ -323,7 +354,7 @@ local function lower_function(fn, sites)
       emit(node)
     elseif kind == "For" then
       labels = labels + 1
-      local node = { kind = "For", label = labels, span = statement.span }
+      local node = { kind = "For", label = labels, tries = #tries, span = statement.span }
       node.target = { kind = "Local", symbol = statement.symbol }
       -- The iterator is created once, after its operands are evaluated here.
       local iterable = statement.iterable
@@ -346,11 +377,47 @@ local function lower_function(fn, sites)
       node.body = lower_block(statement.body)
       loop = enclosing
       emit(node)
-    elseif kind == "Break" then
-      emit({ kind = "Break", span = statement.span })
-    elseif kind == "Continue" then
-      loop.continues = true
-      emit({ kind = "Continue", label = loop.label, span = statement.span })
+    elseif kind == "Break" or kind == "Continue" then
+      departure(kind, nil, statement.span)
+    elseif kind == "Raise" then
+      local value
+      if statement.value then
+        value = helper("raise", { lower_operand(statement.value) }, statement.span)
+      else
+        value = helper("reraise", { { kind = "TryValue", index = try_indexes[statement.try] } }, statement.span)
+      end
+      emit({ kind = "Eval", value = value, span = statement.span })
+    elseif kind == "Try" then
+      labels = labels + 1
+      try_indexes[statement] = labels
+      local node = { kind = "Try", index = labels, span = statement.span }
+      node.body = protect(statement.body, node)
+      node.handlers = {}
+      for i, handler in ipairs(statement.handlers) do
+        local record = handler.record
+        node.handlers[i] = {
+          class = record.type_name ~= "Exception" and record.type_name or nil,
+          target = handler.symbol and { kind = "Local", symbol = handler.symbol },
+          body = protect(handler.body, node),
+        }
+      end
+      node.finally_body = statement.finally_body and lower_block(statement.finally_body)
+      -- Resume what left the protected blocks, in the try's own context.
+      local outer = out
+      out = {}
+      local value = { kind = "TryValue", index = node.index }
+      if node.returns then
+        departure("Return", value)
+      end
+      if node.breaks then
+        departure("Break")
+      end
+      if node.continues then
+        departure("Continue")
+      end
+      node.resume = out
+      out = outer
+      emit(node)
     end
   end
 

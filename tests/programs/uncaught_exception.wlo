@@ -1,0 +1,15 @@
+class ParseError(Exception):
+    line: int
+
+def inner(line: int) -> None:
+    raise ParseError("bad input", line)
+
+def outer() -> None:
+    inner(7)
+
+def main() -> None:
+    try:
+        outer()
+    except ParseError:
+        print("seen")
+        raise

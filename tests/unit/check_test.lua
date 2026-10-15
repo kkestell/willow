@@ -382,4 +382,88 @@ return {
     }, "\n")
     eq("2:12: expected int, received str\n4:11: operator '+' cannot be applied to int and bool", check_errors(source))
   end,
+
+  exception_classes = function()
+    local E = "class ParseError(Exception):\n    line: int\n"
+    local program = check_source(E .. in_main("e = ParseError('bad', 2)\nm = e.message\nn = e.line\nb: Exception = e\nc: Exception | None = None\nc = ValueError('x')"))
+    local body = program.functions[1].body
+    eq("ParseError", body[1].symbol.type)
+    eq("str", body[2].symbol.type)
+    eq("int", body[3].symbol.type)
+    eq("4:9: 'ParseError' expects 2 arguments, received 1", check_errors(E .. in_main("e = ParseError('bad')")))
+    check_source(E .. "def f(e: ParseError | None) -> Exception | None:\n    return e\n" .. MAIN)
+    eq("5:26: expected list[Exception], received list[ParseError]",
+      check_errors(E .. in_main("x: list[ParseError] = []\ny: list[Exception] = x")))
+    eq("5:11: record Exception has no field 'line'",
+      check_errors(E .. in_main("e: Exception = ParseError('bad', 2)\nx = e.line")))
+    eq("4:11: cannot print a value of type Exception", check_errors(E .. in_main("print(Exception('x'))")))
+  end,
+
+  raise_operands = function()
+    eq("2:11: expected an exception, received int", check_errors(in_main("raise 1")))
+    eq("3:11: expected an exception, received Exception | None",
+      check_errors(in_main("e: Exception | None = None\nraise e")))
+    check_source("def f(n: int) -> int:\n    if n > 0:\n        return n\n    raise ValueError('negative')\n" .. MAIN)
+    eq("3:5: unreachable statement", check_errors(in_main("raise ValueError('x')\nprint(1)")))
+  end,
+
+  except_clauses = function()
+    local function try(clauses)
+      return in_main("try:\n    pass\n" .. clauses)
+    end
+    eq("6:5: unreachable 'except' clause",
+      check_errors(try("except Exception:\n    pass\nexcept ValueError:\n    pass")))
+    eq("6:5: unreachable 'except' clause",
+      check_errors(try("except ValueError:\n    pass\nexcept ValueError:\n    pass")))
+    local program = check_source(try("except KeyError as e:\n    m = e.message\nexcept Exception as other:\n    pass"))
+    eq("KeyError", program.functions[1].locals[1].type)
+    eq("6:5: expected KeyError, received IndexError",
+      check_errors(try("except KeyError as e:\n    pass\nexcept IndexError as e:\n    pass")))
+    check_source(in_main("e: Exception = ValueError('x')\ntry:\n    pass\nexcept KeyError as e:\n    pass"))
+  end,
+
+  finally_departures = function()
+    local function in_finally(statements)
+      return in_main("while True:\n    try:\n        pass\n    finally:\n" .. statements:gsub("[^\n]+", "        %0"))
+    end
+    eq("6:13: 'return' cannot leave a 'finally' clause", check_errors(in_finally("return")))
+    eq("6:13: 'break' cannot leave a 'finally' clause", check_errors(in_finally("break")))
+    eq("7:17: 'continue' cannot leave a 'finally' clause", check_errors(in_finally("if True:\n    continue")))
+    check_source(in_finally("while True:\n    break"))
+    check_source(in_main("while True:\n    try:\n        break\n    except Exception:\n        continue"))
+  end,
+
+  try_transfers = function()
+    check_source("def f() -> int:\n    try:\n        return 1\n    except Exception:\n        return 2\n" .. MAIN)
+    check_source("def f() -> int:\n    try:\n        pass\n    finally:\n        raise ValueError('x')\n" .. MAIN)
+    eq("1:5: function 'f' must return a value on every path",
+      check_errors("def f() -> int:\n    try:\n        return 1\n    except Exception:\n        pass\n" .. MAIN))
+    eq("6:5: unreachable statement",
+      check_errors(in_main("try:\n    return\nexcept Exception:\n    return\nprint(1)")))
+  end,
+
+  try_flow = function()
+    local function f(statements)
+      return "def f(x: int | None) -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
+    end
+    eq("5:15: variable 'y' may be used before assignment",
+      check_errors(f("try:\n    y = 1\nexcept Exception:\n    print(y)")))
+    eq("5:15: variable 'y' may be used before assignment",
+      check_errors(f("try:\n    y = 1\nfinally:\n    print(y)")))
+    check_source(f("try:\n    y = 1\nexcept Exception:\n    y = 2\nprint(y)"))
+    check_source(f("try:\n    y = 1\nexcept Exception:\n    return\nprint(y)"))
+    eq("6:11: variable 'y' may be used before assignment",
+      check_errors(f("try:\n    y = 1\nexcept Exception:\n    pass\nprint(y)")))
+    check_source(f("try:\n    pass\nfinally:\n    y = 1\nprint(y)"))
+    -- Narrowing before the try holds in a clause only for locals the body does not assign.
+    check_source(f("if x is None:\n    return\ntry:\n    pass\nexcept Exception:\n    print(x + 1)"))
+    eq("7:17: operator '+' cannot be applied to int | None and int",
+      check_errors(f("if x is None:\n    return\ntry:\n    x = None\nexcept Exception:\n    print(x + 1)")))
+    eq("9:17: operator '+' cannot be applied to int | None and int",
+      check_errors(f("if x is None:\n    return\ntry:\n    pass\nexcept Exception:\n    x = None\nfinally:\n    print(x + 1)")))
+    check_source(f("try:\n    x = 1\nexcept Exception:\n    return\nprint(x + 1)"))
+    check_source(f("try:\n    pass\nfinally:\n    if x is None:\n        raise ValueError('x')\nprint(x + 1)"))
+    eq("7:13: operator '+' cannot be applied to int | None and int",
+      check_errors(f("try:\n    y: int | None = 1\nfinally:\n    if x is None:\n        y = None\nprint(y + 1)")))
+  end,
 }

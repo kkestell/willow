@@ -144,6 +144,8 @@ function M.emit(lowered)
       return M.mangle(e.symbol.name)
     elseif kind == "Temp" then
       return "__wlo_t" .. e.index
+    elseif kind == "TryValue" then
+      return "__wlo_value" .. e.index
     elseif kind == "Not" then
       return "not " .. expr(e.operand, true)
     elseif kind == "Neg" then
@@ -169,8 +171,11 @@ function M.emit(lowered)
       return expr(e.object) .. "." .. M.mangle(e.name)
     elseif kind == "Construct" then
       local parts = {}
+      if e.class then
+        parts[1] = "__wlo_class = " .. M.quote(e.class)
+      end
       for i, name in ipairs(e.names) do
-        parts[i] = M.mangle(name) .. " = " .. expr(e.values[i])
+        parts[#parts + 1] = M.mangle(name) .. " = " .. expr(e.values[i])
       end
       return "{ " .. table.concat(parts, ", ") .. " }"
     elseif kind == "List" then
@@ -181,6 +186,25 @@ function M.emit(lowered)
   end
 
   local block
+
+  local function temp_locals(count, depth)
+    local temps = {}
+    for i = 1, count do
+      temps[i] = "__wlo_t" .. i
+    end
+    if count > 0 then
+      line(depth, "local " .. table.concat(temps, ", "))
+    end
+  end
+
+  -- Emits a protected block as a closure passed to __wlo_try, which returns
+  -- the block's departure code and value into the try's locals.
+  local function protected(target, block_node, depth)
+    line(depth, target .. " = __wlo_try(function()")
+    temp_locals(block_node.temps, depth + 1)
+    block(block_node.body, depth + 1)
+    line(depth, "end)")
+  end
 
   local function loop_body(s, depth)
     if s.continues then
@@ -201,12 +225,47 @@ function M.emit(lowered)
       line(depth, expr(s.target) .. " = " .. expr(s.value), s.span)
     elseif kind == "Eval" then
       line(depth, expr(s.value), s.span)
+    elseif kind == "Return" and s.exits then
+      line(depth, 'return "return"' .. (s.value and ", " .. expr(s.value) or ""), s.span)
     elseif kind == "Return" then
       line(depth, s.value and "return " .. expr(s.value) or "return", s.span)
     elseif kind == "Break" then
-      line(depth, "break", s.span)
+      line(depth, s.exits and 'return "break"' or "break", s.span)
     elseif kind == "Continue" then
-      line(depth, "goto __wlo_continue_" .. s.label, s.span)
+      line(depth, s.exits and 'return "continue"' or "goto __wlo_continue_" .. s.label, s.span)
+    elseif kind == "Try" then
+      local code, value = "__wlo_code" .. s.index, "__wlo_value" .. s.index
+      line(depth, "do")
+      protected("local " .. code .. ", " .. value, s.body, depth + 1)
+      if #s.handlers > 0 then
+        line(depth + 1, "if " .. code .. ' == "raise" then')
+        for i, handler in ipairs(s.handlers) do
+          if handler.class then
+            local test = value .. ".__wlo_class == " .. M.quote(handler.class)
+            line(depth + 2, (i == 1 and "if " or "elseif ") .. test .. " then")
+          else
+            line(depth + 2, i == 1 and "do" or "else")
+          end
+          if handler.target then
+            line(depth + 3, expr(handler.target) .. " = " .. value)
+          end
+          protected(code .. ", " .. value, handler.body, depth + 3)
+        end
+        line(depth + 2, "end")
+        line(depth + 1, "end")
+      end
+      if s.finally_body then
+        block(s.finally_body, depth + 1)
+      end
+      line(depth + 1, "if " .. code .. ' == "raise" then')
+      line(depth + 2, "__wlo_reraise(" .. value .. ")")
+      line(depth + 1, "end")
+      for _, resume in ipairs(s.resume) do
+        line(depth + 1, "if " .. code .. " == " .. M.quote(resume.kind:lower()) .. " then")
+        statement(resume, depth + 2)
+        line(depth + 1, "end")
+      end
+      line(depth, "end")
     elseif kind == "If" then
       line(depth, "if " .. expr(s.condition) .. " then", s.span)
       block(s.body, depth + 1)

@@ -1,0 +1,3 @@
+errors.wlo:6:9: error: errors.ParseError: empty
+  in check at errors.wlo:6:9
+  called from main at main.wlo:10:12

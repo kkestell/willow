@@ -1,4 +1,4 @@
-overflow_frames.wlo:5:14: error: integer overflow
+overflow_frames.wlo:5:14: error: OverflowError: integer overflow
   in boom at overflow_frames.wlo:5:14
   called from wrap at overflow_frames.wlo:8:12
   called from main at overflow_frames.wlo:12:21

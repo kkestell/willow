@@ -106,6 +106,15 @@ show = function(node)
       .. (node.else_body and " else " .. show_block(node.else_body) or "")
   elseif kind == "While" then
     return "while " .. show(node.condition) .. " " .. show_block(node.body)
+  elseif kind == "Raise" then
+    return node.value and "raise " .. show(node.value) or "raise"
+  elseif kind == "Try" then
+    local text = "try " .. show_block(node.body)
+    for _, handler in ipairs(node.handlers) do
+      local class = (handler.class.module and handler.class.module .. "." or "") .. handler.class.name
+      text = text .. " except " .. class .. (handler.name and " as " .. handler.name or "") .. " " .. show_block(handler.body)
+    end
+    return text .. (node.finally_body and " finally " .. show_block(node.finally_body) or "")
   end
   error("unknown node kind " .. tostring(kind))
 end
@@ -278,6 +287,34 @@ return {
     eq("3:5: " .. message, parse_error("class A:\n    x: int\n    def f() -> None:\n        pass\n"))
   end,
 
+  exception_classes = function()
+    local program = parse("class E(Exception):\n    line: int\nclass F(Exception):\n    pass\n")
+    eq("class E { message: str; line: int }", show(program.records[1]))
+    eq("class F { message: str }", show(program.records[2]))
+    eq(true, program.records[2].exception)
+    eq("1:9: the base of a class must be 'Exception'", parse_error("class E(Base):\n    pass\n"))
+    eq("2:5: exception class cannot declare field 'message'", parse_error("class E(Exception):\n    message: str\n"))
+    eq("2:5: record bodies hold only field declarations", parse_error("class E:\n    pass\n"))
+    eq("3:5: record bodies hold only field declarations", parse_error("class E(Exception):\n    x: int\n    pass\n"))
+  end,
+
+  raise = function()
+    eq("{ raise E(\"x\"); raise }", body("raise E('x')\nraise"))
+    eq("2:15: 'raise ... from' is not supported", body_error("raise E() from e"))
+  end,
+
+  try = function()
+    eq("{ try { f() } except E as e { g(e) } except m.F { pass } finally { h() } }",
+      body("try:\n    f()\nexcept E as e:\n    g(e)\nexcept m.F:\n    pass\nfinally:\n    h()"))
+    eq("{ try { f() } finally { h() } }", body("try:\n    f()\nfinally:\n    h()"))
+    eq("4:1: expected 'except' or 'finally', found dedent", body_error("try:\n    pass"))
+    eq("4:5: bare 'except' is not supported", body_error("try:\n    pass\nexcept:\n    pass"))
+    eq("4:12: exception class lists are not supported", body_error("try:\n    pass\nexcept (E, F):\n    pass"))
+    eq("4:5: 'except*' is not supported", body_error("try:\n    pass\nexcept* E:\n    pass"))
+    eq("6:5: 'else' clause on 'try' is not supported",
+      body_error("try:\n    pass\nexcept E:\n    pass\nelse:\n    pass"))
+  end,
+
   fields = function()
     eq("a.b.c", expr("a.b.c"))
     eq("rows[0].name", expr("rows[0].name"))
@@ -344,7 +381,7 @@ return {
   end,
 
   unsupported_reserved_words = function()
-    eq("2:5: 'try' is not supported", body_error("try:\n    pass"))
+    eq("2:5: 'with' is not supported", body_error("with:\n    pass"))
     eq("2:9: 'lambda' is not supported", body_error("x = lambda"))
     eq("2:5: nested functions are not supported", body_error("def g() -> None:\n    pass"))
   end,

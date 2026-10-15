@@ -1,0 +1,153 @@
+class ParseError(Exception):
+    line: int
+
+class Empty(Exception):
+    pass
+
+def parse_digit(text: str, line: int) -> int:
+    index = "0123456789".find(text)
+    if len(text) != 1 or index < 0:
+        raise ParseError(f"not a digit: {text}", line)
+    return index
+
+def trace(text: str) -> int:
+    print(text)
+    return len(text)
+
+def builtin_failures() -> None:
+    items = [1]
+    ages = {"a": 1}
+    for step in range(7):
+        try:
+            if step == 0:
+                print(9007199254740991 + step + 1)
+            elif step == 1:
+                print(1 // (step - 1))
+            elif step == 2:
+                print(int(float(step) * 1e308 * 10.0))
+            elif step == 3:
+                print(items[step])
+            elif step == 4:
+                print(ages["b"])
+            elif step == 5:
+                for key in ages:
+                    ages[key + "!"] = 2
+            else:
+                words = "".split("")
+        except OverflowError as overflow:
+            print(f"OverflowError: {overflow.message}")
+        except ZeroDivisionError as division:
+            print(f"ZeroDivisionError: {division.message}")
+        except IndexError as index:
+            print(f"IndexError: {index.message}")
+        except KeyError as missing:
+            print(f"KeyError: {missing.message}")
+        except Exception as other:
+            print(f"other: {other.message}")
+
+def clause_order() -> None:
+    errors: list[Exception] = [ParseError("p", 1), Empty("e"), ValueError("v")]
+    for raised in errors:
+        try:
+            raise raised
+        except Empty:
+            print("Empty")
+        except ParseError as error:
+            print(f"ParseError {error.line}")
+        except Exception as other:
+            print(f"Exception {other.message}")
+
+def propagate(depth: int) -> int:
+    if depth == 0:
+        return parse_digit("?", 3)
+    try:
+        return propagate(depth - 1)
+    finally:
+        print(f"unwind {depth}")
+
+def returns() -> int:
+    try:
+        return trace("return value")
+    finally:
+        print("finally after return")
+
+def departures() -> None:
+    for i in range(4):
+        try:
+            if i == 1:
+                continue
+            if i == 3:
+                break
+            print(f"body {i}")
+        finally:
+            print(f"finally {i}")
+    print("after loop")
+
+def replaced() -> None:
+    try:
+        try:
+            raise Empty("first")
+        finally:
+            raise ValueError("second")
+    except Exception as error:
+        print(error.message)
+
+def nested() -> int:
+    total = 0
+    try:
+        while True:
+            try:
+                total = total + 1
+                if total == 3:
+                    return total
+                continue
+            except Exception:
+                pass
+    finally:
+        print(f"nested finally {total}")
+    return 0
+
+def reraise() -> None:
+    try:
+        try:
+            parse_digit("x", 4)
+        except ParseError:
+            try:
+                print("handling")
+                raise
+            finally:
+                print("inner finally")
+    except ParseError as error:
+        print(f"reraised {error.line}")
+
+def handler_raises() -> None:
+    try:
+        try:
+            raise Empty("one")
+        except Empty:
+            raise ParseError("two", 5)
+        finally:
+            print("finally after handler")
+    except ParseError as error:
+        print(error.message)
+
+def main() -> None:
+    try:
+        print(parse_digit("7", 1))
+        print(parse_digit("x", 2))
+    except ParseError as error:
+        print(f"line {error.line}: {error.message}")
+    finally:
+        print("done")
+    builtin_failures()
+    clause_order()
+    try:
+        print(propagate(2))
+    except ParseError as error:
+        print(error.message)
+    print(returns())
+    departures()
+    replaced()
+    print(nested())
+    reraise()
+    handler_raises()

@@ -1,4 +1,5 @@
 -- Checks types, definite assignment, and narrowing, annotating the tree in place.
+local bind = require("compiler.bind")
 local diag = require("compiler.diag")
 
 local M = {}
@@ -49,8 +50,16 @@ local function base(type)
   return type:sub(1, -#OPTIONAL - 1)
 end
 
+-- The type names of every exception class, including `Exception`, set by M.check.
+local exception_classes = {}
+
+-- Exception classes are assignable to `Exception`, and optionals follow their
+-- bases.
 local function assignable(target, source)
-  return target == source or optional(target) and (source == "None" or source == base(target))
+  if target == source or target == "Exception" and exception_classes[source] then
+    return true
+  end
+  return optional(target) and (source == "None" or assignable(base(target), optional(source) and base(source) or source))
 end
 
 local SCALARS = { int = true, float = true, bool = true, str = true, None = true }
@@ -166,8 +175,8 @@ local function replace(state, result)
   end
 end
 
--- Adds the symbol of every assignment and loop name in `body`, including
--- nested blocks.
+-- Adds the symbol of every assignment, loop name, and `as` name in `body`,
+-- including nested blocks.
 local function assigned_symbols(body, result)
   for _, statement in ipairs(body) do
     local kind = statement.kind
@@ -181,15 +190,26 @@ local function assigned_symbols(body, result)
       end
     elseif kind == "While" or kind == "For" then
       assigned_symbols(statement.body, result)
+    elseif kind == "Try" then
+      assigned_symbols(statement.body, result)
+      for _, handler in ipairs(statement.handlers) do
+        if handler.symbol then
+          result[handler.symbol] = true
+        end
+        assigned_symbols(handler.body, result)
+      end
+      if statement.finally_body then
+        assigned_symbols(statement.finally_body, result)
+      end
     end
   end
   return result
 end
 
--- Narrowing before a loop holds in it and after it only for locals the loop
--- does not assign.
-local function forget_loop_narrowing(state, loop)
-  for symbol in pairs(assigned_symbols({ loop }, {})) do
+-- Forgets narrowing for the locals `statements` assign. Narrowing before a
+-- loop holds in it and after it only for locals the loop does not assign.
+local function forget_narrowing(state, statements)
+  for symbol in pairs(assigned_symbols(statements, {})) do
     if state[symbol] then
       state[symbol] = symbol.type
     end
@@ -197,12 +217,12 @@ local function forget_loop_narrowing(state, loop)
 end
 
 -- Records that `symbol` holds a value of `value_type`. A value that cannot be
--- None narrows an optional local.
+-- None narrows an optional local to its base.
 local function assign(state, symbol, value_type)
-  if value_type == "None" or optional(value_type) then
+  if value_type == "None" or optional(value_type) or not optional(symbol.type) then
     state[symbol] = symbol.type
   else
-    state[symbol] = value_type
+    state[symbol] = base(symbol.type)
   end
 end
 
@@ -226,6 +246,9 @@ local function check_function(fn, records)
   end
 
   local return_type = fn.return_type.name
+  -- The number of `finally` clauses enclosing the statement being checked.
+  -- `in_loop` is this count at the innermost loop, or false outside loops.
+  local finally_depth = 0
 
   local check_expression
 
@@ -434,6 +457,80 @@ local function check_function(fn, records)
 
   local check_block
 
+  -- Checks a `try`, updating `state`; returns true if it transfers control.
+  -- The body may stop at any statement, so clauses start from the state
+  -- before the `try` without narrowing of locals the earlier parts assign.
+  local function check_try(statement, state, in_loop)
+    local handler_entry = copy(state)
+    forget_narrowing(handler_entry, statement.body)
+    local finally_entry = copy(handler_entry)
+    local body_state, transfers = check_block(statement.body, state, in_loop)
+    local exits = {}
+    if not transfers then
+      exits[1] = body_state
+    end
+    local named = {}
+    for _, handler in ipairs(statement.handlers) do
+      local class = handler.record.type_name
+      if named.Exception or named[class] then
+        diag.error(handler.span, "unreachable 'except' clause")
+      end
+      named[class] = true
+      local handler_state = copy(handler_entry)
+      local symbol = handler.symbol
+      if symbol then
+        if symbol.type then
+          expect_type(handler, symbol.type, class)
+        else
+          symbol.type = class
+        end
+        assign(handler_state, symbol, class)
+      end
+      local exit, handler_transfers = check_block(handler.body, handler_state, in_loop)
+      if not handler_transfers then
+        exits[#exits + 1] = exit
+      end
+      transfers = transfers and handler_transfers
+      forget_narrowing(finally_entry, handler.body)
+      if symbol and finally_entry[symbol] then
+        finally_entry[symbol] = symbol.type
+      end
+    end
+    local result = exits[1]
+    for i = 2, #exits do
+      result = join(result, exits[i])
+    end
+    if statement.finally_body then
+      finally_depth = finally_depth + 1
+      local finally_state, finally_transfers = check_block(statement.finally_body, finally_entry, in_loop)
+      finally_depth = finally_depth - 1
+      if finally_transfers then
+        return true
+      end
+      -- The finally clause runs after whichever part fell through.
+      if result then
+        local assigned = assigned_symbols(statement.finally_body, {})
+        -- A local the finally clause assigns on some paths only is missing
+        -- from its exit state but may no longer hold the narrowed type.
+        for symbol in pairs(assigned) do
+          if result[symbol] then
+            result[symbol] = symbol.type
+          end
+        end
+        for symbol, type in pairs(finally_state) do
+          if assigned[symbol] or type ~= symbol.type then
+            result[symbol] = type
+          end
+        end
+      end
+    end
+    if transfers then
+      return true
+    end
+    replace(state, result)
+    return false
+  end
+
   -- Checks one statement, updating `state`; returns true if it transfers
   -- control so that the next statement cannot run.
   local function check_statement(statement, state, in_loop)
@@ -472,6 +569,9 @@ local function check_function(fn, records)
     elseif kind == "CallStmt" then
       check_expression(statement.call, state)
     elseif kind == "Return" then
+      if finally_depth > 0 then
+        diag.error(statement.span, "'return' cannot leave a 'finally' clause")
+      end
       if statement.value then
         check_against(statement.value, state, return_type)
       else
@@ -481,8 +581,20 @@ local function check_function(fn, records)
     elseif kind == "Break" or kind == "Continue" then
       if not in_loop then
         diag.error(statement.span, "'" .. kind:lower() .. "' outside of a loop")
+      elseif in_loop < finally_depth then
+        diag.error(statement.span, "'" .. kind:lower() .. "' cannot leave a 'finally' clause")
       end
       return true
+    elseif kind == "Raise" then
+      if statement.value then
+        local type = check_expression(statement.value, state)
+        if not exception_classes[type] then
+          diag.error(statement.value.span, "expected an exception, received " .. type)
+        end
+      end
+      return true
+    elseif kind == "Try" then
+      return check_try(statement, state, in_loop)
     elseif kind == "If" then
       local true_facts, false_facts = check_condition(statement.condition, state)
       local body_state, body_transfers = check_block(statement.body, narrow(state, true_facts), in_loop)
@@ -500,10 +612,10 @@ local function check_function(fn, records)
         replace(state, join(body_state, else_state))
       end
     elseif kind == "While" then
-      forget_loop_narrowing(state, statement)
+      forget_narrowing(state, { statement })
       local true_facts = check_condition(statement.condition, state)
       -- The body may run zero times, so its assignments are not definite after the loop.
-      check_block(statement.body, narrow(state, true_facts), true)
+      check_block(statement.body, narrow(state, true_facts), finally_depth)
     elseif kind == "For" then
       -- The iterable is evaluated once, before the loop.
       local iterable = statement.iterable
@@ -530,11 +642,11 @@ local function check_function(fn, records)
       else
         symbol.type = item
       end
-      forget_loop_narrowing(state, statement)
+      forget_narrowing(state, { statement })
       local body_state = copy(state)
       assign(body_state, symbol, item)
       -- As with `while`, the loop name and body assignments are not definite after the loop.
-      check_block(statement.body, body_state, true)
+      check_block(statement.body, body_state, finally_depth)
     end
     return false
   end
@@ -575,9 +687,18 @@ end
 -- independent of the others; all of them are reported together.
 function M.check(modules)
   local records = {}
+  for name, record in pairs(bind.exceptions) do
+    records[name] = record
+  end
   for _, module in ipairs(modules) do
     for _, record in ipairs(module.records) do
       records[record.type_name] = record
+    end
+  end
+  exception_classes = {}
+  for name, record in pairs(records) do
+    if record.exception then
+      exception_classes[name] = true
     end
   end
   local errors = {}

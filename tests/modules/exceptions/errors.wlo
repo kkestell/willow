@@ -1,0 +1,6 @@
+class ParseError(Exception):
+    line: int
+
+def check(text: str, line: int) -> None:
+    if text == "":
+        raise ParseError("empty", line)

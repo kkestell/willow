@@ -1,0 +1,4 @@
+uncaught_exception.wlo:5:5: error: ParseError: bad input
+  in inner at uncaught_exception.wlo:5:5
+  called from outer at uncaught_exception.wlo:8:5
+  called from main at uncaught_exception.wlo:12:9

@@ -1,3 +1,3 @@
-list_index_out_of_range.wlo:2:17: error: list index out of range
+list_index_out_of_range.wlo:2:17: error: IndexError: list index out of range
   in last at list_index_out_of_range.wlo:2:17
   called from main at list_index_out_of_range.wlo:5:11

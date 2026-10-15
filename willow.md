@@ -553,8 +553,8 @@ the first slice.
 
 In the first slice, all runtime failures terminate execution. §19 makes them
 exceptions that programs can catch. Internally, represent errors as a structured table
-containing at least `category`, `message`, and `location` so future exception
-handling does not require parsing display text. In the top-level `xpcall` error
+containing at least the message, location, and frames so exception handling does
+not require parsing display text. In the top-level `xpcall` error
 handler, if LuaJIT raises a raw VM string error (such as `"stack overflow"` or
 `"not enough memory"`) rather than a structured Willow error table, wrap it into a
 structured runtime error and attach the innermost surviving Willow frame location

@@ -15,8 +15,7 @@ end
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
-as assert async await case del except finally from global lambda match nonlocal
-raise try type with yield
+assert async await case del from global lambda match nonlocal type with yield
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
@@ -316,7 +315,7 @@ function M.parse(tokens)
   local parse_and = binary_level(set("and"), parse_not)
   parse_expression = binary_level(set("or"), parse_and)
 
-  local parse_block
+  local parse_block, parse_try
 
   -- Parses the rest of an `if` or `elif` whose keyword `token` was consumed.
   -- An `elif` becomes a nested `If` that is the whole `else_body`.
@@ -331,6 +330,45 @@ function M.parse(tokens)
       else_body = parse_block()
     end
     return ast.node("If", token.span, { condition = condition, body = body, else_body = else_body })
+  end
+
+  -- Parses the clauses of a `try` whose keyword `token` was consumed.
+  parse_try = function(token)
+    local body = parse_block()
+    local handlers = {}
+    while peek().kind == "except" do
+      local clause = advance()
+      local next_token = peek()
+      if next_token.kind == ":" then
+        diag.error(clause.span, "bare 'except' is not supported")
+      elseif next_token.kind == "(" then
+        diag.error(next_token.span, "exception class lists are not supported")
+      elseif next_token.kind == "*" then
+        diag.error(clause.span, "'except*' is not supported")
+      end
+      local name = expect("NAME", "an exception class name")
+      local class = { name = name.value, span = name.span }
+      if accept(".") then
+        class.module = class.name
+        class.name = expect("NAME", "an exception class name").value
+      end
+      local bound
+      if accept("as") then
+        bound = expect("NAME", "a name").value
+      end
+      handlers[#handlers + 1] = { class = class, name = bound, body = parse_block(), span = clause.span }
+    end
+    local finally_body
+    if accept("finally") then
+      finally_body = parse_block()
+    end
+    if peek().kind == "else" then
+      diag.error(peek().span, "'else' clause on 'try' is not supported")
+    end
+    if #handlers == 0 and not finally_body then
+      unexpected("'except' or 'finally'")
+    end
+    return ast.node("Try", token.span, { body = body, handlers = handlers, finally_body = finally_body })
   end
 
   local function reject_chained_assignment()
@@ -397,6 +435,9 @@ function M.parse(tokens)
       expect("in")
       local iterable = parse_expression()
       return ast.node("For", token.span, { name = name.value, iterable = iterable, body = parse_block() })
+    elseif kind == "try" then
+      advance()
+      return parse_try(token)
     elseif kind == "def" then
       diag.error(token.span, "nested functions are not supported")
     end
@@ -408,6 +449,16 @@ function M.parse(tokens)
         value = parse_expression()
       end
       node = ast.node("Return", token.span, { value = value })
+    elseif kind == "raise" then
+      advance()
+      local value
+      if peek().kind ~= "NEWLINE" then
+        value = parse_expression()
+        if peek().kind == "from" then
+          diag.error(peek().span, "'raise ... from' is not supported")
+        end
+      end
+      node = ast.node("Raise", token.span, { value = value })
     elseif simple_statements[kind] then
       advance()
       node = ast.node(simple_statements[kind], token.span, {})
@@ -449,24 +500,45 @@ function M.parse(tokens)
       { name = name.value, params = params, return_type = return_type, body = parse_block() })
   end
 
+  -- An exception class has `message: str` as its first field and may have a
+  -- body of `pass` alone.
   local function parse_record()
     advance()
     local name = expect("NAME", "a record name")
+    local exception = false
+    local fields = {}
+    if accept("(") then
+      local base = expect("NAME", "a base class name")
+      if base.value ~= "Exception" then
+        diag.error(base.span, "the base of a class must be 'Exception'")
+      end
+      expect(")")
+      exception = true
+      fields[1] = ast.node("FieldDecl", name.span,
+        { name = "message", type = ast.node("Type", name.span, { name = "str", records = {} }) })
+    end
     expect(":")
     expect("NEWLINE", "end of line")
     expect("INDENT", "an indented block")
-    local fields = {}
+    if exception and accept("pass") then
+      expect("NEWLINE", "end of line")
+      expect("DEDENT", "the end of the class")
+      return ast.node("Record", name.span, { name = name.value, fields = fields, exception = true })
+    end
     repeat
       local field = peek()
       if field.kind ~= "NAME" or tokens[pos + 1].kind ~= ":" then
         diag.error(field.span, "record bodies hold only field declarations")
+      end
+      if exception and field.value == "message" then
+        diag.error(field.span, "exception class cannot declare field 'message'")
       end
       advance()
       advance()
       fields[#fields + 1] = ast.node("FieldDecl", field.span, { name = field.value, type = parse_type() })
       expect("NEWLINE", "end of line")
     until accept("DEDENT")
-    return ast.node("Record", name.span, { name = name.value, fields = fields })
+    return ast.node("Record", name.span, { name = name.value, fields = fields, exception = exception })
   end
 
   local imports = {}
