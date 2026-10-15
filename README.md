@@ -23,7 +23,7 @@ follows symlinks to find its installation.
 ```sh
 willow check hello.wlo                 # check the program without running it
 willow run hello.wlo                   # check, then run on the bundled LuaJIT
-willow run number.wlo out.txt          # arguments after the source go to main
+willow run number.wlo out.txt          # arguments after the source go to sys.args()
 willow compile hello.wlo -o hello.lua  # check, then write a standalone Lua file
 luajit hello.lua                       # a compiled file needs only LuaJIT 2.1
 willow build hello.wlo -o hello        # check, then write an executable
@@ -35,4 +35,4 @@ in `luajit number.lua out.txt` or `./number out.txt`.
 
 Diagnostics go to stderr and program output to stdout. The exit status is 0 on
 success and 1 for invalid usage, source errors, failed output, and runtime
-errors, unless the program chooses its own with `exit`.
+errors, unless the program chooses its own with `sys.exit`.

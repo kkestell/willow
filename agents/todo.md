@@ -176,3 +176,13 @@ Section numbers refer to that document.
   - [x] CLI: `check`, `run`, `compile`, and `build` find `lib/` from the installation, including through a symlinked launcher; compiled and built output bundle standard modules like a program's own
   - [x] `lib/json.wlo`: the `Json` alias, `JsonError`, `parse` per RFC 8259 with `int` and `float` numbers, repeated keys, surrogate pairs, unpaired surrogates rejected, and line and column in error messages; `dump` with no whitespace, dictionary order, float text from `str`, the escape rules, and `cannot encode` for NaN and infinities
   - [x] Tests: import resolution and shadowing, a missing module, standard modules in built output run outside the checkout; JSON round trips, number typing and the `int` boundary, escapes and non-ASCII text, rejected texts with their positions, non-finite floats; the §14 example
+
+## Eighth slice
+
+- [ ] `sys` and `fs` modules (docs/spec.md §1, §11, §14)
+  - [ ] Loader and bind: `sys` and `fs` as compiler-provided modules, checked right after the entry file's directory without probing `lib/`, with member signatures declared in the compiler like built-ins; a program's own `sys.wlo` or `fs.wlo` shadows them
+  - [ ] Bind: `eprint`, `read_file`, `write_file`, and `exit` no longer built-in names; `main(args: list[str])` rejected, leaving `main() -> None` as the only entry signature
+  - [ ] Check: `sys.args`, `sys.eprint` accepting printable values like `print`, `sys.exit`, `fs.read_file`, and `fs.write_file`; a statement calling the standard `sys.exit` transfers control, a shadowing module's `exit` does not
+  - [ ] Runtime: `sys.args()` returning a new list of the arguments on each call and raising `ValueError` `invalid UTF-8` for a malformed argument; no validation before `main` runs; existing helpers reused for the moved functions
+  - [ ] Update `examples/number.wlo` and the existing tests to the new names
+  - [ ] Tests: each moved function under its module name, the old built-in names now free for user declarations, `main(args)` rejected, `sys.args()` through `run`, compiled, and built output, a malformed argument raising from `sys.args()`, `sys.exit` as a transfer, shadowing `sys` with a local module; the §14 `sys` example

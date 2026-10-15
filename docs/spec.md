@@ -35,23 +35,17 @@ A program is an entry file and the modules it imports (§12). A file contains
 order.
 Nothing else appears at file scope.
 
-The entry file defines exactly one `main`, with one of these signatures:
-
-```python
-def main() -> None:
-def main(args: list[str]) -> None:
-```
-
-`args` is a new list of the program's arguments in order, without the program or
-source name. An argument that is not valid UTF-8 terminates the program with status
-1 before `main` runs. In other modules, `main` is an ordinary function name.
+The entry file defines exactly one `main`, with the signature
+`def main() -> None:`. In other modules, `main` is an ordinary function name. The
+program's arguments come from `sys.args()` (§14).
 
 The whole program is checked before any of it runs; an error in any module
 prevents execution. The program then calls `main` once. A call to `main` from user
 code is an ordinary call. Programs have no access to Lua globals or `require`.
 
 The exit status is 0 when `main` returns, 1 when an exception leaves `main` or the
-program otherwise fails, and the given status when the program calls `exit` (§11).
+program otherwise fails, and the given status when the program calls `sys.exit`
+(§14).
 
 ## 2. Lexical structure
 
@@ -551,9 +545,10 @@ and `if False:` and `while True:` are treated like any other condition.
 
 ### Control transfer
 
-`return`, `break`, `continue`, `raise`, and a statement that calls `exit` transfer
-control. An `if` whose branches all transfer, including an `else`, transfers. A
-statement after a transfer in the same block is an unreachable-code error.
+`return`, `break`, `continue`, `raise`, and a statement that calls the standard
+library's `sys.exit` (§14) transfer control. An `if` whose branches all transfer,
+including an `else`, transfers. A statement after a transfer in the same block is
+an unreachable-code error.
 
 A function not annotated `-> None` must return a value on every path. A loop never
 establishes that a function returns, so a trailing `return` is required even after
@@ -646,7 +641,7 @@ These built-in exception classes have only the `message` field:
 | --- | --- |
 | `OverflowError` | Integer overflow |
 | `ZeroDivisionError` | Division by zero |
-| `ValueError` | Invalid values for conversions, `ord`, `chr`, `range`, `split`, `exit`, and UTF-8 input |
+| `ValueError` | Invalid values for conversions, `ord`, `chr`, `range`, `split`, `sys.exit`, and UTF-8 input |
 | `IndexError` | List indexes and `pop` from an empty list |
 | `KeyError` | Missing dictionary keys |
 | `RuntimeError` | Dictionary size changes during iteration |
@@ -692,30 +687,14 @@ to read stdin terminate the program with status 1. They cannot be caught.
 | Function | Meaning |
 | --- | --- |
 | `print(value) -> None` | Write a printable value and `\n` to stdout |
-| `eprint(value) -> None` | Write a printable value and `\n` to stderr |
 | `input() -> str \| None` | The next line of stdin without its line ending, or `None` at end of input |
-| `read_file(path: str) -> str` | The contents of the file |
-| `write_file(path: str, text: str) -> None` | Create the file, or replace its contents, with `text` |
-| `exit(status: int) -> None` | End the program with exit status `status` |
 | `len`, `range`, `int`, `float`, `str`, `ord`, `chr`, `isinstance` | See §4, §6, §7, and §8 |
 
 The built-in names are these functions and the built-in exception classes.
 
 A line of input ends at `\n`; `input` removes the `\n` and a `\r` just before it,
-and returns a final line that has no line ending. `read_file` and `write_file`
-transfer text exactly, without line-ending translation, and `write_file` does not
-replace the file atomically. Relative paths resolve against the current working
-directory.
-
-Text read by `input` or `read_file` must be valid UTF-8, or the call raises
-`ValueError` with the message `invalid UTF-8`. When `read_file` or `write_file`
-cannot open, read, or write a file, it raises `OSError` with the message
-`cannot read <path>: <reason>` or `cannot write <path>: <reason>`, where the host
-supplies the reason.
-
-`exit` takes a status from 0 through 255 and otherwise raises `ValueError` with the
-message `exit status out of range`. It ends the program at once; pending `finally`
-clauses do not run.
+and returns a final line that has no line ending. Text read by `input` must be
+valid UTF-8, or the call raises `ValueError` with the message `invalid UTF-8`.
 
 ## 12. Modules
 
@@ -778,6 +757,22 @@ Each location names the file it belongs to. Diagnostics go to stderr.
 The standard library is a set of modules that ship with Willow and are imported
 like a program's own (§12).
 
+### `fs`
+
+| Function | Meaning |
+| --- | --- |
+| `read_file(path: str) -> str` | The contents of the file |
+| `write_file(path: str, text: str) -> None` | Create the file, or replace its contents, with `text` |
+
+Both transfer text exactly, without line-ending translation, and `write_file` does
+not replace the file atomically. Relative paths resolve against the current
+working directory.
+
+Text read by `read_file` must be valid UTF-8, or the call raises `ValueError` with
+the message `invalid UTF-8`. When either function cannot open, read, or write a
+file, it raises `OSError` with the message `cannot read <path>: <reason>` or
+`cannot write <path>: <reason>`, where the host supplies the reason.
+
 ### `json`
 
 ```python
@@ -802,9 +797,10 @@ def main() -> None:
 
 `parse` accepts JSON as RFC 8259 defines it. A number without a fraction or
 exponent and within the `int` range is an `int`; any other number is the nearest
-`float`. An object's repeated key keeps its first position and its last value. Text that is not JSON, including an escape of an
-unpaired surrogate, raises `JsonError` with a message that describes the problem
-and gives its line and column.
+`float`. An object's repeated key keeps its first position and its last value.
+Text that is not JSON, including an escape of an unpaired surrogate, raises
+`JsonError` with a message that describes the problem and gives its line and
+column.
 
 `dump` writes no whitespace and keeps dictionary order. Floats are written as
 `str` writes them, so `2.0` reads back as a `float`. Strings escape `"`, `\`, and
@@ -812,3 +808,35 @@ control characters, using `\b`, `\f`, `\n`, `\r`, and `\t` where they exist and
 `\u00XX` otherwise; other characters are written as they are. NaN and infinities
 raise `JsonError` with the message `cannot encode <value>`, as in
 `cannot encode inf`.
+
+### `sys`
+
+```python
+import fs
+import sys
+
+def main() -> None:
+    args = sys.args()
+    if len(args) != 1:
+        sys.eprint("usage: chars <file>")
+        sys.exit(2)
+    try:
+        text = fs.read_file(args[0])
+    except OSError as error:
+        sys.eprint(error.message)
+        sys.exit(1)
+    print(len(text))
+```
+
+| Function | Meaning |
+| --- | --- |
+| `args() -> list[str]` | A new list of the program's arguments in order, without the program or source name |
+| `eprint(value) -> None` | Write a printable value and `\n` to stderr |
+| `exit(status: int) -> None` | End the program with exit status `status` |
+
+`args` raises `ValueError` with the message `invalid UTF-8` when an argument is not
+valid UTF-8.
+
+`exit` takes a status from 0 through 255 and otherwise raises `ValueError` with the
+message `exit status out of range`. It ends the program at once; pending `finally`
+clauses do not run.
