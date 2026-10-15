@@ -23,8 +23,14 @@ if ffi.os == "OSX" and ffi.arch == "x64" then
 else
   ffi.cdef([[int stat(const char *path, willow_stat *buf);]])
 end
+if ffi.os == "OSX" then
+  ffi.cdef([[int chmod(const char *path, uint16_t mode);]])
+else
+  ffi.cdef([[int chmod(const char *path, uint32_t mode);]])
+end
 
-local USAGE = "usage: willow check <file>\n       willow run <file>\n       willow build <file> -o <output>"
+local USAGE = "usage: willow check <file>\n       willow run <file>\n"
+  .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>"
 
 local function fail(message)
   io.stderr:write(message, "\n")
@@ -39,14 +45,15 @@ local function parse_args(args)
   local command = args[1]
   if not command then
     usage_error("missing command")
-  elseif command ~= "check" and command ~= "run" and command ~= "build" then
+  elseif command ~= "check" and command ~= "run" and command ~= "compile" and command ~= "build" then
     usage_error("unknown command '" .. command .. "'")
   end
+  local writes = command == "compile" or command == "build"
   local input, output
   local i = 2
   while i <= #args do
     local argument = args[i]
-    if argument == "-o" and command == "build" then
+    if argument == "-o" and writes then
       if output then
         usage_error("-o given more than once")
       end
@@ -67,8 +74,8 @@ local function parse_args(args)
   if not input then
     usage_error("missing input file")
   end
-  if command == "build" and not output then
-    usage_error("build needs -o <output>")
+  if writes and not output then
+    usage_error(command .. " needs -o <output>")
   end
   return command, input, output
 end
@@ -83,8 +90,9 @@ local function same_file(a, b)
 end
 
 -- Writes through an exclusively created sibling and renames it into place, so
--- a failure leaves any existing output untouched.
-local function write_output(output, text)
+-- a failure leaves any existing output untouched. `mode` sets the permissions
+-- when given.
+local function write_output(output, text, mode)
   local temp = output .. ".tmp"
   local file, err = io.open(temp, "wbx")
   if not file then
@@ -99,6 +107,9 @@ local function write_output(output, text)
   if ok and not closed then
     ok, err = closed, close_err
   end
+  if ok and mode and ffi.C.chmod(temp, mode) ~= 0 then
+    ok, err = false, "cannot set permissions"
+  end
   if ok then
     ok, err = os.rename(temp, output)
   end
@@ -108,9 +119,9 @@ local function write_output(output, text)
   end
 end
 
--- Checks the whole program and returns its modules and, for run and build,
--- the generated Lua and its loaded chunk.
-local function compile(command, path, source)
+-- Checks the whole program and returns its modules and, for every command but
+-- check, the generated Lua and its loaded chunk.
+local function translate(command, path, source)
   local modules = loader.load(path, source)
   bind.bind(modules)
   check.check(modules)
@@ -119,6 +130,24 @@ local function compile(command, path, source)
     return modules, text, assert(load(text, "=" .. path))
   end
   return modules
+end
+
+-- The stub, then the Lua, an 8-byte little-endian length, and the magic the
+-- stub looks for at the end of its own file.
+local function executable(text)
+  local stub_path = root .. "/runtime/stub"
+  local stub_file, err = io.open(stub_path, "rb")
+  if not stub_file then
+    fail("error: " .. err)
+  end
+  local stub = stub_file:read("*a")
+  stub_file:close()
+  local length, bytes = #text, {}
+  for i = 1, 8 do
+    bytes[i] = string.char(length % 256)
+    length = math.floor(length / 256)
+  end
+  return stub .. text .. table.concat(bytes) .. "WILLOWLU"
 end
 
 local function report(err)
@@ -149,7 +178,7 @@ if output and same_file(path, output) then
   fail("error: output " .. output .. " is the input file")
 end
 
-local ok, modules, text, chunk = xpcall(compile, report, command, path, source)
+local ok, modules, text, chunk = xpcall(translate, report, command, path, source)
 if not ok then
   if not diag.is(modules) then
     fail(modules)
@@ -162,11 +191,15 @@ if not ok then
 end
 if command == "run" then
   chunk()
-elseif command == "build" then
+elseif output then
   for i = 2, #modules do
     if same_file(modules[i].path, output) then
       fail("error: output " .. output .. " is the module file " .. modules[i].path)
     end
   end
-  write_output(output, text)
+  if command == "compile" then
+    write_output(output, text)
+  else
+    write_output(output, executable(text), 493) -- 0755
+  end
 end

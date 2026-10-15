@@ -391,30 +391,39 @@ The interface is file-oriented:
 ```sh
 willow check hello.wlo
 willow run hello.wlo
-willow build hello.wlo -o hello.lua
+willow compile hello.wlo -o hello.lua
 luajit hello.lua
+willow build hello.wlo -o hello
+./hello
 ```
 
 `check` parses, resolves names, and checks types without running the program or
 writing generated files. `run` performs the same checks, generates Lua in memory,
-and executes it on the bundled LuaJIT. `build` performs the same checks and writes
-one standalone Lua file. The `-o <path>` output option is required for `build`;
-there is no project-directory discovery or implicit output directory in this slice.
+and executes it on the bundled LuaJIT. `compile` performs the same checks and
+writes one standalone Lua file. `build` performs the same checks and writes one
+self-contained executable. The `-o <path>` output option is required for `compile`
+and `build`; there is no project-directory discovery or implicit output directory
+in this slice.
 
 Reject extra arguments and unknown options. Program arguments and compiler
 configuration files can be added later with explicit syntax.
 
-Success returns exit status 0. Source errors, invalid CLI usage, build failures,
+Success returns exit status 0. Source errors, invalid CLI usage, output failures,
 and runtime failures return a nonzero status; use 1 initially. Diagnostics go to
 stderr. Program output goes to stdout. Check the complete source before executing
-any user code or replacing a build output.
+any user code or replacing an output file.
 
-Build output contains the small runtime helpers it needs, translated functions,
+Compiled output contains the small runtime helpers it needs, translated functions,
 source-location metadata, and entry-point invocation. It requires LuaJIT 2.1 but
 does not require Willow, the source file, a source checkout, or additional Lua
 packages at execution time. Generate Lua source, not LuaJIT bytecode.
 
-For a failed build, preserve any existing output file. For a successful build,
+A built executable is a native stub with LuaJIT linked in, followed by the
+compiled Lua, its length, and a marker the stub finds at the end of its own file.
+It does not require LuaJIT, Willow, the source file, or a source checkout at
+execution time, and it is marked executable.
+
+For a failed `compile` or `build`, preserve any existing output file. On success,
 write to a temporary sibling file in the target directory and atomically replace
 the target after the write and flush succeed. Reject an output path that would
 overwrite the input source file, including aliases (such as symlinks, hardlinks,
@@ -497,6 +506,7 @@ compiler/
     emit.lua
 runtime/
     core.lua
+    stub.c
 tests/
     unit/
     programs/
@@ -590,10 +600,10 @@ Cover these layers:
   deeply nested expressions (>200 temporaries in a function), recursion, exact
   output, and column-accurate source-mapped failures across multi-call lines and
   return-call sites.
-- CLI/artifact cases: `check` does not execute, `run` and built output agree,
-  invalid source does not replace output, overwriting input via path or symlink
-  is rejected, paths with spaces work, and standalone output runs without the
-  source checkout or installed compiler.
+- CLI/artifact cases: `check` does not execute, `run` agrees with compiled and
+  built output, invalid source does not replace output, overwriting input via
+  path or symlink is rejected, paths with spaces work, and standalone output
+  runs without the source checkout or installed compiler.
 
 Use small source programs with expected stdout, exit status, or diagnostics.
 Where the supported behavior agrees with Python, Python can provide an additional
@@ -1056,10 +1066,11 @@ def main() -> None:
 - The entry file must define `main() -> None` (§7). In other modules, `main` is an
   ordinary function name.
 
-`check`, `run`, and `build` take the entry file and process every reachable module.
-An error in any module prevents execution and build output. `build` writes one
-standalone Lua file containing every module, ordered by first import in depth-first
-order from the entry file. Diagnostics and runtime frames name the file each
+`check`, `run`, `compile`, and `build` take the entry file and process every
+reachable module. An error in any module prevents execution and output.
+`compile` writes one standalone Lua file containing every module, ordered by
+first import in depth-first order from the entry file, and `build` embeds that
+file in its executable. Diagnostics and runtime frames name the file each
 location belongs to. The input-overwrite check of §8 covers every module.
 
 ## 19. Exceptions
