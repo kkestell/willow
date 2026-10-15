@@ -32,12 +32,12 @@ Section numbers refer to that document.
   - [x] Multiline expressions inside parentheses
   - [x] Reserved words without a supported construct (`for`, `class`, `import`, `lambda`, `is`, `in`, `try`, `with`, ...) rejected explicitly
 
-- [ ] Bind (§6, §7)
-  - [ ] Collect all file-level signatures before bodies; duplicate function and parameter names are errors; defining `print` is an error
-  - [ ] Require exactly one `main() -> None`
-  - [ ] Per-function symbols with stable identities: parameters and every name assigned anywhere in the body are locals for the whole body, shadowing functions and `print`
-  - [ ] Calling a local or parameter is a "cannot call local variable" error at any position; unknown names are errors
-  - [ ] Record the resolved target on every call node
+- [x] Bind (§6, §7)
+  - [x] Collect all file-level signatures before bodies; duplicate function and parameter names are errors; defining `print` is an error
+  - [x] Require exactly one `main() -> None`
+  - [x] Per-function symbols with stable identities: parameters and every name assigned anywhere in the body are locals for the whole body, shadowing functions and `print`
+  - [x] Calling a local or parameter is a "cannot call local variable" error at any position; unknown names are errors
+  - [x] Record the resolved target on every call node
 
 - [ ] Check (§4, §5, §6)
   - [ ] Expression types: unary `+`/`-` on `int`, `not` on `bool`, `+ - *` on `int`, `+` on `str`, `and`/`or` on `bool`, `==`/`!=` on same-typed operands of any of the four types, ordering on `int` only; conditions must be `bool`
