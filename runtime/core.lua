@@ -198,22 +198,33 @@ local function __wlo_write(text, site)
   end
 end
 
-local function __wlo_print(value, site)
-  local text = value
+-- The text print writes for a value whose static type is not float.
+local function __wlo_str(value)
   if value == nil then
-    text = "None"
+    return "None"
   elseif value == true then
-    text = "True"
+    return "True"
   elseif value == false then
-    text = "False"
+    return "False"
   elseif type(value) == "number" then
-    text = string.format("%d", value)
+    return string.format("%d", value)
   end
-  __wlo_write(text, site)
+  return value
+end
+
+local function __wlo_str_float(value)
+  if value == nil then
+    return "None"
+  end
+  return __wlo_format_float(value)
+end
+
+local function __wlo_print(value, site)
+  __wlo_write(__wlo_str(value), site)
 end
 
 local function __wlo_print_float(value, site)
-  __wlo_write(value == nil and "None" or __wlo_format_float(value), site)
+  __wlo_write(__wlo_str_float(value), site)
 end
 
 -- Lists hold their elements at 1..n so that stored None (nil) counts.
@@ -244,7 +255,18 @@ local function __wlo_dict(entries, n)
   return dict
 end
 
+-- Every Willow string is valid UTF-8, so this matches one code point.
+local __wlo_CODE_POINT = "[^\128-\191][\128-\191]*"
+
+local function __wlo_code_points(text)
+  local _, count = text:gsub(__wlo_CODE_POINT, "")
+  return count
+end
+
 local function __wlo_len(value, site)
+  if type(value) == "string" then
+    return __wlo_code_points(value)
+  end
   return value.n or #value.keys
 end
 
@@ -345,6 +367,88 @@ local function __wlo_dict_items(dict, site)
       return true, dict.keys[i]
     end
   end
+end
+
+local function __wlo_str_items(text, site)
+  local next_code_point = text:gmatch(__wlo_CODE_POINT)
+  return function()
+    local code_point = next_code_point()
+    if code_point then
+      return true, code_point
+    end
+  end
+end
+
+-- String helpers work on bytes: a valid UTF-8 needle only matches at code
+-- point boundaries of a valid UTF-8 string.
+local function __wlo_str_contains(text, sub, site)
+  return text:find(sub, 1, true) ~= nil
+end
+
+local function __wlo_str_startswith(text, prefix, site)
+  return text:sub(1, #prefix) == prefix
+end
+
+local function __wlo_str_endswith(text, suffix, site)
+  return suffix == "" or text:sub(-#suffix) == suffix
+end
+
+local function __wlo_str_find(text, sub, site)
+  local i = text:find(sub, 1, true)
+  if not i then
+    return -1
+  end
+  return __wlo_code_points(text:sub(1, i - 1))
+end
+
+local function __wlo_str_replace(text, old, new, site)
+  local parts = {}
+  if old == "" then
+    parts[1] = new
+    for code_point in text:gmatch(__wlo_CODE_POINT) do
+      parts[#parts + 1] = code_point
+      parts[#parts + 1] = new
+    end
+    return table.concat(parts)
+  end
+  local start = 1
+  while true do
+    local i, j = text:find(old, start, true)
+    if not i then
+      break
+    end
+    parts[#parts + 1] = text:sub(start, i - 1)
+    parts[#parts + 1] = new
+    start = j + 1
+  end
+  parts[#parts + 1] = text:sub(start)
+  return table.concat(parts)
+end
+
+local function __wlo_str_strip(text, site)
+  return text:match("^[ \t\n\v\f\r]*(.-)[ \t\n\v\f\r]*$")
+end
+
+local function __wlo_str_split(text, sep, site)
+  if sep == "" then
+    __wlo_fail("value", "empty separator", site)
+  end
+  local items = __wlo_list({}, 0)
+  local start = 1
+  while true do
+    local i, j = text:find(sep, start, true)
+    if not i then
+      break
+    end
+    __wlo_list_append(items, text:sub(start, i - 1))
+    start = j + 1
+  end
+  __wlo_list_append(items, text:sub(start))
+  return items
+end
+
+local function __wlo_str_join(sep, items, site)
+  return table.concat(items, sep, 1, items.n)
 end
 
 local function __wlo_range(start, stop, step, site)

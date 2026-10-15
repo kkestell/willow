@@ -64,7 +64,7 @@ return {
     eq("2:9: operator '-' cannot be applied to str", check_errors(in_main("x = -'a'")))
     eq("2:9: operator 'not' cannot be applied to int", check_errors(in_main("x = not 1")))
     eq("2:11: operator 'and' cannot be applied to int and bool", check_errors(in_main("x = 1 and True")))
-    eq("2:13: operator '<' cannot be applied to str and str", check_errors(in_main("x = 'a' < 'b'")))
+    eq("2:14: operator '<' cannot be applied to bool and bool", check_errors(in_main("x = True < False")))
     eq("2:11: operator '==' cannot be applied to int and str", check_errors(in_main("x = 1 == 'a'")))
   end,
 
@@ -263,6 +263,28 @@ return {
     eq("7:17: operator '+' cannot be applied to int | None and int", check_errors(
       "class P:\n    x: int\n    y: int | None\ndef main() -> None:\n    p = P(1, None)\n"
       .. "    if p.y is not None:\n        z = p.y + 1\n"))
+  end,
+
+  strings = function()
+    check_source(in_main(table.concat({
+      "s = 'a'",
+      "b = s < 'b' and s.startswith('a') and s.endswith('a') and 'a' in s",
+      "n: int = s.find('a') + len(s)",
+      "t: str = s.replace('a', 'b').strip()",
+      "parts: list[str] = s.split(',')",
+      "u: str = ','.join(parts)",
+      "v: str = f'{n}{b}{None}{1.5}{s}' + str(n) + str(None)",
+      "for ch in s:",
+      "    w: str = ch",
+    }, "\n")))
+    eq("2:12: cannot format a value of type list[int]", check_errors(in_main("x = f'{[1]}'")))
+    eq("2:13: cannot convert a value of type list[int] to str", check_errors(in_main("x = str([1])")))
+    eq("2:12: unknown name 'y'", check_errors(in_main("x = f'{y}'")))
+    eq("3:16: expected str, received int", check_errors(in_main("s = 'a'\nx = s.find(1)")))
+    eq("3:11: type str has no method 'upper'", check_errors(in_main("s = 'a'\nx = s.upper()")))
+    eq("3:22: expected str, received int", check_errors(in_main("s = 'a'\nx = s.join(['a', 1])")))
+    eq("3:10: cannot index a value of type str", check_errors(in_main("s = 'a'\nx = s[0]")))
+    eq("2:11: operator 'in' cannot be applied to int and str", check_errors(in_main("x = 1 in 'abc'")))
   end,
 
   equality_on_all_types = function()

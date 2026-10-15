@@ -72,6 +72,8 @@ show = function(node)
     return show(node.object) .. "." .. node.name .. "(" .. show_list(node.args, ", ") .. ")"
   elseif kind == "Field" then
     return show(node.object) .. "." .. node.name
+  elseif kind == "FString" then
+    return "f[" .. show_list(node.parts, ", ") .. "]"
   elseif kind == "FieldAssign" then
     return show(node.object) .. "." .. node.name .. " = " .. show(node.value)
   elseif kind == "Record" then
@@ -283,6 +285,14 @@ return {
     eq("{ for x in range(1, 3) { print(x) }; for k in d { pass } }",
       body("for x in range(1, 3):\n    print(x)\nfor k in d:\n    pass"))
     eq("2:10: expected 'in', found ','", body_error("for k, v in d:\n    pass"))
+  end,
+
+  f_strings = function()
+    eq('f["a", b, "c", (x + 1)]', expr('f"a{b}c{x + 1}"'))
+    eq("f[]", expr('f""'))
+    eq("2:15: expected an expression, found '}'", body_error("x = f'{1 +}'"))
+    eq("2:14: expected '}', found 'b'", body_error("x = f'{a b}'"))
+    eq("str(x)", expr("str(x)"))
   end,
 
   conversions_are_calls = function()

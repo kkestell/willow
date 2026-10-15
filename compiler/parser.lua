@@ -21,7 +21,7 @@ nonlocal raise try type with yield
 
 local compare_ops = set("== != < <= > >= is in")
 local type_names = set("int float bool str None list dict")
-local expression_starts = set("NAME INT FLOAT STRING True False None int float ( [ { - + not")
+local expression_starts = set("NAME INT FLOAT STRING FSTRING True False None int float str ( [ { - + not")
 local UNIONS = "unions other than 'T | None' are not supported"
 local simple_statements = { pass = "Pass", ["break"] = "Break", continue = "Continue" }
 
@@ -33,6 +33,8 @@ local descriptions = {
   INT = "integer",
   FLOAT = "float",
   STRING = "string",
+  FSTRING = "f-string",
+  FIELD_END = "'}'",
 }
 
 local function describe(token)
@@ -158,6 +160,22 @@ function M.parse(tokens)
     elseif kind == "FLOAT" then
       advance()
       node = ast.node("Float", token.span, { value = token.value })
+    elseif kind == "FSTRING" then
+      advance()
+      local parts = {}
+      for _, part in ipairs(token.value) do
+        if type(part) == "table" then
+          -- Each field is its own token list ending in FIELD_END.
+          local outer_tokens, outer_pos = tokens, pos
+          tokens, pos = part, 1
+          parts[#parts + 1] = parse_expression()
+          expect("FIELD_END", "'}'")
+          tokens, pos = outer_tokens, outer_pos
+        elseif part ~= "" then
+          parts[#parts + 1] = ast.node("String", token.span, { value = part })
+        end
+      end
+      node = ast.node("FString", token.span, { parts = parts })
     elseif kind == "True" or kind == "False" then
       advance()
       node = ast.node("Bool", token.span, { value = kind == "True" })
@@ -171,7 +189,7 @@ function M.parse(tokens)
       else
         node = ast.node("Name", token.span, { name = token.value })
       end
-    elseif (kind == "int" or kind == "float") and tokens[pos + 1].kind == "(" then
+    elseif (kind == "int" or kind == "float" or kind == "str") and tokens[pos + 1].kind == "(" then
       advance()
       advance()
       node = ast.node("Call", token.span, { name = kind, args = parse_args() })

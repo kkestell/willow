@@ -7,6 +7,7 @@ local builtins = {
   print = { kind = "Builtin", name = "print" },
   int = { kind = "Builtin", name = "int" },
   float = { kind = "Builtin", name = "float" },
+  str = { kind = "Builtin", name = "str" },
   len = { kind = "Builtin", name = "len" },
   range = { kind = "Builtin", name = "range" },
 }
@@ -89,6 +90,10 @@ local function resolve_function(fn, scope, declarations)
       resolve_expression(node.index)
     elseif kind == "Field" then
       resolve_expression(node.object)
+    elseif kind == "FString" then
+      for _, part in ipairs(node.parts) do
+        resolve_expression(part)
+      end
     elseif kind == "MethodCall" then
       resolve_expression(node.object)
       for _, arg in ipairs(node.args) do

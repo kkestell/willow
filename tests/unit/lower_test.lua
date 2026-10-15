@@ -54,6 +54,10 @@ show_expr = function(e)
     return e.name .. "(" .. show_list(e.args, show_expr, ", ") .. ")#" .. e.site
   elseif kind == "Field" then
     return show_expr(e.object) .. "." .. e.name
+  elseif kind == "Str" then
+    return (e.float and "str_float(" or "str(") .. show_expr(e.value) .. ")"
+  elseif kind == "Concat" then
+    return "(" .. show_list(e.parts, show_expr, " .. ") .. ")"
   elseif kind == "Construct" then
     local parts = {}
     for i, name in ipairs(e.names) do
@@ -216,6 +220,12 @@ return {
     eq("p = P{x = 1, y = 2}; t1 = p.x; t2 = f(1); x = add(t1, t2)#1", lower_records("p = P(1, 2)\nx = p.x + f(1)"))
     eq("p = P{x = 1, y = 2}; x = p.y", lower_records("p = P(1, 2)\nx = p.y"))
     eq("t1 = f(3); t2 = g(0); t2 = mk(t2); t2.x = t1", lower_records("mk(g(0)).x = f(3)"))
+  end,
+
+  string_formatting = function()
+    eq('t1 = f(1); t2 = f(2); x = ("n=" .. str(t1) .. ", " .. str(t2))', lower_main("x = f'n={f(1)}, {f(2)}'", INT_HELPERS))
+    eq('s = "a"; x = s; y = str_float(1.5); z = str(None)', lower_main("s = 'a'\nx = f'{s}'\ny = str(1.5)\nz = str(None)"))
+    eq('s = "a"; x = str_split(s, ",")#1', lower_main("s = 'a'\nx = s.split(',')"))
   end,
 
   conversions = function()

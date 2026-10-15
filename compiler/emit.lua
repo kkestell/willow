@@ -122,6 +122,15 @@ function M.emit(lowered, path)
       return M.mangle(e.target.name) .. "(" .. args(e.args) .. ")"
     elseif kind == "Helper" then
       return "__wlo_" .. e.name .. "(" .. args(e.args, e.site) .. ")"
+    elseif kind == "Str" then
+      return (e.float and "__wlo_str_float(" or "__wlo_str(") .. expr(e.value) .. ")"
+    elseif kind == "Concat" then
+      local parts = {}
+      for i, part in ipairs(e.parts) do
+        parts[i] = expr(part, true)
+      end
+      local text = table.concat(parts, " .. ")
+      return nested and "(" .. text .. ")" or text
     elseif kind == "Field" then
       return expr(e.object) .. "." .. M.mangle(e.name)
     elseif kind == "Construct" then

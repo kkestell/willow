@@ -1,0 +1,71 @@
+class Point:
+    x: int
+    y: int
+
+def trace(label: str) -> str:
+    print(label)
+    return label
+
+def main() -> None:
+    name = "Willow"
+    print(f"{name} has {len(name)} letters")    # Willow has 6 letters
+    words = "a, b, c".split(", ")
+    print("-".join(words))                      # a-b-c
+    print(f"{7 / 2} {{braces}}")                # 3.5 {braces}
+
+    poem = """first line
+    indented line
+last line"""
+    print(poem)
+    print(len(poem))
+    two_lines = '''a
+b'''
+    print(two_lines == "a\nb")
+    print("\x41é\U0001F600")
+    print(len("é\U0001F600"))
+
+    maybe: int | None = None
+    ratio: float | None = 0.25
+    p = Point(3, 4)
+    print(f"{1}|{-2.5}|{True}|{None}|{maybe}|{ratio}|{'s'}|{p.x + p.y}")
+    print(f"{trace('first')}{trace('second')}")
+    print(f"{ {'k': 1}['k'] } {f'{name}!'} {[1, 2][1]}")
+    print(f"")
+    print(f"{{}}")
+    print(str(1) + str(2.0) + str(False) + str(None) + str(maybe) + str("x"))
+    print(str(0.1 + 0.2))
+
+    text = "héllo wörld"
+    print(len(text))
+    print(text.find("wö"))
+    print(text.find("z"))
+    print(text.find(""))
+    print("ö" in text)
+    print("xyz" not in text)
+    for ch in "añ😀":
+        print(ch)
+    print("apple" < "banana")
+    print("a" < "B")
+    print("é" > "z")
+    print("abc" <= "abc")
+    print("ab" >= "abc")
+
+    print(text.startswith("hé"))
+    print(text.startswith(""))
+    print(text.endswith("rld"))
+    print(text.endswith("x"))
+    print("aaa".replace("a", "bb"))
+    print("aaaa".replace("aa", "b"))
+    print("abc".replace("", "-"))
+    print("héllo".replace("", "."))
+    print("".replace("", "x"))
+    print("abc".replace("z", "y"))
+    print("[" + "  \t\n hi there \r\n".strip() + "]")
+    print("[" + "   ".strip() + "]")
+    parts = "a,,b,".split(",")
+    print(len(parts))
+    print("|".join(parts))
+    print(len("".split(",")))
+    print(len("abc".split("abc")))
+    print(", ".join([]))
+    print("".join(["x", "y", "z"]))

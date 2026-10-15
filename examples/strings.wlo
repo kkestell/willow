@@ -1,0 +1,21 @@
+def initials(name: str) -> str:
+    result = ""
+    for word in name.split(" "):
+        if word != "":
+            for ch in word:
+                result = result + ch
+                break
+    return result
+
+def main() -> None:
+    lines = """  ada lovelace, 36
+  alan turing, 41
+"""
+    for line in lines.split("\n"):
+        entry = line.strip()
+        if entry == "":
+            continue
+        fields = entry.split(", ")
+        name = fields[0]
+        print(f"{name.replace(' ', '_')}: {initials(name)} ({len(name)} letters, age {fields[1]})")
+    print(", ".join(["a", "b", "c"]))

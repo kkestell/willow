@@ -114,12 +114,12 @@ Section numbers refer to that document.
   - [x] Emit and runtime: records as Lua tables; constructor arguments evaluated left to right; field assignment evaluation order
   - [x] Tests: construction, mutation through aliases, recursive records with optional fields and narrowing, constructor arity and type errors, unknown fields, field expressions that do not narrow; the §16 example
 
-- [ ] Richer strings (§17)
-  - [ ] Lexer: triple-quoted strings with line breaks as `\n` and bare CR still rejected; `\x`, `\u`, `\U` escapes with surrogates and values above U+10FFFF rejected; f-strings with `{{`, `}}`, the field restrictions, and accurate spans inside fields
-  - [ ] Parser: f-string fields as expressions
-  - [ ] Check: printable field types; `str(...)`; string ordering; `len`, `in`, and the §17 methods; `for` over strings
-  - [ ] Runtime: one formatting routine shared by `print`, `str(...)`, and f-strings; code-point length and iteration; `startswith`, `endswith`, `find` by code-point index, `replace` including an empty `old`, ASCII `strip`, `split` raising `empty separator`, and `join`, matching Python
-  - [ ] Tests: triple-quoted line endings, numeric escape boundaries, f-string evaluation order and rejections, non-ASCII length, ordering, and method results checked against Python; a strings example
+- [x] Richer strings (§17)
+  - [x] Lexer: triple-quoted strings with line breaks as `\n` and bare CR still rejected; `\x`, `\u`, `\U` escapes with surrogates and values above U+10FFFF rejected; f-strings with `{{`, `}}`, the field restrictions, and accurate spans inside fields
+  - [x] Parser: f-string fields as expressions
+  - [x] Check: printable field types; `str(...)`; string ordering; `len`, `in`, and the §17 methods; `for` over strings
+  - [x] Runtime: one formatting routine shared by `print`, `str(...)`, and f-strings; code-point length and iteration; `startswith`, `endswith`, `find` by code-point index, `replace` including an empty `old`, ASCII `strip`, `split` raising `empty separator`, and `join`, matching Python
+  - [x] Tests: triple-quoted line endings, numeric escape boundaries, f-string evaluation order and rejections, non-ASCII length, ordering, and method results checked against Python; a strings example
 
 - [ ] Modules (§18)
   - [ ] Parser: `import name` before declarations; `module.name` in calls, constructors, and annotations

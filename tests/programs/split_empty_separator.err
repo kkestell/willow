@@ -1,0 +1,3 @@
+split_empty_separator.wlo:2:17: error: empty separator
+  in words at split_empty_separator.wlo:2:17
+  called from main at split_empty_separator.wlo:6:15

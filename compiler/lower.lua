@@ -17,8 +17,17 @@ local function binary_helper(node)
   return helpers and helpers[node.type]
 end
 
-local function is_list(type)
-  return type:sub(1, 5) == "list["
+-- The prefix of the runtime helpers for operations on a string, list, or
+-- dictionary of `type`.
+local function prefix(type)
+  if type == "str" then
+    return "str_"
+  end
+  return type:sub(1, 5) == "list[" and "list_" or "dict_"
+end
+
+local function is_float(type)
+  return type == "float" or type == "float | None"
 end
 
 -- True when evaluating `node` can neither call anything nor fail, so it can be
@@ -43,6 +52,12 @@ local function is_pure(node)
   elseif kind == "Binary" then
     return not binary_helper(node) and node.op ~= "in" and node.op ~= "not in"
       and is_pure(node.left) and is_pure(node.right)
+  elseif kind == "FString" then
+    for _, part in ipairs(node.parts) do
+      if not is_pure(part) then
+        return false
+      end
+    end
   elseif kind == "ListDisplay" then
     for _, element in ipairs(node.elements) do
       if not is_pure(element) then
@@ -85,6 +100,14 @@ local function lower_function(fn, sites)
   end
 
   local lower_value, lower_operand, lower_object
+
+  -- The text of an evaluated operand of a printable type, as print writes it.
+  local function text(operand, type)
+    if type == "str" then
+      return operand
+    end
+    return { kind = "Str", value = operand, float = is_float(type) }
+  end
 
   -- Moves a call or helper call into a temporary. It consumes its operands'
   -- temporaries above `mark`, so its result reuses them.
@@ -148,7 +171,7 @@ local function lower_function(fn, sites)
       local left = lower_operand(node.left)
       local right = lower_operand(node.right)
       if node.op == "in" or node.op == "not in" then
-        local name = is_list(node.right.type) and "list_contains" or "dict_contains"
+        local name = prefix(node.right.type) .. "contains"
         local contains = helper(name, { right, left }, node.span)
         if node.op == "in" then
           return contains
@@ -178,8 +201,9 @@ local function lower_function(fn, sites)
         return { kind = "Construct", names = names, values = args }
       elseif node.target.kind == "Builtin" then
         local name = node.name
-        local arg_type = node.args[1].type
-        if name == "print" and (arg_type == "float" or arg_type == "float | None") then
+        if name == "str" then
+          return text(args[1], node.args[1].type)
+        elseif name == "print" and is_float(node.args[1].type) then
           name = "print_float"
         end
         return helper(name, args, node.span)
@@ -187,18 +211,28 @@ local function lower_function(fn, sites)
       return { kind = "Call", target = node.target, args = args, span = node.span }
     elseif kind == "Field" then
       return { kind = "Field", object = lower_object(node.object), name = node.name }
+    elseif kind == "FString" then
+      local parts = {}
+      for i, part in ipairs(node.parts) do
+        parts[i] = text(lower_operand(part), part.type)
+      end
+      if #parts == 0 then
+        return { kind = "Literal", value = "" }
+      elseif #parts == 1 then
+        return parts[1]
+      end
+      return { kind = "Concat", parts = parts }
     elseif kind == "Index" then
       local object = lower_operand(node.object)
       local index = lower_operand(node.index)
-      local name = is_list(node.object.type) and "list_index" or "dict_index"
+      local name = prefix(node.object.type) .. "index"
       return helper(name, { object, index }, node.span)
     elseif kind == "MethodCall" then
       local args = { lower_operand(node.object) }
       for _, arg in ipairs(node.args) do
         args[#args + 1] = lower_operand(arg)
       end
-      local prefix = is_list(node.object.type) and "list_" or "dict_"
-      return helper(prefix .. node.name, args, node.span)
+      return helper(prefix(node.object.type) .. node.name, args, node.span)
     elseif kind == "ListDisplay" then
       local elements = {}
       for i, element in ipairs(node.elements) do
@@ -255,7 +289,7 @@ local function lower_function(fn, sites)
       local value = lower_operand(statement.value)
       local object = lower_operand(statement.object)
       local index = lower_operand(statement.index)
-      local name = is_list(statement.object.type) and "list_set" or "dict_set"
+      local name = prefix(statement.object.type) .. "set"
       local set_item = helper(name, { object, index, value }, statement.span)
       emit({ kind = "Eval", value = set_item, span = statement.span })
     elseif kind == "CallStmt" then
@@ -304,7 +338,7 @@ local function lower_function(fn, sites)
         args[3] = args[3] or { kind = "Literal", value = 1 }
         node.iterator = helper("range", args, iterable.span)
       else
-        local name = is_list(iterable.type) and "list_items" or "dict_items"
+        local name = prefix(iterable.type) .. "items"
         node.iterator = helper(name, { lower_operand(iterable) }, statement.span)
       end
       local enclosing = loop

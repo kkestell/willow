@@ -13,7 +13,7 @@ local unary_types = {
 -- Result types keyed by "<left type> <right type>". Equality is handled
 -- separately.
 local ARITHMETIC = { ["int int"] = "int", ["float float"] = "float" }
-local ORDERING = { ["int int"] = "bool", ["float float"] = "bool" }
+local ORDERING = { ["int int"] = "bool", ["float float"] = "bool", ["str str"] = "bool" }
 local binary_types = {
   ["+"] = { ["int int"] = "int", ["float float"] = "float", ["str str"] = "str" },
   ["-"] = ARITHMETIC,
@@ -29,10 +29,11 @@ local binary_types = {
   [">="] = ORDERING,
 }
 
--- Built-in signatures. Each takes one argument; print and len check theirs
--- separately. range is checked only as a `for` iterable.
+-- Built-in signatures. Each takes one argument; print, str, and len check
+-- theirs separately. range is checked only as a `for` iterable.
 local builtins = {
   print = { result = "None" },
+  str = { result = "str" },
   int = { param = "float", result = "int" },
   float = { param = "int", result = "float" },
   len = { result = "int" },
@@ -76,13 +77,35 @@ local function index_types(type)
   return dict_types(type)
 end
 
--- The type of the items `for` and `in` see: list elements and dictionary keys.
+-- The type of the items `for` and `in` see: list elements, dictionary keys,
+-- and the one-code-point strings of a string.
 local function item_type(type)
+  if type == "str" then
+    return "str"
+  end
   return list_element(type) or (dict_types(type))
 end
 
+-- Parameter types and result types of the string methods.
+local STRING_METHODS = {
+  startswith = { { "str" }, "bool" },
+  endswith = { { "str" }, "bool" },
+  find = { { "str" }, "int" },
+  replace = { { "str", "str" }, "str" },
+  strip = { {}, "str" },
+  split = { { "str" }, "list[str]" },
+  join = { { "list[str]" }, "str" },
+}
+
 -- Parameter types and result type of method `name` on `type`, or nil.
 local function method_signature(type, name)
+  if type == "str" then
+    local method = STRING_METHODS[name]
+    if method then
+      return method[1], method[2]
+    end
+    return nil
+  end
   local element = list_element(type)
   local key, value = dict_types(type)
   if element and name == "append" then
@@ -314,7 +337,9 @@ local function check_function(fn, records)
       local arg_type = builtin and node.args[1].type
       if node.name == "print" and builtin and not scalar(arg_type) then
         diag.error(node.args[1].span, "cannot print a value of type " .. arg_type)
-      elseif node.name == "len" and builtin and not (list_element(arg_type) or dict_types(arg_type)) then
+      elseif node.name == "str" and builtin and not scalar(arg_type) then
+        diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type .. " to str")
+      elseif node.name == "len" and builtin and arg_type ~= "str" and not index_types(arg_type) then
         diag.error(node.span, "'len' cannot be applied to " .. arg_type)
       end
       if builtin then
@@ -326,6 +351,15 @@ local function check_function(fn, records)
       end
     elseif kind == "Field" then
       type = field_type(node, check_expression(node.object, state))
+    elseif kind == "FString" then
+      -- Literal text is a String part.
+      for _, part in ipairs(node.parts) do
+        local field = check_expression(part, state)
+        if not scalar(field) then
+          diag.error(part.span, "cannot format a value of type " .. field)
+        end
+      end
+      type = "str"
     elseif kind == "Index" then
       local object = check_expression(node.object, state)
       local index, item = index_types(object)

@@ -146,6 +146,51 @@ return {
     eq("1:5: unterminated string literal", lex_error("x = 'abc"))
   end,
 
+  triple_quoted_strings = function()
+    local tokens = lexer.lex('x = """a\n    b\r\nc\\t""" + y\n')
+    eq("a\n    b\nc\t", tokens[3].value)
+    eq("1:5", tokens[3].span.line .. ":" .. tokens[3].span.col)
+    eq("3:8", tokens[4].span.line .. ":" .. tokens[4].span.col)
+    eq("NEWLINE", tokens[6].kind)
+    eq("it's", single("'''it's'''").value)
+    eq("1:5: unterminated string literal", lex_error('x = """abc\ndef\n'))
+    eq("2:2: bare carriage return; line endings must be LF or CRLF", lex_error('x = """a\nb\rc"""\n'))
+  end,
+
+  numeric_escapes = function()
+    eq("Aé😀\244\143\191\191", single([['\x41\u00e9\U0001F600\U0010FFFF']]).value)
+    eq("1:6: escape '\\x' needs 2 hexadecimal digits", lex_error("x = '\\x4'\n"))
+    eq("1:6: escape '\\u' needs 4 hexadecimal digits", lex_error("x = '\\u00g0'\n"))
+    eq("1:6: escape '\\uD800' is not a valid code point", lex_error("x = '\\uD800'\n"))
+    eq("1:6: escape '\\uDFFF' is not a valid code point", lex_error("x = '\\uDFFF'\n"))
+    eq("1:6: escape '\\U00110000' is not a valid code point", lex_error("x = '\\U00110000'\n"))
+  end,
+
+  f_strings = function()
+    local token = single('f"a{b}c{{d}}{e[1] + g(2)}"')
+    eq("FSTRING", token.kind)
+    eq("a", token.value[1])
+    eq("NAME FIELD_END", token.value[2][1].kind .. " " .. token.value[2][2].kind)
+    eq("1:5", token.value[2][1].span.line .. ":" .. token.value[2][1].span.col)
+    eq("c{d}", token.value[3])
+    eq(10, #token.value[4])
+    eq("", token.value[5])
+    eq(9, #single([[f"{ {'k': 1}['}'] }"]]).value[2])
+    eq(4, #single('f"{a != b}"').value[2])
+    local field = lexer.lex('x = f"""\n{a +\n b}"""\n')[3].value[2]
+    eq("3:2", field[3].span.line .. ":" .. field[3].span.col)
+    eq("1:8: single '}' is not allowed in an f-string", lex_error('x = f"a}b"\n'))
+    eq("1:7: empty f-string field", lex_error('x = f"{ }"\n'))
+    eq("1:9: f-string fields cannot contain a backslash", lex_error('x = f"{a\\n}"\n'))
+    eq("1:9: f-string fields cannot contain '#'", lex_error('x = f"{a#}"\n'))
+    eq("1:8: f-string fields cannot contain the f-string's quote character", lex_error('x = f"{"a"}"\n'))
+    eq("1:9: format specifications are not supported", lex_error('x = f"{a:2}"\n'))
+    eq("1:9: conversions are not supported", lex_error('x = f"{a!r}"\n'))
+    eq("1:7: unterminated f-string field", lex_error("x = f'{a\n"))
+    eq("2:3: format specifications are not supported", lex_error('x = f"""{a +\n b:2}"""\n'))
+    eq("1:10: unterminated string literal", lex_error("x = f\"\"\"{'a\nb'}\"\"\"\n"))
+  end,
+
   operators = function()
     local text = "-> == != <= >= < > = + - * / // % | ( ) , :"
     eq(text .. " NEWLINE EOF", kinds(text))
