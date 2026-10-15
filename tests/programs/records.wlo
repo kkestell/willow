@@ -1,0 +1,80 @@
+class Node:
+    value: int
+    next: Node | None
+
+class Point:
+    x: int
+    y: int
+
+class Keywords:
+    end: str
+    local: list[int]
+
+class Bag:
+    items: list[str]
+    owner: Person | None
+
+class Person:
+    name: str
+
+def total(head: Node | None) -> int:
+    result = 0
+    node = head
+    while node is not None:
+        result = result + node.value
+        node = node.next
+    return result
+
+def trace(label: str, value: int) -> int:
+    print(label)
+    return value
+
+def move(p: Point, dx: int) -> None:
+    p.x = p.x + dx
+
+def make_point() -> Point:
+    print("object")
+    return Point(0, 0)
+
+def main() -> None:
+    print(total(Node(1, Node(2, Node(3, None)))))   # 6
+
+    p = Point(1, 2)
+    alias = p
+    alias.y = 20
+    move(p, 5)
+    print(p.x)
+    print(p.y)
+
+    head: Node | None = None
+    i = 0
+    while i < 4:
+        head = Node(i, head)
+        i = i + 1
+    print(total(head))
+    if head is not None:
+        second = head.next
+        if second is not None:
+            print(second.value)
+
+    k = Keywords("done", [1, 2])
+    k.local.append(3)
+    print(k.end)
+    print(len(k.local))
+
+    bag = Bag([], None)
+    bag.items.append("apple")
+    bag.owner = Person("ada")
+    owner = bag.owner
+    if owner is not None:
+        print(owner.name)
+    print(bag.items[0])
+
+    q = Point(trace("first", 1), trace("second", 2))
+    make_point().x = trace("value", 3)
+    print(q.x + q.y)
+    points = [Point(1, 1), Point(2, 2)]
+    points[1].x = 7
+    print(points[1].x)
+    Point(0, 0).y = trace("constructed", 4)
+    print(Point(5, 6).y)

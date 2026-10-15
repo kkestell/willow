@@ -107,12 +107,12 @@ Section numbers refer to that document.
   - [x] Lower and emit: display evaluation order; index assignment evaluating the right-hand side, the object, then the index; `for` evaluating its iterable once, rechecking list length each step, and detecting dictionary key changes; loop names keeping their last value; zero `range` step rejected
   - [x] Tests: display inference and rejections, invariance, stored `None`, out-of-range and negative indexes, missing keys, empty `pop`, dictionary order after replace and reinsert, iteration while appending and while changing keys, `range` forms, evaluation order, index expressions that do not narrow; a collections example
 
-- [ ] Records (§16)
-  - [ ] Parser: `class Name:` with one or more `name: Type` fields and nothing else; file scope holds `def` and `class`; field access and field assignment targets
-  - [ ] Bind: record names in the file-level namespace with functions and built-ins; duplicate record and field names rejected; forward and self references; constructors as call targets; locals shadowing constructors but not annotations
-  - [ ] Check: nominal record types; constructor arity and argument assignability; field read and write types; unknown fields rejected; `==` and `print` reject records
-  - [ ] Emit and runtime: records as Lua tables; constructor arguments evaluated left to right; field assignment evaluation order
-  - [ ] Tests: construction, mutation through aliases, recursive records with optional fields and narrowing, constructor arity and type errors, unknown fields, field expressions that do not narrow; the §16 example
+- [x] Records (§16)
+  - [x] Parser: `class Name:` with one or more `name: Type` fields and nothing else; file scope holds `def` and `class`; field access and field assignment targets
+  - [x] Bind: record names in the file-level namespace with functions and built-ins; duplicate record and field names rejected; forward and self references; constructors as call targets; locals shadowing constructors but not annotations
+  - [x] Check: nominal record types; constructor arity and argument assignability; field read and write types; unknown fields rejected; `==` and `print` reject records
+  - [x] Emit and runtime: records as Lua tables; constructor arguments evaluated left to right; field assignment evaluation order
+  - [x] Tests: construction, mutation through aliases, recursive records with optional fields and narrowing, constructor arity and type errors, unknown fields, field expressions that do not narrow; the §16 example
 
 - [ ] Richer strings (§17)
   - [ ] Lexer: triple-quoted strings with line breaks as `\n` and bare CR still rejected; `\x`, `\u`, `\U` escapes with surrogates and values above U+10FFFF rejected; f-strings with `{{`, `}}`, the field restrictions, and accurate spans inside fields

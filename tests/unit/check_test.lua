@@ -238,6 +238,33 @@ return {
       check_errors(in_main("xs: list[int | None] = [1]\nif xs[0] is not None:\n    print(xs[0] + 1)")))
   end,
 
+  records = function()
+    local P = "class P:\n    x: int\n    y: int | None\nclass Bag:\n    items: list[int]\n"
+    local function m(statements)
+      return P .. "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n"
+    end
+    local program = check_source(m("p = P(1, None)\nq = P(2, 3)\ny: int = p.x\nb = Bag([])\nb.items = []\np.y = None"))
+    eq("P", program.functions[1].body[1].symbol.type)
+    eq("7:9: 'P' expects 2 arguments, received 1", check_errors(m("p = P(1)")))
+    eq("7:14: expected int | None, received str", check_errors(m("p = P(1, 'a')")))
+    eq("8:7: record P has no field 'z'", check_errors(m("p = P(1, None)\np.z = 1")))
+    eq("8:11: record P has no field 'z'", check_errors(m("p = P(1, None)\nq = p.z")))
+    eq("8:11: expected int, received str", check_errors(m("p = P(1, None)\np.x = 'a'")))
+    eq("8:11: type int has no field 'z'", check_errors(m("x = 1\ny = x.z")))
+    eq("8:12: type list[int] has no field 'append'", check_errors(m("xs = [1]\ny = xs.append")))
+    eq("8:11: type P | None has no field 'x'", check_errors(m("p: P | None = None\ny = p.x")))
+    eq("8:11: operator '==' cannot be applied to P and P", check_errors(m("p = P(1, None)\nb = p == p")))
+    eq("8:11: cannot print a value of type P", check_errors(m("p = P(1, None)\nprint(p)")))
+    eq("6:12: expected A, received B",
+      check_errors("class A:\n    x: int\nclass B:\n    x: int\ndef main() -> None:\n    a: A = B(1)\n"))
+  end,
+
+  field_expressions_do_not_narrow = function()
+    eq("7:17: operator '+' cannot be applied to int | None and int", check_errors(
+      "class P:\n    x: int\n    y: int | None\ndef main() -> None:\n    p = P(1, None)\n"
+      .. "    if p.y is not None:\n        z = p.y + 1\n"))
+  end,
+
   equality_on_all_types = function()
     local program = check_source(in_main("a = 1 == 2\nb = True != False\nc = 'x' == 'y'\nd = None == print(1)"))
     for _, statement in ipairs(program.functions[1].body) do

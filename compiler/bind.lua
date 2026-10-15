@@ -43,13 +43,27 @@ local function collect_symbols(fn)
   return scope
 end
 
-local function resolve_function(fn, scope, functions)
+-- Types name records through the file-level declarations, which locals never
+-- shadow.
+local function check_type(type, declarations)
+  for _, record in ipairs(type.records) do
+    local declaration = declarations[record.name]
+    if not (declaration and declaration.kind == "Record") then
+      diag.error(record.span, "unknown type '" .. record.name .. "'")
+    end
+  end
+end
+
+local function resolve_function(fn, scope, declarations)
   local function resolve_expression(node)
     local kind = node.kind
     if kind == "Name" then
       node.symbol = scope[node.name]
       if not node.symbol then
-        if functions[node.name] or builtins[node.name] then
+        local declaration = declarations[node.name]
+        if declaration and declaration.kind == "Record" then
+          diag.error(node.span, "record '" .. node.name .. "' cannot be used as a value")
+        elseif declaration or builtins[node.name] then
           diag.error(node.span, "function '" .. node.name .. "' cannot be used as a value")
         end
         diag.error(node.span, "unknown name '" .. node.name .. "'")
@@ -58,7 +72,7 @@ local function resolve_function(fn, scope, functions)
       if scope[node.name] then
         diag.error(node.span, "cannot call local variable '" .. node.name .. "'")
       end
-      node.target = functions[node.name] or builtins[node.name]
+      node.target = declarations[node.name] or builtins[node.name]
       if not node.target then
         diag.error(node.span, "unknown function '" .. node.name .. "'")
       end
@@ -73,6 +87,8 @@ local function resolve_function(fn, scope, functions)
     elseif kind == "Index" then
       resolve_expression(node.object)
       resolve_expression(node.index)
+    elseif kind == "Field" then
+      resolve_expression(node.object)
     elseif kind == "MethodCall" then
       resolve_expression(node.object)
       for _, arg in ipairs(node.args) do
@@ -96,6 +112,12 @@ local function resolve_function(fn, scope, functions)
       if kind == "Assign" then
         resolve_expression(statement.value)
         statement.symbol = scope[statement.name]
+        if statement.annotation then
+          check_type(statement.annotation, declarations)
+        end
+      elseif kind == "FieldAssign" then
+        resolve_expression(statement.value)
+        resolve_expression(statement.object)
       elseif kind == "IndexAssign" then
         resolve_expression(statement.value)
         resolve_expression(statement.object)
@@ -126,27 +148,60 @@ local function resolve_function(fn, scope, functions)
   resolve_block(fn.body)
 end
 
+-- Checks names that must be unique within a function's parameters or a
+-- record's fields.
+local function check_unique(items, what)
+  local seen = {}
+  for _, item in ipairs(items) do
+    if seen[item.name] then
+      diag.error(item.span, "duplicate " .. what .. " '" .. item.name .. "'")
+    end
+    seen[item.name] = true
+  end
+end
+
 function M.bind(program)
-  local functions = {}
+  -- Functions and records share one namespace; report clashes in source order.
+  local ordered = {}
   for _, fn in ipairs(program.functions) do
-    if builtins[fn.name] then
-      diag.error(fn.span, "cannot redefine built-in function '" .. fn.name .. "'")
+    ordered[#ordered + 1] = fn
+  end
+  for _, record in ipairs(program.records) do
+    ordered[#ordered + 1] = record
+  end
+  table.sort(ordered, function(a, b)
+    return a.span.first < b.span.first
+  end)
+
+  local declarations = {}
+  for _, declaration in ipairs(ordered) do
+    local name = declaration.name
+    if builtins[name] then
+      diag.error(declaration.span, "cannot redefine built-in function '" .. name .. "'")
     end
-    if functions[fn.name] then
-      diag.error(fn.span, "duplicate function '" .. fn.name .. "'")
+    if declarations[name] then
+      local what = declaration.kind == "Record" and "record" or "function"
+      diag.error(declaration.span, "duplicate " .. what .. " '" .. name .. "'")
     end
-    functions[fn.name] = fn
-    local params = {}
-    for _, param in ipairs(fn.params) do
-      if params[param.name] then
-        diag.error(param.span, "duplicate parameter '" .. param.name .. "'")
-      end
-      params[param.name] = true
-    end
+    declarations[name] = declaration
   end
 
-  local main = functions.main
-  if not main then
+  for _, record in ipairs(program.records) do
+    check_unique(record.fields, "field")
+    for _, field in ipairs(record.fields) do
+      check_type(field.type, declarations)
+    end
+  end
+  for _, fn in ipairs(program.functions) do
+    check_unique(fn.params, "parameter")
+    for _, param in ipairs(fn.params) do
+      check_type(param.type, declarations)
+    end
+    check_type(fn.return_type, declarations)
+  end
+
+  local main = declarations.main
+  if not (main and main.kind == "Function") then
     diag.error(program.span, "program has no main function")
   end
   if #main.params > 0 or main.return_type.name ~= "None" then
@@ -154,7 +209,7 @@ function M.bind(program)
   end
 
   for _, fn in ipairs(program.functions) do
-    resolve_function(fn, collect_symbols(fn), functions)
+    resolve_function(fn, collect_symbols(fn), declarations)
   end
 end
 

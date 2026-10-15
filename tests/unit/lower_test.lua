@@ -52,6 +52,14 @@ show_expr = function(e)
     return e.target.name .. "(" .. show_list(e.args, show_expr, ", ") .. ")"
   elseif kind == "Helper" then
     return e.name .. "(" .. show_list(e.args, show_expr, ", ") .. ")#" .. e.site
+  elseif kind == "Field" then
+    return show_expr(e.object) .. "." .. e.name
+  elseif kind == "Construct" then
+    local parts = {}
+    for i, name in ipairs(e.names) do
+      parts[i] = name .. " = " .. show_expr(e.values[i])
+    end
+    return "P{" .. table.concat(parts, ", ") .. "}"
   elseif kind == "List" then
     return "[" .. show_list(e.elements, show_expr, ", ") .. "]"
   elseif kind == "Dict" then
@@ -195,6 +203,19 @@ return {
   for_loops = function()
     eq("t1 = f(3); for#1 i range(0, t1, 1)#1 { print(i)#2 }", lower_main("for i in range(f(3)):\n    print(i)", INT_HELPERS))
     eq("xs = [1]; for#1 x list_items(xs)#1 { continue#1 }", lower_main("xs = [1]\nfor x in xs:\n    continue"))
+  end,
+
+  records = function()
+    local P = "class P:\n    x: int\n    y: int\n"
+    local function lower_records(statements)
+      local source = P .. "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. INT_HELPERS
+        .. "def mk(n: int) -> P:\n    return P(n, n)\n"
+      return show_body(lower_source(source).functions[1])
+    end
+    eq("t1 = f(1); p = P{x = t1, y = 2}", lower_records("p = P(f(1), 2)"))
+    eq("p = P{x = 1, y = 2}; t1 = p.x; t2 = f(1); x = add(t1, t2)#1", lower_records("p = P(1, 2)\nx = p.x + f(1)"))
+    eq("p = P{x = 1, y = 2}; x = p.y", lower_records("p = P(1, 2)\nx = p.y"))
+    eq("t1 = f(3); t2 = g(0); t2 = mk(t2); t2.x = t1", lower_records("mk(g(0)).x = f(3)"))
   end,
 
   conversions = function()

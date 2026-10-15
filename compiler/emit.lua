@@ -122,6 +122,14 @@ function M.emit(lowered, path)
       return M.mangle(e.target.name) .. "(" .. args(e.args) .. ")"
     elseif kind == "Helper" then
       return "__wlo_" .. e.name .. "(" .. args(e.args, e.site) .. ")"
+    elseif kind == "Field" then
+      return expr(e.object) .. "." .. M.mangle(e.name)
+    elseif kind == "Construct" then
+      local parts = {}
+      for i, name in ipairs(e.names) do
+        parts[i] = M.mangle(name) .. " = " .. expr(e.values[i])
+      end
+      return "{ " .. table.concat(parts, ", ") .. " }"
     elseif kind == "List" then
       return "__wlo_list(" .. table_text(e.elements) .. ", " .. #e.elements .. ")"
     elseif kind == "Dict" then

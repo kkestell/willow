@@ -70,6 +70,16 @@ show = function(node)
     return show(node.object) .. "[" .. show(node.index) .. "]"
   elseif kind == "MethodCall" then
     return show(node.object) .. "." .. node.name .. "(" .. show_list(node.args, ", ") .. ")"
+  elseif kind == "Field" then
+    return show(node.object) .. "." .. node.name
+  elseif kind == "FieldAssign" then
+    return show(node.object) .. "." .. node.name .. " = " .. show(node.value)
+  elseif kind == "Record" then
+    local fields = {}
+    for i, field in ipairs(node.fields) do
+      fields[i] = field.name .. ": " .. field.type.name
+    end
+    return "class " .. node.name .. " { " .. table.concat(fields, "; ") .. " }"
   elseif kind == "IndexAssign" then
     return show(node.object) .. "[" .. show(node.index) .. "] = " .. show(node.value)
   elseif kind == "For" then
@@ -131,14 +141,13 @@ return {
     eq("1:8: expected ':', found ')'", parse_error("def f(x) -> int:\n    return x\n"))
     eq("1:14: expected '->', found ':'", parse_error("def f(x: int):\n    pass\n"))
     eq("1:14: expected '[', found ')'", parse_error("def f(x: list) -> None:\n    pass\n"))
-    eq("1:10: expected a type, found 'set'", parse_error("def f(x: set) -> None:\n    pass\n"))
+    eq("1:10: expected a type, found integer", parse_error("def f(x: 1) -> None:\n    pass\n"))
   end,
 
-  file_scope_holds_only_def = function()
-    eq("1:1: only function definitions are allowed at file scope", parse_error("x = 1\n"))
-    eq("1:1: 'class' is not supported", parse_error("class A:\n    pass\n"))
+  file_scope_holds_only_declarations = function()
+    eq("1:1: only function and class definitions are allowed at file scope", parse_error("x = 1\n"))
     eq("1:1: 'import' is not supported", parse_error("import os\n"))
-    eq("1:5: only function definitions are allowed at file scope",
+    eq("1:5: only function and class definitions are allowed at file scope",
       parse_error("    def f() -> None:\n        pass\n"))
   end,
 
@@ -238,11 +247,29 @@ return {
     eq("(- xs[0])", expr("-xs[0]"))
     eq("text.strip().split(\",\")", expr("text.strip().split(',')"))
     eq("{ xs[i] = (v + 1); xs.append(2) }", body("xs[i] = v + 1\nxs.append(2)"))
-    eq("2:12: methods must be called", body_error("x = xs.append"))
     eq("2:17: call target must be a function name", body_error("x = items[0](1)"))
     eq("2:16: call target must be a function name", body_error("x = xs.f(1)(2)"))
     eq("2:10: only a name can have an annotation", body_error("xs[0]: int = 1"))
     eq("2:7: only calls can be used as statements", body_error("xs[0]"))
+  end,
+
+  records = function()
+    local program = parse("class Node:\n    value: int\n    next: Node | None\n    tags: list[Tag] | None\n")
+    eq("class Node { value: int; next: Node | None; tags: list[Tag] | None }", show(program.records[1]))
+    local types = program.records[1].fields[3].type.records
+    eq(1, #types)
+    eq("Tag 4:16", types[1].name .. " " .. types[1].span.line .. ":" .. types[1].span.col)
+    local message = "record bodies hold only field declarations"
+    eq("2:5: " .. message, parse_error("class A:\n    pass\n"))
+    eq("2:5: " .. message, parse_error("class A:\n    x = 1\n"))
+    eq("3:5: " .. message, parse_error("class A:\n    x: int\n    def f() -> None:\n        pass\n"))
+  end,
+
+  fields = function()
+    eq("a.b.c", expr("a.b.c"))
+    eq("rows[0].name", expr("rows[0].name"))
+    eq("{ p.x = (p.x + 1) }", body("p.x = p.x + 1"))
+    eq("2:8: only a name can have an annotation", body_error("p.x: int = 1"))
   end,
 
   membership = function()

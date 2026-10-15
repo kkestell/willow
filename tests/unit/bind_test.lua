@@ -112,6 +112,31 @@ return {
     eq("2:11: function 'print' cannot be used as a value", bind_error("def main() -> None:\n    print(print)\n"))
   end,
 
+  records = function()
+    eq("3:7: duplicate record 'A'", bind_error("class A:\n    x: int\nclass A:\n    y: int\n" .. MAIN))
+    eq("3:7: duplicate record 'A'", bind_error("def A() -> None:\n    pass\nclass A:\n    y: int\n" .. MAIN))
+    eq("3:5: duplicate function 'A'", bind_error("class A:\n    x: int\ndef A() -> None:\n    pass\n" .. MAIN))
+    eq("1:7: cannot redefine built-in function 'len'", bind_error("class len:\n    x: int\n" .. MAIN))
+    eq("3:5: duplicate field 'x'", bind_error("class A:\n    x: int\n    x: str\n" .. MAIN))
+    local program = bind_source("class A:\n    b: B | None\nclass B:\n    a: A\n    self: B\n"
+      .. "def main() -> None:\n    x = B(A(None), None)\n")
+    eq(program.records[2], program.functions[1].body[1].value.target)
+  end,
+
+  unknown_types = function()
+    eq("2:8: unknown type 'Missing'", bind_error("class A:\n    x: Missing\n" .. MAIN))
+    eq("1:10: unknown type 'Missing'", bind_error("def f(a: Missing) -> None:\n    pass\n" .. MAIN))
+    eq("2:13: unknown type 'Missing'", bind_error("def main() -> None:\n    x: list[Missing] = []\n"))
+    eq("2:8: unknown type 'f'", bind_error("def main() -> None:\n    x: f = 1\ndef f() -> None:\n    pass\n"))
+  end,
+
+  locals_shadow_constructors = function()
+    local P = "class P:\n    x: int\n"
+    eq("5:9: cannot call local variable 'P'", bind_error(P .. "def main() -> None:\n    P = 1\n    p = P(1)\n"))
+    bind_source(P .. "def main() -> None:\n    P = 1\n    q: P | None = None\n")
+    eq("4:9: record 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
+  end,
+
   collection_builtins = function()
     eq("1:5: cannot redefine built-in function 'len'", bind_error("def len(x: int) -> int:\n    return x\n" .. MAIN))
     eq("1:5: cannot redefine built-in function 'range'", bind_error("def range() -> None:\n    pass\n" .. MAIN))

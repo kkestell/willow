@@ -24,10 +24,17 @@ end
 -- True when evaluating `node` can neither call anything nor fail, so it can be
 -- evaluated wherever its value is used. Callees cannot change a caller's
 -- locals, so a later call cannot change its value either. Reading a collection
--- is a helper call, since a later call can change the collection.
+-- or a field is not pure, since a later call can change the collection or
+-- record.
 local function is_pure(node)
   local kind = node.kind
-  if kind == "Call" or kind == "Index" or kind == "MethodCall" then
+  if kind == "Call" and node.target.kind == "Record" then
+    for _, arg in ipairs(node.args) do
+      if not is_pure(arg) then
+        return false
+      end
+    end
+  elseif kind == "Call" or kind == "Index" or kind == "MethodCall" or kind == "Field" then
     return false
   elseif kind == "Unary" then
     return not (node.op == "-" and node.type == "int") and is_pure(node.operand)
@@ -77,7 +84,7 @@ local function lower_function(fn, sites)
     return { kind = "Helper", name = name, args = args, site = #sites, span = span }
   end
 
-  local lower_value, lower_operand
+  local lower_value, lower_operand, lower_object
 
   -- Moves a call or helper call into a temporary. It consumes its operands'
   -- temporaries above `mark`, so its result reuses them.
@@ -163,7 +170,13 @@ local function lower_function(fn, sites)
       for i, arg in ipairs(node.args) do
         args[i] = lower_operand(arg)
       end
-      if node.target.kind == "Builtin" then
+      if node.target.kind == "Record" then
+        local names = {}
+        for i, field in ipairs(node.target.fields) do
+          names[i] = field.name
+        end
+        return { kind = "Construct", names = names, values = args }
+      elseif node.target.kind == "Builtin" then
         local name = node.name
         local arg_type = node.args[1].type
         if name == "print" and (arg_type == "float" or arg_type == "float | None") then
@@ -172,6 +185,8 @@ local function lower_function(fn, sites)
         return helper(name, args, node.span)
       end
       return { kind = "Call", target = node.target, args = args, span = node.span }
+    elseif kind == "Field" then
+      return { kind = "Field", object = lower_object(node.object), name = node.name }
     elseif kind == "Index" then
       local object = lower_operand(node.object)
       local index = lower_operand(node.index)
@@ -200,15 +215,27 @@ local function lower_function(fn, sites)
     end
   end
 
-  -- Returns an expression with no calls, moving a call or helper call into a
-  -- temporary first.
+  -- Returns an expression with no calls or field reads, moving a call, helper
+  -- call, or field read into a temporary first.
   lower_operand = function(node)
     local mark = depth
     local value = lower_value(node)
-    if value.kind ~= "Call" and value.kind ~= "Helper" then
+    if value.kind ~= "Call" and value.kind ~= "Helper" and value.kind ~= "Field" then
       return value
     end
     return spill(value, mark)
+  end
+
+  -- Returns a local or temporary for a field's object, so a field access never
+  -- begins with a parenthesized constructor, which Lua can read as a call
+  -- continuing the previous statement.
+  lower_object = function(node)
+    local mark = depth
+    local object = lower_operand(node)
+    if object.kind == "Construct" then
+      return spill(object, mark)
+    end
+    return object
   end
 
   local lower_block
@@ -218,6 +245,11 @@ local function lower_function(fn, sites)
     local kind = statement.kind
     if kind == "Assign" then
       set({ kind = "Local", symbol = statement.symbol }, lower_value(statement.value), statement.span)
+    elseif kind == "FieldAssign" then
+      -- Python evaluates the value, then the object.
+      local value = lower_operand(statement.value)
+      local target = { kind = "Field", object = lower_object(statement.object), name = statement.name }
+      set(target, value, statement.span)
     elseif kind == "IndexAssign" then
       -- Python evaluates the value, then the object, then the index.
       local value = lower_operand(statement.value)
@@ -227,7 +259,8 @@ local function lower_function(fn, sites)
       local set_item = helper(name, { object, index, value }, statement.span)
       emit({ kind = "Eval", value = set_item, span = statement.span })
     elseif kind == "CallStmt" then
-      -- float(x) lowers to x, which leaves nothing to evaluate as a statement.
+      -- float(x) and constructors leave nothing to evaluate as a statement once
+      -- their arguments are evaluated.
       local value = lower_value(statement.call)
       if value.kind == "Call" or value.kind == "Helper" then
         emit({ kind = "Eval", value = value, span = value.span })

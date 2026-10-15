@@ -187,7 +187,21 @@ local function arguments(count)
   return count .. (count == 1 and " argument" or " arguments")
 end
 
-local function check_function(fn)
+local function check_function(fn, records)
+  -- The type of field `node.name` on a value of `object` type.
+  local function field_type(node, object)
+    local record = records[object]
+    if not record then
+      diag.error(node.span, "type " .. object .. " has no field '" .. node.name .. "'")
+    end
+    for _, field in ipairs(record.fields) do
+      if field.name == node.name then
+        return field.type.name
+      end
+    end
+    diag.error(node.span, "record " .. object .. " has no field '" .. node.name .. "'")
+  end
+
   local return_type = fn.return_type.name
 
   local check_expression
@@ -279,7 +293,9 @@ local function check_function(fn)
         diag.error(node.span, "'range' can only be used as a 'for' iterable")
       end
       local builtin = target.kind == "Builtin" and builtins[target.name]
-      local count = builtin and 1 or #target.params
+      -- A constructor takes one argument per field.
+      local params = target.kind == "Record" and target.fields or target.params
+      local count = builtin and 1 or #params
       if #node.args ~= count then
         diag.error(node.span, "'" .. node.name .. "' expects " .. arguments(count) .. ", received " .. #node.args)
       end
@@ -288,7 +304,7 @@ local function check_function(fn)
         if builtin then
           param = builtin.param
         else
-          param = target.params[i].type.name
+          param = params[i].type.name
         end
         local arg_type = check_expression(arg, state, param)
         if param then
@@ -301,7 +317,15 @@ local function check_function(fn)
       elseif node.name == "len" and builtin and not (list_element(arg_type) or dict_types(arg_type)) then
         diag.error(node.span, "'len' cannot be applied to " .. arg_type)
       end
-      type = builtin and builtin.result or target.return_type.name
+      if builtin then
+        type = builtin.result
+      elseif target.kind == "Record" then
+        type = target.name
+      else
+        type = target.return_type.name
+      end
+    elseif kind == "Field" then
+      type = field_type(node, check_expression(node.object, state))
     elseif kind == "Index" then
       local object = check_expression(node.object, state)
       local index, item = index_types(object)
@@ -400,6 +424,9 @@ local function check_function(fn)
         symbol.type = value_type
       end
       assign(state, symbol, value_type)
+    elseif kind == "FieldAssign" then
+      local field = field_type(statement, check_expression(statement.object, state))
+      check_against(statement.value, state, field)
     elseif kind == "IndexAssign" then
       local object = check_expression(statement.object, state)
       local index, item = index_types(object)
@@ -513,9 +540,13 @@ end
 -- Signatures are fixed before checking, so each function's first error is
 -- independent of the others; all of them are reported together.
 function M.check(program)
+  local records = {}
+  for _, record in ipairs(program.records) do
+    records[record.name] = record
+  end
   local errors = {}
   for _, fn in ipairs(program.functions) do
-    local ok, err = xpcall(check_function, capture, fn)
+    local ok, err = xpcall(check_function, capture, fn, records)
     if not ok then
       if not diag.is(err) then
         error(err, 0)
