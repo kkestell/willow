@@ -23,7 +23,7 @@ local function lex_error(source)
   if not diag.is(err) then
     error(err, 0)
   end
-  return string.format("%d:%d: %s", err.span.line, err.span.col, err.message)
+  return string.format("%d:%d: %s", err[1].span.line, err[1].span.col, err[1].message)
 end
 
 local function single(source)

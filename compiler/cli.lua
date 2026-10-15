@@ -30,7 +30,12 @@ local function report(err)
   if diag.is(err) then
     return err
   end
-  return debug.traceback("internal compiler error: " .. tostring(err), 2)
+  local message = "internal compiler error: " .. tostring(err)
+  -- check.lua re-raises internal errors with the traceback of the fault.
+  if message:find("\nstack traceback:\n", 1, true) then
+    return message
+  end
+  return debug.traceback(message, 1)
 end
 
 local command, path = arg[1], arg[2]
@@ -50,7 +55,14 @@ end
 
 local ok, result = xpcall(compile, report, command, path, source)
 if not ok then
-  fail(diag.is(result) and diag.format(path, result) or result)
+  if not diag.is(result) then
+    fail(result)
+  end
+  local lines = {}
+  for i, d in ipairs(result) do
+    lines[i] = diag.format(path, d)
+  end
+  fail(table.concat(lines, "\n"))
 end
 if command == "run" then
   result()

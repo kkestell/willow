@@ -1,0 +1,2 @@
+type_errors.wlo:2:14: error: operator '+' cannot be applied to int and str
+type_errors.wlo:5:8: error: expected bool, received int

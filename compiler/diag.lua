@@ -1,15 +1,20 @@
--- Compile-time diagnostics. A pass reports invalid source by raising one with
--- diag.error; the CLI treats any other raised value as an internal compiler error.
+-- Compile-time diagnostics. A pass reports invalid source by raising a list of
+-- one or more diagnostics; the CLI treats any other raised value as an internal
+-- compiler error.
 local M = {}
 
-local Diagnostic = {}
+local Diagnostics = {}
+
+function M.raise(list)
+  error(setmetatable(list, Diagnostics))
+end
 
 function M.error(span, message)
-  error(setmetatable({ span = span, message = message }, Diagnostic))
+  M.raise({ { span = span, message = message } })
 end
 
 function M.is(value)
-  return getmetatable(value) == Diagnostic
+  return getmetatable(value) == Diagnostics
 end
 
 function M.format(path, d)

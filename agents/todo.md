@@ -39,13 +39,13 @@ Section numbers refer to that document.
   - [x] Calling a local or parameter is a "cannot call local variable" error at any position; unknown names are errors
   - [x] Record the resolved target on every call node
 
-- [ ] Check (§4, §5, §6)
-  - [ ] Expression types: unary `+`/`-` on `int`, `not` on `bool`, `+ - *` on `int`, `+` on `str`, `and`/`or` on `bool`, `==`/`!=` on same-typed operands of any of the four types, ordering on `int` only; conditions must be `bool`
-  - [ ] Calls: exact arity, argument types match parameters, result is the return type; `print` accepts one value of any of the four types and returns `None`
-  - [ ] Locals keep one type across all assignments; an explicit annotation checks the initializer and is allowed only on the lexically first assignment; annotating a parameter is an error
-  - [ ] Definite assignment: join rules after `if`/`elif`/`else`, transferring branches ignored, loop-body assignments not definite after the loop
-  - [ ] Control transfer: an `if` whose branches all transfer is itself a transfer; statements after a transfer are unreachable errors; non-`None` functions return on every path by structural analysis; `break`/`continue` outside a loop are errors
-  - [ ] Record operation types for lowering; collect independent errors; report unexpected compiler failures as internal compiler errors
+- [x] Check (§4, §5, §6)
+  - [x] Expression types: unary `+`/`-` on `int`, `not` on `bool`, `+ - *` on `int`, `+` on `str`, `and`/`or` on `bool`, `==`/`!=` on same-typed operands of any of the four types, ordering on `int` only; conditions must be `bool`
+  - [x] Calls: exact arity, argument types match parameters, result is the return type; `print` accepts one value of any of the four types and returns `None`
+  - [x] Locals keep one type across all assignments; an explicit annotation checks the initializer and is allowed only on the lexically first assignment; annotating a parameter is an error
+  - [x] Definite assignment: join rules after `if`/`elif`/`else`, transferring branches ignored, loop-body assignments not definite after the loop
+  - [x] Control transfer: an `if` whose branches all transfer is itself a transfer; statements after a transfer are unreachable errors; non-`None` functions return on every path by structural analysis; `break`/`continue` outside a loop are errors
+  - [x] Record operation types for lowering; collect independent errors; report unexpected compiler failures as internal compiler errors
 
 - [ ] Lower (§9)
   - [ ] Left-to-right evaluation with explicit temporaries for operands and arguments
