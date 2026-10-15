@@ -1,0 +1,88 @@
+def trace(label: str, value: int) -> int:
+    print(label)
+    return value
+
+def add_all(items: list[int], extra: list[int]) -> None:
+    for item in extra:
+        items.append(item)
+
+def main() -> None:
+    totals: dict[str, int] = {}
+    for word in ["a", "b", "a"]:
+        if word in totals:
+            totals[word] = totals[word] + 1
+        else:
+            totals[word] = 1
+    for word in totals:
+        print(word)                 # a, then b
+        print(totals[word])         # 2, then 1
+    for i in range(3, 0, -1):
+        print(i)                    # 3, 2, 1
+
+    maybe: list[int | None] = [1, None, 3]
+    print(len(maybe))
+    print(maybe[1])
+    print(None in maybe)
+    print(2 not in maybe)
+    scores: dict[str, int | None] = {"ada": None}
+    print(scores.get("ada"))
+    print(scores.get("alan"))
+    print("ada" in scores)
+    print("alan" in scores)
+    print(len(scores))
+
+    ages = {"ada": 36, "alan": 41, "grace": 85}
+    ages["alan"] = 42
+    print(ages.pop("ada"))
+    ages["ada"] = 37
+    for name in ages:
+        print(name)
+        print(ages[name])
+    repeated = {1: "first", 2: "second", 1: "again"}
+    for key in repeated:
+        print(key)
+        print(repeated[key])
+
+    numbers = [1, 2]
+    for n in numbers:
+        if n < 4:
+            numbers.append(n + 2)
+    print(len(numbers))
+    print(numbers.pop())
+    print(len(numbers))
+    for name in ages:
+        ages[name] = 0
+    print(ages["grace"])
+
+    last = 0
+    for last in range(5):
+        pass
+    print(last)
+    for i in range(2, 5):
+        print(i)
+    for i in range(10, 0, -4):
+        print(i)
+    for i in range(0):
+        print(i)
+    for i in range(5, 1):
+        print(i)
+
+    alias = numbers
+    alias.append(99)
+    add_all(numbers, [7, 8])
+    print(len(numbers))
+    print(numbers[len(numbers) - 1])
+
+    order = [trace("first", 1), trace("second", 2)]
+    order[trace("index", 0)] = trace("value", 10)
+    print(order[0])
+    keyed = {trace("k1", 1): trace("v1", 1), trace("k2", 2): trace("v2", 2)}
+    print(len(keyed))
+
+    grid: list[list[int]] = [[], [1]]
+    grid[0].append(5)
+    print(grid[0][0] + grid[1][0])
+    empty: dict[int, list[str]] = {}
+    empty[3] = []
+    empty[3].append("x")
+    print(empty[3][0])

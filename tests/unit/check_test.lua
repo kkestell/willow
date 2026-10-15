@@ -153,6 +153,91 @@ return {
     eq("6:13: " .. unnarrowed, check_errors(f("if x is None:\n    return\nwhile False:\n    x = None\nprint(x + 1)")))
   end,
 
+  display_types = function()
+    local helpers = "def f(x: list[int]) -> None:\n    pass\ndef g() -> dict[str, int]:\n    return {}\n"
+    check_source(in_main(table.concat({
+      "a: list[int] = []",
+      "b: dict[str, int] = {}",
+      "c: list[int | None] = [1, None]",
+      "d: list[list[int]] = [[], [1]]",
+      "e = [[1], []]",
+      "h: list[int] | None = []",
+      "f([])",
+      "d.append([])",
+    }, "\n"), helpers))
+    local program = check_source(in_main("x = [1, 2]\ny = {'a': [1.5]}"))
+    eq("list[int]", program.functions[1].body[1].symbol.type)
+    eq("dict[str, list[float]]", program.functions[1].body[2].symbol.type)
+    eq("2:13: expected int, received str", check_errors(in_main("x = [1, 'a']")))
+    eq("2:16: expected None, received int", check_errors(in_main("x = [None, 1]")))
+    eq("2:9: cannot infer the element type of an empty list", check_errors(in_main("x = []")))
+    eq("2:9: cannot infer the key and value types of an empty dict", check_errors(in_main("x = {}")))
+    eq("2:10: dictionary keys must be int or str", check_errors(in_main("x = {1.5: 2}")))
+    eq("2:18: expected str, received int", check_errors(in_main("x = {'a': 1, 2: 2}")))
+    eq("3:27: expected list[int | None], received list[int]",
+      check_errors(in_main("x = [1]\ny: list[int | None] = x")))
+  end,
+
+  collection_operations = function()
+    check_source(in_main(table.concat({
+      "xs: list[int | None] = [1]",
+      "d: dict[str, int | None] = {}",
+      "a: int | None = xs[0]",
+      "b: int | None = xs.pop()",
+      "c: int | None = d.get('a')",
+      "e: int | None = d.pop('a')",
+      "n = len(xs) + len(d)",
+      "f = None in xs and 'a' not in d",
+      "xs[0] = None",
+      "d['a'] = 1",
+    }, "\n")))
+    eq("3:16: expected int, received int | None", check_errors(in_main("d = {'a': 1}\ny: int = d.get('a')")))
+    eq("3:11: expected int, received str", check_errors(in_main("x = [1]\ny = x['a']")))
+    eq("3:11: expected str, received int", check_errors(in_main("x = {'a': 1}\ny = x[1]")))
+    eq("3:10: cannot index a value of type int", check_errors(in_main("x = 1\ny = x[0]")))
+    eq("3:6: cannot index a value of type int", check_errors(in_main("x = 1\nx[0] = 1")))
+    eq("3:13: expected int, received str", check_errors(in_main("xs = [1]\nxs[0] = 'a'")))
+    eq("3:7: type list[int] has no method 'push'", check_errors(in_main("x = [1]\nx.push(1)")))
+    eq("3:7: 'append' expects 1 argument, received 0", check_errors(in_main("x = [1]\nx.append()")))
+    eq("3:8: type list[int] | None has no method 'append'",
+      check_errors(in_main("xs: list[int] | None = None\nxs.append(1)")))
+    eq("2:9: 'len' cannot be applied to int", check_errors(in_main("x = len(3)")))
+    eq("3:13: operator 'in' cannot be applied to list[int] and list[list[int]]",
+      check_errors(in_main("x = [[1]]\ny = [1] in x")))
+    eq("3:11: operator 'in' cannot be applied to int and dict[str, int]",
+      check_errors(in_main("d = {'a': 1}\ny = 1 in d")))
+    eq("2:13: operator '==' cannot be applied to list[int] and list[int]", check_errors(in_main("x = [1] == [1]")))
+    eq("2:11: cannot print a value of type list[int]", check_errors(in_main("print([1])")))
+  end,
+
+  for_loops = function()
+    check_source(in_main(table.concat({
+      "for x in [1]:",
+      "    a: int = x",
+      "for k in {'a': 1}:",
+      "    b: str = k",
+      "for i in range(1, 3, 1):",
+      "    if i > 1:",
+      "        continue",
+      "    break",
+      "n = 0",
+      "for n in range(3):",
+      "    pass",
+      "print(n)",
+    }, "\n")))
+    eq("2:23: expected int, received str", check_errors(in_main("for x in range(1, 'a'):\n    pass")))
+    eq("2:14: 'range' expects 1 to 3 arguments, received 0", check_errors(in_main("for x in range():\n    pass")))
+    eq("2:9: 'range' can only be used as a 'for' iterable", check_errors(in_main("x = range(3)")))
+    eq("2:14: cannot iterate over int", check_errors(in_main("for x in 3:\n    pass")))
+    eq("3:5: expected str, received int", check_errors(in_main("x = 'a'\nfor x in [1]:\n    pass")))
+    eq("4:11: variable 'x' may be used before assignment", check_errors(in_main("for x in [1]:\n    pass\nprint(x)")))
+  end,
+
+  index_expressions_do_not_narrow = function()
+    eq("4:21: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main("xs: list[int | None] = [1]\nif xs[0] is not None:\n    print(xs[0] + 1)")))
+  end,
+
   equality_on_all_types = function()
     local program = check_source(in_main("a = 1 == 2\nb = True != False\nc = 'x' == 'y'\nd = None == print(1)"))
     for _, statement in ipairs(program.functions[1].body) do

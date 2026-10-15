@@ -15,13 +15,13 @@ end
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
-as assert async await case class del except finally for from global import in
-lambda match nonlocal raise try type with yield
+as assert async await case class del except finally from global import lambda
+match nonlocal raise try type with yield
 ]])
 
-local compare_ops = set("== != < <= > >= is")
-local type_names = set("int float bool str None")
-local expression_starts = set("NAME INT FLOAT STRING True False None int float ( - + not")
+local compare_ops = set("== != < <= > >= is in")
+local type_names = set("int float bool str None list dict")
+local expression_starts = set("NAME INT FLOAT STRING True False None int float ( [ { - + not")
 local UNIONS = "unions other than 'T | None' are not supported"
 local simple_statements = { pass = "Pass", ["break"] = "Break", continue = "Continue" }
 
@@ -84,6 +84,20 @@ function M.parse(tokens)
     end
     advance()
     local name = token.kind
+    if name == "list" then
+      expect("[")
+      name = "list[" .. parse_type().name .. "]"
+      expect("]")
+    elseif name == "dict" then
+      expect("[")
+      local key = parse_type()
+      if key.name ~= "int" and key.name ~= "str" then
+        diag.error(key.span, "dictionary keys must be int or str")
+      end
+      expect(",")
+      name = "dict[" .. key.name .. ", " .. parse_type().name .. "]"
+      expect("]")
+    end
     if token.kind ~= "None" and accept("|") then
       if peek().kind ~= "None" then
         diag.error(peek().span, UNIONS)
@@ -99,16 +113,27 @@ function M.parse(tokens)
 
   local parse_expression
 
-  local function parse_args()
-    local args = {}
-    while not accept(")") do
-      args[#args + 1] = parse_expression()
+  -- Parses comma-separated items up to `close`, allowing a trailing comma.
+  local function parse_list(close, parse_item)
+    local items = {}
+    while not accept(close) do
+      items[#items + 1] = parse_item()
       if not accept(",") then
-        expect(")", "',' or ')'")
+        expect(close, "',' or '" .. close .. "'")
         break
       end
     end
-    return args
+    return items
+  end
+
+  local function parse_args()
+    return parse_list(")", parse_expression)
+  end
+
+  local function parse_entry()
+    local key = parse_expression()
+    expect(":")
+    return { key = key, value = parse_expression() }
   end
 
   local function parse_primary()
@@ -142,13 +167,40 @@ function M.parse(tokens)
       advance()
       node = parse_expression()
       expect(")")
+    elseif kind == "[" then
+      advance()
+      node = ast.node("ListDisplay", token.span, { elements = parse_list("]", parse_expression) })
+    elseif kind == "{" then
+      advance()
+      node = ast.node("DictDisplay", token.span, { entries = parse_list("}", parse_entry) })
     else
       unexpected("an expression")
     end
-    if peek().kind == "(" then
-      diag.error(peek().span, "call target must be a function name")
-    end
     return node
+  end
+
+  -- Indexing and method calls chain left to right after a primary.
+  local function parse_postfix()
+    local node = parse_primary()
+    while true do
+      local token = peek()
+      if token.kind == "[" then
+        advance()
+        node = ast.node("Index", token.span, { object = node, index = parse_expression() })
+        expect("]")
+      elseif token.kind == "." then
+        advance()
+        local name = expect("NAME", "a method name")
+        if not accept("(") then
+          diag.error(name.span, "methods must be called")
+        end
+        node = ast.node("MethodCall", name.span, { object = node, name = name.value, args = parse_args() })
+      elseif token.kind == "(" then
+        diag.error(token.span, "call target must be a function name")
+      else
+        return node
+      end
+    end
   end
 
   local function parse_unary()
@@ -157,7 +209,7 @@ function M.parse(tokens)
       advance()
       return ast.node("Unary", token.span, { op = token.kind, operand = parse_unary() })
     end
-    return parse_primary()
+    return parse_postfix()
   end
 
   -- Returns a parser for one left-associative binary precedence level.
@@ -192,12 +244,16 @@ function M.parse(tokens)
   -- Comparison operands are sums, so `a == not b` fails and chains are rejected.
   local function parse_comparison()
     local left = parse_operand()
-    if not compare_ops[peek().kind] then
+    local negated_in = peek().kind == "not" and tokens[pos + 1].kind == "in"
+    if not compare_ops[peek().kind] and not negated_in then
       return left
     end
     local token = advance()
     local node
-    if token.kind == "is" then
+    if negated_in then
+      advance()
+      node = ast.node("Binary", token.span, { op = "not in", left = left, right = parse_operand() })
+    elseif token.kind == "is" then
       local op = accept("not") and "is not" or "is"
       expect("None", "'None'")
       reject_bitwise_or()
@@ -205,7 +261,7 @@ function M.parse(tokens)
     else
       node = ast.node("Binary", token.span, { op = token.kind, left = left, right = parse_operand() })
     end
-    if compare_ops[peek().kind] then
+    if compare_ops[peek().kind] or peek().kind == "not" and tokens[pos + 1].kind == "in" then
       diag.error(peek().span, "comparison chains are not supported")
     end
     return node
@@ -253,13 +309,20 @@ function M.parse(tokens)
     local expression = parse_expression()
     local token = peek()
     if token.kind == "=" then
-      if expression.kind ~= "Name" then
+      advance()
+      local node
+      if expression.kind == "Name" then
+        node = ast.node("Assign", expression.span, { name = expression.name, value = parse_expression() })
+      elseif expression.kind == "Index" then
+        node = ast.node("IndexAssign", expression.span,
+          { object = expression.object, index = expression.index, value = parse_expression() })
+      else
         diag.error(token.span, "cannot assign to this expression")
       end
-      advance()
-      local node = ast.node("Assign", expression.span, { name = expression.name, value = parse_expression() })
       reject_chained_assignment()
       return node
+    elseif token.kind == ":" and expression.kind == "Index" then
+      diag.error(token.span, "only a name can have an annotation")
     elseif token.kind == ":" and expression.kind == "Name" then
       advance()
       local annotation = parse_type()
@@ -272,7 +335,7 @@ function M.parse(tokens)
       return node
     elseif token.kind == "," and expression.kind == "Name" then
       diag.error(token.span, "destructuring assignment is not supported")
-    elseif expression.kind ~= "Call" then
+    elseif expression.kind ~= "Call" and expression.kind ~= "MethodCall" then
       diag.error(expression.span, "only calls can be used as statements")
     end
     return ast.node("CallStmt", expression.span, { call = expression })
@@ -288,6 +351,12 @@ function M.parse(tokens)
       advance()
       local condition = parse_expression()
       return ast.node("While", token.span, { condition = condition, body = parse_block() })
+    elseif kind == "for" then
+      advance()
+      local name = expect("NAME", "a loop variable name")
+      expect("in")
+      local iterable = parse_expression()
+      return ast.node("For", token.span, { name = name.value, iterable = iterable, body = parse_block() })
     elseif kind == "def" then
       diag.error(token.span, "nested functions are not supported")
     end

@@ -58,6 +58,22 @@ show = function(node)
     return "(" .. node.op .. " " .. show(node.operand) .. ")"
   elseif kind == "Is" then
     return "(" .. show(node.operand) .. " " .. node.op .. " None)"
+  elseif kind == "ListDisplay" then
+    return "[" .. show_list(node.elements, ", ") .. "]"
+  elseif kind == "DictDisplay" then
+    local parts = {}
+    for i, entry in ipairs(node.entries) do
+      parts[i] = show(entry.key) .. ": " .. show(entry.value)
+    end
+    return "{" .. table.concat(parts, ", ") .. "}"
+  elseif kind == "Index" then
+    return show(node.object) .. "[" .. show(node.index) .. "]"
+  elseif kind == "MethodCall" then
+    return show(node.object) .. "." .. node.name .. "(" .. show_list(node.args, ", ") .. ")"
+  elseif kind == "IndexAssign" then
+    return show(node.object) .. "[" .. show(node.index) .. "] = " .. show(node.value)
+  elseif kind == "For" then
+    return "for " .. node.name .. " in " .. show(node.iterable) .. " " .. show_block(node.body)
   elseif kind == "Binary" then
     return "(" .. show(node.left) .. " " .. node.op .. " " .. show(node.right) .. ")"
   elseif kind == "Param" then
@@ -114,7 +130,8 @@ return {
   annotations_required_and_limited = function()
     eq("1:8: expected ':', found ')'", parse_error("def f(x) -> int:\n    return x\n"))
     eq("1:14: expected '->', found ':'", parse_error("def f(x: int):\n    pass\n"))
-    eq("1:10: expected a type, found 'list'", parse_error("def f(x: list) -> None:\n    pass\n"))
+    eq("1:14: expected '[', found ')'", parse_error("def f(x: list) -> None:\n    pass\n"))
+    eq("1:10: expected a type, found 'set'", parse_error("def f(x: set) -> None:\n    pass\n"))
   end,
 
   file_scope_holds_only_def = function()
@@ -203,6 +220,44 @@ return {
     eq("2:19: unsupported operator '|'", body_error("x = a is None | b"))
   end,
 
+  collection_annotations = function()
+    local source = "def f(x: list[int], y: dict[str, int | None]) -> list[list[str]] | None:\n    return None\n"
+    eq("def f(x: list[int], y: dict[str, int | None]) -> list[list[str]] | None { return None }",
+      show(parse(source).functions[1]))
+    eq("1:15: dictionary keys must be int or str", parse_error("def f(x: dict[float, int]) -> None:\n    pass\n"))
+  end,
+
+  displays = function()
+    eq("[1, [2, 3], []]", expr("[1, [2, 3,], []]"))
+    eq('{"a": 1, 2: {}}', expr("{\n    'a': 1,\n    2: {},\n}"))
+    eq("2:14: expected ',' or ']', found '}'", body_error("x = [1, 2}"))
+  end,
+
+  postfix = function()
+    eq("rows[0].pop()", expr("rows[0].pop()"))
+    eq("(- xs[0])", expr("-xs[0]"))
+    eq("text.strip().split(\",\")", expr("text.strip().split(',')"))
+    eq("{ xs[i] = (v + 1); xs.append(2) }", body("xs[i] = v + 1\nxs.append(2)"))
+    eq("2:12: methods must be called", body_error("x = xs.append"))
+    eq("2:17: call target must be a function name", body_error("x = items[0](1)"))
+    eq("2:16: call target must be a function name", body_error("x = xs.f(1)(2)"))
+    eq("2:10: only a name can have an annotation", body_error("xs[0]: int = 1"))
+    eq("2:7: only calls can be used as statements", body_error("xs[0]"))
+  end,
+
+  membership = function()
+    eq("((a in b) and (c not in d))", expr("a in b and c not in d"))
+    eq("(not (a in b))", expr("not a in b"))
+    eq("2:16: comparison chains are not supported", body_error("x = a in b in c"))
+    eq("2:16: comparison chains are not supported", body_error("x = a == b not in c"))
+  end,
+
+  for_loops = function()
+    eq("{ for x in range(1, 3) { print(x) }; for k in d { pass } }",
+      body("for x in range(1, 3):\n    print(x)\nfor k in d:\n    pass"))
+    eq("2:10: expected 'in', found ','", body_error("for k, v in d:\n    pass"))
+  end,
+
   conversions_are_calls = function()
     eq("int(x)", expr("int(x)"))
     eq("(float(1) / 0.5)", expr("float(1) / 0.5"))
@@ -241,10 +296,8 @@ return {
   end,
 
   unsupported_reserved_words = function()
-    eq("2:5: 'for' is not supported", body_error("for x in y:\n    pass"))
     eq("2:5: 'try' is not supported", body_error("try:\n    pass"))
     eq("2:9: 'lambda' is not supported", body_error("x = lambda"))
-    eq("2:13: 'in' is not supported", body_error("while x in y:\n    pass"))
     eq("2:5: nested functions are not supported", body_error("def g() -> None:\n    pass"))
   end,
 }

@@ -151,6 +151,10 @@ return {
     eq(text .. " NEWLINE EOF", kinds(text))
   end,
 
+  brackets_and_braces = function()
+    eq("NAME = [ INT , { STRING : NAME . NAME } ] NEWLINE EOF", kinds("x = [1,\n  {'a':\n    b.c}\n]\n"))
+  end,
+
   unsupported_operators = function()
     for operator in ("/= //= %= |= ** += := & ^ ~ << >>"):gmatch("%S+") do
       eq("1:3: unsupported operator '" .. operator .. "'", lex_error("a " .. operator .. " b\n"))
@@ -158,7 +162,7 @@ return {
   end,
 
   unexpected_characters = function()
-    eq("1:5: unexpected character '['", lex_error("x = [1]\n"))
+    eq("1:5: unexpected character '@'", lex_error("x = @\n"))
     eq("1:5: unexpected character 'é'", lex_error("x = é\n"))
   end,
 }

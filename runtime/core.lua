@@ -216,6 +216,153 @@ local function __wlo_print_float(value, site)
   __wlo_write(value == nil and "None" or __wlo_format_float(value), site)
 end
 
+-- Lists hold their elements at 1..n so that stored None (nil) counts.
+local function __wlo_list(items, n)
+  items.n = n
+  return items
+end
+
+-- Dictionaries keep keys in insertion order. `positions` maps each key to its
+-- index in `keys`, so a key with a None value is still present. `version`
+-- changes when a key is added or removed.
+local function __wlo_dict_set(dict, key, value, site)
+  if not dict.positions[key] then
+    local keys = dict.keys
+    keys[#keys + 1] = key
+    dict.positions[key] = #keys
+    dict.version = dict.version + 1
+  end
+  dict.values[key] = value
+end
+
+-- `entries` holds each key followed by its value.
+local function __wlo_dict(entries, n)
+  local dict = { keys = {}, positions = {}, values = {}, version = 0 }
+  for i = 1, 2 * n, 2 do
+    __wlo_dict_set(dict, entries[i], entries[i + 1])
+  end
+  return dict
+end
+
+local function __wlo_len(value, site)
+  return value.n or #value.keys
+end
+
+local function __wlo_check_index(list, i, site)
+  if i < 0 or i >= list.n then
+    __wlo_fail("index", "list index out of range", site)
+  end
+end
+
+local function __wlo_list_index(list, i, site)
+  __wlo_check_index(list, i, site)
+  return list[i + 1]
+end
+
+local function __wlo_list_set(list, i, value, site)
+  __wlo_check_index(list, i, site)
+  list[i + 1] = value
+end
+
+local function __wlo_list_append(list, value, site)
+  local n = list.n + 1
+  list[n] = value
+  list.n = n
+end
+
+local function __wlo_list_pop(list, site)
+  local n = list.n
+  if n == 0 then
+    __wlo_fail("index", "pop from empty list", site)
+  end
+  local value = list[n]
+  list[n] = nil
+  list.n = n - 1
+  return value
+end
+
+local function __wlo_list_contains(list, value, site)
+  for i = 1, list.n do
+    if list[i] == value then
+      return true
+    end
+  end
+  return false
+end
+
+local function __wlo_dict_index(dict, key, site)
+  if not dict.positions[key] then
+    __wlo_fail("key", "key not found", site)
+  end
+  return dict.values[key]
+end
+
+local function __wlo_dict_get(dict, key, site)
+  return dict.values[key]
+end
+
+local function __wlo_dict_pop(dict, key, site)
+  local position = dict.positions[key]
+  if not position then
+    __wlo_fail("key", "key not found", site)
+  end
+  local value = dict.values[key]
+  local keys = dict.keys
+  table.remove(keys, position)
+  for i = position, #keys do
+    dict.positions[keys[i]] = i
+  end
+  dict.positions[key] = nil
+  dict.values[key] = nil
+  dict.version = dict.version + 1
+  return value
+end
+
+local function __wlo_dict_contains(dict, key, site)
+  return dict.positions[key] ~= nil
+end
+
+-- Iterators for `for` return true and the next item. A list's length is read
+-- at each step, so appended elements are visited.
+local function __wlo_list_items(list, site)
+  local i = 0
+  return function()
+    if i < list.n then
+      i = i + 1
+      return true, list[i]
+    end
+  end
+end
+
+local function __wlo_dict_items(dict, site)
+  local i, version = 0, dict.version
+  return function()
+    if dict.version ~= version then
+      __wlo_fail("value", "dictionary changed size during iteration", site)
+    end
+    if i < #dict.keys then
+      i = i + 1
+      return true, dict.keys[i]
+    end
+  end
+end
+
+local function __wlo_range(start, stop, step, site)
+  if step == 0 then
+    __wlo_fail("value", "range step must not be zero", site)
+  end
+  local value, started = start, false
+  return function()
+    if started then
+      value = value + step
+    end
+    started = true
+    if step > 0 and value < stop or step < 0 and value > stop then
+      return true, value
+    end
+  end
+end
+
 local function __wlo_where(location)
   return __wlo_path .. ":" .. location[1] .. ":" .. location[2]
 end

@@ -52,6 +52,10 @@ show_expr = function(e)
     return e.target.name .. "(" .. show_list(e.args, show_expr, ", ") .. ")"
   elseif kind == "Helper" then
     return e.name .. "(" .. show_list(e.args, show_expr, ", ") .. ")#" .. e.site
+  elseif kind == "List" then
+    return "[" .. show_list(e.elements, show_expr, ", ") .. "]"
+  elseif kind == "Dict" then
+    return "{" .. show_list(e.entries, show_expr, ", ") .. "}"
   end
   error("unknown expression kind " .. tostring(kind))
 end
@@ -70,6 +74,8 @@ local function show_statement(s)
       .. (s.else_body and " else " .. show_block(s.else_body) or "")
   elseif kind == "While" then
     return "while#" .. s.label .. " " .. show_block(s.setup) .. " " .. show_expr(s.condition) .. " " .. show_block(s.body)
+  elseif kind == "For" then
+    return "for#" .. s.label .. " " .. show_expr(s.target) .. " " .. show_expr(s.iterator) .. " " .. show_block(s.body)
   elseif kind == "Break" then
     return "break"
   elseif kind == "Continue" then
@@ -168,6 +174,27 @@ return {
 
   is_none_compares_with_nil = function()
     eq("x = None; y = (x == None); z = (x != None)", lower_main("x: int | None = None\ny = x is None\nz = x is not None"))
+  end,
+
+  display_order = function()
+    eq("t1 = f(1); t2 = f(2); x = [t1, 3, t2]", lower_main("x = [f(1), 3, f(2)]", INT_HELPERS))
+    eq("t1 = f(1); t2 = g(2); x = {t1, t2, 4, 3}", lower_main("x = {f(1): g(2), 4: 3}", INT_HELPERS))
+  end,
+
+  index_assignment_order = function()
+    eq("xs = [1]; t1 = f(2); t2 = g(0); list_set(xs, t2, t1)#1",
+      lower_main("xs = [1]\nxs[g(0)] = f(2)", INT_HELPERS))
+  end,
+
+  collection_reads_are_helpers = function()
+    eq("xs = [1]; t1 = list_index(xs, 0)#1; t2 = f(1); x = add(t1, t2)#2",
+      lower_main("xs = [1]\nx = xs[0] + f(1)", INT_HELPERS))
+    eq("xs = [1]; t1 = list_contains(xs, 1)#1; x = (not t1)", lower_main("xs = [1]\nx = 1 not in xs"))
+  end,
+
+  for_loops = function()
+    eq("t1 = f(3); for#1 i range(0, t1, 1)#1 { print(i)#2 }", lower_main("for i in range(f(3)):\n    print(i)", INT_HELPERS))
+    eq("xs = [1]; for#1 x list_items(xs)#1 { continue#1 }", lower_main("xs = [1]\nfor x in xs:\n    continue"))
   end,
 
   conversions = function()

@@ -1,0 +1,6 @@
+def grow(counts: dict[int, int]) -> None:
+    for key in counts:
+        counts[key + 10] = key
+
+def main() -> None:
+    grow({1: 1, 2: 2})

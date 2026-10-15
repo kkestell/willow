@@ -92,6 +92,10 @@ function M.emit(lowered, path)
     return table.concat(parts, ", ")
   end
 
+  local function table_text(list)
+    return #list == 0 and "{}" or "{ " .. args(list) .. " }"
+  end
+
   -- Nested binary operations are parenthesized so Lua precedence never matters.
   expr = function(e, nested)
     local kind = e.kind
@@ -118,10 +122,27 @@ function M.emit(lowered, path)
       return M.mangle(e.target.name) .. "(" .. args(e.args) .. ")"
     elseif kind == "Helper" then
       return "__wlo_" .. e.name .. "(" .. args(e.args, e.site) .. ")"
+    elseif kind == "List" then
+      return "__wlo_list(" .. table_text(e.elements) .. ", " .. #e.elements .. ")"
+    elseif kind == "Dict" then
+      return "__wlo_dict(" .. table_text(e.entries) .. ", " .. #e.entries / 2 .. ")"
     end
   end
 
   local block
+
+  local function loop_body(s, depth)
+    if s.continues then
+      -- The body may end in return or break, which Lua requires to close a
+      -- block, so it gets its own block ahead of the continue label.
+      line(depth, "do")
+      block(s.body, depth + 1)
+      line(depth, "end")
+      line(depth, "::__wlo_continue_" .. s.label .. "::")
+    else
+      block(s.body, depth)
+    end
+  end
 
   local function statement(s, depth)
     local kind = s.kind
@@ -158,16 +179,12 @@ function M.emit(lowered, path)
         block(s.setup, depth + 1)
         line(depth + 1, "if not " .. expr(s.condition, true) .. " then break end", s.span)
       end
-      if s.continues then
-        -- The body may end in return or break, which Lua requires to close a
-        -- block, so it gets its own block ahead of the continue label.
-        line(depth + 1, "do")
-        block(s.body, depth + 2)
-        line(depth + 1, "end")
-        line(depth + 1, "::__wlo_continue_" .. s.label .. "::")
-      else
-        block(s.body, depth + 1)
-      end
+      loop_body(s, depth + 1)
+      line(depth, "end")
+    elseif kind == "For" then
+      line(depth, "for _, __wlo_item in " .. expr(s.iterator) .. " do", s.iterator.span)
+      line(depth + 1, expr(s.target) .. " = __wlo_item", s.span)
+      loop_body(s, depth + 1)
       line(depth, "end")
     end
   end

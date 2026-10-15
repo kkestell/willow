@@ -15,10 +15,10 @@ end
 local keywords = set([[
 False None True and as assert async await break case class continue def del
 elif else except finally for from global if import in is lambda match nonlocal
-not or pass raise return try type while with yield int float bool str
+not or pass raise return try type while with yield int float bool str list dict
 ]])
 
-local operators = set("-> == != <= >= < > = + - * / // % | ( ) , :")
+local operators = set("-> == != <= >= < > = + - * / // % | ( ) [ ] { } , : .")
 
 local unsupported = set("**= //= <<= >>= ** << >> += -= *= /= %= &= |= ^= := & ^ ~")
 
@@ -189,9 +189,9 @@ function M.lex(source)
         if not operator then
           fail(pos, "unexpected character '" .. char_at(source, pos) .. "'")
         end
-        if operator == "(" then
+        if operator == "(" or operator == "[" or operator == "{" then
           depth = depth + 1
-        elseif operator == ")" and depth > 0 then
+        elseif (operator == ")" or operator == "]" or operator == "}") and depth > 0 then
           depth = depth - 1
         end
         add(operator, pos, pos + #operator - 1)
@@ -248,7 +248,7 @@ function M.lex(source)
   end
 
   local eof = #source + 1
-  -- A file that ends inside parentheses gets no DEDENTs, so the parser reports
+  -- A file that ends inside brackets gets no DEDENTs, so the parser reports
   -- the unclosed expression at end of file.
   if depth == 0 then
     for _ = 1, level do

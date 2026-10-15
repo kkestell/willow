@@ -1,0 +1,7 @@
+def take(items: list[str]) -> str:
+    return items.pop()
+
+def main() -> None:
+    names = ["ada"]
+    print(take(names))
+    print(take(names))

@@ -7,10 +7,12 @@ local builtins = {
   print = { kind = "Builtin", name = "print" },
   int = { kind = "Builtin", name = "int" },
   float = { kind = "Builtin", name = "float" },
+  len = { kind = "Builtin", name = "len" },
+  range = { kind = "Builtin", name = "range" },
 }
 
--- Gives the function one symbol per parameter and per assigned name, recording
--- non-parameter symbols in `fn.locals` in order of first assignment.
+-- Gives the function one symbol per parameter and per assigned or loop name,
+-- recording non-parameter symbols in `fn.locals` in order of first assignment.
 local function collect_symbols(fn)
   local scope = {}
   for _, param in ipairs(fn.params) do
@@ -21,16 +23,18 @@ local function collect_symbols(fn)
   fn.locals = {}
   local function walk(body)
     for _, statement in ipairs(body) do
-      if statement.kind == "Assign" and not scope[statement.name] then
+      local kind = statement.kind
+      if (kind == "Assign" or kind == "For") and not scope[statement.name] then
         local symbol = { name = statement.name, span = statement.span }
         scope[statement.name] = symbol
         fn.locals[#fn.locals + 1] = symbol
-      elseif statement.kind == "If" then
+      end
+      if kind == "If" then
         walk(statement.body)
         if statement.else_body then
           walk(statement.else_body)
         end
-      elseif statement.kind == "While" then
+      elseif kind == "While" or kind == "For" then
         walk(statement.body)
       end
     end
@@ -66,6 +70,23 @@ local function resolve_function(fn, scope, functions)
     elseif kind == "Binary" then
       resolve_expression(node.left)
       resolve_expression(node.right)
+    elseif kind == "Index" then
+      resolve_expression(node.object)
+      resolve_expression(node.index)
+    elseif kind == "MethodCall" then
+      resolve_expression(node.object)
+      for _, arg in ipairs(node.args) do
+        resolve_expression(arg)
+      end
+    elseif kind == "ListDisplay" then
+      for _, element in ipairs(node.elements) do
+        resolve_expression(element)
+      end
+    elseif kind == "DictDisplay" then
+      for _, entry in ipairs(node.entries) do
+        resolve_expression(entry.key)
+        resolve_expression(entry.value)
+      end
     end
   end
 
@@ -75,6 +96,10 @@ local function resolve_function(fn, scope, functions)
       if kind == "Assign" then
         resolve_expression(statement.value)
         statement.symbol = scope[statement.name]
+      elseif kind == "IndexAssign" then
+        resolve_expression(statement.value)
+        resolve_expression(statement.object)
+        resolve_expression(statement.index)
       elseif kind == "CallStmt" then
         resolve_expression(statement.call)
       elseif kind == "Return" then
@@ -90,6 +115,10 @@ local function resolve_function(fn, scope, functions)
       elseif kind == "While" then
         resolve_expression(statement.condition)
         resolve_block(statement.body)
+      elseif kind == "For" then
+        resolve_expression(statement.iterable)
+        statement.symbol = scope[statement.name]
+        resolve_block(statement.body)
       end
     end
   end
@@ -100,8 +129,8 @@ end
 function M.bind(program)
   local functions = {}
   for _, fn in ipairs(program.functions) do
-    if fn.name == "print" then
-      diag.error(fn.span, "cannot redefine built-in function 'print'")
+    if builtins[fn.name] then
+      diag.error(fn.span, "cannot redefine built-in function '" .. fn.name .. "'")
     end
     if functions[fn.name] then
       diag.error(fn.span, "duplicate function '" .. fn.name .. "'")

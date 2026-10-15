@@ -17,19 +17,37 @@ local function binary_helper(node)
   return helpers and helpers[node.type]
 end
 
+local function is_list(type)
+  return type:sub(1, 5) == "list["
+end
+
 -- True when evaluating `node` can neither call anything nor fail, so it can be
 -- evaluated wherever its value is used. Callees cannot change a caller's
--- locals, so a later call cannot change its value either.
+-- locals, so a later call cannot change its value either. Reading a collection
+-- is a helper call, since a later call can change the collection.
 local function is_pure(node)
   local kind = node.kind
-  if kind == "Call" then
+  if kind == "Call" or kind == "Index" or kind == "MethodCall" then
     return false
   elseif kind == "Unary" then
     return not (node.op == "-" and node.type == "int") and is_pure(node.operand)
   elseif kind == "Is" then
     return is_pure(node.operand)
   elseif kind == "Binary" then
-    return not binary_helper(node) and is_pure(node.left) and is_pure(node.right)
+    return not binary_helper(node) and node.op ~= "in" and node.op ~= "not in"
+      and is_pure(node.left) and is_pure(node.right)
+  elseif kind == "ListDisplay" then
+    for _, element in ipairs(node.elements) do
+      if not is_pure(element) then
+        return false
+      end
+    end
+  elseif kind == "DictDisplay" then
+    for _, entry in ipairs(node.entries) do
+      if not (is_pure(entry.key) and is_pure(entry.value)) then
+        return false
+      end
+    end
   end
   return true
 end
@@ -60,6 +78,15 @@ local function lower_function(fn, sites)
   end
 
   local lower_value, lower_operand
+
+  -- Moves a call or helper call into a temporary. It consumes its operands'
+  -- temporaries above `mark`, so its result reuses them.
+  local function spill(value, mark)
+    depth = mark
+    local temp = push_temp()
+    set(temp, value)
+    return temp
+  end
 
   -- `a and b` or `a or b` whose right operand needs statements: the right
   -- operand runs only in the branch that needs it.
@@ -110,8 +137,17 @@ local function lower_function(fn, sites)
       if (node.op == "and" or node.op == "or") and not is_pure(node.right) then
         return lower_short_circuit(node)
       end
+      local mark = depth
       local left = lower_operand(node.left)
       local right = lower_operand(node.right)
+      if node.op == "in" or node.op == "not in" then
+        local name = is_list(node.right.type) and "list_contains" or "dict_contains"
+        local contains = helper(name, { right, left }, node.span)
+        if node.op == "in" then
+          return contains
+        end
+        return { kind = "Not", operand = spill(contains, mark) }
+      end
       local name = binary_helper(node)
       if name then
         return helper(name, { left, right }, node.span)
@@ -136,6 +172,31 @@ local function lower_function(fn, sites)
         return helper(name, args, node.span)
       end
       return { kind = "Call", target = node.target, args = args, span = node.span }
+    elseif kind == "Index" then
+      local object = lower_operand(node.object)
+      local index = lower_operand(node.index)
+      local name = is_list(node.object.type) and "list_index" or "dict_index"
+      return helper(name, { object, index }, node.span)
+    elseif kind == "MethodCall" then
+      local args = { lower_operand(node.object) }
+      for _, arg in ipairs(node.args) do
+        args[#args + 1] = lower_operand(arg)
+      end
+      local prefix = is_list(node.object.type) and "list_" or "dict_"
+      return helper(prefix .. node.name, args, node.span)
+    elseif kind == "ListDisplay" then
+      local elements = {}
+      for i, element in ipairs(node.elements) do
+        elements[i] = lower_operand(element)
+      end
+      return { kind = "List", elements = elements }
+    elseif kind == "DictDisplay" then
+      local entries = {}
+      for _, entry in ipairs(node.entries) do
+        entries[#entries + 1] = lower_operand(entry.key)
+        entries[#entries + 1] = lower_operand(entry.value)
+      end
+      return { kind = "Dict", entries = entries }
     end
   end
 
@@ -147,11 +208,7 @@ local function lower_function(fn, sites)
     if value.kind ~= "Call" and value.kind ~= "Helper" then
       return value
     end
-    -- The call consumes its operands' temporaries, so its result reuses them.
-    depth = mark
-    local temp = push_temp()
-    set(temp, value)
-    return temp
+    return spill(value, mark)
   end
 
   local lower_block
@@ -161,6 +218,14 @@ local function lower_function(fn, sites)
     local kind = statement.kind
     if kind == "Assign" then
       set({ kind = "Local", symbol = statement.symbol }, lower_value(statement.value), statement.span)
+    elseif kind == "IndexAssign" then
+      -- Python evaluates the value, then the object, then the index.
+      local value = lower_operand(statement.value)
+      local object = lower_operand(statement.object)
+      local index = lower_operand(statement.index)
+      local name = is_list(statement.object.type) and "list_set" or "dict_set"
+      local set_item = helper(name, { object, index, value }, statement.span)
+      emit({ kind = "Eval", value = set_item, span = statement.span })
     elseif kind == "CallStmt" then
       -- float(x) lowers to x, which leaves nothing to evaluate as a statement.
       local value = lower_value(statement.call)
@@ -184,6 +249,31 @@ local function lower_function(fn, sites)
       node.condition = lower_operand(statement.condition)
       node.setup = out
       out = outer
+      local enclosing = loop
+      loop = node
+      node.body = lower_block(statement.body)
+      loop = enclosing
+      emit(node)
+    elseif kind == "For" then
+      labels = labels + 1
+      local node = { kind = "For", label = labels, span = statement.span }
+      node.target = { kind = "Local", symbol = statement.symbol }
+      -- The iterator is created once, after its operands are evaluated here.
+      local iterable = statement.iterable
+      if iterable.kind == "Call" and iterable.name == "range" then
+        local args = {}
+        for i, arg in ipairs(iterable.args) do
+          args[i] = lower_operand(arg)
+        end
+        if #args == 1 then
+          table.insert(args, 1, { kind = "Literal", value = 0 })
+        end
+        args[3] = args[3] or { kind = "Literal", value = 1 }
+        node.iterator = helper("range", args, iterable.span)
+      else
+        local name = is_list(iterable.type) and "list_items" or "dict_items"
+        node.iterator = helper(name, { lower_operand(iterable) }, statement.span)
+      end
       local enclosing = loop
       loop = node
       node.body = lower_block(statement.body)

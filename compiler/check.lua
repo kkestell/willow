@@ -29,11 +29,13 @@ local binary_types = {
   [">="] = ORDERING,
 }
 
--- Built-in signatures. Each takes one argument; print accepts every type.
+-- Built-in signatures. Each takes one argument; print and len check theirs
+-- separately. range is checked only as a `for` iterable.
 local builtins = {
   print = { result = "None" },
   int = { param = "float", result = "int" },
   float = { param = "int", result = "float" },
+  len = { result = "int" },
 }
 
 local OPTIONAL = " | None"
@@ -48,6 +50,50 @@ end
 
 local function assignable(target, source)
   return target == source or optional(target) and (source == "None" or source == base(target))
+end
+
+local SCALARS = { int = true, float = true, bool = true, str = true, None = true }
+
+-- Scalars and their optionals support `==` and printing.
+local function scalar(type)
+  return SCALARS[optional(type) and base(type) or type] == true
+end
+
+local function list_element(type)
+  return type:match("^list%[(.*)%]$")
+end
+
+local function dict_types(type)
+  return type:match("^dict%[(%a+), (.*)%]$")
+end
+
+-- The index and item types for indexing `type`, or nil if it cannot be indexed.
+local function index_types(type)
+  local element = list_element(type)
+  if element then
+    return "int", element
+  end
+  return dict_types(type)
+end
+
+-- The type of the items `for` and `in` see: list elements and dictionary keys.
+local function item_type(type)
+  return list_element(type) or (dict_types(type))
+end
+
+-- Parameter types and result type of method `name` on `type`, or nil.
+local function method_signature(type, name)
+  local element = list_element(type)
+  local key, value = dict_types(type)
+  if element and name == "append" then
+    return { element }, "None"
+  elseif element and name == "pop" then
+    return {}, element
+  elseif key and name == "get" then
+    return { key }, (value == "None" or optional(value)) and value or value .. OPTIONAL
+  elseif key and name == "pop" then
+    return { key }, value
+  end
 end
 
 local function expect_type(node, expected, actual)
@@ -97,21 +143,44 @@ local function replace(state, result)
   end
 end
 
--- Adds the symbol of every assignment in `body`, including nested blocks.
+-- Adds the symbol of every assignment and loop name in `body`, including
+-- nested blocks.
 local function assigned_symbols(body, result)
   for _, statement in ipairs(body) do
-    if statement.kind == "Assign" then
+    local kind = statement.kind
+    if kind == "Assign" or kind == "For" then
       result[statement.symbol] = true
-    elseif statement.kind == "If" then
+    end
+    if kind == "If" then
       assigned_symbols(statement.body, result)
       if statement.else_body then
         assigned_symbols(statement.else_body, result)
       end
-    elseif statement.kind == "While" then
+    elseif kind == "While" or kind == "For" then
       assigned_symbols(statement.body, result)
     end
   end
   return result
+end
+
+-- Narrowing before a loop holds in it and after it only for locals the loop
+-- does not assign.
+local function forget_loop_narrowing(state, loop)
+  for symbol in pairs(assigned_symbols({ loop }, {})) do
+    if state[symbol] then
+      state[symbol] = symbol.type
+    end
+  end
+end
+
+-- Records that `symbol` holds a value of `value_type`. A value that cannot be
+-- None narrows an optional local.
+local function assign(state, symbol, value_type)
+  if value_type == "None" or optional(value_type) then
+    state[symbol] = symbol.type
+  else
+    state[symbol] = value_type
+  end
 end
 
 local function arguments(count)
@@ -121,9 +190,16 @@ end
 local function check_function(fn)
   local return_type = fn.return_type.name
 
+  local check_expression
+
+  local function check_against(node, state, expected)
+    expect_type(node, expected, check_expression(node, state, expected))
+  end
+
   -- Returns the type of `node` in `state`, then the facts that hold when it is
-  -- true and when it is false.
-  local function check_expression(node, state)
+  -- true and when it is false. `expected`, when given, is the type a display
+  -- takes.
+  check_expression = function(node, state, expected)
     local kind = node.kind
     local type
     local true_facts, false_facts = NO_FACTS, NO_FACTS
@@ -178,7 +254,12 @@ local function check_function(fn)
       end
       local right, right_true, right_false = check_expression(node.right, right_state)
       if op == "==" or op == "!=" then
-        if assignable(left, right) or assignable(right, left) then
+        if scalar(left) and scalar(right) and (assignable(left, right) or assignable(right, left)) then
+          type = "bool"
+        end
+      elseif op == "in" or op == "not in" then
+        local item = item_type(right)
+        if item and scalar(left) and scalar(item) and (assignable(left, item) or assignable(item, left)) then
           type = "bool"
         end
       else
@@ -194,24 +275,94 @@ local function check_function(fn)
       end
     elseif kind == "Call" then
       local target = node.target
+      if target.kind == "Builtin" and target.name == "range" then
+        diag.error(node.span, "'range' can only be used as a 'for' iterable")
+      end
       local builtin = target.kind == "Builtin" and builtins[target.name]
       local count = builtin and 1 or #target.params
       if #node.args ~= count then
         diag.error(node.span, "'" .. node.name .. "' expects " .. arguments(count) .. ", received " .. #node.args)
       end
       for i, arg in ipairs(node.args) do
-        local arg_type = check_expression(arg, state)
         local param
         if builtin then
           param = builtin.param
         else
           param = target.params[i].type.name
         end
+        local arg_type = check_expression(arg, state, param)
         if param then
           expect_type(arg, param, arg_type)
         end
       end
+      local arg_type = builtin and node.args[1].type
+      if node.name == "print" and builtin and not scalar(arg_type) then
+        diag.error(node.args[1].span, "cannot print a value of type " .. arg_type)
+      elseif node.name == "len" and builtin and not (list_element(arg_type) or dict_types(arg_type)) then
+        diag.error(node.span, "'len' cannot be applied to " .. arg_type)
+      end
       type = builtin and builtin.result or target.return_type.name
+    elseif kind == "Index" then
+      local object = check_expression(node.object, state)
+      local index, item = index_types(object)
+      if not index then
+        diag.error(node.span, "cannot index a value of type " .. object)
+      end
+      check_against(node.index, state, index)
+      type = item
+    elseif kind == "MethodCall" then
+      local object = check_expression(node.object, state)
+      local params, result = method_signature(object, node.name)
+      if not params then
+        diag.error(node.span, "type " .. object .. " has no method '" .. node.name .. "'")
+      end
+      if #node.args ~= #params then
+        diag.error(node.span, "'" .. node.name .. "' expects " .. arguments(#params) .. ", received " .. #node.args)
+      end
+      for i, arg in ipairs(node.args) do
+        check_against(arg, state, params[i])
+      end
+      type = result
+    elseif kind == "ListDisplay" then
+      local want = expected and (optional(expected) and base(expected) or expected)
+      local element = want and list_element(want)
+      local elements = node.elements
+      local first = 1
+      if not element then
+        if #elements == 0 then
+          diag.error(node.span, "cannot infer the element type of an empty list")
+        end
+        element = check_expression(elements[1], state)
+        first = 2
+      end
+      for i = first, #elements do
+        check_against(elements[i], state, element)
+      end
+      type = "list[" .. element .. "]"
+    elseif kind == "DictDisplay" then
+      local want = expected and (optional(expected) and base(expected) or expected)
+      local key, value
+      if want then
+        key, value = dict_types(want)
+      end
+      local entries = node.entries
+      local first = 1
+      if not key then
+        if #entries == 0 then
+          diag.error(node.span, "cannot infer the key and value types of an empty dict")
+        end
+        key = check_expression(entries[1].key, state)
+        if key ~= "int" and key ~= "str" then
+          diag.error(entries[1].key.span, "dictionary keys must be int or str")
+        end
+        value = check_expression(entries[1].value, state)
+        first = 2
+      end
+      for i = first, #entries do
+        check_against(entries[i].key, state, key)
+        check_against(entries[i].value, state, value)
+      end
+      type = "dict[" .. key .. ", " .. value .. "]"
     end
     node.type = type
     return type, true_facts, false_facts
@@ -230,8 +381,9 @@ local function check_function(fn)
   local function check_statement(statement, state, in_loop)
     local kind = statement.kind
     if kind == "Assign" then
-      local value_type = check_expression(statement.value, state)
       local symbol = statement.symbol
+      local expected = statement.annotation and statement.annotation.name or symbol.type
+      local value_type = check_expression(statement.value, state, expected)
       if statement.annotation then
         if symbol.param then
           diag.error(statement.span, "cannot annotate parameter '" .. statement.name .. "'")
@@ -247,17 +399,20 @@ local function check_function(fn)
       else
         symbol.type = value_type
       end
-      -- Assigning a value that cannot be None narrows an optional local.
-      if value_type == "None" or optional(value_type) then
-        state[symbol] = symbol.type
-      else
-        state[symbol] = value_type
+      assign(state, symbol, value_type)
+    elseif kind == "IndexAssign" then
+      local object = check_expression(statement.object, state)
+      local index, item = index_types(object)
+      if not index then
+        diag.error(statement.span, "cannot index a value of type " .. object)
       end
+      check_against(statement.index, state, index)
+      check_against(statement.value, state, item)
     elseif kind == "CallStmt" then
       check_expression(statement.call, state)
     elseif kind == "Return" then
       if statement.value then
-        expect_type(statement.value, return_type, check_expression(statement.value, state))
+        check_against(statement.value, state, return_type)
       else
         expect_type(statement, return_type, "None")
       end
@@ -284,16 +439,41 @@ local function check_function(fn)
         replace(state, join(body_state, else_state))
       end
     elseif kind == "While" then
-      -- Narrowing before the loop holds in the condition, the body, and after
-      -- the loop only for locals the body does not assign.
-      for symbol in pairs(assigned_symbols(statement.body, {})) do
-        if state[symbol] then
-          state[symbol] = symbol.type
-        end
-      end
+      forget_loop_narrowing(state, statement)
       local true_facts = check_condition(statement.condition, state)
       -- The body may run zero times, so its assignments are not definite after the loop.
       check_block(statement.body, narrow(state, true_facts), true)
+    elseif kind == "For" then
+      -- The iterable is evaluated once, before the loop.
+      local iterable = statement.iterable
+      local item
+      if iterable.kind == "Call" and iterable.name == "range" then
+        local count = #iterable.args
+        if count < 1 or count > 3 then
+          diag.error(iterable.span, "'range' expects 1 to 3 arguments, received " .. count)
+        end
+        for _, arg in ipairs(iterable.args) do
+          check_against(arg, state, "int")
+        end
+        item = "int"
+      else
+        local iterable_type = check_expression(iterable, state)
+        item = item_type(iterable_type)
+        if not item then
+          diag.error(iterable.span, "cannot iterate over " .. iterable_type)
+        end
+      end
+      local symbol = statement.symbol
+      if symbol.type then
+        expect_type(statement, symbol.type, item)
+      else
+        symbol.type = item
+      end
+      forget_loop_narrowing(state, statement)
+      local body_state = copy(state)
+      assign(body_state, symbol, item)
+      -- As with `while`, the loop name and body assignments are not definite after the loop.
+      check_block(statement.body, body_state, true)
     end
     return false
   end

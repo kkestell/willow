@@ -1,0 +1,7 @@
+def age(ages: dict[str, int], name: str) -> int:
+    return ages.pop(name)
+
+def main() -> None:
+    ages = {"ada": 36}
+    print(age(ages, "ada"))
+    print(age(ages, "ada"))

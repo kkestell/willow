@@ -97,15 +97,15 @@ Section numbers refer to that document.
   - [x] Emit and runtime: `is None` and `is not None` as `nil` comparisons; printing optionals
   - [x] Tests: annotation forms and rejections, assignability, reassignment rules, narrowing after early return, in `elif`/`else`, through `and`/`or`/`not`, ended by assignment, and cleared by loop assignments
 
-- [ ] Lists, dictionaries, and `for` (§12, §15)
-  - [ ] Lexer: `[`, `]`, `{`, `}`, `.`; newlines inside brackets and braces produce no `NEWLINE`, `INDENT`, or `DEDENT`
-  - [ ] Parser: `list[T]` and `dict[K, V]` annotations; list and dict displays with trailing commas; postfix indexing and method calls; index assignment targets; `in` and `not in`; `for name in expression:`
-  - [ ] Bind: `len` and `range` as built-in names that file-level declarations cannot use and locals shadow; `for` names as function locals
-  - [ ] Check: display typing with and without an expected type; empty displays without one rejected; invariance; `int` and `str` keys only; operation types from the §15 table, including `get` on optional values; `in` on lists only for element types with `==`; `==` and `print` reject collections
-  - [ ] Check: `for` over lists, dictionaries, and `range`; `range` only as a `for` iterable; loop name typing; loop names not definitely assigned after the loop; `break` and `continue` in `for`
-  - [ ] Runtime: lists with an explicit length that store `None`; dictionaries in insertion order with stored `None` distinct from missing keys; helpers for indexing, index assignment, `append`, `pop`, `get`, `pop(k)`, and `in`, raising the §15 messages
-  - [ ] Lower and emit: display evaluation order; index assignment evaluating the right-hand side, the object, then the index; `for` evaluating its iterable once, rechecking list length each step, and detecting dictionary key changes; loop names keeping their last value; zero `range` step rejected
-  - [ ] Tests: display inference and rejections, invariance, stored `None`, out-of-range and negative indexes, missing keys, empty `pop`, dictionary order after replace and reinsert, iteration while appending and while changing keys, `range` forms, evaluation order, index expressions that do not narrow; a collections example
+- [x] Lists, dictionaries, and `for` (§12, §15)
+  - [x] Lexer: `[`, `]`, `{`, `}`, `.`; newlines inside brackets and braces produce no `NEWLINE`, `INDENT`, or `DEDENT`
+  - [x] Parser: `list[T]` and `dict[K, V]` annotations; list and dict displays with trailing commas; postfix indexing and method calls; index assignment targets; `in` and `not in`; `for name in expression:`
+  - [x] Bind: `len` and `range` as built-in names that file-level declarations cannot use and locals shadow; `for` names as function locals
+  - [x] Check: display typing with and without an expected type; empty displays without one rejected; invariance; `int` and `str` keys only; operation types from the §15 table, including `get` on optional values; `in` on lists only for element types with `==`; `==` and `print` reject collections
+  - [x] Check: `for` over lists, dictionaries, and `range`; `range` only as a `for` iterable; loop name typing; loop names not definitely assigned after the loop; `break` and `continue` in `for`
+  - [x] Runtime: lists with an explicit length that store `None`; dictionaries in insertion order with stored `None` distinct from missing keys; helpers for indexing, index assignment, `append`, `pop`, `get`, `pop(k)`, and `in`, raising the §15 messages
+  - [x] Lower and emit: display evaluation order; index assignment evaluating the right-hand side, the object, then the index; `for` evaluating its iterable once, rechecking list length each step, and detecting dictionary key changes; loop names keeping their last value; zero `range` step rejected
+  - [x] Tests: display inference and rejections, invariance, stored `None`, out-of-range and negative indexes, missing keys, empty `pop`, dictionary order after replace and reinsert, iteration while appending and while changing keys, `range` forms, evaluation order, index expressions that do not narrow; a collections example
 
 - [ ] Records (§16)
   - [ ] Parser: `class Name:` with one or more `name: Type` fields and nothing else; file scope holds `def` and `class`; field access and field assignment targets

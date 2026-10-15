@@ -1,0 +1,7 @@
+def count(step: int) -> None:
+    for i in range(0, 3, step):
+        print(i)
+
+def main() -> None:
+    count(2)
+    count(0)

@@ -112,6 +112,20 @@ return {
     eq("2:11: function 'print' cannot be used as a value", bind_error("def main() -> None:\n    print(print)\n"))
   end,
 
+  collection_builtins = function()
+    eq("1:5: cannot redefine built-in function 'len'", bind_error("def len(x: int) -> int:\n    return x\n" .. MAIN))
+    eq("1:5: cannot redefine built-in function 'range'", bind_error("def range() -> None:\n    pass\n" .. MAIN))
+    eq("3:14: cannot call local variable 'range'",
+      bind_error("def main() -> None:\n    range = 3\n    for i in range(3):\n        pass\n"))
+  end,
+
+  for_names_are_locals = function()
+    local program = bind_source("def f() -> None:\n    pass\ndef main() -> None:\n    for f in [1]:\n        print(f)\n")
+    local main = program.functions[2]
+    eq("f", main.locals[1].name)
+    eq(main.body[1].symbol, main.body[1].body[1].call.args[1].symbol)
+  end,
+
   call_targets_recorded = function()
     local program = bind_source(table.concat({
       "def f(n: int) -> int:",
