@@ -171,8 +171,8 @@ Section numbers refer to that document.
 
 ## Seventh slice
 
-- [ ] Standard library and JSON (docs/spec.md §12, §14)
-  - [ ] Loader: resolve `import name` from the entry file's directory, then from `lib/` in the installation when the entry directory has no `name.wlo`; a program's own module shadows a standard one; a module missing from both is an error at the import
-  - [ ] CLI: `check`, `run`, `compile`, and `build` find `lib/` from the installation, including through a symlinked launcher; compiled and built output bundle standard modules like a program's own
-  - [ ] `lib/json.wlo`: the `Json` alias, `JsonError`, `parse` per RFC 8259 with `int` and `float` numbers, repeated keys, surrogate pairs, unpaired surrogates rejected, and line and column in error messages; `dump` with no whitespace, dictionary order, float text from `str`, the escape rules, and `cannot encode` for NaN and infinities
-  - [ ] Tests: import resolution and shadowing, a missing module, standard modules in built output run outside the checkout; JSON round trips, number typing and the `int` boundary, escapes and non-ASCII text, rejected texts with their positions, non-finite floats; the §14 example
+- [x] Standard library and JSON (docs/spec.md §12, §14)
+  - [x] Loader: resolve `import name` from the entry file's directory, then from `lib/` in the installation when the entry directory has no `name.wlo`; a program's own module shadows a standard one; a module missing from both is an error at the import
+  - [x] CLI: `check`, `run`, `compile`, and `build` find `lib/` from the installation, including through a symlinked launcher; compiled and built output bundle standard modules like a program's own
+  - [x] `lib/json.wlo`: the `Json` alias, `JsonError`, `parse` per RFC 8259 with `int` and `float` numbers, repeated keys, surrogate pairs, unpaired surrogates rejected, and line and column in error messages; `dump` with no whitespace, dictionary order, float text from `str`, the escape rules, and `cannot encode` for NaN and infinities
+  - [x] Tests: import resolution and shadowing, a missing module, standard modules in built output run outside the checkout; JSON round trips, number typing and the `int` boundary, escapes and non-ASCII text, rejected texts with their positions, non-finite floats; the §14 example

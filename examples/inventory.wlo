@@ -1,0 +1,41 @@
+# Reads an inventory from JSON, totals its value, and writes a summary as JSON.
+
+import json
+
+def inventory() -> str:
+    return """{
+    "store": "Willow Hardware",
+    "items": [
+        {"name": "hammer", "price": 12.5, "count": 4},
+        {"name": "nails", "price": 0.05, "count": 1000},
+        {"name": "saw", "price": 24.0, "count": 0}
+    ]
+}"""
+
+def summarize(doc: json.Json) -> json.Json:
+    if not isinstance(doc, dict):
+        raise json.JsonError("expected an object")
+    items = doc["items"]
+    if not isinstance(items, list):
+        raise json.JsonError("expected a list of items")
+    total = 0.0
+    sold_out: list[json.Json] = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise json.JsonError("expected an item object")
+        name = item["name"]
+        price = item["price"]
+        count = item["count"]
+        if not isinstance(price, float) or not isinstance(count, int):
+            raise json.JsonError("expected a float price and an int count")
+        total = total + price * float(count)
+        if count == 0:
+            sold_out.append(name)
+    return {"store": doc["store"], "total": total, "sold_out": sold_out}
+
+def main() -> None:
+    print(json.dump(summarize(json.parse(inventory()))))
+    try:
+        json.parse('{"items": [1, 2,]}')
+    except json.JsonError as error:
+        print(error.message)

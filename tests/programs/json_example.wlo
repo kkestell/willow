@@ -1,0 +1,10 @@
+import json
+
+def main() -> None:
+    doc = json.parse('{"name": "Willow", "ports": [80, 443]}')
+    if isinstance(doc, dict):
+        ports = doc["ports"]
+        if isinstance(ports, list):
+            print(len(ports))       # 2
+    reply: json.Json = {"ok": True, "items": [1, 2.5, None]}
+    print(json.dump(reply))         # {"ok":true,"items":[1,2.5,null]}

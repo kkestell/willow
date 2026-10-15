@@ -1,0 +1,93 @@
+import json
+
+def kind(value: json.Json) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, int):
+        return "int"
+    if isinstance(value, float):
+        return "float"
+    if isinstance(value, str):
+        return "str"
+    if isinstance(value, list):
+        return "list"
+    return "dict"
+
+def round_trip(text: str) -> None:
+    try:
+        value = json.parse(text)
+        print(kind(value) + " " + json.dump(value))
+    except json.JsonError as error:
+        print(error.message)
+
+def encode(value: json.Json) -> None:
+    try:
+        print(json.dump(value))
+    except json.JsonError as error:
+        print(error.message)
+
+def main() -> None:
+    # Values and nesting
+    round_trip("null")
+    round_trip("true")
+    round_trip("false")
+    round_trip("\"text\"")
+    round_trip("[]")
+    round_trip("{}")
+    round_trip(" \t\r\n[ 1 , [ ] , { \"a\" : { \"b\" : [ null ] } } ] \n")
+
+    # Numbers
+    round_trip("0")
+    round_trip("-0")
+    round_trip("9007199254740991")
+    round_trip("-9007199254740991")
+    round_trip("9007199254740992")
+    round_trip("1.0")
+    round_trip("1e2")
+    round_trip("-1E-2")
+    round_trip("1e20")
+    round_trip("0.1")
+    round_trip("1e400")
+
+    # Strings
+    round_trip("\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"")
+    round_trip("\"\\u00e9\\u00E9 \\ud83c\\udf33 \\u0041\"")
+    round_trip("\"é🌳\"")
+    round_trip("\"\\u0001\\u001f\\u0020\"")
+
+    # Repeated keys keep their first position and last value
+    round_trip("{\"a\": 1, \"b\": 2, \"a\": 3}")
+
+    # Invalid text
+    round_trip("")
+    round_trip("   ")
+    round_trip("[1, 2")
+    round_trip("[1 2]")
+    round_trip("{\"a\" 1}")
+    round_trip("{1: 2}")
+    round_trip("{\"a\": 1,}")
+    round_trip("tru")
+    round_trip("nul!")
+    round_trip("01")
+    round_trip("1.")
+    round_trip(".5")
+    round_trip("-")
+    round_trip("1e")
+    round_trip("+1")
+    round_trip("\"\\x\"")
+    round_trip("\"\\u12g4\"")
+    round_trip("\"\\ud800\"")
+    round_trip("\"\\ud800\\u0041\"")
+    round_trip("\"\\udc00\"")
+    round_trip("\"a\tb\"")
+    round_trip("\"open")
+    round_trip("1 2")
+    round_trip("{\n  \"a\": [\n    1,\n    x\n  ]\n}")
+
+    # Encoding
+    encode({"é": "🌳", "list": [1, 2.0, -0.0, 1e-05, None, True]})
+    encode(float("inf"))
+    encode(float("-inf"))
+    encode(float("nan"))

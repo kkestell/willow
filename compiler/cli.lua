@@ -127,7 +127,7 @@ end
 -- Checks the whole program and returns its modules and, for every command but
 -- check, the generated Lua and its loaded chunk.
 local function translate(command, path, source)
-  local modules = loader.load(path, source)
+  local modules = loader.load(path, source, root .. "/lib/")
   bind.bind(modules)
   check.check(modules)
   if command ~= "check" then

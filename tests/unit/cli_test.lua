@@ -37,6 +37,8 @@ local LUAJIT = ROOT .. "/vendor/luajit/src/luajit"
 local USAGE = "usage: willow check <file>\n       willow run <file> [args...]\n"
   .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>\n"
 
+local JSON_PROGRAM = "import json\ndef main() -> None:\n    print(json.dump(json.parse('[1, 2.5]')))\n"
+
 -- Runs `command` in `dir`; returns its exit status, stdout, and stderr.
 local function sh(dir, command)
   local out, err = os.tmpname(), os.tmpname()
@@ -330,6 +332,32 @@ return {
       status, stdout, stderr = willow(dir, "run " .. example .. " </dev/null")
       eq(2, status)
       eq("usage: number <output>\n", stderr)
+    end)
+  end,
+
+  standard_library_build_runs_elsewhere = function()
+    in_temp_dir(function(dir, base)
+      write(dir .. "/prog.wlo", JSON_PROGRAM)
+      local run_status, run_out = willow(dir, "run prog.wlo")
+      eq(0, run_status)
+      eq("[1,2.5]\n", run_out)
+      eq(0, (willow(dir, "build prog.wlo -o out")))
+      local elsewhere = base .. "/elsewhere"
+      os.execute("mkdir " .. quote(elsewhere))
+      os.execute("cp " .. quote(dir .. "/out") .. " " .. quote(elsewhere .. "/copy"))
+      local status, stdout = sh(elsewhere, "./copy")
+      eq(0, status)
+      eq(run_out, stdout)
+    end)
+  end,
+
+  standard_library_through_symlink = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/prog.wlo", JSON_PROGRAM)
+      os.execute("ln -s " .. quote(WILLOW) .. " " .. quote(dir .. "/willow"))
+      local status, stdout = sh(dir, "./willow run prog.wlo")
+      eq(0, status)
+      eq("[1,2.5]\n", stdout)
     end)
   end,
 }
