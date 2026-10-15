@@ -19,7 +19,7 @@ $(LUAJIT): | $(LUAJIT_DIR)
 	$(MAKE) -C $(LUAJIT_DIR) $(LUAJIT_FLAGS)
 
 test: $(LUAJIT)
-	$(LUAJIT) tests/run.lua $(wildcard tests/*_test.lua)
+	$(LUAJIT) tests/run.lua $(wildcard tests/unit/*_test.lua) $(wildcard tests/programs/*.wlo)
 
 clean:
 	$(MAKE) -C $(LUAJIT_DIR) $(LUAJIT_FLAGS) clean

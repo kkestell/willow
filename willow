@@ -1,0 +1,12 @@
+#!/bin/sh
+# Follow symlinks so a link installed elsewhere still finds the checkout.
+self=$0
+while [ -L "$self" ]; do
+    link=$(readlink "$self")
+    case $link in
+        /*) self=$link ;;
+        *) self=$(dirname "$self")/$link ;;
+    esac
+done
+root=$(cd "$(dirname "$self")" && pwd -P)
+exec "$root/vendor/luajit/src/luajit" "$root/compiler/cli.lua" "$@"

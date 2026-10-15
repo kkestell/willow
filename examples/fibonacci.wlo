@@ -1,0 +1,29 @@
+# Fibonacci numbers computed two ways: by the recursive definition and by a
+# loop that keeps the last two values.
+
+def fib_recursive(n: int) -> int:
+    if n < 2:
+        return n
+    return fib_recursive(n - 1) + fib_recursive(n - 2)
+
+def fib_loop(n: int) -> int:
+    if n == 0:
+        return 0
+    previous: int = 0
+    current: int = 1
+    count = 1
+    while count < n:
+        next_value = previous + current
+        previous = current
+        current = next_value
+        count = count + 1
+    return current
+
+def main() -> None:
+    n = 0
+    while n <= 10:
+        print(fib_loop(n))
+        n = n + 1
+    print(fib_recursive(20) == fib_loop(20))
+    # The largest Fibonacci number in Willow's integer range.
+    print(fib_loop(78))

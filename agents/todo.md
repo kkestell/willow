@@ -3,12 +3,12 @@
 Milestones and tasks for implementing the first slice described in `willow.md`.
 Section numbers refer to that document.
 
-- [ ] Scaffold
-  - [ ] `willow` launcher that locates its installation and runs `compiler/cli.lua` on `vendor/luajit/src/luajit`
-  - [ ] `compiler/` modules per the §9 pass pipeline (`cli`, `lexer`, `parser`, `bind`, `check`, `lower`, `emit`) plus small shared modules for spans, diagnostics, and AST nodes
-  - [ ] `runtime/core.lua`
-  - [ ] `examples/hello.wlo` and `examples/sums.wlo` (the §2 program)
-  - [ ] Extend `tests/run.lua` and `make test` to cover `tests/unit/` and `tests/programs/`; program tests pair a `.wlo` file with expected stdout, exit status, and diagnostics
+- [x] Scaffold
+  - [x] `willow` launcher that locates its installation and runs `compiler/cli.lua` on `vendor/luajit/src/luajit`
+  - [x] `compiler/` modules per the §9 pass pipeline (`cli`, `lexer`, `parser`, `bind`, `check`, `lower`, `emit`) plus small shared modules for spans, diagnostics, and AST nodes
+  - [x] `runtime/core.lua`
+  - [x] `examples/hello.wlo` and `examples/sums.wlo` (the §2 program)
+  - [x] Extend `tests/run.lua` and `make test` to cover `tests/unit/` and `tests/programs/`; program tests pair a `.wlo` file with expected stdout, exit status, and diagnostics
 
 - [ ] Lexer (§3, §4)
   - [ ] Validate UTF-8; accept LF and CRLF; reject bare CR anywhere, including comments and strings
