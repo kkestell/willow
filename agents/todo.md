@@ -150,3 +150,21 @@ Section numbers refer to that document.
   - [x] Runtime: a new `list[str]` of arguments passed to `main`, with invalid UTF-8 terminating before `main` runs; `input` removing `\n` and `\r\n` and returning `None` at end of input; `eprint` to stderr; whole-file `read_file` and `write_file` raising `OSError` with the host reason; `invalid UTF-8` as `ValueError`; `exit` with its status range check and without running `finally`; stdin read failures terminating like output failures
   - [x] CLI and stub: `run` passes everything after the source path verbatim; `check`, `compile`, and `build` still reject extra arguments; compiled Lua and built executables receive their own command-line arguments
   - [x] Tests: arguments through `run`, compiled, and built output, including ones that begin with `-`; `input` with LF, CRLF, a missing final newline, and empty input; file round trips, a missing file, and a caught `OSError`; invalid UTF-8; `exit` statuses, out-of-range status, unreachable statements after it, and skipped `finally`; the §20 example
+
+## Fifth slice
+
+- [ ] Text conversions (docs/spec.md §6, §7)
+  - [ ] Bind: `ord` and `chr` as built-in names
+  - [ ] Check: `int(str)` and `float(str)` alongside the numeric conversions; `ord(str) -> int` and `chr(int) -> str`
+  - [ ] Runtime: `int(str)` accepting a sign and decimal digits, rejecting other text and out-of-range values with `cannot convert str to int`; `float(str)` accepting the decimal forms, `inf`, `infinity`, and `nan` in any case, rounding to nearest and overflowing to infinity, rejecting other text (including whitespace, underscores, and hexadecimal) with `cannot convert str to float`; `ord` raising `expected one character`; `chr` raising `invalid code point` for surrogates and values outside 0 through 0x10FFFF
+  - [ ] Tests: accepted and rejected forms for each conversion checked against Python, `int` range boundaries, float rounding and overflow, non-ASCII `ord` and `chr` round trips, surrogate and out-of-range `chr`
+
+## Sixth slice
+
+- [ ] Unions and type aliases (docs/spec.md §3, §4, §9)
+  - [ ] Parser: `type Name = Type` declarations at file scope; unions of any members in any order; `module.Alias` in annotations
+  - [ ] Bind: aliases in the file-level namespace with functions and records; forward, self, and cross-module references; `_` aliases private; locals shadowing aliases but not annotations; `isinstance` as a built-in name
+  - [ ] Check: aliases equal to their expansions, including recursive ones; aliases that expand to themselves outside `list` or `dict` rejected; union flattening, member order ignored, members assignable to one another and second `list` or `dict` members rejected; assignability to and from unions; printable and `==` rules for unions; displays taking a union's list or dict member as the expected type; `isinstance` operands and class names
+  - [ ] Check: narrowing generalized from optionals to member sets: `is None`, `is not None`, and `isinstance` facts, joins after `if` as the union of fall-through branches, assignment of a single member, loops, and `try`
+  - [ ] Runtime: union values that distinguish `int` from `float` and records of different classes; `isinstance`; `==` false across member types; `print`, `str`, and f-strings formatting by the held value's type
+  - [ ] Tests: alias declarations and rejections, recursive JSON-shaped values built from displays, assignability and invariance, `isinstance` narrowing through `if`/`elif`/`else`, `and`, `or`, `not`, and assignment, int and float members printed and compared, records across modules; the §4 example

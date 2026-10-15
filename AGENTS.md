@@ -3,8 +3,8 @@ Keep this document accurate and short.
 ## Purpose and scope
 
 Willow is a small, statically typed language with Python-like syntax that compiles
-to readable Lua for LuaJIT. Source files use `.wlo`. `willow.md` defines the first
-three slices.
+to readable Lua for LuaJIT. Source files use `.wlo`. `docs/spec.md` specifies the
+language.
 
 - Build the small language we need now. This is an early implementation, not a
   production-hardening exercise.
@@ -48,7 +48,7 @@ three slices.
 
 ## Documentation
 
-- `willow.md` describes the language and system. `README.md` explains setup and
+- `docs/spec.md` specifies the language. `README.md` explains setup and
   usage. `AGENTS.md` guides contributors. Plans and work records belong in
   `agents/` when needed.
 - Keep each fact in one place. Most code changes need no new documentation file,

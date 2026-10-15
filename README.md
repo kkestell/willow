@@ -2,7 +2,7 @@
 
 Willow is a small, statically typed language with Python-like syntax that
 compiles to readable Lua and runs on LuaJIT. Source files use `.wlo`.
-[willow.md](willow.md) describes the language.
+[docs/spec.md](docs/spec.md) specifies the language.
 
 ## Setup
 
