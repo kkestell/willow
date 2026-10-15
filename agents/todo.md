@@ -63,11 +63,11 @@ Section numbers refer to that document.
   - [x] Runtime helpers inlined into the output: checked integer ops rejecting non-finite and out-of-range results and normalizing `-0.0`; `print` formatting for all four types; write and flush failures reported as runtime errors
   - [x] Structured errors `{category, message, location}`; `xpcall` handler prints `file:line:col: error: message` plus Willow caller frames, hides runtime and wrapper frames, and wraps raw VM string errors with the innermost Willow frame
 
-- [ ] CLI (§8)
-  - [ ] `check`, `run`, `build -o <path>`; unknown options and extra arguments rejected; exit 0 on success and 1 otherwise; diagnostics on stderr, program output on stdout
-  - [ ] `run` compiles in memory and executes only after the full source checks
-  - [ ] `build` writes a temporary sibling, flushes, and renames atomically; a failed build leaves existing output intact
-  - [ ] Output paths that alias the input rejected via `ffi` `stat` device and inode comparison
+- [x] CLI (§8)
+  - [x] `check`, `run`, `build -o <path>`; unknown options and extra arguments rejected; exit 0 on success and 1 otherwise; diagnostics on stderr, program output on stdout
+  - [x] `run` compiles in memory and executes only after the full source checks
+  - [x] `build` writes a temporary sibling, flushes, and renames atomically; a failed build leaves existing output intact
+  - [x] Output paths that alias the input rejected via `ffi` `stat` device and inode comparison
 
 - [ ] Tests and completion (§11)
   - [ ] Lexer/parser tests: indentation, tabs, blank and comment-only lines, bare CR, missing final newline, UTF-8, escapes, precedence, chained comparisons, parenthesized call targets, multiline calls, malformed blocks, unsupported syntax
