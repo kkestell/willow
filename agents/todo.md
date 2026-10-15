@@ -47,12 +47,12 @@ Section numbers refer to that document.
   - [x] Control transfer: an `if` whose branches all transfer is itself a transfer; statements after a transfer are unreachable errors; non-`None` functions return on every path by structural analysis; `break`/`continue` outside a loop are errors
   - [x] Record operation types for lowering; collect independent errors; report unexpected compiler failures as internal compiler errors
 
-- [ ] Lower (§9)
-  - [ ] Left-to-right evaluation with explicit temporaries for operands and arguments
-  - [ ] Short-circuit `and`/`or` as branches
-  - [ ] Checked integer `+ - *` and negation as runtime helper calls carrying a site ID
-  - [ ] `return call()` assigns to a temporary before returning; every call yields exactly one value
-  - [ ] `break` and `continue` as labeled loop transfers; `print` as a built-in call
+- [x] Lower (§9)
+  - [x] Left-to-right evaluation with explicit temporaries for operands and arguments
+  - [x] Short-circuit `and`/`or` as branches
+  - [x] Checked integer `+ - *` and negation as runtime helper calls carrying a site ID
+  - [x] `return call()` assigns to a temporary before returning; every call yields exactly one value
+  - [x] `break` and `continue` as labeled loop transfers; `print` as a built-in call
 
 - [ ] Emit and runtime (§8, §9, §10)
   - [ ] Forward-declare every user function as a local at file top; mangle user names; `__wlo_` prefix for helpers, temporaries, and labels
