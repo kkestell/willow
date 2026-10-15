@@ -245,10 +245,10 @@ local function __wlo_format_float(x)
 end
 
 -- Flushes every line so a write failure is reported at the print that hit it.
-local function __wlo_write(text, site)
-  local ok, err = io.stdout:write(text, "\n")
+local function __wlo_write(file, text, site)
+  local ok, err = file:write(text, "\n")
   if ok then
-    ok, err = io.stdout:flush()
+    ok, err = file:flush()
   end
   if not ok then
     __wlo_host_fail("cannot write output: " .. tostring(err), site)
@@ -277,11 +277,112 @@ local function __wlo_str_float(value)
 end
 
 local function __wlo_print(value, site)
-  __wlo_write(__wlo_str(value), site)
+  __wlo_write(io.stdout, __wlo_str(value), site)
 end
 
 local function __wlo_print_float(value, site)
-  __wlo_write(__wlo_str_float(value), site)
+  __wlo_write(io.stdout, __wlo_str_float(value), site)
+end
+
+local function __wlo_eprint(value, site)
+  __wlo_write(io.stderr, __wlo_str(value), site)
+end
+
+local function __wlo_eprint_float(value, site)
+  __wlo_write(io.stderr, __wlo_str_float(value), site)
+end
+
+-- Well-formed multibyte UTF-8 sequences: no overlong forms, surrogates, or
+-- code points above U+10FFFF.
+local __wlo_UTF8_SEQUENCES = {
+  "^[\194-\223][\128-\191]",
+  "^\224[\160-\191][\128-\191]",
+  "^[\225-\236\238\239][\128-\191][\128-\191]",
+  "^\237[\128-\159][\128-\191]",
+  "^\240[\144-\191][\128-\191][\128-\191]",
+  "^[\241-\243][\128-\191][\128-\191][\128-\191]",
+  "^\244[\128-\143][\128-\191][\128-\191]",
+}
+
+local function __wlo_valid_utf8(text)
+  local pos = text:find("[\128-\255]")
+  while pos do
+    local char
+    for _, pattern in ipairs(__wlo_UTF8_SEQUENCES) do
+      char = text:match(pattern, pos)
+      if char then
+        break
+      end
+    end
+    if not char then
+      return false
+    end
+    pos = text:find("[\128-\255]", pos + #char)
+  end
+  return true
+end
+
+-- Reads with "*L" so that only a \r before a \n is removed.
+local function __wlo_input(site)
+  local line, err = io.stdin:read("*L")
+  if err then
+    __wlo_host_fail("cannot read input: " .. tostring(err), site)
+  end
+  if not line then
+    return nil
+  end
+  if line:sub(-1) == "\n" then
+    line = line:sub(-2, -2) == "\r" and line:sub(1, -3) or line:sub(1, -2)
+  end
+  if not __wlo_valid_utf8(line) then
+    __wlo_fail("ValueError", "invalid UTF-8", site)
+  end
+  return line
+end
+
+-- io.open reports "<path>: <reason>"; reads and writes report the reason alone.
+local function __wlo_read_file(path, site)
+  local file, err = io.open(path, "rb")
+  if not file then
+    __wlo_fail("OSError", "cannot read " .. path .. ": " .. err:sub(#path + 3), site)
+  end
+  local text
+  text, err = file:read("*a")
+  file:close()
+  if not text then
+    __wlo_fail("OSError", "cannot read " .. path .. ": " .. tostring(err), site)
+  end
+  if not __wlo_valid_utf8(text) then
+    __wlo_fail("ValueError", "invalid UTF-8", site)
+  end
+  return text
+end
+
+local function __wlo_write_file(path, text, site)
+  local file, err = io.open(path, "wb")
+  if not file then
+    __wlo_fail("OSError", "cannot write " .. path .. ": " .. err:sub(#path + 3), site)
+  end
+  local ok
+  ok, err = file:write(text)
+  if ok then
+    ok, err = file:flush()
+  end
+  local closed, close_err = file:close()
+  if ok and not closed then
+    ok, err = closed, close_err
+  end
+  if not ok then
+    __wlo_fail("OSError", "cannot write " .. path .. ": " .. tostring(err), site)
+  end
+end
+
+-- os.exit ends the process here, so no pending finally clause runs.
+local function __wlo_exit(status, site)
+  if status < 0 or status > 255 then
+    __wlo_fail("ValueError", "exit status out of range", site)
+  end
+  os.exit(status)
 end
 
 -- Lists hold their elements at 1..n so that stored None (nil) counts.
@@ -549,8 +650,20 @@ local function __wlo_report(err)
   return table.concat(lines, "\n")
 end
 
-local function __wlo_run(main)
-  local ok, err = xpcall(main, __wlo_catch)
+-- The program arguments as a Willow list, checked before main runs.
+local function __wlo_args(...)
+  local args = __wlo_list({ ... }, select("#", ...))
+  for i = 1, args.n do
+    if not __wlo_valid_utf8(args[i]) then
+      io.stderr:write("error: argument ", i, " is not valid UTF-8\n")
+      os.exit(1)
+    end
+  end
+  return args
+end
+
+local function __wlo_run(main, ...)
+  local ok, err = xpcall(main, __wlo_catch, ...)
   if not ok then
     io.stderr:write(__wlo_report(err), "\n")
     os.exit(1)

@@ -77,8 +77,11 @@ return {
 
   main_required = function()
     eq("1:1: program has no main function", bind_error("def f() -> None:\n    pass\n"))
-    eq("1:5: main must take no parameters and return None", bind_error("def main(x: int) -> None:\n    pass\n"))
-    eq("1:5: main must take no parameters and return None", bind_error("def main() -> int:\n    return 0\n"))
+    bind_source("def main(args: list[str]) -> None:\n    pass\n")
+    local message = "1:5: main must take no parameters or one list[str] parameter and return None"
+    eq(message, bind_error("def main(x: int) -> None:\n    pass\n"))
+    eq(message, bind_error("def main(a: list[str], b: int) -> None:\n    pass\n"))
+    eq(message, bind_error("def main() -> int:\n    return 0\n"))
   end,
 
   locals_cover_the_whole_body = function()

@@ -376,7 +376,9 @@ function M.emit(lowered)
     quoted[i] = M.quote(path)
   end
   line(0, "__wlo_paths = { " .. table.concat(quoted, ", ") .. " }")
-  line(0, "__wlo_run(" .. M.mangle("main") .. ")")
+  -- The program arguments arrive as the chunk's varargs.
+  local main = entry.declarations.main
+  line(0, "__wlo_run(" .. M.mangle("main") .. (#main.params > 0 and ", __wlo_args(...)" or "") .. ")")
   return table.concat(lines, "\n") .. "\n"
 end
 

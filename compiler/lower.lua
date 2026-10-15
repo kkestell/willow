@@ -207,8 +207,8 @@ local function lower_function(fn, sites)
         local name = node.name
         if name == "str" then
           return text(args[1], node.args[1].type)
-        elseif name == "print" and is_float(node.args[1].type) then
-          name = "print_float"
+        elseif (name == "print" or name == "eprint") and is_float(node.args[1].type) then
+          name = name .. "_float"
         end
         return helper(name, args, node.span)
       end

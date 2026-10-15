@@ -1,0 +1,6 @@
+def main() -> None:
+    eprint(1)
+    eprint(2.5)
+    eprint("text")
+    eprint(None)
+    raise ValueError("done")

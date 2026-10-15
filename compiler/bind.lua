@@ -10,12 +10,17 @@ local builtins = {
   str = { kind = "Builtin", name = "str" },
   len = { kind = "Builtin", name = "len" },
   range = { kind = "Builtin", name = "range" },
+  input = { kind = "Builtin", name = "input" },
+  eprint = { kind = "Builtin", name = "eprint" },
+  read_file = { kind = "Builtin", name = "read_file" },
+  write_file = { kind = "Builtin", name = "write_file" },
+  exit = { kind = "Builtin", name = "exit" },
 }
 
 -- The built-in exception classes, records with only a `message` field.
 local exceptions = {}
 M.exceptions = exceptions
-for name in ("Exception OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError"):gmatch("%S+") do
+for name in ("Exception OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError"):gmatch("%S+") do
   exceptions[name] = {
     kind = "Record",
     name = name,
@@ -342,8 +347,9 @@ function M.bind(modules)
   if not (main and main.kind == "Function") then
     diag.error(entry.span, "program has no main function")
   end
-  if #main.params > 0 or main.return_type.name ~= "None" then
-    diag.error(main.span, "main must take no parameters and return None")
+  local params = main.params
+  if #params > 1 or #params == 1 and params[1].type.name ~= "list[str]" or main.return_type.name ~= "None" then
+    diag.error(main.span, "main must take no parameters or one list[str] parameter and return None")
   end
 
   for _, module in ipairs(modules) do

@@ -34,7 +34,7 @@ end
 local ROOT = capture("cd " .. quote(arg[0]:match("^(.*)/tests/[^/]*$") or ".") .. " && pwd"):gsub("\n$", "")
 local WILLOW = ROOT .. "/willow"
 local LUAJIT = ROOT .. "/vendor/luajit/src/luajit"
-local USAGE = "usage: willow check <file>\n       willow run <file>\n"
+local USAGE = "usage: willow check <file>\n       willow run <file> [args...]\n"
   .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>\n"
 
 -- Runs `command` in `dir`; returns its exit status, stdout, and stderr.
@@ -74,8 +74,10 @@ return {
         { "", "error: missing command" },
         { "make x.wlo", "error: unknown command 'make'" },
         { "run -x x.wlo", "error: unknown option '-x'" },
-        { "run a.wlo b.wlo", "error: unexpected argument 'b.wlo'" },
-        { "run a.wlo -o out.lua", "error: unknown option '-o'" },
+        { "check a.wlo b.wlo", "error: unexpected argument 'b.wlo'" },
+        { "check a.wlo -o out.lua", "error: unknown option '-o'" },
+        { "compile a.wlo -o out.lua b.wlo", "error: unexpected argument 'b.wlo'" },
+        { "build a.wlo -o out b.wlo", "error: unexpected argument 'b.wlo'" },
         { "compile a.wlo", "error: compile needs -o <output>" },
         { "build a.wlo", "error: build needs -o <output>" },
         { "compile a.wlo -o", "error: -o needs a path" },
@@ -241,6 +243,93 @@ return {
       local status, _, stderr = willow(dir, "compile prog.wlo -o missing/out.lua")
       eq(1, status)
       assert(stderr:find("error: cannot write missing/out.lua: ", 1, true) == 1, stderr)
+    end)
+  end,
+
+  arguments_reach_main = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/prog.wlo", "def main(args: list[str]) -> None:\n    print(len(args))\n    for a in args:\n        print(a)\n")
+      local args = " a -o --x 'b c'"
+      local expected = "4\na\n-o\n--x\nb c\n"
+      local status, stdout = willow(dir, "run prog.wlo" .. args)
+      eq(0, status)
+      eq(expected, stdout)
+      eq(0, (willow(dir, "compile prog.wlo -o out.lua")))
+      status, stdout = sh(dir, quote(LUAJIT) .. " out.lua" .. args)
+      eq(0, status)
+      eq(expected, stdout)
+      eq(0, (willow(dir, "build prog.wlo -o out")))
+      status, stdout = sh(dir, "./out" .. args)
+      eq(0, status)
+      eq(expected, stdout)
+    end)
+  end,
+
+  invalid_utf8_argument = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/prog.wlo", "def main(args: list[str]) -> None:\n    print(1)\n")
+      local status, stdout, stderr = willow(dir, "run prog.wlo ok \"$(printf '\\377')\"")
+      eq(1, status)
+      eq("", stdout)
+      eq("error: argument 2 is not valid UTF-8\n", stderr)
+    end)
+  end,
+
+  exit_status = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/three.wlo", "def main() -> None:\n    print(1)\n    exit(3)\n")
+      local status, stdout, stderr = willow(dir, "run three.wlo")
+      eq(3, status)
+      eq("1\n", stdout)
+      eq("", stderr)
+      eq(0, (willow(dir, "build three.wlo -o three")))
+      status, stdout = sh(dir, "./three")
+      eq(3, status)
+      eq("1\n", stdout)
+      write(dir .. "/finally.wlo", "def main() -> None:\n    try:\n        exit(0)\n    finally:\n        print(1)\n")
+      status, stdout = willow(dir, "run finally.wlo")
+      eq(0, status)
+      eq("", stdout)
+      for _, value in ipairs({ "256", "-1" }) do
+        write(dir .. "/range.wlo", "def main() -> None:\n    exit(" .. value .. ")\n")
+        status, stdout, stderr = willow(dir, "run range.wlo")
+        eq(1, status)
+        eq("range.wlo:2:5: error: ValueError: exit status out of range\n  in main at range.wlo:2:5\n", stderr)
+      end
+    end)
+  end,
+
+  file_round_trip = function()
+    in_temp_dir(function(dir)
+      local text = "caf\195\169\r\nline\n"
+      write(dir .. "/prog.wlo", table.concat({
+        "def main() -> None:",
+        "    text = 'caf\\u00e9\\r\\nline\\n'",
+        "    write_file('out.txt', text)",
+        "    print(read_file('out.txt') == text)",
+        "    try:",
+        "        write_file('missing/out.txt', text)",
+        "    except OSError as error:",
+        "        print(error.message.startswith('cannot write missing/out.txt: '))",
+      }, "\n"))
+      local status, stdout = willow(dir, "run prog.wlo")
+      eq(0, status)
+      eq("True\nTrue\n", stdout)
+      eq(text, read(dir .. "/out.txt"))
+    end)
+  end,
+
+  number_example = function()
+    in_temp_dir(function(dir)
+      local example = quote(ROOT .. "/examples/number.wlo")
+      local status, stdout = sh(dir, "printf 'apple\\nbanana\\n' | " .. quote(WILLOW) .. " run " .. example .. " out.txt")
+      eq(0, status)
+      eq("wrote 2 lines\n", stdout)
+      eq("1: apple\n2: banana\n", read(dir .. "/out.txt"))
+      local stderr
+      status, stdout, stderr = willow(dir, "run " .. example .. " </dev/null")
+      eq(2, status)
+      eq("usage: number <output>\n", stderr)
     end)
   end,
 }

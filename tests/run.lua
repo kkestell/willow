@@ -6,7 +6,8 @@
 -- A `.wlo` file is a program test, run as `willow run NAME.wlo` from its own
 -- directory. Optional `NAME.out` and `NAME.err` hold the expected stdout and
 -- stderr; a missing file means no output. The expected exit status is 1 when
--- `NAME.err` exists and 0 otherwise.
+-- `NAME.err` exists and 0 otherwise. Stdin is `NAME.in` when it exists and
+-- empty otherwise.
 
 local root = (arg[0]:match("^(.*)/tests/[^/]*$") or ".")
 package.path = root .. "/?.lua"
@@ -40,8 +41,9 @@ local function run_program(file)
   local dir, name = file:match("^(.-)([^/]*)$")
   local base = file:sub(1, -5)
   local out, err = os.tmpname(), os.tmpname()
-  local shell = io.popen(string.format("cd %s && %s run %s >%s 2>%s; echo $?",
-    quote(dir == "" and "." or dir), quote(willow), quote(name), quote(out), quote(err)))
+  local input = read(base .. ".in") and name:sub(1, -5) .. ".in" or "/dev/null"
+  local shell = io.popen(string.format("cd %s && %s run %s <%s >%s 2>%s; echo $?",
+    quote(dir == "" and "." or dir), quote(willow), quote(name), quote(input), quote(out), quote(err)))
   local status = shell:read("*n")
   shell:close()
   local stdout, stderr = read(out), read(err)

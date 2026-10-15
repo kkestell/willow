@@ -30,14 +30,19 @@ local binary_types = {
   [">="] = ORDERING,
 }
 
--- Built-in signatures. Each takes one argument; print, str, and len check
--- theirs separately. range is checked only as a `for` iterable.
+-- Built-in signatures. An "any" parameter is checked separately by name. range
+-- is checked only as a `for` iterable.
 local builtins = {
-  print = { result = "None" },
-  str = { result = "str" },
-  int = { param = "float", result = "int" },
-  float = { param = "int", result = "float" },
-  len = { result = "int" },
+  print = { params = { "any" }, result = "None" },
+  eprint = { params = { "any" }, result = "None" },
+  str = { params = { "any" }, result = "str" },
+  int = { params = { "float" }, result = "int" },
+  float = { params = { "int" }, result = "float" },
+  len = { params = { "any" }, result = "int" },
+  input = { params = {}, result = "str | None" },
+  read_file = { params = { "str" }, result = "str" },
+  write_file = { params = { "str", "str" }, result = "None" },
+  exit = { params = { "int" }, result = "None" },
 }
 
 local OPTIONAL = " | None"
@@ -341,14 +346,14 @@ local function check_function(fn, records)
       local builtin = target.kind == "Builtin" and builtins[target.name]
       -- A constructor takes one argument per field.
       local params = target.kind == "Record" and target.fields or target.params
-      local count = builtin and 1 or #params
+      local count = builtin and #builtin.params or #params
       if #node.args ~= count then
         diag.error(node.span, "'" .. node.name .. "' expects " .. arguments(count) .. ", received " .. #node.args)
       end
       for i, arg in ipairs(node.args) do
         local param
         if builtin then
-          param = builtin.param
+          param = builtin.params[i] ~= "any" and builtin.params[i] or nil
         else
           param = params[i].type.name
         end
@@ -357,8 +362,8 @@ local function check_function(fn, records)
           expect_type(arg, param, arg_type)
         end
       end
-      local arg_type = builtin and node.args[1].type
-      if node.name == "print" and builtin and not scalar(arg_type) then
+      local arg_type = builtin and node.args[1] and node.args[1].type
+      if (node.name == "print" or node.name == "eprint") and builtin and not scalar(arg_type) then
         diag.error(node.args[1].span, "cannot print a value of type " .. arg_type)
       elseif node.name == "str" and builtin and not scalar(arg_type) then
         diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type .. " to str")
@@ -567,7 +572,12 @@ local function check_function(fn, records)
       check_against(statement.index, state, index)
       check_against(statement.value, state, item)
     elseif kind == "CallStmt" then
-      check_expression(statement.call, state)
+      local call = statement.call
+      check_expression(call, state)
+      -- exit never returns, so it transfers control like raise.
+      if call.kind == "Call" and call.target.kind == "Builtin" and call.target.name == "exit" then
+        return true
+      end
     elseif kind == "Return" then
       if finally_depth > 0 then
         diag.error(statement.span, "'return' cannot leave a 'finally' clause")

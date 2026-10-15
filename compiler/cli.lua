@@ -29,7 +29,7 @@ else
   ffi.cdef([[int chmod(const char *path, uint32_t mode);]])
 end
 
-local USAGE = "usage: willow check <file>\n       willow run <file>\n"
+local USAGE = "usage: willow check <file>\n       willow run <file> [args...]\n"
   .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>"
 
 local function fail(message)
@@ -50,10 +50,15 @@ local function parse_args(args)
   end
   local writes = command == "compile" or command == "build"
   local input, output
+  local program_args = {}
   local i = 2
   while i <= #args do
     local argument = args[i]
-    if argument == "-o" and writes then
+    if input and command == "run" then
+      -- Everything after the source path belongs to the program.
+      program_args[#program_args + 1] = argument
+      i = i + 1
+    elseif argument == "-o" and writes then
       if output then
         usage_error("-o given more than once")
       end
@@ -77,7 +82,7 @@ local function parse_args(args)
   if writes and not output then
     usage_error(command .. " needs -o <output>")
   end
-  return command, input, output
+  return command, input, output, program_args
 end
 
 -- True when both paths name the same existing file, following symlinks.
@@ -162,7 +167,7 @@ local function report(err)
   return debug.traceback(message, 1)
 end
 
-local command, path, output = parse_args(arg)
+local command, path, output, program_args = parse_args(arg)
 
 local file, err = io.open(path, "rb")
 if not file then
@@ -190,7 +195,7 @@ if not ok then
   fail(table.concat(lines, "\n"))
 end
 if command == "run" then
-  chunk()
+  chunk(unpack(program_args))
 elseif output then
   for i = 2, #modules do
     if same_file(modules[i].path, output) then

@@ -1,6 +1,7 @@
 /* Executable stub for `willow build`. The build appends the generated Lua to a
  * copy of this binary, followed by an 8-byte little-endian payload length and
- * the 8-byte magic "WILLOWLU". The stub reads its own file and runs the payload. */
+ * the 8-byte magic "WILLOWLU". The stub reads its own file and runs the payload
+ * with its command-line arguments. */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -52,13 +53,20 @@ static char *read_payload(size_t *length) {
     return text;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     size_t length;
     char *text = read_payload(&length);
     lua_State *L = luaL_newstate();
     if (!L) die("cannot create Lua state");
     luaL_openlibs(L);
-    if (luaL_loadbuffer(L, text, length, "=program") != 0 || lua_pcall(L, 0, 0, 0) != 0) {
+    if (luaL_loadbuffer(L, text, length, "=program") != 0) {
+        fprintf(stderr, "error: %s\n", lua_tostring(L, -1));
+        return 1;
+    }
+    /* The program's arguments are the chunk's varargs, as under luajit. */
+    luaL_checkstack(L, argc, "too many arguments");
+    for (int i = 1; i < argc; i++) lua_pushstring(L, argv[i]);
+    if (lua_pcall(L, argc - 1, 0, 0) != 0) {
         fprintf(stderr, "error: %s\n", lua_tostring(L, -1));
         return 1;
     }

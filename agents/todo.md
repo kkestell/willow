@@ -144,9 +144,9 @@ Section numbers refer to that document.
 
 ## Fourth slice
 
-- [ ] Input and output (§20)
-  - [ ] Bind: `main(args: list[str]) -> None` accepted as the entry signature alongside `main() -> None`; `input`, `eprint`, `read_file`, `write_file`, `exit`, and `OSError` as built-in names
-  - [ ] Check: built-in signatures; `eprint` accepts printable values like `print`; a statement calling `exit` transfers control like `raise`
-  - [ ] Runtime: a new `list[str]` of arguments passed to `main`, with invalid UTF-8 terminating before `main` runs; `input` removing `\n` and `\r\n` and returning `None` at end of input; `eprint` to stderr; whole-file `read_file` and `write_file` raising `OSError` with the host reason; `invalid UTF-8` as `ValueError`; `exit` with its status range check and without running `finally`; stdin read failures terminating like output failures
-  - [ ] CLI and stub: `run` passes everything after the source path verbatim; `check`, `compile`, and `build` still reject extra arguments; compiled Lua and built executables receive their own command-line arguments
-  - [ ] Tests: arguments through `run`, compiled, and built output, including ones that begin with `-`; `input` with LF, CRLF, a missing final newline, and empty input; file round trips, a missing file, and a caught `OSError`; invalid UTF-8; `exit` statuses, out-of-range status, unreachable statements after it, and skipped `finally`; the §20 example
+- [x] Input and output (§20)
+  - [x] Bind: `main(args: list[str]) -> None` accepted as the entry signature alongside `main() -> None`; `input`, `eprint`, `read_file`, `write_file`, `exit`, and `OSError` as built-in names
+  - [x] Check: built-in signatures; `eprint` accepts printable values like `print`; a statement calling `exit` transfers control like `raise`
+  - [x] Runtime: a new `list[str]` of arguments passed to `main`, with invalid UTF-8 terminating before `main` runs; `input` removing `\n` and `\r\n` and returning `None` at end of input; `eprint` to stderr; whole-file `read_file` and `write_file` raising `OSError` with the host reason; `invalid UTF-8` as `ValueError`; `exit` with its status range check and without running `finally`; stdin read failures terminating like output failures
+  - [x] CLI and stub: `run` passes everything after the source path verbatim; `check`, `compile`, and `build` still reject extra arguments; compiled Lua and built executables receive their own command-line arguments
+  - [x] Tests: arguments through `run`, compiled, and built output, including ones that begin with `-`; `input` with LF, CRLF, a missing final newline, and empty input; file round trips, a missing file, and a caught `OSError`; invalid UTF-8; `exit` statuses, out-of-range status, unreachable statements after it, and skipped `finally`; the §20 example
