@@ -741,9 +741,10 @@ def main() -> None:
     print(geometry.distance_squared(origin, corner))    # 25.0
 ```
 
-- `import name` loads `name.wlo` from the entry file's directory, where every
-  module of a program lives. Each import names one module. A missing module is an
-  error at the import.
+- `import name` loads `name.wlo` from the entry file's directory, or from the
+  standard library (§14) when that directory has no `name.wlo`, so a program's own
+  module shadows a standard one. Each import names one module. A missing module is
+  an error at the import.
 - An import binds the module name in the importing file's namespace (§9).
 - `module.name` refers to a function, record, or alias declared in that module, in
   calls, constructors, annotations, `except` clauses, and `isinstance`. Modules
@@ -771,3 +772,43 @@ main.wlo:7:9: error: ParseError: not a digit: x
 ```
 
 Each location names the file it belongs to. Diagnostics go to stderr.
+
+## 14. Standard library
+
+The standard library is a set of modules that ship with Willow and are imported
+like a program's own (§12).
+
+### `json`
+
+```python
+import json
+
+def main() -> None:
+    doc = json.parse('{"name": "Willow", "ports": [80, 443]}')
+    if isinstance(doc, dict):
+        ports = doc["ports"]
+        if isinstance(ports, list):
+            print(len(ports))       # 2
+    reply: json.Json = {"ok": True, "items": [1, 2.5, None]}
+    print(json.dump(reply))         # {"ok":true,"items":[1,2.5,null]}
+```
+
+| Declaration | Meaning |
+| --- | --- |
+| `type Json = None \| bool \| int \| float \| str \| list[Json] \| dict[str, Json]` | A JSON value |
+| `class JsonError(Exception)` | Invalid JSON text, or a value `dump` cannot encode |
+| `parse(text: str) -> Json` | The value of the JSON text `text` |
+| `dump(value: Json) -> str` | The JSON text of `value` |
+
+`parse` accepts JSON as RFC 8259 defines it. A number without a fraction or
+exponent and within the `int` range is an `int`; any other number is the nearest
+`float`. An object's repeated key keeps its first position and its last value. Text that is not JSON, including an escape of an
+unpaired surrogate, raises `JsonError` with a message that describes the problem
+and gives its line and column.
+
+`dump` writes no whitespace and keeps dictionary order. Floats are written as
+`str` writes them, so `2.0` reads back as a `float`. Strings escape `"`, `\`, and
+control characters, using `\b`, `\f`, `\n`, `\r`, and `\t` where they exist and
+`\u00XX` otherwise; other characters are written as they are. NaN and infinities
+raise `JsonError` with the message `cannot encode <value>`, as in
+`cannot encode inf`.
