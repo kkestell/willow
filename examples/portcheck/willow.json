@@ -1,0 +1,6 @@
+{
+  "entry": "portcheck/main.wlo",
+  "source": "src",
+  "dependencies": ["vendor"],
+  "tests": "tests"
+}

@@ -43,6 +43,26 @@ Diagnostics go to stderr and program output to stdout. The exit status is 0 on
 success and 1 for invalid usage, source errors, failed output, and runtime
 errors, unless the program chooses its own with `sys.exit`.
 
+## Projects
+
+A directory with a `willow.json` is a project: its modules live under a source
+root, it can use local dependency roots, and its tests live in their own
+directory. `examples/portcheck` is one; from a clean checkout:
+
+```sh
+make                                   # build LuaJIT and the executable stub
+cd examples/portcheck
+willow test                            # run every test_*.wlo under tests/
+willow run -- 127.0.0.1:22             # run the entry with arguments
+willow build -o portcheck              # bundle every module into one executable
+cp portcheck /usr/local/bin/           # the executable runs anywhere
+portcheck --help
+```
+
+Its `willow.json` names the entry `src/portcheck/main.wlo`, the source root
+`src`, and the dependency root `vendor`, which holds the `textkit` modules it
+imports as `textkit.table`.
+
 ## Editor support
 
 `editors/vscode` is a VS Code extension for `.wlo` files with syntax

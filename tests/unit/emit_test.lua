@@ -74,6 +74,25 @@ return {
     assert(emit_source("import fs\ndef main() -> None:\n    print(fs.exists('x'))\n"):find("__wlo_c_stat", 1, true))
   end,
 
+  module_tables_stay_distinct = function()
+    local function emit_modules(names)
+      local modules = {}
+      for i, name in ipairs(names) do
+        local source = i == 1 and "import a.b\nimport a_0b\ndef main() -> None:\n    print(a.b.f() + a_0b.f())\n"
+          or "def f() -> int:\n    return " .. i .. "\n"
+        local program = parser.parse(lexer.lex(source, name .. ".wlo"))
+        program.name, program.path = name, name .. ".wlo"
+        modules[i] = program
+      end
+      bind.bind(modules)
+      check.check(modules)
+      return emit.emit(lower.lower(modules))
+    end
+    local text = emit_modules({ "main", "a.b", "a_0b" })
+    assert(text:find("local __wlo_module_a_0b = {}", 1, true), "a.b table missing")
+    assert(text:find("local __wlo_module_a__0b = {}", 1, true), "a_0b table missing")
+  end,
+
   one_call_per_line = function()
     local text = emit_source(table.concat({
       "def f(a: int, b: int) -> int:",

@@ -1,0 +1,53 @@
+# Reports which TCP ports accept connections:
+# willow run -- [--timeout SECONDS] [--json] host:port...
+
+import cli
+import io
+import json
+import portcheck.probe
+import sys
+import textkit.table
+
+def main() -> None:
+    parser = cli.parser("portcheck", description="Check whether TCP ports accept connections.")
+    parser.add_float("timeout", 2.0, help="Seconds to wait for each connection", short="t")
+    parser.add_flag("json", help="Write one JSON object per target")
+    parser.add_rest("target", help="host:port to check")
+    try:
+        args = parser.parse(sys.args())
+    except cli.HelpRequested as help:
+        io.stdout().write_text(help.message)
+        sys.exit(0)
+    except cli.UsageError as usage:
+        sys.eprint(usage.message)
+        sys.exit(2)
+    texts = args.get_list("target")
+    targets: list[portcheck.probe.Target] = []
+    try:
+        for text in texts:
+            targets.append(portcheck.probe.parse_target(text))
+    except ValueError as error:
+        sys.eprint(f"portcheck: error: {error.message}")
+        sys.exit(2)
+    if len(targets) == 0:
+        sys.eprint("portcheck: error: expected at least one host:port")
+        sys.exit(2)
+
+    all_open = True
+    rows: list[list[str]] = []
+    for target in targets:
+        result = portcheck.probe.check(target, args.get_float("timeout"))
+        if not result.open:
+            all_open = False
+        name = f"{target.host}:{target.port}"
+        if args.get_bool("json"):
+            print(json.dump({"target": name, "open": result.open, "detail": result.detail}))
+        else:
+            state = "closed"
+            if result.open:
+                state = "open"
+            rows.append([name, state, f"{result.millis:.1f} ms"])
+    if not args.get_bool("json"):
+        print(textkit.table.render(["target", "state", "time"], rows))
+    if not all_open:
+        sys.exit(1)

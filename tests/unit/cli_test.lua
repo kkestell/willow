@@ -34,9 +34,10 @@ end
 local ROOT = capture("cd " .. quote(arg[0]:match("^(.*)/tests/[^/]*$") or ".") .. " && pwd"):gsub("\n$", "")
 local WILLOW = ROOT .. "/willow"
 local LUAJIT = ROOT .. "/vendor/luajit/src/luajit"
-local USAGE = "usage: willow check <file>\n       willow run <file> [args...]\n"
-  .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>\n"
+local USAGE = "usage: willow check [file]\n       willow run [file [args...] | -- args...]\n"
+  .. "       willow compile [file] -o <output>\n       willow build [file] -o <output>\n"
   .. "       willow test [--check] [path]\n"
+  .. "Without a file, the command uses willow.json in the current directory.\n"
 
 local ffi = require("ffi")
 ffi.cdef([[
@@ -150,7 +151,6 @@ return {
         { "build a.wlo", "error: build needs -o <output>" },
         { "compile a.wlo -o", "error: -o needs a path" },
         { "compile a.wlo -o x.lua -o y.lua", "error: -o given more than once" },
-        { "check", "error: missing input file" },
       }
       for _, case in ipairs(cases) do
         local status, stdout, stderr = willow(dir, case[1])
@@ -824,6 +824,111 @@ return {
       if not ok then
         error(err, 0)
       end
+    end)
+  end,
+
+  project_commands = function()
+    in_temp_dir(function(dir, base)
+      os.execute("cd " .. quote(dir) .. " && mkdir -p src/app vendor/textkit vendor2/textkit tests/unit empty")
+      write(dir .. "/willow.json", '{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor"]}')
+      write(dir .. "/src/app/main.wlo", table.concat({
+        "import app.greet",
+        "import sys",
+        "def main() -> None:",
+        "    names = sys.args()",
+        "    if len(names) == 0:",
+        "        names = ['world']",
+        "    for name in names:",
+        "        print(app.greet.greet(name))",
+        "",
+      }, "\n"))
+      -- The entry is registered under its own name, so this imports it.
+      write(dir .. "/src/app/greet.wlo", "import app.main\nimport textkit.shout\n"
+        .. "def greet(name: str) -> str:\n    return textkit.shout.shout('hello, ' + name)\n")
+      write(dir .. "/vendor/textkit/shout.wlo", "def shout(text: str) -> str:\n    return text.upper() + '!'\n")
+      write(dir .. "/tests/test_shout.wlo", "import textkit.shout\n"
+        .. "def test_shout() -> None:\n    assert textkit.shout.shout('a') == 'A!'\n")
+      write(dir .. "/tests/unit/test_greet.wlo", "import app.greet\n"
+        .. "def test_greet() -> None:\n    assert app.greet.greet('x') == 'HELLO, X!'\n")
+
+      local status, stdout, stderr = willow(dir, "check")
+      eq(0, status)
+      eq("", stderr)
+      status, stdout = willow(dir, "run")
+      eq("HELLO, WORLD!\n", stdout)
+      status, stdout = willow(dir, "run -- Ada --verbose")
+      eq("HELLO, ADA!\nHELLO, --VERBOSE!\n", stdout)
+      eq(0, willow(dir, "compile -o out.lua"))
+      eq(0, willow(dir, "build -o app.bin"))
+      status, stdout = sh(base, quote(LUAJIT) .. " " .. quote(dir .. "/out.lua") .. " Lua")
+      eq("HELLO, LUA!\n", stdout)
+      status, stdout = sh(base, quote(dir .. "/app.bin") .. " Bin")
+      eq("HELLO, BIN!\n", stdout)
+
+      status, stdout = willow(dir, "test")
+      eq(0, status)
+      eq("PASS tests/test_shout.wlo test_shout\nPASS tests/unit/test_greet.wlo test_greet\n2 passed, 0 failed\n", stdout)
+      status, stdout = willow(dir, "test tests/unit")
+      eq("PASS tests/unit/test_greet.wlo test_greet\n1 passed, 0 failed\n", stdout)
+      status, stdout, stderr = willow(dir, "test --check")
+      eq(0, status)
+      eq("", stdout .. stderr)
+
+      -- An explicit file keeps the file workflow and ignores the manifest.
+      status, stdout, stderr = willow(dir, "check src/app/main.wlo")
+      eq(1, status)
+      eq("src/app/main.wlo:1:8: error: cannot load module 'app.greet': src/app/app/greet.wlo: No such file or directory\n", stderr)
+      status, stdout, stderr = willow(dir .. "/empty", "check")
+      eq(1, status)
+      eq("error: no source file given and no willow.json in the current directory\n", stderr)
+
+      local function manifest_error(text)
+        write(dir .. "/willow.json", text)
+        local code, _, err = willow(dir, "check")
+        eq(1, code)
+        return err
+      end
+      eq("error: willow.json: unknown key 'name'\n", manifest_error('{"name": "x"}'))
+      eq("error: willow.json: 'source' must be a string\n", manifest_error('{"source": 1}'))
+      eq("error: willow.json: 'dependencies' must be a list of strings\n", manifest_error('{"dependencies": "vendor"}'))
+      eq("error: willow.json: 'dependencies' must be a list of strings\n", manifest_error('{"dependencies": null}'))
+      eq("error: willow.json: expected a value at line 1, column 19\n", manifest_error('{"dependencies": [1-2]}'))
+      eq("error: willow.json: expected an object\n", manifest_error('[]'))
+      eq("error: willow.json: expected a value at line 1, column 11\n", manifest_error('{"entry": }'))
+      local entry_message = "error: willow.json: 'entry' must be a .wlo path inside the source root with identifier components\n"
+      eq(entry_message, manifest_error('{"entry": "../main.wlo"}'))
+      eq(entry_message, manifest_error('{"entry": "main.py"}'))
+      eq(entry_message, manifest_error('{"entry": "my-app/main.wlo"}'))
+
+      write(dir .. "/vendor2/textkit/shout.wlo", "def shout(text: str) -> str:\n    return text\n")
+      eq("src/app/greet.wlo:2:8: error: module 'textkit.shout' is ambiguous: found in vendor/textkit/shout.wlo"
+        .. " and vendor2/textkit/shout.wlo\n",
+        manifest_error('{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor", "vendor2"]}'))
+      write(dir .. "/src/app/main.wlo", "import app.greet\nimport greet\ndef main() -> None:\n    pass\n")
+      eq("src/app/main.wlo:2:8: error: module 'greet' is the same file as module 'app.greet'\n",
+        manifest_error('{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor", "src/app"]}'))
+      write(dir .. "/src/app/main.wlo", "import textkit.shout\ndef main() -> None:\n    pass\n")
+      write(dir .. "/vendor/textkit/shout.wlo", "import textkit.missing\n")
+      eq("vendor/textkit/shout.wlo:1:8: error: cannot load module 'textkit.missing': src/textkit/missing.wlo: No such file or directory\n",
+        manifest_error('{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor"]}'))
+    end)
+  end,
+
+  portcheck_example = function()
+    local project = ROOT .. "/examples/portcheck"
+    local status, stdout, stderr = willow(project, "test")
+    eq("", stderr)
+    eq(0, status)
+    eq("4 passed, 0 failed\n", stdout:match("[^\n]*\n$"))
+    in_temp_dir(function(dir, base)
+      eq(0, willow(project, "build -o " .. quote(dir .. "/portcheck")))
+      status, stdout = sh(base, quote(dir .. "/portcheck") .. " --timeout 1 127.0.0.1:1")
+      eq(1, status)
+      assert(stdout:match("^target       state   time\n127%.0%.0%.1:1  closed  [%d.]+ ms\n$"), stdout)
+      status, stdout = sh(base, quote(dir .. "/portcheck") .. " --json 127.0.0.1:1")
+      eq('{"target":"127.0.0.1:1","open":false,"detail":"cannot connect to 127.0.0.1:1: Connection refused"}\n', stdout)
+      local _, _, err = sh(base, quote(dir .. "/portcheck") .. " nope")
+      eq("portcheck: error: expected host:port, received 'nope'\n", err)
     end)
   end,
 

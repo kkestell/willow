@@ -354,4 +354,27 @@ return {
     eq("main.wlo:3:16: alias 'shapes.Shape' cannot be called",
       modules_error({ { "main", "import shapes\ndef main() -> None:\n    x = shapes.Shape(1)\n" }, shapes }))
   end,
+
+  qualified_modules = function()
+    local util = { "app.util", "def f() -> int:\n    return 1\n" }
+    local other = { "app.other", "def g() -> int:\n    return 2\n" }
+    local app = { "app", "def h() -> int:\n    return 3\n" }
+    local function entry(text)
+      return { "main", text }
+    end
+    local modules = bind_modules({ entry("import app.util\nimport app.other\ndef main() -> None:\n    print(app.util.f() + app.other.g())\n"), util, other })
+    eq(modules[2].declarations.f, modules[1].functions[1].body[1].call.args[1].left.target)
+    eq("main.wlo:2:8: 'app' is imported as a module and as a namespace",
+      modules_error({ entry("import app.util\nimport app\n" .. MAIN), util, app }))
+    eq("main.wlo:2:5: duplicate function 'app'", modules_error({ entry("import app.util\ndef app() -> None:\n    pass\n" .. MAIN), util }))
+    eq("main.wlo:3:11: module 'app' cannot be used as a value",
+      modules_error({ entry("import app.util\ndef main() -> None:\n    print(app)\n"), util }))
+    eq("main.wlo:3:15: unknown module 'app.missing'",
+      modules_error({ entry("import app.util\ndef main() -> None:\n    print(app.missing.f())\n"), util }))
+    eq("main.wlo:3:20: module 'app.util' has no function, record, or alias 'nope'",
+      modules_error({ entry("import app.util\ndef main() -> None:\n    print(app.util.nope())\n"), util }))
+    -- A local shadows the namespace, so the call stays a method call on it.
+    modules = bind_modules({ entry("import app.util\ndef main() -> None:\n    app = 1\n    print(app.util.f())\n"), util })
+    eq("MethodCall", modules[1].functions[1].body[2].call.args[1].kind)
+  end,
 }

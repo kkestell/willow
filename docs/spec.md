@@ -4,9 +4,9 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-Sections 1–23 describe the implemented language. Section 24 describes a planned
-milestone, introduced under
-[planned application development milestones](#planned-application-development-milestones).
+Sections 1–14 describe the language. Sections 15–24 record the
+[application development milestones](#application-development-milestones) that
+extended it; each now points to where its rules live.
 
 ## 1. Programs
 
@@ -34,7 +34,8 @@ Hello, Willow
 55
 ```
 
-A program is an entry file and the modules it imports (§12). A file contains
+A program is an entry file and the modules it imports (§12), optionally organized
+as a project with a `willow.json` (§12). A file contains
 `import` statements followed by `def`, `class`, and `type` declarations in any
 order.
 Nothing else appears at file scope.
@@ -873,16 +874,63 @@ def main() -> None:
     print(geometry.distance_squared(origin, corner))    # 25.0
 ```
 
-- `import name` loads `name.wlo` from the entry file's directory, or from the
-  standard library (§14) when that directory has no `name.wlo`, so a program's own
-  module shadows a standard one. Each import names one module. A missing module is
-  an error at the import.
-- An import binds the module name in the importing file's namespace (§9).
-- `module.name` refers to a function, record, or alias declared in that module, in
-  calls, constructors, annotations, `except` clauses, and `isinstance`. Modules
-  are not values. Names that begin with `_` are private to their module.
+- `import name` loads `name.wlo` and `import app.util` loads `app/util.wlo`, each
+  component an identifier, from the search roots below. Each import names one
+  module. Directories are only namespaces: importing `app.util` neither needs nor
+  loads an `app.wlo`.
+- An import binds its first component in the importing file's namespace (§9).
+  Several imports may share it, but it may not also name a function, record, or
+  alias, and a module cannot also be a namespace: importing both `app` and
+  `app.util` is an error. A local with that name shadows the whole namespace.
+- `module.name`, with the module's full name such as `app.util.name`, refers to
+  a function, record, or alias declared in that module, in calls, constructors,
+  annotations, `except` clauses, and `isinstance`. Modules and namespaces are not
+  values. Names that begin with `_` are private to their module.
 - Imports may form cycles. Modules contain only declarations, so they have no
-  initialization order. Each module loads once.
+  initialization order.
+
+A module is looked for in the search roots in order: the entry file's
+directory, or a project's source root; then a project's dependency roots, where
+more than one match raises the error `module '<name>' is ambiguous: found in
+<file> and <file>`; then the standard library. A program's own module therefore
+shadows a standard one. Imports are absolute: a module in `app/` imports its
+neighbor as `app.other`. A module that is not found is an error at its import.
+Each file loads once and has one module name: a second name for a loaded file is
+the error `module '<name>' is the same file as module '<name>'`. The entry
+file's own module name, its path under its root without `.wlo` and with `/` as
+`.`, refers to the entry itself.
+
+### Projects
+
+A `willow.json` in the current directory describes a project:
+
+```json
+{
+  "entry": "portcheck/main.wlo",
+  "source": "src",
+  "dependencies": ["vendor"],
+  "tests": "tests"
+}
+```
+
+It is a JSON object with only these keys, each optional: `entry`, a `.wlo` path
+under the source root whose components are identifiers (default `main.wlo`);
+`source`, the source root (default `.`); `dependencies`, a list of dependency
+roots (default none); and `tests`, the test directory (default `tests`). Paths
+other than `entry` are relative to the manifest's directory and may be absolute
+or use `..`; roots hold `.wlo` modules, not further manifests. A repeated key
+keeps its last value. Any other key, a wrong type, an empty path, or an invalid
+`entry` is an error naming `willow.json`.
+
+Without a source file, `willow check`, `willow run`, `willow compile -o <output>`,
+and `willow build -o <output>` use the project in the current directory, and
+`willow run -- <args>` passes `<args>` to the program; with no `willow.json`
+they report `no source file given and no willow.json in the current directory`.
+Given a source file, they use only that file's directory and the standard
+library, whether or not a `willow.json` exists. Programs keep the current
+directory for their own file operations. Compiled and built output contains
+every module, from every root.
+
 
 ### Tests
 
@@ -897,7 +945,11 @@ def test_empty_cart_totals_zero() -> None:
 `willow test [path]` takes a file or a directory, `.` by default. A directory
 contributes the files directly inside it named `test_*.wlo`; a file named
 explicitly may have any name. Each test file is an entry file whose imports
-resolve from its own directory. It needs no `main`; its functions named `test_*`
+resolve from its own directory. In a project, the default path is the test
+directory, directories are searched at every depth (without following directory
+symlinks), and imports resolve from the project's roots; the test directory is
+not itself a root, so test helpers belong under the source or a dependency
+root. It needs no `main`; its functions named `test_*`
 are its tests, and each must take no parameters and return `None`.
 
 Every test file and its imports are checked before any test runs. Tests run in
@@ -1471,30 +1523,19 @@ stderr, through the same buffer as `sys.eprint`, and leave stdout alone.
 duration. `utc` rounds down to whole seconds, covers years 0001 through 9999, and
 raises `ValueError` with the message `timestamp out of range` otherwise.
 
-## Planned application development milestones
+## Application development milestones
 
-Section 24 defines the remaining accepted target. It is not yet implemented.
-Sections 1–23 describe the implemented baseline; each planned section
-identifies the rules it changes when its milestone lands. Completion and delivery
-examples are tracked in `agents/todo.md`. A planned API is not available merely
-because its signature appears here.
+Sections 15–24 are the milestones that grew Willow from its baseline into a
+language for small applications, in the order they were implemented. Their rules
+are now part of sections 1–14. Delivery examples are tracked in
+`agents/todo.md`.
 
-Prefer Python's familiar spelling and behavior where they fit Willow's static
-types and small scope. Keep differences explicit. These milestones retain strict
-boolean conditions, explicit numeric conversions, declaration-only modules, and
-functions that are not values. They introduce neither general inheritance nor
-user-defined protocols, callbacks, async execution, or a package registry.
-
-Library signatures below describe the public contract. `T` in a signature is
-explanatory notation for an existing element type, not user-defined generics.
-`= value` denotes an optional argument. Module functions are called with the module
-prefix. Unless specified otherwise, result records follow §3, and new exceptions
-have only `message: str` and directly extend `Exception`.
-
-New native types follow the `io.File` conventions of §14. Invalid options and
-values raise `ValueError`, and expired waits raise `TimeoutError` (§10). Unless an
-API says otherwise, a timeout is a finite, strictly positive float in seconds,
-`None` means no limit, and elapsed time is measured on a monotonic clock.
+The milestones prefer Python's familiar spelling and behavior where they fit
+Willow's static types and small scope, and keep differences explicit. They retain
+strict boolean conditions, explicit numeric conversions, declaration-only
+modules, and functions that are not values, and they introduce neither general
+inheritance nor user-defined protocols, callbacks, async execution, or a package
+registry.
 
 ## 15. Text and collection essentials
 
@@ -1537,80 +1578,7 @@ This milestone is implemented. Its rules are part of §14.
 
 ## 24. Small projects and reusable modules
 
-### Qualified imports
-
-`import app.util` loads `app/util.wlo` under a search root and binds the qualified
-name `app.util`. Each component is an identifier. References use
-`app.util.function`, `app.util.Record`, or `app.util.Alias` wherever §12 permits a
-module member. Importing a child does not execute or require a parent module;
-directories are namespaces without `__init__` files or initialization code.
-
-Multiple imports may share a namespace prefix. A module cannot also serve as a
-namespace prefix: importing both `app` and `app.util` is an error. The root name
-cannot conflict with another file-level declaration; a local of that name shadows
-the entire qualified namespace. Imports are absolute from search roots, not
-relative to the importing file's subdirectory. Privacy remains about member names
-beginning with `_`, and cycles remain legal because modules contain declarations.
-
-In explicit-file mode, the entry directory remains the first search root,
-followed by the standard library. Qualified imports do not introduce automatic
-project discovery or change the process working directory.
-
-### Project configuration
-
-An optional `willow.json` in the invocation directory describes a project:
-
-```json
-{
-  "entry": "main.wlo",
-  "source": "src",
-  "dependencies": ["vendor/shared"],
-  "tests": "tests"
-}
-```
-
-The file is a JSON object. The only keys are `entry: str`, `source: str`,
-`dependencies: list[str]`, and `tests: str`; omitted values default to `main.wlo`,
-`.`, `[]`, and `tests`. Unknown keys and wrong types are configuration errors;
-repeated keys use the last value, as in the existing JSON library. Entry is
-relative to the source root; other paths are relative to the manifest directory.
-Entry must stay within the source root, end in `.wlo`, and have identifier
-components after removing the extension. Root paths are nonempty; absolute paths
-and `..` are allowed for explicit local dependencies. These roots contain `.wlo`
-modules, not manifests to resolve recursively. There is no package download, version solver, or lockfile.
-
-A module is resolved from the source root first, then the explicit dependency
-roots, then the standard library. More than one dependency match is an ambiguity
-error, not an order-dependent choice. Source modules intentionally shadow
-libraries. Missing modules are reported at their imports, and resolved physical
-files load only once; two qualified names resolving to the same file are rejected.
-The entry is registered under its source-relative qualified name, preventing a
-second copy through an import. Private members retain their declaration module's
-identity across all imports.
-
-### Commands and tests
-
-When the source argument is omitted, `willow check`, `run`, `compile`, and `build`
-use the current directory's `willow.json`; there is no ancestor search. `run --`
-passes following arguments to the project entry. Compile and build still require
-`-o`. A missing manifest is an error. An explicit source file continues to use the
-existing file workflow and ignores the manifest.
-
-With a manifest and no explicit test path, `willow test` discovers `test_*.wlo`
-recursively under the configured tests directory, using source/dependency/library
-roots for imports. Directory symlinks are not traversed. Test entries need no
-`main`; discovery order and process isolation follow §17. Test-only helper modules
-belong under a source or dependency root; the tests directory is not an implicit
-import root. With an explicit test path, that path narrows discovery while
-retaining the project roots; directories are still searched recursively. Without a manifest,
-§17's standalone discovery and roots apply. The same rules apply to
-`willow test --check [path]`.
-
-Commands retain the invoking working directory for application I/O; module paths
-and test discovery are resolved using the roots above. Diagnostics identify actual
-source files. Compile/build bundle all reachable Willow modules, including local
-dependencies, and the overwrite check covers them all. Outputs must run outside
-the source tree with the deployment dependencies stated in README and §22.
+This milestone is implemented. Its rules are part of §1 and §12.
 
 ### Scope references
 

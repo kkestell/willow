@@ -1,0 +1,7 @@
+import app.models
+
+def label(name: str) -> str:
+    return "<" + name + ">"
+
+def first(items: list[app.models.Item]) -> app.models.Item:
+    return items[0]

@@ -6,6 +6,7 @@ package.path = root .. "/?.lua"
 local ffi = require("ffi")
 local diag = require("compiler.diag")
 local loader = require("compiler.loader")
+local manifest = require("compiler.manifest")
 local bind = require("compiler.bind")
 local check = require("compiler.check")
 local lower = require("compiler.lower")
@@ -30,9 +31,10 @@ else
   ffi.cdef([[int chmod(const char *path, uint32_t mode);]])
 end
 
-local USAGE = "usage: willow check <file>\n       willow run <file> [args...]\n"
-  .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>\n"
-  .. "       willow test [--check] [path]"
+local USAGE = "usage: willow check [file]\n       willow run [file [args...] | -- args...]\n"
+  .. "       willow compile [file] -o <output>\n       willow build [file] -o <output>\n"
+  .. "       willow test [--check] [path]\n"
+  .. "Without a file, the command uses willow.json in the current directory."
 
 local function fail(message)
   io.stderr:write(message, "\n")
@@ -61,7 +63,7 @@ local function parse_test_args(args)
       path = argument
     end
   end
-  return path or ".", check_only
+  return path, check_only
 end
 
 local function parse_args(args)
@@ -81,6 +83,12 @@ local function parse_args(args)
       -- Everything after the source path belongs to the program.
       program_args[#program_args + 1] = argument
       i = i + 1
+    elseif argument == "--" and not input and command == "run" then
+      -- `run -- args` runs the project entry with `args`.
+      for j = i + 1, #args do
+        program_args[#program_args + 1] = args[j]
+      end
+      break
     elseif argument == "-o" and writes then
       if output then
         usage_error("-o given more than once")
@@ -98,9 +106,6 @@ local function parse_args(args)
       input = argument
       i = i + 1
     end
-  end
-  if not input then
-    usage_error("missing input file")
   end
   if writes and not output then
     usage_error(command .. " needs -o <output>")
@@ -149,8 +154,8 @@ end
 
 -- Checks the whole program and returns its modules and, for every command but
 -- check, the generated Lua and its loaded chunk. A test entry is a test file.
-local function translate(command, path, source, test)
-  local modules = loader.load(path, source, root .. "/lib/")
+local function translate(command, path, source, roots, test)
+  local modules = loader.load(path, source, roots)
   bind.bind(modules, test)
   check.check(modules)
   if command ~= "check" then
@@ -202,9 +207,32 @@ local function format_error(err)
   return table.concat(lines, "\n")
 end
 
+-- Module roots for the explicit file at `path`: its own directory first.
+local function file_roots(path)
+  return {
+    primary = path:match("^(.*/)") or "",
+    library = root .. "/lib/",
+    entry_name = (path:match("([^/]*)$"):gsub("%.wlo$", "")),
+  }
+end
+
+-- Module roots for `project` whose entry module is named `entry_name`.
+local function project_roots(project, entry_name)
+  return { primary = project.source, dependencies = project.dependencies, library = root .. "/lib/", entry_name = entry_name }
+end
+
+-- The project in the current directory, or nil; a broken manifest fails.
+local function read_project()
+  local project, err = manifest.read()
+  if project == false then
+    fail("error: " .. err)
+  end
+  return project
+end
+
 -- The test chunk and test names of the test file at `path`, or false and the
--- diagnostics.
-local function compile_test(path)
+-- diagnostics. Imports use `project`'s roots when there is a project.
+local function compile_test(path, project)
   local file, err = io.open(path, "rb")
   if not file then
     return false, "error: " .. err
@@ -214,7 +242,8 @@ local function compile_test(path)
   if not source then
     return false, "error: " .. path .. ": " .. read_err
   end
-  local ok, modules, text = xpcall(translate, report, "test", path, source, true)
+  local roots = project and project_roots(project, file_roots(path).entry_name) or file_roots(path)
+  local ok, modules, text = xpcall(translate, report, "test", path, source, roots, true)
   if not ok then
     return false, format_error(modules)
   end
@@ -227,10 +256,25 @@ end
 
 if arg[1] == "test" then
   local test_path, check_only = parse_test_args(arg)
-  os.exit(runner.test(root .. "/vendor/luajit/src/luajit", test_path, check_only, compile_test))
+  local project = read_project()
+  local function compile(file)
+    return compile_test(file, project)
+  end
+  os.exit(runner.test(root .. "/vendor/luajit/src/luajit", test_path or project and project.tests or ".", check_only,
+    compile, project ~= nil))
 end
 
 local command, path, output, program_args = parse_args(arg)
+local roots
+if path then
+  roots = file_roots(path)
+else
+  local project = read_project()
+  if not project then
+    fail("error: no source file given and no willow.json in the current directory")
+  end
+  path, roots = project.entry, project_roots(project, project.entry_name)
+end
 
 local file, err = io.open(path, "rb")
 if not file then
@@ -246,7 +290,7 @@ if output and same_file(path, output) then
   fail("error: output " .. output .. " is the input file")
 end
 
-local ok, modules, text, chunk = xpcall(translate, report, command, path, source)
+local ok, modules, text, chunk = xpcall(translate, report, command, path, source, roots)
 if not ok then
   fail(format_error(modules))
 end

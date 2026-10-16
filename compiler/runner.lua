@@ -6,17 +6,20 @@ local function quote(s)
   return "'" .. s:gsub("'", "'\\''") .. "'"
 end
 
--- The test files at `path`, sorted: the `test_*.wlo` files directly inside a
--- directory, or the path itself.
-function M.discover(path)
+-- The test files at `path`, sorted: the `test_*.wlo` files inside a
+-- directory, directly or, when `recursive`, at any depth without following
+-- directory symlinks; or the path itself.
+function M.discover(path, recursive)
   if os.execute("test -d " .. quote(path)) ~= 0 then
     return { path }
   end
-  local prefix = path == "." and "" or path:gsub("/$", "") .. "/"
-  local shell = io.popen("find " .. quote(path) .. " -maxdepth 1 -type f -name 'test_*.wlo'")
+  local shell = io.popen("find " .. quote(path) .. (recursive and "" or " -maxdepth 1")
+    .. " -type f -name 'test_*.wlo'")
+  -- find prints each file after the starting path as given.
+  local prefix = path == "." and "" or path:gsub("/+$", "") .. "/"
   local files = {}
   for line in shell:lines() do
-    files[#files + 1] = prefix .. line:match("[^/]*$")
+    files[#files + 1] = prefix .. line:sub(#path + 1):gsub("^/+", "")
   end
   shell:close()
   table.sort(files)
@@ -39,8 +42,8 @@ end
 
 -- Runs the test command and returns its exit status. `compile(file)` returns
 -- the file's test chunk and its test names, or false and its diagnostics.
-function M.test(luajit, path, check_only, compile)
-  local files = M.discover(path)
+function M.test(luajit, path, check_only, compile, recursive)
+  local files = M.discover(path, recursive)
   local chunks, names, failed_checks, count = {}, {}, false, 0
   for i, file in ipairs(files) do
     local text, tests = compile(file)

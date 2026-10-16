@@ -462,8 +462,27 @@ resolve_type = function(node, module, name)
   return declaration.type
 end
 
+-- The dotted module name `node` spells, a `Name` or `Field`s on one, or nil.
+local function qualified_name(node)
+  if node.kind == "Name" then
+    return node.name, node.name
+  elseif node.kind == "Field" then
+    local path, root = qualified_name(node.object)
+    return path and path .. "." .. node.name, root
+  end
+end
+
 local function resolve_function(fn, scope, module)
-  local declarations, imports = module.declarations, module.imported
+  local declarations, imports, roots = module.declarations, module.imported, module.roots
+
+  -- The module name a method call's object spells when it starts with an
+  -- import's root that no local shadows, or nil.
+  local function module_path(object)
+    local path, root = qualified_name(object)
+    if path and not scope[root] and roots[root] then
+      return path
+    end
+  end
 
   local function resolve_expression(node)
     local kind = node.kind
@@ -471,7 +490,7 @@ local function resolve_function(fn, scope, module)
       node.symbol = scope[node.name]
       if not node.symbol then
         local declaration = declarations[node.name]
-        if imports[node.name] then
+        if roots[node.name] then
           diag.error(node.span, "module '" .. node.name .. "' cannot be used as a value")
         elseif declaration and declaration.kind == "Record" or exceptions[node.name] then
           diag.error(node.span, "record '" .. node.name .. "' cannot be used as a value")
@@ -495,13 +514,16 @@ local function resolve_function(fn, scope, module)
       for _, arg in ipairs(node.args) do
         resolve_expression(arg)
       end
-    elseif kind == "MethodCall" and node.object.kind == "Name" and not scope[node.object.name]
-      and imports[node.object.name] then
+    elseif kind == "MethodCall" and module_path(node.object) then
       -- `module.name(...)` calls a function or constructs a record of that module.
-      local imported = imports[node.object.name]
+      local path = module_path(node.object)
+      local imported = imports[path]
+      if not imported then
+        diag.error(node.object.span, "unknown module '" .. path .. "'")
+      end
       node.kind = "Call"
       node.target = lookup(module, imported, node.name, node.span)
-      node.name = node.object.name .. "." .. node.name
+      node.name = path .. "." .. node.name
       if node.target.kind == "Alias" then
         diag.error(node.span, "alias '" .. node.name .. "' cannot be called")
       end
@@ -664,21 +686,38 @@ local function declare(module, modules_by_name, entry)
     return a.span.first < b.span.first
   end)
 
-  module.declarations, module.imported = {}, {}
+  -- An import takes its root name, which several qualified imports may share.
+  module.declarations, module.imported, module.roots = {}, {}, {}
   local taken = {}
   for _, declaration in ipairs(ordered) do
-    local name = declaration.name
+    local import = declaration.kind == "Import"
+    local name = import and declaration.root or declaration.name
     if builtins[name] then
       diag.error(declaration.span, "cannot redefine built-in function '" .. name .. "'")
     elseif exceptions[name] then
       diag.error(declaration.span, "cannot redefine built-in class '" .. name .. "'")
     end
-    if taken[name] then
+    if import then
+      local full = declaration.name
+      for other in pairs(module.imported) do
+        local short, long = other, full
+        if #short > #long then
+          short, long = long, short
+        end
+        if long:sub(1, #short + 1) == short .. "." then
+          diag.error(declaration.span, "'" .. short .. "' is imported as a module and as a namespace")
+        end
+      end
+      if module.imported[full] or taken[name] and not module.roots[name] then
+        diag.error(declaration.span, "duplicate import '" .. full .. "'")
+      end
+    elseif taken[name] then
       diag.error(declaration.span, "duplicate " .. declaration.kind:lower() .. " '" .. name .. "'")
     end
     taken[name] = true
-    if declaration.kind == "Import" then
-      module.imported[name] = modules_by_name[name] or M.modules[name]
+    if import then
+      module.roots[name] = true
+      module.imported[declaration.name] = modules_by_name[declaration.name] or M.modules[declaration.name]
     else
       declaration.module = module
       module.declarations[name] = declaration

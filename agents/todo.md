@@ -276,10 +276,10 @@ remove obsolete amendment wording, and update implementation status.
   - [x] Exercise the pair through `willow test`, with subprocess startup, an
     ephemeral port, and deterministic child cleanup
 
-- [ ] Small projects and reusable modules (spec §24)
-  - [ ] Qualified imports, namespace conflicts, explicit source/dependency roots,
+- [x] Small projects and reusable modules (spec §24)
+  - [x] Qualified imports, namespace conflicts, explicit source/dependency roots,
     module identity, and missing/ambiguous-module diagnostics
-  - [ ] Minimal `willow.json`, project command forms, recursive project tests,
+  - [x] Minimal `willow.json`, project command forms, recursive project tests,
     and preservation of explicit-file workflows
-  - [ ] Deliver a multi-module network/CLI application using a local dependency,
+  - [x] Deliver a multi-module network/CLI application using a local dependency,
     with a documented clean-checkout-to-distributed-executable workflow

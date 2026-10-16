@@ -1,0 +1,16 @@
+import app.deep.leaf
+
+class Item:
+    name: str
+    count: int
+
+class BadItem(Exception):
+    pass
+
+type Count = int | None
+
+def describe(item: Item) -> str:
+    return app.deep.leaf.label(item.name) + " x" + str(item.count)
+
+def _hidden() -> int:
+    return 1

@@ -305,7 +305,14 @@ return {
     local point = type.members[1].args[1]
     eq("geometry Point 3:34", point.module .. " " .. point.name .. " " .. point.span.line .. ":" .. point.span.col)
     eq("3:1: imports must come before declarations", parse_error("def f() -> None:\n    pass\nimport x\n"))
-    eq("1:9: expected end of line, found '.'", parse_error("import a.b\n"))
+    program = parse("import app.util.text\ndef f(r: app.util.Rec) -> list[app.util.Rec]:\n"
+      .. "    try:\n        return [r]\n    except app.errors.Bad:\n        raise\n")
+    eq("app.util.text app", program.imports[1].name .. " " .. program.imports[1].root)
+    eq("list[app.util.Rec]", show(program.functions[1].return_type))
+    eq("app.util Rec", program.functions[1].params[1].type.module .. " " .. program.functions[1].params[1].type.name)
+    eq("app.errors", program.functions[1].body[1].handlers[1].class.module)
+    eq("isinstance(x, a.b.C)", expr("isinstance(x, a.b.C)"))
+    eq("1:10: expected a module name, found end of line", parse_error("import a.\n"))
   end,
 
   records = function()

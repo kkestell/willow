@@ -1,0 +1,6 @@
+import app.models
+
+def make(name: str, count: int = 1) -> app.models.Item:
+    if count < 0:
+        raise app.models.BadItem("negative count for " + name)
+    return app.models.Item(name, count)

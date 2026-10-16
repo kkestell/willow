@@ -81,6 +81,20 @@ function M.parse(tokens)
   -- name, with `args` holding a list's element or a dict's key and value.
   local parse_type
 
+  -- Reads `. NAME` parts after `first`, a NAME already consumed, into `ref`:
+  -- the last name is `ref.name` and any before it, joined by `.`, `ref.module`.
+  local function qualify(ref, first, what)
+    local names = { first }
+    while accept(".") do
+      names[#names + 1] = expect("NAME", what).value
+    end
+    ref.name = names[#names]
+    if #names > 1 then
+      ref.module = table.concat(names, ".", 1, #names - 1)
+    end
+    return ref
+  end
+
   local function parse_member()
     local token = peek()
     if not type_names[token.kind] and token.kind ~= "NAME" then
@@ -89,11 +103,7 @@ function M.parse(tokens)
     advance()
     local node = ast.node("Type", token.span, { name = token.kind })
     if token.kind == "NAME" then
-      node.name = token.value
-      if accept(".") then
-        node.module = node.name
-        node.name = expect("NAME", "a type name").value
-      end
+      qualify(node, token.value, "a type name")
     elseif token.kind == "list" then
       expect("[")
       node.args = { parse_type() }
@@ -205,9 +215,8 @@ function M.parse(tokens)
       end
       advance()
       local class = { name = name.kind == "NAME" and name.value or name.kind, span = name.span }
-      if name.kind == "NAME" and accept(".") then
-        class.module = class.name
-        class.name = expect("NAME", "a class name").value
+      if name.kind == "NAME" then
+        qualify(class, name.value, "a class name")
       end
       accept(",")
       expect(")", "')'")
@@ -386,11 +395,7 @@ function M.parse(tokens)
         diag.error(clause.span, "'except*' is not supported")
       end
       local name = expect("NAME", "an exception class name")
-      local class = { name = name.value, span = name.span }
-      if accept(".") then
-        class.module = class.name
-        class.name = expect("NAME", "an exception class name").value
-      end
+      local class = qualify({ span = name.span }, name.value, "an exception class name")
       local bound
       if accept("as") then
         bound = expect("NAME", "a name").value
@@ -629,8 +634,12 @@ function M.parse(tokens)
   while peek().kind == "import" do
     advance()
     local name = expect("NAME", "a module name")
+    local names = { name.value }
+    while accept(".") do
+      names[#names + 1] = expect("NAME", "a module name").value
+    end
     expect("NEWLINE", "end of line")
-    imports[#imports + 1] = { name = name.value, span = name.span }
+    imports[#imports + 1] = { name = table.concat(names, "."), root = name.value, span = name.span }
   end
 
   local functions, records, aliases = {}, {}, {}

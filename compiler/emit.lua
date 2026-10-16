@@ -117,8 +117,9 @@ function M.emit(lowered)
   -- Functions of the entry module are locals. Every other module keeps its
   -- functions in a table, and so does the entry module when another module
   -- imports it, so that a caller's local cannot shadow the function.
+  -- Escaping `_` as `__` and `.` as `_0` keeps distinct module names distinct.
   local function module_table(module)
-    return "__wlo_module_" .. module.name
+    return "__wlo_module_" .. module.name:gsub("_", "__"):gsub("%.", "_0")
   end
 
   local entry_imported = false
