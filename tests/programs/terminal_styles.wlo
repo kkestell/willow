@@ -1,0 +1,24 @@
+import io
+import terminal
+
+def visible(text: str) -> str:
+    return text.replace("\x1b", "ESC")
+
+def main() -> None:
+    for color in ["default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]:
+        print(f"{color}: {visible(terminal.style('x', color=color))}")
+    print(visible(terminal.style("bold", bold=True)))
+    print(visible(terminal.style("both", color="cyan", bold=True)))
+    print(visible(terminal.style("off", color="red", bold=True, enabled=False)))
+    try:
+        terminal.style("x", color="purple", enabled=False)
+    except ValueError as e:
+        print(e.message)
+    out = io.stdout()
+    print(f"{terminal.isatty(out)} {terminal.color_enabled(out)} {terminal.isatty(io.stdin())}")
+    terminal.progress("working")
+    terminal.finish_progress()
+    try:
+        terminal.progress("two\nlines")
+    except ValueError as e:
+        print(e.message)

@@ -251,12 +251,12 @@ remove obsolete amendment wording, and update implementation status.
   - [x] Deliver a command wrapper handling literal arguments, binary output,
     nonzero status, timeout, and background-helper cleanup
 
-- [ ] Friendly command-line and terminal tools (spec §21)
-  - [ ] Typed parser declarations/accessors, options/positionals, generated help,
+- [x] Friendly command-line and terminal tools (spec §21)
+  - [x] Typed parser declarations/accessors, options/positionals, generated help,
     and separate usage/help/programming errors
-  - [ ] TTY detection, explicit color policy, styling, progress, and finish;
+  - [x] TTY detection, explicit color policy, styling, progress, and finish;
     preserve clean stdout when output is redirected
-  - [ ] Deliver a report CLI with help, typed options, terminal presentation, and
+  - [x] Deliver a report CLI with help, typed options, terminal presentation, and
     clean piped output
 
 - [ ] HTTP and HTTPS clients (spec §22)

@@ -1,0 +1,92 @@
+import cli
+
+def build() -> cli.Parser:
+    parser = cli.parser("tool", description="Process some files.")
+    parser.add_str("output", "out.txt", help="Where to write", short="o")
+    parser.add_int("count", 3, help="How many")
+    parser.add_float("ratio", 0.5)
+    parser.add_str("name", "", help="Your name", required=True)
+    parser.add_flag("verbose", help="Say more", short="v")
+    parser.add_positional("source", help="Input file")
+    parser.add_rest("extra", help="More inputs")
+    return parser
+
+def show(args: cli.Args) -> str:
+    extra = ", ".join(args.get_list("extra"))
+    return f"{args.get_str('output')} {args.get_int('count')} {args.get_float('ratio')} {args.get_str('name')} {args.get_bool('verbose')} {args.get_str('source')} [{extra}]"
+
+def attempt(parser: cli.Parser, args: list[str]) -> None:
+    try:
+        print(show(parser.parse(args)))
+    except cli.UsageError as error:
+        print(error.message.split("\n")[1])
+    except cli.HelpRequested as help:
+        print(f"help: {len(help.message.split(chr(10)))} lines")
+
+def schema(kind: str) -> None:
+    parser = cli.parser("bad")
+    try:
+        if kind == "name":
+            parser.add_flag("2fast")
+        elif kind == "hyphens":
+            parser.add_flag("a--b")
+        elif kind == "short":
+            parser.add_flag("fast", short="ab")
+        elif kind == "reserved":
+            parser.add_flag("help")
+        elif kind == "duplicate":
+            parser.add_flag("fast")
+            parser.add_positional("fast")
+        elif kind == "short duplicate":
+            parser.add_flag("fast", short="f")
+            parser.add_flag("full", short="f")
+        elif kind == "rest twice":
+            parser.add_rest("a")
+            parser.add_rest("b")
+        else:
+            parser.add_rest("a")
+            parser.add_positional("b")
+    except ValueError as error:
+        print(f"{kind}: {error.message}")
+
+def main() -> None:
+    parser = build()
+    print(parser.help())
+    attempt(parser, ["--name", "Ada", "in.txt"])
+    attempt(parser, ["-o", "x.txt", "--count=7", "--ratio", "2", "--name=Ada", "-v", "-v", "in.txt", "a", "b"])
+    attempt(parser, ["in.txt", "--name", "-dash", "--count", "1", "--count", "2"])
+    attempt(parser, ["--name", "Ada", "--", "-in.txt", "--verbose"])
+    attempt(parser, ["--name", "Ada", "-", "-h"])
+    attempt(parser, ["--help"])
+    attempt(parser, ["--name", "Ada"])
+    attempt(parser, ["in.txt"])
+    attempt(parser, ["--name", "Ada", "in.txt", "--colour"])
+    attempt(parser, ["--name", "Ada", "in.txt", "-vq"])
+    attempt(parser, ["--name", "Ada", "in.txt", "--count"])
+    attempt(parser, ["--name", "Ada", "in.txt", "--count", "many"])
+    attempt(parser, ["--name", "Ada", "in.txt", "--ratio=fast"])
+    attempt(parser, ["--name", "Ada", "in.txt", "--verbose=yes"])
+    attempt(parser, ["--name", "Ada", "in.txt", "--source", "x"])
+    plain = cli.parser("plain")
+    plain.add_positional("one")
+    try:
+        plain.parse(["a", "b"])
+    except cli.UsageError as error:
+        print(error.message)
+    print(plain.help())
+
+    for kind in ["name", "hyphens", "short", "reserved", "duplicate", "short duplicate", "rest twice", "after rest"]:
+        schema(kind)
+
+    args = parser.parse(["--name", "Ada", "in.txt", "a"])
+    for getter in ["missing", "type"]:
+        try:
+            if getter == "missing":
+                args.get_str("nope")
+            else:
+                args.get_int("name")
+        except ValueError as wrong:
+            print(wrong.message)
+    extras = args.get_list("extra")
+    extras.append("changed")
+    print(len(args.get_list("extra")))

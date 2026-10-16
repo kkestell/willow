@@ -1,0 +1,52 @@
+usage: tool [options] source [extra ...]
+
+Process some files.
+
+arguments:
+  source     Input file
+  extra ...  More inputs
+
+options:
+  -h, --help           show this help and exit
+  -o, --output OUTPUT  Where to write (default: out.txt)
+  --count COUNT        How many (default: 3)
+  --ratio RATIO        (default: 0.5)
+  --name NAME          Your name (required)
+  -v, --verbose        Say more
+
+out.txt 3 0.5 Ada False in.txt []
+x.txt 7 2.0 Ada True in.txt [a, b]
+out.txt 2 0.5 -dash False in.txt []
+out.txt 3 0.5 Ada False -in.txt [--verbose]
+help: 16 lines
+help: 16 lines
+tool: error: missing argument 'source'
+tool: error: option '--name' is required
+tool: error: unknown option '--colour'
+tool: error: unknown option '-vq'
+tool: error: option '--count' needs a value
+tool: error: option '--count' expects an integer, received 'many'
+tool: error: option '--ratio' expects a number, received 'fast'
+tool: error: option '--verbose' takes no value
+tool: error: unknown option '--source'
+usage: plain [options] one
+plain: error: unexpected argument 'b'
+usage: plain [options] one
+
+arguments:
+  one
+
+options:
+  -h, --help  show this help and exit
+
+name: invalid name '2fast'
+hyphens: invalid name 'a--b'
+short: invalid short option 'ab'
+reserved: 'help' and 'h' are reserved
+duplicate: duplicate name 'fast'
+short duplicate: duplicate short option '-f'
+rest twice: only one rest argument is allowed
+after rest: positional 'b' follows the rest argument
+no argument named 'nope'
+'name' is not an int argument
+1

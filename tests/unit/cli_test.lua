@@ -38,6 +38,42 @@ local USAGE = "usage: willow check <file>\n       willow run <file> [args...]\n"
   .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>\n"
   .. "       willow test [--check] [path]\n"
 
+local ffi = require("ffi")
+ffi.cdef([[
+int posix_openpt(int flags);
+int grantpt(int fd);
+int unlockpt(int fd);
+char *ptsname(int fd);
+int open(const char *path, int flags, ...);
+long read(int fd, void *buffer, size_t size);
+int close(int fd);
+int fcntl(int fd, int command, ...);
+]])
+local OSX = ffi.os == "OSX"
+
+-- Runs `command` with stdout and stderr on a new terminal and returns what it
+-- wrote there, without the carriage returns the terminal adds before newlines.
+-- The test keeps the terminal open so the output stays readable afterwards.
+local function in_terminal(dir, command)
+  local master = ffi.C.posix_openpt(OSX and 0x20002 or 0x102) -- O_RDWR | O_NOCTTY
+  assert(master >= 0 and ffi.C.grantpt(master) == 0 and ffi.C.unlockpt(master) == 0)
+  local slave_path = ffi.string(ffi.C.ptsname(master))
+  local slave = ffi.C.open(slave_path, OSX and 0x20002 or 0x102)
+  os.execute(string.format("cd %s && %s >%s 2>&1 </dev/null", quote(dir), command, quote(slave_path)))
+  ffi.C.fcntl(master, 4, ffi.new("int", OSX and 0x4 or 0x800)) -- F_SETFL, O_NONBLOCK
+  local buffer, parts = ffi.new("char[4096]"), {}
+  while true do
+    local count = tonumber(ffi.C.read(master, buffer, 4096))
+    if count <= 0 then
+      break
+    end
+    parts[#parts + 1] = ffi.string(buffer, count)
+  end
+  ffi.C.close(slave)
+  ffi.C.close(master)
+  return (table.concat(parts):gsub("\r\n", "\n"))
+end
+
 local JSON_PROGRAM = "import json\ndef main() -> None:\n    print(json.dump(json.parse('[1, 2.5]')))\n"
 
 -- Runs `command` in `dir`; returns its exit status, stdout, and stderr.
@@ -599,6 +635,50 @@ return {
       eq("timed out: command timed out after 0.2 seconds\nhelper stopped: -15\n", stdout)
       status, stdout = wrap("1 nosuchprogram")
       eq("failed: cannot run nosuchprogram: No such file or directory\nhelper stopped: -15\n", stdout)
+    end)
+  end,
+
+  report_example = function()
+    in_temp_dir(function(dir)
+      local lines = {}
+      for i = 1, 2500 do
+        lines[i] = i % 5 == 0 and "ERROR failed" or (i % 2 == 0 and "INFO ok" or "WARN slow")
+      end
+      write(dir .. "/app.log", table.concat(lines, "\n") .. "\n")
+      local example = quote(ROOT .. "/examples/report.wlo")
+      local status, stdout, stderr = willow(dir, "run " .. example .. " --help")
+      eq(0, status)
+      eq("usage: report [options] [file ...]\n", stdout:match("^[^\n]*\n"))
+      status, stdout, stderr = willow(dir, "run " .. example .. " --limit")
+      eq(2, status)
+      eq("usage: report [options] [file ...]\nreport: error: option '--limit' needs a value\n", stderr)
+      eq(2, (willow(dir, "run " .. example .. " -n -1 app.log")))
+      -- Piped output is plain and progress stays off a non-terminal stderr.
+      local table_text = "level        lines\nINFO          1000\nWARN          1000\nERROR          500\ntotal         2500\n"
+      status, stdout, stderr = willow(dir, "run " .. example .. " app.log")
+      eq(0, status)
+      eq(table_text, stdout)
+      eq("", stderr)
+      status, stdout = willow(dir, "run " .. example .. " -n 1 --sort=name < app.log")
+      eq("level        lines\nERROR          500\ntotal         2500\n", stdout)
+      -- On a terminal the table is styled and progress lines are replaced.
+      local output = in_terminal(dir, "env -u NO_COLOR TERM=xterm " .. quote(WILLOW) .. " run " .. example .. " app.log")
+      eq("\r\27[Kread 1000 lines\r\27[Kread 2000 lines\r\27[K\27[1mlevel        lines\27[0m\n"
+        .. "\27[32mINFO      \27[0m    1000\n\27[33mWARN      \27[0m    1000\n\27[31mERROR     \27[0m     500\n"
+        .. "total         2500\n", output)
+      output = in_terminal(dir, "TERM=dumb " .. quote(WILLOW) .. " run " .. example .. " --color=never -q app.log")
+      eq(table_text, output)
+    end)
+  end,
+
+  finish_progress_message = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/done.wlo", "import terminal\ndef main() -> None:\n    terminal.progress('x')\n    terminal.finish_progress('done')\n")
+      local status, stdout, stderr = willow(dir, "run done.wlo")
+      eq(0, status)
+      eq("", stdout)
+      eq("done\n", stderr)
+      eq("\r\27[Kx\r\27[Kdone\n", in_terminal(dir, "TERM=xterm " .. quote(WILLOW) .. " run done.wlo"))
     end)
   end,
 

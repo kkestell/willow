@@ -1,0 +1,15 @@
+default: x
+black: ESC[30mxESC[0m
+red: ESC[31mxESC[0m
+green: ESC[32mxESC[0m
+yellow: ESC[33mxESC[0m
+blue: ESC[34mxESC[0m
+magenta: ESC[35mxESC[0m
+cyan: ESC[36mxESC[0m
+white: ESC[37mxESC[0m
+ESC[1mboldESC[0m
+ESC[1;36mbothESC[0m
+off
+unknown color 'purple'
+False False False
+progress message cannot contain a line break

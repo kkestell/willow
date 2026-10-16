@@ -101,7 +101,91 @@ local subprocess = provided("subprocess", "run spawn", { Result = result, Proces
 subprocess.declarations.run.helper = "process_run"
 subprocess.declarations.spawn.helper = "process_spawn"
 
+local optional_str = types.union({ types.str, types.None })
+local function value_option(kind)
+  return {
+    params = { types.str, kind, types.str, optional_str, types.bool },
+    names = { "name", "default", "help", "short", "required" },
+    defaults = { [3] = { kind = "String", value = "" }, [4] = { kind = "None" }, [5] = { kind = "Bool", value = false } },
+    result = types.None,
+  }
+end
+local function getter(kind)
+  return { params = { types.str }, names = { "name" }, result = kind }
+end
+
+local args = {
+  kind = "Record",
+  name = "Args",
+  type_name = "cli.Args",
+  fields = {},
+  native = true,
+  prefix = "cli_args",
+  methods = {
+    get_str = getter(types.str),
+    get_int = getter(types.int),
+    get_float = getter(types.float),
+    get_bool = getter(types.bool),
+    get_list = getter(types.list(types.str)),
+  },
+}
+args.type = types.record(args)
+
+local described = {
+  params = { types.str, types.str },
+  names = { "name", "help" },
+  defaults = { [2] = { kind = "String", value = "" } },
+  result = types.None,
+}
+local parser = {
+  kind = "Record",
+  name = "Parser",
+  type_name = "cli.Parser",
+  fields = {},
+  native = true,
+  prefix = "cli_parser",
+  methods = {
+    add_str = value_option(types.str),
+    add_int = value_option(types.int),
+    add_float = value_option(types.float),
+    add_flag = {
+      params = { types.str, types.str, optional_str },
+      names = { "name", "help", "short" },
+      defaults = { [2] = { kind = "String", value = "" }, [3] = { kind = "None" } },
+      result = types.None,
+    },
+    add_positional = described,
+    add_rest = described,
+    parse = { params = { types.list(types.str) }, names = { "args" }, result = args.type },
+    help = { params = {}, result = types.str },
+  },
+}
+parser.type = types.record(parser)
+
+-- An exception class of a provided module, with only a `message` field.
+local function provided_exception(module, name)
+  local record = {
+    kind = "Record",
+    name = name,
+    type_name = module .. "." .. name,
+    exception = true,
+    fields = { { name = "message", type = types.str } },
+  }
+  record.type = types.record(record)
+  return record
+end
+
+local cli = provided("cli", "parser", {
+  Parser = parser,
+  Args = args,
+  UsageError = provided_exception("cli", "UsageError"),
+  HelpRequested = provided_exception("cli", "HelpRequested"),
+})
+cli.declarations.parser.helper = "cli_parser_new"
+
 M.modules = {
+  cli = cli,
+  terminal = provided("terminal", "isatty color_enabled style progress finish_progress"),
   io = provided("io", "open stdin stdout stderr", { File = file }),
   subprocess = subprocess,
   sys = provided("sys", "args eprint exit getenv environ getcwd"),
@@ -113,6 +197,7 @@ M.stat = stat
 M.file = file
 M.result = result
 M.process = process
+M.parser = parser
 
 -- The built-in exception classes, records with only a `message` field.
 local exceptions = {}

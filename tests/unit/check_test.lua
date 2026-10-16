@@ -720,4 +720,28 @@ return {
     eq("3:59: operator '+' cannot be applied to bytes | None and int",
       err("x = subprocess.run(['x'], capture_output=True).stdout + 1"))
   end,
+
+  cli_and_terminal = function()
+    local program = check_source("import cli\nimport terminal\n" .. in_main(table.concat({
+      "p = cli.parser('tool', description='Does things')",
+      "p.add_int('limit', 10, short='n')",
+      "p.add_flag('verbose')",
+      "a = p.parse(['-n', '2'])",
+      "n: int = a.get_int('limit')",
+      "f: float = a.get_float('x')",
+      "b: bool = a.get_bool('verbose')",
+      "rest: list[str] = a.get_list('rest')",
+      "try:",
+      "    p.parse([])",
+      "except cli.UsageError as e:",
+      "    print(e.message)",
+      "t: str = terminal.style('x', color='red', bold=True, enabled=False)",
+    }, "\n")))
+    eq("cli.Args", program.functions[1].body[4].value.type.name)
+    local function err(statement)
+      return check_errors("import cli\n" .. in_main("p = cli.parser('tool')\n" .. statement))
+    end
+    eq("4:20: expected int, received str", err("p.add_int('n', 'x')"))
+    eq("4:13: cannot construct native type cli.Parser", err("q = cli.Parser()"))
+  end,
 }

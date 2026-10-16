@@ -1,0 +1,114 @@
+# Counts log lines by level (their first word) and prints the most frequent
+# levels as a table: willow run report.wlo [options] [file]
+# Run with --help for the options. Output to a terminal is colored; piped
+# output is plain.
+
+import cli
+import fs
+import io
+import sys
+import terminal
+
+class Options:
+    path: str
+    limit: int
+    sort: str
+    color: bool
+    quiet: bool
+
+def parse_options() -> Options:
+    parser = cli.parser("report", description="Count log lines by level.")
+    parser.add_int("limit", 10, help="Show at most this many levels", short="n")
+    parser.add_str("sort", "count", help="Order by count or name")
+    parser.add_str("color", "auto", help="Color output: auto, always, or never")
+    parser.add_flag("quiet", help="Do not show progress", short="q")
+    parser.add_rest("file", help="Log file to read (default: stdin)")
+    try:
+        args = parser.parse(sys.args())
+    except cli.HelpRequested as help:
+        io.stdout().write_text(help.message)
+        sys.exit(0)
+    except cli.UsageError as error:
+        sys.eprint(error.message)
+        sys.exit(2)
+    files = args.get_list("file")
+    sort = args.get_str("sort")
+    color = args.get_str("color")
+    limit = args.get_int("limit")
+    if len(files) > 1 or limit < 0 or (sort != "count" and sort != "name") or (color != "auto" and color != "always" and color != "never"):
+        sys.eprint(parser.help().split("\n")[0])
+        sys.eprint("report: error: expected at most one file, --limit of at least 0, --sort count|name, and --color auto|always|never")
+        sys.exit(2)
+    path = "-"
+    if len(files) == 1:
+        path = files[0]
+    enabled = color == "always" or (color == "auto" and terminal.color_enabled(io.stdout()))
+    return Options(path, limit, sort, enabled, args.get_bool("quiet"))
+
+def keys(items: dict[str, int]) -> list[str]:
+    result: list[str] = []
+    for key in items:
+        result.append(key)
+    return result
+
+def count_keys(items: dict[int, list[str]]) -> list[int]:
+    result: list[int] = []
+    for key in items:
+        result.append(key)
+    return result
+
+def level_color(level: str) -> str:
+    if level == "ERROR":
+        return "red"
+    elif level == "WARN":
+        return "yellow"
+    elif level == "INFO":
+        return "green"
+    return "default"
+
+def main() -> None:
+    options = parse_options()
+    source = io.stdin()
+    if options.path != "-":
+        try:
+            source = io.open(options.path)
+        except OSError as error:
+            sys.eprint(error.message)
+            sys.exit(1)
+    counts: dict[str, int] = {}
+    total = 0
+    line = source.readline()
+    while line is not None:
+        words = line.strip().split(" ")
+        if words[0] != "":
+            seen = counts.get(words[0])
+            if seen is None:
+                counts[words[0]] = 1
+            else:
+                counts[words[0]] = seen + 1
+        total = total + 1
+        if not options.quiet and total % 1000 == 0:
+            terminal.progress(f"read {total} lines")
+        line = source.readline()
+    if options.path != "-":
+        source.close()
+    terminal.finish_progress()
+
+    levels = sorted(keys(counts))
+    if options.sort == "count":
+        by_count: dict[int, list[str]] = {}
+        for level in levels:
+            n = counts[level]
+            if n not in by_count:
+                by_count[n] = []
+            by_count[n].append(level)
+        ordered: list[str] = []
+        for n in sorted(count_keys(by_count), reverse=True):
+            for level in by_count[n]:
+                ordered.append(level)
+        levels = ordered
+    print(terminal.style(f"{'level':<10}{'lines':>8}", bold=True, enabled=options.color))
+    for level in levels[:options.limit]:
+        name = terminal.style(f"{level:<10}", color=level_color(level), enabled=options.color)
+        print(f"{name}{counts[level]:>8d}")
+    print(f"{'total':<10}{total:>8d}")

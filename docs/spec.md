@@ -4,7 +4,7 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-Sections 1–20 describe the implemented language. Sections 21–24 describe planned
+Sections 1–21 describe the implemented language. Sections 22–24 describe planned
 milestones, introduced under
 [planned application development milestones](#planned-application-development-milestones).
 
@@ -946,6 +946,92 @@ Each location names the file it belongs to. Diagnostics go to stderr.
 The standard library is a set of modules that ship with Willow and are imported
 like a program's own (§12).
 
+### `cli`
+
+```python
+import cli
+import io
+import sys
+
+def main() -> None:
+    parser = cli.parser("report", description="Summarize a log file")
+    parser.add_int("limit", 10, help="Maximum rows", short="n")
+    parser.add_positional("file")
+    try:
+        args = parser.parse(sys.args())
+    except cli.HelpRequested as help:
+        io.stdout().write_text(help.message)
+        sys.exit(0)
+    except cli.UsageError as error:
+        sys.eprint(error.message)
+        sys.exit(2)
+    print(args.get_str("file"))
+    print(args.get_int("limit"))
+```
+
+| Declaration | Meaning |
+| --- | --- |
+| `parser(prog: str, description: str = "") -> Parser` | A new parser for the program named `prog` |
+| `class Parser` | A native type that declares arguments and parses them |
+| `class Args` | A native type holding one parse's values |
+| `class UsageError(Exception)` | Arguments that do not fit the declarations |
+| `class HelpRequested(Exception)` | `-h` or `--help` among the options; the message is the help text |
+
+| `Parser` method | Meaning |
+| --- | --- |
+| `add_str(name: str, default: str, help: str = "", short: str \| None = None, required: bool = False) -> None` | A text option `--name VALUE` |
+| `add_int(name: str, default: int, help: str = "", short: str \| None = None, required: bool = False) -> None` | An integer option |
+| `add_float(name: str, default: float, help: str = "", short: str \| None = None, required: bool = False) -> None` | A number option |
+| `add_flag(name: str, help: str = "", short: str \| None = None) -> None` | An option without a value, false unless given |
+| `add_positional(name: str, help: str = "") -> None` | A required positional argument |
+| `add_rest(name: str, help: str = "") -> None` | Zero or more remaining positional arguments |
+| `parse(args: list[str]) -> Args` | Parse `args` |
+| `help() -> str` | The help text |
+
+| `Args` method | Meaning |
+| --- | --- |
+| `get_str(name: str) -> str` | A text option or positional argument |
+| `get_int(name: str) -> int` | An integer option |
+| `get_float(name: str) -> float` | A number option |
+| `get_bool(name: str) -> bool` | A flag |
+| `get_list(name: str) -> list[str]` | A new list of the rest arguments |
+
+A name starts with an ASCII letter and continues with letters and digits, with
+single hyphens between them, and an option `name` is written `--name`. A short
+spelling is one ASCII letter, written `-x`. Names and short spellings are
+unique, and `help` and `h` are reserved. Positional arguments share the
+namespace and are declared in order; at most one rest argument is allowed, and
+it comes after the positional arguments.
+
+An option's value follows as `--name value`, `--name=value`, or `-x value`, and
+is taken even if it begins with `-`. A repeated option keeps its last value.
+Options may appear between positional arguments; after `--`, every argument is
+positional, and `-` alone is always positional. There are no abbreviations,
+bundled short options, or subcommands. Integer and number values convert as
+`int` and `float` convert text (§6). An option with `required` must appear even
+though it has a default. Every option without its own value takes its default.
+
+A `UsageError` message is the usage line, a newline, and `<prog>: error: `
+followed by one of `unknown option '<arg>'`, `option '--<name>' needs a value`,
+`option '--<name>' takes no value`, `option '--<name>' expects an integer,
+received '<value>'` (or `a number`), `option '--<name>' is required`,
+`missing argument '<name>'`, or `unexpected argument '<arg>'`. Neither
+exception prints anything or ends the program; applications usually exit with
+status 2 after a usage error and 0 after showing help.
+
+The help text starts with `usage: <prog> [options]` and the positional
+arguments, then the description, then `arguments:` and `options:` sections in
+declaration order with aligned help. Each value option shows an upper-case
+placeholder and either `(required)` or a nonempty `(default: <value>)`. Every
+line, including the last, ends with a newline.
+
+An invalid declaration raises `ValueError` with a message such as
+`invalid name '<name>'`, `duplicate name '<name>'`, or
+`'help' and 'h' are reserved`. A getter given a name that was not declared, or
+the name of an argument of another kind, raises `ValueError`
+(`no argument named '<name>'`, `'<name>' is not an int argument`). Each parse
+returns an independent `Args`.
+
 ### `fs`
 
 | Declaration | Meaning |
@@ -1213,6 +1299,26 @@ message `invalid environment variable name`. Values, and the working directory,
 must be valid UTF-8, or the call raises `ValueError` with the message
 `invalid UTF-8`.
 
+### `terminal`
+
+| Function | Meaning |
+| --- | --- |
+| `isatty(file: io.File) -> bool` | Whether `file` is a terminal |
+| `color_enabled(file: io.File) -> bool` | Whether `file` is a terminal, `TERM` is not `dumb`, and `NO_COLOR` is unset |
+| `style(text: str, color: str = "default", bold: bool = False, enabled: bool = True) -> str` | `text` wrapped in ANSI sequences for the color and boldness, or unchanged when not `enabled` |
+| `progress(message: str) -> None` | Replace the progress line on stderr |
+| `finish_progress(message: str = "") -> None` | Clear the progress line and write `message` and a newline to stderr when it is not empty |
+
+The colors are `default`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`,
+`cyan`, and `white`; any other raises `ValueError` with the message
+`unknown color '<color>'`. `style` does not look at any stream: callers pass
+`enabled=terminal.color_enabled(stream)` or their own choice. `progress` writes
+nothing unless stderr is a terminal and `TERM` is not `dumb`, and a message with
+CR or LF raises `ValueError` with the message
+`progress message cannot contain a line break`. `finish_progress` clears the
+line only on such a terminal but writes its message everywhere. Both flush
+stderr, through the same buffer as `sys.eprint`, and leave stdout alone.
+
 ### `time`
 
 | Function | Meaning |
@@ -1229,8 +1335,8 @@ raises `ValueError` with the message `timestamp out of range` otherwise.
 
 ## Planned application development milestones
 
-Sections 21–24 define accepted targets, in implementation order. They are not yet
-implemented. Sections 1–20 describe the implemented baseline; each planned section
+Sections 22–24 define accepted targets, in implementation order. They are not yet
+implemented. Sections 1–21 describe the implemented baseline; each planned section
 identifies the rules it changes when its milestone lands. Completion and delivery
 examples are tracked in `agents/todo.md`. A planned API is not available merely
 because its signature appears here.
@@ -1281,102 +1387,7 @@ This milestone is implemented. Its rules are part of §14.
 
 ## 21. Command-line and terminal tools
 
-### `cli`
-
-`cli.parser(prog: str, description: str = "") -> cli.Parser` creates a native
-argument parser. Its schema is explicit; it does not inspect user records or
-require callbacks. Typed option defaults are required, making getters nonoptional.
-
-```text
-Parser.add_str(name: str, default: str, help: str = "",
-               short: str | None = None, required: bool = False) -> None
-Parser.add_int(name: str, default: int, help: str = "",
-               short: str | None = None, required: bool = False) -> None
-Parser.add_float(name: str, default: float, help: str = "",
-                 short: str | None = None, required: bool = False) -> None
-Parser.add_flag(name: str, help: str = "", short: str | None = None) -> None
-Parser.add_positional(name: str, help: str = "") -> None
-Parser.add_rest(name: str, help: str = "") -> None
-Parser.parse(args: list[str]) -> Args
-Parser.help() -> str
-
-Args.get_str(name: str) -> str
-Args.get_int(name: str) -> int
-Args.get_float(name: str) -> float
-Args.get_bool(name: str) -> bool
-Args.get_list(name: str) -> list[str]
-```
-
-An option name contains ASCII letters, digits, and single interior hyphens,
-begins with a letter, and denotes `--name`. A short spelling, when present, is
-one ASCII letter without a dash and denotes `-x`. Names and spellings must be
-unique; `--help` and `-h` are reserved. Getter names are the registered names.
-Positionals use the same naming rules and share the name namespace.
-
-Options accept `--name value`, `--name=value`, or `-x value`. Flags take no value
-and default to false. Repeated value options use the last value; repeated flags
-remain true. `--` ends option processing. There is no abbreviation, short-option
-bundling, subcommand system, environment lookup, or response-file expansion.
-A value-taking option consumes the next argument even if it starts with `-`;
-for signed numeric positionals use `--` when needed. Options may appear among
-positionals. Fixed positionals are required strings. At most one `add_rest`
-collects zero or more remaining positionals into `list[str]`, and it must follow
-all fixed positionals.
-
-Integer and float values use §6's conversions. `required=True` requires an
-explicit occurrence even though the schema supplies a typed default. A missing
-value, unknown option, conversion failure, or wrong positional count raises
-`cli.UsageError` with a useful message. Encountering help in option position
-raises `cli.HelpRequested`, whose message is the generated help. Both are exception
-classes; neither prints nor exits. Applications handle them with statuses 2 and 0
-respectively. Help includes usage, description, declared options/positionals,
-required markers, and defaults in declaration order, with a trailing newline.
-
-Invalid schemas and wrong getter names or types raise `ValueError`, not
-`UsageError`. Parse results are independent snapshots; `get_list` returns a copy.
-User code may construct its own options record from the typed getters.
-
-```python
-import cli
-import io
-import sys
-
-def main() -> None:
-    parser = cli.parser("report", description="Summarize a log file")
-    parser.add_int("limit", 10, help="Maximum rows", short="n")
-    parser.add_positional("file")
-    try:
-        args = parser.parse(sys.args())
-    except cli.HelpRequested as help:
-        io.stdout().write_text(help.message)
-        sys.exit(0)
-    except cli.UsageError as error:
-        sys.eprint(error.message)
-        sys.exit(2)
-    print(args.get_str("file"))
-    print(args.get_int("limit"))
-```
-
-### `terminal`
-
-| Function | Meaning |
-| --- | --- |
-| `isatty(file: io.File) -> bool` | Whether the stream is a terminal |
-| `color_enabled(file: io.File) -> bool` | TTY, `TERM` is not `dumb`, and `NO_COLOR` is absent |
-| `style(text: str, color: str = "default", bold: bool = False, enabled: bool = True) -> str` | Wrap text in ANSI style/reset sequences, or return it unchanged |
-| `progress(message: str) -> None` | Replace the current stderr progress line and flush |
-| `finish_progress(message: str = "") -> None` | Clear an active progress line and write any final message to stderr |
-
-Colors are `default`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`,
-and `white`; unknown names raise `ValueError`. `style` is independent of the host;
-applications pass `enabled=terminal.color_enabled(stream)` or an explicit override.
-`progress` does nothing when stderr is not a terminal or `TERM=dumb`.
-`finish_progress` clears the line only on a capable terminal, then writes any
-nonempty message followed by a newline on every destination and flushes. An empty
-message only clears the line. Progress messages must contain no CR or LF, or
-raise `ValueError`. These operations use the shared stderr buffer and leave stdout
-untouched. There is no raw keyboard
-mode, cursor-positioning API, terminal-size model, or full-screen UI system.
+This milestone is implemented. Its rules are part of §14.
 
 ## 22. HTTP and HTTPS clients
 

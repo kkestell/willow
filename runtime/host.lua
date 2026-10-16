@@ -726,3 +726,71 @@ function __wlo_process_kill(process, site)
     __wlo_C.__wlo_c_kill(process.pid, __wlo_SIGKILL)
   end
 end
+
+-- Terminals.
+
+__wlo_ffi.cdef([[int __wlo_c_isatty(int fd) __asm__("isatty");]])
+
+function __wlo_isatty(handle, site)
+  if handle.closed then
+    __wlo_fail("ValueError", "I/O operation on closed file", site)
+  end
+  return __wlo_C.__wlo_c_isatty(__wlo_fd(handle.file)) == 1
+end
+
+local function __wlo_capable(fd)
+  return __wlo_C.__wlo_c_isatty(fd) == 1 and os.getenv("TERM") ~= "dumb"
+end
+
+function __wlo_color_enabled(handle, site)
+  return __wlo_isatty(handle, site) and os.getenv("TERM") ~= "dumb" and os.getenv("NO_COLOR") == nil
+end
+
+local __wlo_COLORS = {
+  default = false, black = 30, red = 31, green = 32, yellow = 33, blue = 34, magenta = 35, cyan = 36, white = 37,
+}
+
+function __wlo_style(text, color, bold, enabled, site)
+  local code = __wlo_COLORS[color]
+  if code == nil then
+    __wlo_fail("ValueError", "unknown color '" .. color .. "'", site)
+  end
+  local codes = {}
+  if bold then
+    codes[#codes + 1] = "1"
+  end
+  if code then
+    codes[#codes + 1] = tostring(code)
+  end
+  if not enabled or #codes == 0 then
+    return text
+  end
+  return "\27[" .. table.concat(codes, ";") .. "m" .. text .. "\27[0m"
+end
+
+local function __wlo_write_stderr(text, site)
+  local ok, err = io.stderr:write(text)
+  if ok then
+    ok, err = io.stderr:flush()
+  end
+  if not ok then
+    __wlo_host_fail("cannot write output: " .. tostring(err), site)
+  end
+end
+
+function __wlo_progress(message, site)
+  if message:find("[\r\n]") then
+    __wlo_fail("ValueError", "progress message cannot contain a line break", site)
+  end
+  if __wlo_capable(2) then
+    __wlo_write_stderr("\r\27[K" .. message, site)
+  end
+end
+
+function __wlo_finish_progress(message, site)
+  local text = __wlo_capable(2) and "\r\27[K" or ""
+  if message ~= "" then
+    text = text .. message .. "\n"
+  end
+  __wlo_write_stderr(text, site)
+end

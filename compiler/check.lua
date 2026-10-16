@@ -90,6 +90,31 @@ local builtins = {
     result = bind.file.type,
   },
   stdin = { params = {}, result = bind.file.type },
+  parser = {
+    params = { types.str, types.str },
+    names = { "prog", "description" },
+    defaults = { [2] = { kind = "String", value = "" } },
+    result = bind.parser.type,
+  },
+  isatty = { params = { bind.file.type }, names = { "file" }, result = types.bool },
+  color_enabled = { params = { bind.file.type }, names = { "file" }, result = types.bool },
+  style = {
+    params = { types.str, types.str, types.bool, types.bool },
+    names = { "text", "color", "bold", "enabled" },
+    defaults = {
+      [2] = { kind = "String", value = "default" },
+      [3] = { kind = "Bool", value = false },
+      [4] = { kind = "Bool", value = true },
+    },
+    result = types.str,
+  },
+  progress = { params = { types.str }, names = { "message" }, result = types.None },
+  finish_progress = {
+    params = { types.str },
+    names = { "message" },
+    defaults = { [1] = { kind = "String", value = "" } },
+    result = types.None,
+  },
   run = {
     params = {
       types.list(types.str),
