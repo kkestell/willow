@@ -1,0 +1,44 @@
+# JSON messages over TCP, one per line. Received bytes are buffered and only
+# complete lines are decoded, so a code point split across reads is whole by
+# the time it is decoded.
+
+import json
+import net
+
+class LineReader:
+    connection: net.Connection
+    pending: bytes
+
+def reader(connection: net.Connection) -> LineReader:
+    return LineReader(connection, bytes([]))
+
+# The index of the first newline in `data`, or -1.
+def _newline(data: bytes) -> int:
+    index = 0
+    for octet in data:
+        if octet == 10:
+            return index
+        index = index + 1
+    return -1
+
+# The next complete line without its newline, or None when the peer closed.
+def read_line(lines: LineReader, timeout: float | None = None) -> str | None:
+    index = _newline(lines.pending)
+    while index < 0:
+        chunk = lines.connection.recv(4096, timeout=timeout)
+        if len(chunk) == 0:
+            return None
+        lines.pending = lines.pending + chunk
+        index = _newline(lines.pending)
+    line = lines.pending[:index]
+    lines.pending = lines.pending[index + 1:]
+    return line.decode()
+
+def read_json(lines: LineReader, timeout: float | None = None) -> json.Json:
+    line = read_line(lines, timeout=timeout)
+    if line is None:
+        return None
+    return json.parse(line)
+
+def send_json(connection: net.Connection, value: json.Json) -> None:
+    connection.sendall((json.dump(value) + "\n").encode())

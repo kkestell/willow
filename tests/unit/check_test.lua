@@ -744,4 +744,20 @@ return {
     eq("4:20: expected int, received str", err("p.add_int('n', 'x')"))
     eq("4:13: cannot construct native type cli.Parser", err("q = cli.Parser()"))
   end,
+
+  net_module = function()
+    local program = check_source("import net\n" .. in_main(table.concat({
+      "c = net.connect('localhost', 80)",
+      "data = c.recv(4, timeout=1.0)",
+      "l = net.listen('127.0.0.1', 0, backlog=4)",
+      "a = l.accept(timeout=1.0)",
+      "port: int = l.local_port()",
+      "c.sendall(data)",
+    }, "\n")))
+    eq("bytes", program.functions[1].body[2].value.type.name)
+    eq("net.Connection", program.functions[1].body[4].value.type.name)
+    eq("3:13: cannot construct native type net.Connection", check_errors("import net\n" .. in_main("x = net.Connection()")))
+    eq("4:12: expected int, received str",
+      check_errors("import net\n" .. in_main("c = net.connect('h', 1)\nc.recv('x')")))
+  end,
 }

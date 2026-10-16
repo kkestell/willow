@@ -1,0 +1,105 @@
+import net
+
+def pair(listener: net.Listener) -> list[net.Connection]:
+    client = net.connect("127.0.0.1", listener.local_port(), timeout=5.0)
+    return [client, listener.accept(timeout=5.0)]
+
+def main() -> None:
+    listener = net.listen("127.0.0.1", 0)
+    print(listener.local_port() > 0)
+    ends = pair(listener)
+    client = ends[0]
+    server = ends[1]
+
+    # Both directions; reads return what is available, up to the size.
+    client.sendall("ping".encode())
+    print(server.recv(100).decode())
+    server.sendall("pong".encode())
+    print(client.recv(2).decode() + "|" + client.recv(100).decode())
+    client.sendall(bytes([]))
+
+    big = "0123456789".encode()
+    while len(big) < 300000:
+        big = big + big
+    client.sendall(big, timeout=10.0)
+    received = 0
+    largest = 0
+    while received < len(big):
+        chunk = server.recv(65536, timeout=5.0)
+        received = received + len(chunk)
+        if len(chunk) > largest:
+            largest = len(chunk)
+    print(f"{received == len(big)} {largest <= 65536}")
+
+    # Timeouts leave handles usable.
+    try:
+        server.recv(10, timeout=0.1)
+    except TimeoutError as t:
+        print(t.message)
+    client.sendall("after".encode())
+    print(server.recv(10).decode())
+    try:
+        listener.accept(timeout=0.1)
+    except TimeoutError as t:
+        print(t.message)
+
+    # End of stream, closing, and broken peers.
+    client.close()
+    client.close()
+    print(len(server.recv(10)))
+    try:
+        client.recv(1)
+    except ValueError as v:
+        print(v.message)
+    ends = pair(listener)
+    ends[1].close()
+    failed = False
+    try:
+        for i in range(100):
+            ends[0].sendall(big, timeout=5.0)
+    except OSError as error:
+        failed = error.message.startswith("cannot send: ")
+    print(failed)
+    try:
+        ends[0].recv(1)
+    except ValueError as v:
+        print(v.message)
+    ends[0].close()
+    server.close()
+    listener.close()
+    try:
+        listener.accept()
+    except ValueError as v:
+        print(v.message)
+
+    try:
+        net.connect("127.0.0.1", 1, timeout=2.0)
+    except OSError as error:
+        print(error.message.startswith("cannot connect to 127.0.0.1:1: "))
+    try:
+        six = net.listen("::1", 0)
+        conn = net.connect("::1", six.local_port())
+        conn.close()
+        six.close()
+        print("ipv6 ok")
+    except OSError:
+        print("ipv6 ok")
+
+    again = net.listen("127.0.0.1", 0)
+    fresh = pair(again)[0]
+    for kind in ["host", "port", "listen port", "size", "backlog", "timeout"]:
+        try:
+            if kind == "host":
+                net.connect("bad host", 80)
+            elif kind == "port":
+                net.connect("127.0.0.1", 0)
+            elif kind == "listen port":
+                net.listen("127.0.0.1", 70000)
+            elif kind == "size":
+                fresh.recv(0)
+            elif kind == "backlog":
+                net.listen("127.0.0.1", 0, backlog=0)
+            else:
+                net.connect("127.0.0.1", 80, timeout=-1.0)
+        except ValueError as v:
+            print(f"{kind}: {v.message}")

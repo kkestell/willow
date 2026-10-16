@@ -1,0 +1,94 @@
+# Starts the server in its own process and talks to it over TCP.
+# Run with `willow test examples/kv` from the repository root, or
+# `willow test` from this directory.
+
+import framing
+import fs
+import json
+import net
+import subprocess
+import sys
+import time
+
+class Server:
+    process: subprocess.Process
+    port_file: str
+    port: int
+
+def _server_path() -> str:
+    for path in ["server.wlo", "examples/kv/server.wlo"]:
+        if fs.exists(path):
+            return path
+    raise RuntimeError("cannot find server.wlo")
+
+def _start() -> Server:
+    willow = sys.getenv("WILLOW")
+    assert willow is not None, "WILLOW is not set"
+    port_file = fs.join("/tmp", f"kv_port_{int(time.time() * 1000000.0)}")
+    process = subprocess.spawn([willow, "run", _server_path(), port_file])
+    deadline = time.monotonic() + 10.0
+    while not fs.exists(port_file):
+        if time.monotonic() > deadline:
+            process.terminate()
+            process.wait(timeout=5.0)
+            raise RuntimeError("server did not start")
+        time.sleep(0.05)
+    return Server(process, port_file, int(fs.read_file(port_file)))
+
+def _stop(server: Server) -> None:
+    server.process.terminate()
+    server.process.wait(timeout=5.0)
+    fs.remove(server.port_file)
+
+def _ask(lines: framing.LineReader, request: json.Json) -> str:
+    framing.send_json(lines.connection, request)
+    return json.dump(framing.read_json(lines, timeout=5.0))
+
+def test_set_get_and_keys() -> None:
+    server = _start()
+    try:
+        connection = net.connect("127.0.0.1", server.port)
+        lines = framing.reader(connection)
+        assert _ask(lines, {"op": "set", "key": "b", "value": [1, 2]}) == '{"ok":true}'
+        assert _ask(lines, {"op": "set", "key": "a", "value": "x"}) == '{"ok":true}'
+        assert _ask(lines, {"op": "get", "key": "b"}) == '{"value":[1,2]}'
+        assert _ask(lines, {"op": "get", "key": "missing"}) == '{"value":null}'
+        assert _ask(lines, {"op": "keys"}) == '{"keys":["a","b"]}'
+        assert _ask(lines, {"op": "nope"}) == '{"error":"unknown request"}'
+        connection.close()
+    finally:
+        _stop(server)
+
+def test_split_code_point_is_reassembled() -> None:
+    server = _start()
+    try:
+        connection = net.connect("127.0.0.1", server.port)
+        lines = framing.reader(connection)
+        message = '{"op": "set", "key": "café", "value": "naïve"}\n'.encode()
+        # Split inside the two bytes of "é".
+        cut = len('{"op": "set", "key": "caf'.encode()) + 1
+        connection.sendall(message[:cut])
+        time.sleep(0.1)
+        connection.sendall(message[cut:])
+        reply = framing.read_json(lines, timeout=5.0)
+        assert json.dump(reply) == '{"ok":true}', json.dump(reply)
+        assert _ask(lines, {"op": "get", "key": "café"}) == '{"value":"naïve"}'
+        connection.close()
+    finally:
+        _stop(server)
+
+def test_clients_are_served_in_turn() -> None:
+    server = _start()
+    try:
+        first = net.connect("127.0.0.1", server.port)
+        lines = framing.reader(first)
+        assert _ask(lines, {"op": "set", "key": "k", "value": 1}) == '{"ok":true}'
+        first.close()
+        second = net.connect("127.0.0.1", server.port)
+        lines = framing.reader(second)
+        assert _ask(lines, {"op": "get", "key": "k"}) == '{"value":1}'
+        assert _ask(lines, {"op": "shutdown"}) == '{"ok":true}'
+        second.close()
+        assert server.process.wait(timeout=5.0) == 0
+    finally:
+        _stop(server)

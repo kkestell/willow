@@ -1,0 +1,21 @@
+# Sends JSON requests to the key-value server and prints each reply:
+# willow run client.wlo <port> <request>...
+
+import framing
+import json
+import net
+import sys
+
+def main() -> None:
+    args = sys.args()
+    if len(args) < 2:
+        sys.eprint("usage: client <port> <request>...")
+        sys.exit(2)
+    connection = net.connect("127.0.0.1", int(args[0]), timeout=5.0)
+    lines = framing.reader(connection)
+    try:
+        for request in args[1:]:
+            framing.send_json(connection, json.parse(request))
+            print(json.dump(framing.read_json(lines, timeout=5.0)))
+    finally:
+        connection.close()

@@ -794,3 +794,266 @@ function __wlo_finish_progress(message, site)
   end
   __wlo_write_stderr(text, site)
 end
+
+-- TCP sockets. Every socket is non-blocking and close-on-exec, and each call
+-- waits with poll, which gives every timeout one mechanism.
+
+if __wlo_OSX then
+  __wlo_ffi.cdef([[
+typedef struct __wlo_addrinfo {
+  int flags; int family; int socktype; int protocol; uint32_t addrlen;
+  char *canonname; void *addr; struct __wlo_addrinfo *next;
+} __wlo_addrinfo_t;
+]])
+else
+  __wlo_ffi.cdef([[
+typedef struct __wlo_addrinfo {
+  int flags; int family; int socktype; int protocol; uint32_t addrlen;
+  void *addr; char *canonname; struct __wlo_addrinfo *next;
+} __wlo_addrinfo_t;
+]])
+end
+__wlo_ffi.cdef([[
+int __wlo_c_getaddrinfo(const char *host, const char *service, const __wlo_addrinfo_t *hints,
+  __wlo_addrinfo_t **result) __asm__("getaddrinfo");
+void __wlo_c_freeaddrinfo(__wlo_addrinfo_t *list) __asm__("freeaddrinfo");
+const char *__wlo_c_gai_strerror(int code) __asm__("gai_strerror");
+int __wlo_c_socket(int family, int type, int protocol) __asm__("socket");
+int __wlo_c_connect(int fd, const void *address, uint32_t length) __asm__("connect");
+int __wlo_c_bind(int fd, const void *address, uint32_t length) __asm__("bind");
+int __wlo_c_listen(int fd, int backlog) __asm__("listen");
+int __wlo_c_accept(int fd, void *address, void *length) __asm__("accept");
+int __wlo_c_getsockopt(int fd, int level, int name, void *value, uint32_t *length) __asm__("getsockopt");
+int __wlo_c_setsockopt(int fd, int level, int name, const void *value, uint32_t length) __asm__("setsockopt");
+int __wlo_c_getsockname(int fd, void *address, uint32_t *length) __asm__("getsockname");
+long __wlo_c_recv(int fd, void *buffer, size_t size, int flags) __asm__("recv");
+long __wlo_c_send(int fd, const void *buffer, size_t size, int flags) __asm__("send");
+]])
+
+local __wlo_SOL_SOCKET = __wlo_OSX and 0xffff or 1
+local __wlo_SO_REUSEADDR = __wlo_OSX and 4 or 2
+local __wlo_SO_ERROR = __wlo_OSX and 0x1007 or 4
+local __wlo_EINPROGRESS = __wlo_OSX and 36 or 115
+
+local function __wlo_reason()
+  return __wlo_ffi.string(__wlo_C.__wlo_c_strerror(__wlo_ffi.errno()))
+end
+
+local function __wlo_check_host(host, port, lowest, site)
+  if host == "" or host:find("[^\33-\126]") then
+    __wlo_fail("ValueError", "invalid host '" .. host .. "'", site)
+  elseif port < lowest or port > 65535 then
+    __wlo_fail("ValueError", "invalid port " .. port, site)
+  end
+end
+
+-- The addresses `host` and `port` resolve to, in resolver order, as
+-- { address, length, family } entries.
+local function __wlo_resolve(host, port, site)
+  local hints = __wlo_ffi.new("__wlo_addrinfo_t")
+  hints.socktype = 1 -- SOCK_STREAM
+  local list = __wlo_ffi.new("__wlo_addrinfo_t *[1]")
+  local code = __wlo_C.__wlo_c_getaddrinfo(host, tostring(port), hints, list)
+  if code ~= 0 then
+    __wlo_fail("OSError", "cannot resolve " .. host .. ": " .. __wlo_ffi.string(__wlo_C.__wlo_c_gai_strerror(code)), site)
+  end
+  local addresses = {}
+  local entry = list[0]
+  while entry ~= nil do
+    local copy = __wlo_ffi.new("uint8_t[?]", entry.addrlen)
+    __wlo_ffi.copy(copy, entry.addr, entry.addrlen)
+    addresses[#addresses + 1] = { copy, entry.addrlen, entry.family }
+    entry = entry.next
+  end
+  __wlo_C.__wlo_c_freeaddrinfo(list[0])
+  return addresses
+end
+
+local function __wlo_new_socket(family)
+  local fd = __wlo_C.__wlo_c_socket(family, 1, 0)
+  if fd >= 0 then
+    __wlo_fcntl(fd, 2, 1) -- F_SETFD, FD_CLOEXEC
+    __wlo_nonblocking(fd)
+  end
+  return fd
+end
+
+-- Waits until `fd` is ready for `events`; false when `deadline` passes first.
+local function __wlo_wait_fd(fd, events, deadline)
+  local fds = __wlo_ffi.new("__wlo_pollfd_t[1]")
+  fds[0].fd, fds[0].events = fd, events
+  while true do
+    local wait = -1
+    if deadline then
+      wait = math.max(0, math.ceil((deadline - __wlo_monotonic()) * 1000))
+    end
+    local ready = __wlo_C.__wlo_c_poll(fds, 1, wait)
+    if ready > 0 then
+      return true
+    elseif ready == 0 then
+      return false
+    elseif __wlo_ffi.errno() ~= __wlo_EINTR then
+      return true
+    end
+  end
+end
+
+local function __wlo_deadline(timeout)
+  return timeout and __wlo_monotonic() + timeout
+end
+
+local function __wlo_timed_out(what, timeout, site)
+  __wlo_fail("TimeoutError", what .. " timed out after " .. __wlo_format_float(timeout) .. " seconds", site)
+end
+
+local function __wlo_connection(fd)
+  return { __wlo_record = "net.Connection", fd = fd, closed = false, broken = false }
+end
+
+function __wlo_net_connect(host, port, timeout, site)
+  __wlo_check_host(host, port, 1, site)
+  __wlo_check_timeout(timeout, site)
+  local addresses = __wlo_resolve(host, port, site)
+  local deadline = __wlo_deadline(timeout)
+  local reason = "no addresses"
+  for _, address in ipairs(addresses) do
+    local fd = __wlo_new_socket(address[3])
+    if fd < 0 then
+      reason = __wlo_reason()
+    else
+      local started = __wlo_C.__wlo_c_connect(fd, address[1], address[2])
+      if started ~= 0 and __wlo_ffi.errno() == __wlo_EINPROGRESS then
+        if not __wlo_wait_fd(fd, 4, deadline) then -- POLLOUT
+          __wlo_C.__wlo_c_close(fd)
+          __wlo_timed_out("connect", timeout, site)
+        end
+        local err, size = __wlo_ffi.new("int[1]"), __wlo_ffi.new("uint32_t[1]", 4)
+        __wlo_C.__wlo_c_getsockopt(fd, __wlo_SOL_SOCKET, __wlo_SO_ERROR, err, size)
+        started = err[0] == 0 and 0 or -1
+        __wlo_ffi.errno(err[0])
+      end
+      if started == 0 then
+        return __wlo_connection(fd)
+      end
+      reason = __wlo_reason()
+      __wlo_C.__wlo_c_close(fd)
+    end
+  end
+  __wlo_fail("OSError", "cannot connect to " .. host .. ":" .. port .. ": " .. reason, site)
+end
+
+function __wlo_net_listen(host, port, backlog, site)
+  __wlo_check_host(host, port, 0, site)
+  if backlog < 1 then
+    __wlo_fail("ValueError", "backlog must be positive", site)
+  end
+  local reason = "no addresses"
+  for _, address in ipairs(__wlo_resolve(host, port, site)) do
+    local fd = __wlo_new_socket(address[3])
+    if fd < 0 then
+      reason = __wlo_reason()
+    else
+      __wlo_C.__wlo_c_setsockopt(fd, __wlo_SOL_SOCKET, __wlo_SO_REUSEADDR, __wlo_ffi.new("int[1]", 1), 4)
+      if __wlo_C.__wlo_c_bind(fd, address[1], address[2]) == 0 and __wlo_C.__wlo_c_listen(fd, backlog) == 0 then
+        return { __wlo_record = "net.Listener", fd = fd, closed = false }
+      end
+      reason = __wlo_reason()
+      __wlo_C.__wlo_c_close(fd)
+    end
+  end
+  __wlo_fail("OSError", "cannot listen on " .. host .. ":" .. port .. ": " .. reason, site)
+end
+
+local function __wlo_usable_socket(handle, what, site)
+  if handle.closed then
+    __wlo_fail("ValueError", "I/O operation on closed " .. what, site)
+  elseif handle.broken then
+    __wlo_fail("ValueError", "connection is unusable after a failed send", site)
+  end
+end
+
+function __wlo_net_connection_recv(connection, size, timeout, site)
+  __wlo_usable_socket(connection, "connection", site)
+  if size < 1 then
+    __wlo_fail("ValueError", "size must be positive", site)
+  end
+  __wlo_check_timeout(timeout, site)
+  local deadline = __wlo_deadline(timeout)
+  local buffer = __wlo_ffi.new("uint8_t[?]", size)
+  while true do
+    local count = tonumber(__wlo_C.__wlo_c_recv(connection.fd, buffer, size, 0))
+    if count >= 0 then
+      return { __wlo_octets = __wlo_ffi.string(buffer, count) }
+    end
+    local err = __wlo_ffi.errno()
+    if err ~= __wlo_EAGAIN and err ~= __wlo_EINTR then
+      __wlo_fail("OSError", "cannot receive: " .. __wlo_reason(), site)
+    elseif err == __wlo_EAGAIN and not __wlo_wait_fd(connection.fd, 1, deadline) then -- POLLIN
+      __wlo_timed_out("recv", timeout, site)
+    end
+  end
+end
+
+function __wlo_net_connection_sendall(connection, data, timeout, site)
+  __wlo_usable_socket(connection, "connection", site)
+  __wlo_check_timeout(timeout, site)
+  local octets, sent = data.__wlo_octets, 0
+  local deadline = __wlo_deadline(timeout)
+  while sent < #octets do
+    local count = tonumber(__wlo_C.__wlo_c_send(connection.fd, octets:sub(sent + 1), #octets - sent, 0))
+    if count >= 0 then
+      sent = sent + count
+    else
+      local err = __wlo_ffi.errno()
+      if err ~= __wlo_EAGAIN and err ~= __wlo_EINTR then
+        connection.broken = true
+        __wlo_fail("OSError", "cannot send: " .. __wlo_reason(), site)
+      elseif err == __wlo_EAGAIN and not __wlo_wait_fd(connection.fd, 4, deadline) then
+        connection.broken = true
+        __wlo_timed_out("send", timeout, site)
+      end
+    end
+  end
+end
+
+function __wlo_net_connection_close(connection, site)
+  if not connection.closed then
+    connection.closed = true
+    __wlo_C.__wlo_c_close(connection.fd)
+  end
+end
+
+function __wlo_net_listener_accept(listener, timeout, site)
+  __wlo_usable_socket(listener, "listener", site)
+  __wlo_check_timeout(timeout, site)
+  local deadline = __wlo_deadline(timeout)
+  while true do
+    local fd = __wlo_C.__wlo_c_accept(listener.fd, nil, nil)
+    if fd >= 0 then
+      __wlo_fcntl(fd, 2, 1)
+      __wlo_nonblocking(fd)
+      return __wlo_connection(fd)
+    end
+    local err = __wlo_ffi.errno()
+    if err ~= __wlo_EAGAIN and err ~= __wlo_EINTR then
+      __wlo_fail("OSError", "cannot accept: " .. __wlo_reason(), site)
+    elseif err == __wlo_EAGAIN and not __wlo_wait_fd(listener.fd, 1, deadline) then
+      __wlo_timed_out("accept", timeout, site)
+    end
+  end
+end
+
+-- The port sits at the same offset in IPv4 and IPv6 socket addresses.
+function __wlo_net_listener_local_port(listener, site)
+  __wlo_usable_socket(listener, "listener", site)
+  local address, length = __wlo_ffi.new("uint8_t[128]"), __wlo_ffi.new("uint32_t[1]", 128)
+  __wlo_C.__wlo_c_getsockname(listener.fd, address, length)
+  return address[2] * 256 + address[3]
+end
+
+function __wlo_net_listener_close(listener, site)
+  if not listener.closed then
+    listener.closed = true
+    __wlo_C.__wlo_c_close(listener.fd)
+  end
+end

@@ -268,12 +268,12 @@ remove obsolete amendment wording, and update implementation status.
   - [x] Deliver a JSON API client and binary downloader with local integration
     tests for HTTP failures, transport failures, redirects, and destination safety
 
-- [ ] TCP clients and simple services (spec §23)
-  - [ ] Blocking TCP connections/listeners, native methods, operation timeouts,
+- [x] TCP clients and simple services (spec §23)
+  - [x] Blocking TCP connections/listeners, native methods, operation timeouts,
     EOF, partial I/O, and resource/error behavior
-  - [ ] Deliver a sequential line/JSON client and server sharing framing code;
+  - [x] Deliver a sequential line/JSON client and server sharing framing code;
     handle split UTF-8 sequences before decoding complete messages
-  - [ ] Exercise the pair through `willow test`, with subprocess startup, an
+  - [x] Exercise the pair through `willow test`, with subprocess startup, an
     ephemeral port, and deterministic child cleanup
 
 - [ ] Small projects and reusable modules (spec §24)

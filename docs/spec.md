@@ -4,8 +4,8 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-Sections 1–22 describe the implemented language. Sections 23–24 describe planned
-milestones, introduced under
+Sections 1–23 describe the implemented language. Section 24 describes a planned
+milestone, introduced under
 [planned application development milestones](#planned-application-development-milestones).
 
 ## 1. Programs
@@ -1267,6 +1267,66 @@ control characters, using `\b`, `\f`, `\n`, `\r`, and `\t` where they exist and
 raise `JsonError` with the message `cannot encode <value>`, as in
 `cannot encode inf`.
 
+### `net`
+
+```python
+import net
+
+def main() -> None:
+    listener = net.listen("127.0.0.1", 0)
+    client = net.connect("127.0.0.1", listener.local_port())
+    server = listener.accept(timeout=5.0)
+    client.sendall("ping\n".encode())
+    print(server.recv(1024).decode())       # ping
+    client.close()
+    server.close()
+    listener.close()
+```
+
+| Declaration | Meaning |
+| --- | --- |
+| `connect(host: str, port: int, timeout: float \| None = 30.0) -> Connection` | Open a TCP connection |
+| `listen(host: str, port: int, backlog: int = 16) -> Listener` | Listen for TCP connections on `host` |
+| `class Connection` | A native type with the methods below |
+| `class Listener` | A native type with the methods below |
+
+| Method | Meaning |
+| --- | --- |
+| `Connection.recv(size: int, timeout: float \| None = None) -> bytes` | Up to `size` bytes as soon as some arrive; empty when the peer has closed its side |
+| `Connection.sendall(data: bytes, timeout: float \| None = None) -> None` | Send all of `data` |
+| `Connection.close() -> None` | Close the connection |
+| `Listener.accept(timeout: float \| None = None) -> Connection` | Wait for the next connection |
+| `Listener.local_port() -> int` | The port the listener is bound to |
+| `Listener.close() -> None` | Stop listening |
+
+Hosts are names, looked up with the host's resolver, or literal IPv4 or IPv6
+addresses, written in ASCII (internationalized names in their ASCII form).
+Ports are 1 through 65535; `listen` also accepts 0, which picks a free port.
+`listen` binds exactly the given address, so local services name a loopback
+address. `connect` tries each resolved address in order within one timeout;
+`listen` binds the first address that works. Name lookup comes before the
+timeout and may take longer.
+
+Each `recv`, `sendall`, and `accept` call has its own timeout; a whole exchange
+of several calls needs its own deadline computed with `time.monotonic()`.
+Framing messages is up to the program: one `recv` may return part of a message
+or several messages. An expired `recv` or `accept` raises `TimeoutError` and
+leaves the handle usable. `sendall` sends everything or raises; its timeout
+covers the whole call. After a failed or timed-out send, the peer may have
+received any part of the data, so later operations on the connection raise
+`ValueError` with the message `connection is unusable after a failed send`.
+
+`close` is idempotent, and other operations on a closed handle raise
+`ValueError` with the message `I/O operation on closed connection` (or
+`listener`). A host name or port that is not valid, a `size` or `backlog` below
+1, and a timeout that is not finite and positive raise `ValueError`. Failures to
+resolve, connect, listen, send, or receive raise `OSError` with messages such as
+`cannot resolve <host>: <reason>`, `cannot connect to <host>:<port>: <reason>`,
+and `cannot send: <reason>`; writing to a closed peer is such a failure, not a
+signal. Timeouts raise `TimeoutError` with messages such as
+`recv timed out after <timeout> seconds`. Connections and listeners are not
+inherited by child processes.
+
 ### `subprocess`
 
 ```python
@@ -1413,8 +1473,8 @@ raises `ValueError` with the message `timestamp out of range` otherwise.
 
 ## Planned application development milestones
 
-Sections 23–24 define accepted targets, in implementation order. They are not yet
-implemented. Sections 1–22 describe the implemented baseline; each planned section
+Section 24 defines the remaining accepted target. It is not yet implemented.
+Sections 1–23 describe the implemented baseline; each planned section
 identifies the rules it changes when its milestone lands. Completion and delivery
 examples are tracked in `agents/todo.md`. A planned API is not available merely
 because its signature appears here.
@@ -1473,55 +1533,7 @@ This milestone is implemented. Its rules are part of §14.
 
 ## 23. TCP clients and simple services
 
-The `net` module exposes blocking TCP connections and listeners with native
-methods. Hostnames use the host resolver; literal IPv4 and IPv6 addresses are
-accepted. Host strings must be ASCII (use an ASCII IDNA name when needed).
-Ports are integers in 1–65535, except a listener may use zero for a host-selected
-port. Invalid inputs raise `ValueError`; host network failures raise `OSError`.
-
-```text
-connect(host: str, port: int, timeout: float | None = 30.0) -> Connection
-listen(host: str, port: int, backlog: int = 16) -> Listener
-
-Connection.recv(size: int, timeout: float | None = None) -> bytes
-Connection.sendall(data: bytes, timeout: float | None = None) -> None
-Connection.close() -> None
-
-Listener.accept(timeout: float | None = None) -> Connection
-Listener.local_port() -> int
-Listener.close() -> None
-```
-
-`listen` binds the specified address, with positive backlog. No wildcard default
-is supplied: use an explicit loopback address for local services. If a hostname
-resolves to multiple addresses, `connect` tries them in resolver order with one
-shared connect-time budget; `listen` binds the first usable address and does not
-promise dual-stack coverage. Name resolution precedes the connect-time budget
-and is subject to §22's resolver limitation.
-
-`recv` requires positive size and returns one available chunk of up to that many
-bytes; empty bytes mean the peer closed its sending side. It does not wait to fill
-the requested size. `sendall` completes the entire byte string or raises; empty
-input returns immediately. Its timeout bounds the entire send, not each partial
-write. After any send failure, the caller cannot know how much the peer received
-and must close the connection before further I/O; subsequent I/O raises
-`ValueError`. A receive or accept timeout leaves the handle usable.
-
-Timeouts bound individual calls, never an application's multi-call message loop.
-An application needing a total message deadline computes its remaining budget
-with `time.monotonic()`. Stream framing is the application's responsibility;
-a read may contain part of a message or several messages. Close is idempotent,
-and broken-peer writes raise rather than terminating by SIGPIPE.
-
-The initial service model is deliberately sequential. There is no scheduler,
-nonblocking API, TLS socket wrapper, UDP, Unix-domain sockets, or HTTP server.
-The delivery example shares framing code between a line/JSON client and server;
-it handles split UTF-8 bytes before decoding a complete message. Integration tests
-use the `WILLOW` launcher variable to start a server through `subprocess.spawn`.
-The test passes a port-file path; after binding, the server publishes its selected
-port by writing a sibling file and renaming it. The test polls with `time.sleep`
-and a monotonic deadline, exchanges messages, and stops and reaps the child and
-removes the port file in cleanup. No live subprocess pipe API is required.
+This milestone is implemented. Its rules are part of §14.
 
 ## 24. Small projects and reusable modules
 

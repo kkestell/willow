@@ -795,6 +795,38 @@ return {
     end)
   end,
 
+  kv_example = function()
+    local status, stdout, stderr = willow(ROOT, "test examples/kv")
+    eq("", stderr)
+    eq(0, status)
+    eq("PASS examples/kv/test_kv.wlo test_clients_are_served_in_turn\n"
+      .. "PASS examples/kv/test_kv.wlo test_set_get_and_keys\n"
+      .. "PASS examples/kv/test_kv.wlo test_split_code_point_is_reassembled\n3 passed, 0 failed\n", stdout)
+    in_temp_dir(function(dir)
+      local pid = start_server(quote(WILLOW) .. " run " .. quote(ROOT .. "/examples/kv/server.wlo") .. " "
+        .. quote(dir .. "/port"), dir .. "/server.log")
+      local port
+      for _ = 1, 100 do
+        port = read(dir .. "/port")
+        if port then
+          break
+        end
+        os.execute("sleep 0.05")
+      end
+      local ok, err = pcall(function()
+        local client = quote(ROOT .. "/examples/kv/client.wlo")
+        local code, out = willow(dir, "run " .. client .. " " .. assert(port, "server did not start")
+          .. [[ '{"op": "set", "key": "a", "value": 1}' '{"op": "get", "key": "a"}' '{"op": "shutdown"}']])
+        eq(0, code)
+        eq('{"ok":true}\n{"value":1}\n{"ok":true}\n', out)
+      end)
+      os.execute("kill " .. pid .. " 2>/dev/null")
+      if not ok then
+        error(err, 0)
+      end
+    end)
+  end,
+
   standard_library_build_runs_elsewhere = function()
     in_temp_dir(function(dir, base)
       write(dir .. "/prog.wlo", JSON_PROGRAM)

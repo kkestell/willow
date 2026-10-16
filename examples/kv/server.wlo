@@ -1,0 +1,83 @@
+# A key-value server for JSON-lines requests on 127.0.0.1:
+# willow run server.wlo <port-file>
+# It listens on a free port, writes the port to <port-file>, and serves one
+# connection at a time until a client sends {"op": "shutdown"}.
+
+import framing
+import fs
+import json
+import net
+import sys
+
+# A JSON value as text when it is a string, otherwise "".
+def _text(value: json.Json) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+def reply(store: dict[str, json.Json], request: json.Json) -> json.Json:
+    if not isinstance(request, dict):
+        return {"error": "expected an object"}
+    op = _text(request.get("op"))
+    key = request.get("key")
+    if op == "set" and isinstance(key, str):
+        store[key] = request.get("value")
+        return {"ok": True}
+    elif op == "get" and isinstance(key, str):
+        return {"value": store.get(key)}
+    elif op == "keys":
+        names: list[json.Json] = []
+        for name in sorted(keys(store)):
+            names.append(name)
+        return {"keys": names}
+    return {"error": "unknown request"}
+
+def keys(store: dict[str, json.Json]) -> list[str]:
+    result: list[str] = []
+    for key in store:
+        result.append(key)
+    return result
+
+# Serves one client; returns True when it asked the server to stop.
+def serve(connection: net.Connection, store: dict[str, json.Json]) -> bool:
+    lines = framing.reader(connection)
+    try:
+        while True:
+            try:
+                line = framing.read_line(lines)
+                if line is None:
+                    return False
+                request = json.parse(line)
+            except ValueError as invalid:
+                framing.send_json(connection, {"error": invalid.message})
+                continue
+            except json.JsonError as error:
+                framing.send_json(connection, {"error": error.message})
+                continue
+            if isinstance(request, dict) and _text(request.get("op")) == "shutdown":
+                framing.send_json(connection, {"ok": True})
+                return True
+            framing.send_json(connection, reply(store, request))
+    finally:
+        connection.close()
+    return False
+
+def main() -> None:
+    args = sys.args()
+    if len(args) != 1:
+        sys.eprint("usage: server <port-file>")
+        sys.exit(2)
+    listener = net.listen("127.0.0.1", 0)
+    # Publishing by rename means a reader never sees a partial port number.
+    fs.write_file(args[0] + ".tmp", str(listener.local_port()))
+    fs.rename(args[0] + ".tmp", args[0])
+    store: dict[str, json.Json] = {}
+    try:
+        while True:
+            try:
+                if serve(listener.accept(), store):
+                    break
+            except OSError as error:
+                sys.eprint(f"client failed: {error.message}")
+    finally:
+        listener.close()

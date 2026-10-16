@@ -90,6 +90,18 @@ local builtins = {
     result = bind.file.type,
   },
   stdin = { params = {}, result = bind.file.type },
+  connect = {
+    params = { types.str, types.int, types.union({ types.float, types.None }) },
+    names = { "host", "port", "timeout" },
+    defaults = { [3] = { kind = "Float", value = 30.0 } },
+    result = bind.net.declarations.Connection.type,
+  },
+  listen = {
+    params = { types.str, types.int, types.int },
+    names = { "host", "port", "backlog" },
+    defaults = { [3] = { kind = "Int", value = 16 } },
+    result = bind.net.declarations.Listener.type,
+  },
   request = {
     params = {
       types.str,

@@ -1,0 +1,20 @@
+True
+ping
+po|ng
+True True
+recv timed out after 0.1 seconds
+after
+accept timed out after 0.1 seconds
+0
+I/O operation on closed connection
+True
+connection is unusable after a failed send
+I/O operation on closed listener
+True
+ipv6 ok
+host: invalid host 'bad host'
+port: invalid port 0
+listen port: invalid port 70000
+size: size must be positive
+backlog: backlog must be positive
+timeout: timeout must be finite and positive

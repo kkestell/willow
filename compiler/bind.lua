@@ -208,9 +208,58 @@ for _, name in ipairs({ "request", "download", "header", "urlencode" }) do
   http.declarations[name].helper = "http_" .. name
 end
 
+local optional_float = types.union({ types.float, types.None })
+local connection = {
+  kind = "Record",
+  name = "Connection",
+  type_name = "net.Connection",
+  fields = {},
+  native = true,
+  prefix = "net_connection",
+  methods = {
+    recv = {
+      params = { types.int, optional_float },
+      names = { "size", "timeout" },
+      defaults = { [2] = { kind = "None" } },
+      result = types.bytes,
+    },
+    sendall = {
+      params = { types.bytes, optional_float },
+      names = { "data", "timeout" },
+      defaults = { [2] = { kind = "None" } },
+      result = types.None,
+    },
+    close = { params = {}, result = types.None },
+  },
+}
+connection.type = types.record(connection)
+local listener = {
+  kind = "Record",
+  name = "Listener",
+  type_name = "net.Listener",
+  fields = {},
+  native = true,
+  prefix = "net_listener",
+  methods = {
+    accept = {
+      params = { optional_float },
+      names = { "timeout" },
+      defaults = { { kind = "None" } },
+      result = connection.type,
+    },
+    local_port = { params = {}, result = types.int },
+    close = { params = {}, result = types.None },
+  },
+}
+listener.type = types.record(listener)
+local net = provided("net", "connect listen", { Connection = connection, Listener = listener })
+net.declarations.connect.helper = "net_connect"
+net.declarations.listen.helper = "net_listen"
+
 M.modules = {
   cli = cli,
   http = http,
+  net = net,
   terminal = provided("terminal", "isatty color_enabled style progress finish_progress"),
   io = provided("io", "open stdin stdout stderr", { File = file }),
   subprocess = subprocess,
@@ -225,6 +274,7 @@ M.result = result
 M.process = process
 M.parser = parser
 M.http = http
+M.net = net
 
 -- The built-in exception classes, records with only a `message` field.
 local exceptions = {}
