@@ -231,16 +231,16 @@ remove obsolete amendment wording, and update implementation status.
   - [x] Deliver an environment-configured directory inventory with elapsed time
     on macOS and Linux
 
-- [ ] Bytes and streaming I/O (spec §19)
-  - [ ] Native nominal types and built-in methods without user-defined methods or
+- [x] Bytes and streaming I/O (spec §19)
+  - [x] Native nominal types and built-in methods without user-defined methods or
     public FFI; common error and resource lifetime conventions
-  - [ ] Bytes typing, construction, sequence operations, equality, iteration, and
+  - [x] Bytes typing, construction, sequence operations, equality, iteration, and
     strict UTF-8 conversions without implicit printing or decoding
-  - [ ] File and standard-stream handles, byte/text operations, close/flush, and
+  - [x] File and standard-stream handles, byte/text operations, close/flush, and
     deterministic cleanup through `try/finally`
-  - [ ] Cover shared buffering with existing `input`/`print`, EOF versus empty
+  - [x] Cover shared buffering with existing `input`/`print`, EOF versus empty
     lines, invalid UTF-8, closed resources, and ordinary broken-pipe behavior
-  - [ ] Deliver a bounded-chunk binary copier and a JSONL filter that retains only
+  - [x] Deliver a bounded-chunk binary copier and a JSONL filter that retains only
     the current record
 
 - [ ] Subprocess execution and control (spec §20)

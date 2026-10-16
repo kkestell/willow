@@ -4,7 +4,7 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-Sections 1–18 describe the implemented language. Sections 19–24 describe planned
+Sections 1–19 describe the implemented language. Sections 20–24 describe planned
 milestones, introduced under
 [planned application development milestones](#planned-application-development-milestones).
 
@@ -83,7 +83,7 @@ elif else except finally for from global if import in is lambda match nonlocal
 not or pass raise return try type while with yield
 ```
 
-The type names `int`, `float`, `bool`, `str`, `list`, and `dict` are also
+The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, and `dict` are also
 reserved. A reserved word that begins no construct described here is an error
 where that construct would appear.
 
@@ -202,14 +202,16 @@ A | B | ...
 | `float` | IEEE 754 binary64 numbers |
 | `bool` | `True` and `False` |
 | `str` | Immutable UTF-8 text |
+| `bytes` | Immutable sequences of octets |
 | `None` | The single value `None` |
 | `A \| B \| ...` | A value of any member type |
 | `list[T]` | Ordered, mutable sequences of `T` |
 | `dict[K, V]` | Mutable, insertion-ordered maps from `K` to `V` |
 | Records | Values of a declared record or exception class |
+| Native types | Library values such as `io.File` (§14) |
 
-The scalar types are `int`, `float`, `bool`, `str`, and `None`. A type is
-printable if it is a scalar type or a union of them. Lists, dictionaries, and
+The scalar types are `int`, `float`, `bool`, `str`, `bytes`, and `None`. A type is
+printable if it is a scalar type other than `bytes` or a union of them. Lists, dictionaries, and
 records have reference semantics: assignment and argument passing share a value
 rather than copy it.
 
@@ -310,11 +312,11 @@ positional arguments.
 ### Operators
 
 - `and`, `or`, and `not` take and produce `bool`; `and` and `or` short-circuit.
-- `==` and `!=` take two operands of printable types where one's type is
-  assignable to the other's, so `count == 3` and `count == None` are valid for
-  `count: int | None`. Values of different types are unequal, so a union holding
-  `1` does not equal one holding `1.0`. Lists, dictionaries, and records do not
-  support `==`.
+- `==` and `!=` take two operands of scalar types or unions of them where one's
+  type is assignable to the other's, so `count == 3` and `count == None` are valid
+  for `count: int | None`. Values of different types are unequal, so a union
+  holding `1` does not equal one holding `1.0`. Bytes compare by content. Lists,
+  dictionaries, records, and native values do not support `==`.
 - `<`, `<=`, `>`, and `>=` take two integers, two floats, or two strings.
 - `is` appears only as `e is None` or `e is not None`, where `e` has an optional
   type.
@@ -498,6 +500,33 @@ a non-empty display takes the types of its first element or entry, later ones mu
 be assignable to them, and an empty display is an error. In a dict display, a
 repeated key keeps its first position and its last value. Displays allow trailing
 commas.
+
+### Bytes
+
+```python
+data = "café".encode()      # bytes([99, 97, 102, 195, 169])
+print(len(data))            # 5
+print(data[-1])             # 169
+print(data[:3].decode())    # caf
+```
+
+| Expression | Type | Meaning |
+| --- | --- | --- |
+| `bytes(values)` | `bytes` | The octets of a `list[int]` of values from 0 through 255 |
+| `a + b` | `bytes` | Concatenation |
+| `len(data)` | `int` | Number of octets |
+| `data[i]` | `int` | The octet at index `i` |
+| `data[i:j]` | `bytes` | The octets from index `i` up to `j` |
+| `s.encode()` | `bytes` | The UTF-8 encoding of the string `s` |
+| `data.decode()` | `str` | The text whose UTF-8 encoding is `data` |
+
+`for` over bytes yields each octet as an `int`. Indexes and slices follow the
+string and list rules. `bytes` of a value outside 0 through 255 raises
+`ValueError` with the message `bytes must be in range(0, 256)`, an invalid index
+raises `IndexError` with the message `index out of range`, and `decode` of
+anything but valid UTF-8 raises `ValueError` with the message `invalid UTF-8`.
+There are no byte literals. Bytes cannot be printed, formatted, converted with
+`str`, ordered, used as dictionary keys, or assigned through an index.
 
 ### Lists and dictionaries
 
@@ -801,8 +830,10 @@ directly inside `finally` are errors.
 
 ### Failures that are not exceptions
 
-Stack exhaustion, memory exhaustion, failure to write stdout or stderr, and failure
-to read stdin terminate the program with status 1. They cannot be caught.
+Stack exhaustion, memory exhaustion, failure to write stdout or stderr through
+`print`, `sys.eprint`, or the final flush (§14), and failure to read stdin through
+`input` terminate the program with status 1. They cannot be caught. A write to a
+closed pipe is such a failure rather than a signal.
 
 ## 11. Built-in functions
 
@@ -810,7 +841,7 @@ to read stdin terminate the program with status 1. They cannot be caught.
 | --- | --- |
 | `print(value) -> None` | Write a printable value and `\n` to stdout |
 | `input() -> str \| None` | The next line of stdin without its line ending, or `None` at end of input |
-| `len`, `range`, `int`, `float`, `str`, `ord`, `chr`, `isinstance`, `sorted` | See §4, §6, §7, and §8 |
+| `len`, `range`, `int`, `float`, `str`, `bytes`, `ord`, `chr`, `isinstance`, `sorted` | See §4, §6, §7, and §8 |
 
 The built-in names are these functions and the built-in exception classes.
 
@@ -962,6 +993,80 @@ the operation and path and giving the host's reason, such as
 `cannot read <path>: <reason>`, `cannot write <path>: <reason>`,
 `cannot list <path>: <reason>`, or `cannot remove directory <path>: <reason>`.
 
+### `io`
+
+```python
+import io
+
+def main() -> None:
+    source = io.open("input.bin")
+    try:
+        target = io.open("output.bin", mode="w")
+        try:
+            while True:
+                chunk = source.read(65536)
+                if len(chunk) == 0:
+                    break
+                target.write(chunk)
+        finally:
+            target.close()
+    finally:
+        source.close()
+```
+
+| Declaration | Meaning |
+| --- | --- |
+| `open(path: str, mode: str = "r") -> File` | Open a file to read (`r`), to write after creating or truncating it (`w`), or to append after creating it if needed (`a`) |
+| `stdin() -> File` | A handle for standard input, open for reading |
+| `stdout() -> File` | A handle for standard output, open for writing |
+| `stderr() -> File` | A handle for standard error, open for writing |
+| `class File` | A native type with the methods below |
+
+| `File` method | Meaning |
+| --- | --- |
+| `read(size: int) -> bytes` | Up to `size` octets; empty only at end of input |
+| `readline() -> str \| None` | The next line as `input` reads it, or `None` at end of input |
+| `write(data: bytes) -> None` | Write all of `data` |
+| `write_text(text: str) -> None` | Write the UTF-8 encoding of `text`, without adding a newline |
+| `flush() -> None` | Write any buffered data |
+| `close() -> None` | Flush and close the file |
+
+A native type is a library type with methods. Only its module's functions create
+its values, and it has no fields. It can be used in annotations, aliases, unions,
+and `isinstance`, and its values can be stored and passed; it does not support
+`==`, printing, or construction. Every reference to a handle shares it, so
+closing one closes them all.
+
+Files carry octets with no newline translation; `readline` and `write_text` use
+UTF-8. `readline` removes the line's `\n` and a `\r` just before it, returns a
+final line that has no line ending, returns `""` for an empty line, and consumes
+a line that is not valid UTF-8 before raising `ValueError` with the message
+`invalid UTF-8`. Byte and line reads share the file position. Reads may return
+fewer octets than asked for.
+
+The standard handles share their streams' buffers with `input`, `print`, and
+`sys.eprint`, so reads and writes through either keep their order. When `main`
+returns, when an uncaught exception ends the program, and in `sys.exit`, stdout
+and stderr are flushed. Data written to an owned file is guaranteed to reach it
+only after `flush` or `close`, so close owned files with `try/finally`.
+
+`close` is idempotent and closes the handle even when it fails. These raise
+`ValueError`:
+
+- any other operation on a closed handle: `I/O operation on closed file`;
+- reading a handle open for writing or writing one open for reading:
+  `file is not open for reading` or `file is not open for writing`;
+- `read` with a size below 1: `read size must be positive`;
+- closing a standard handle: `cannot close a standard stream`;
+- `open` with any other mode: `invalid mode '<mode>'`;
+- `open` with a path containing NUL: `path contains a NUL character`.
+
+Host failures raise `OSError` with the message `cannot open <path>: <reason>`,
+`cannot read <path>: <reason>`, `cannot write <path>: <reason>`, or
+`cannot close <path>: <reason>`, where the standard handles' paths are
+`<stdin>`, `<stdout>`, and `<stderr>`. Unlike `print`, a failed write through a
+handle, including to a closed pipe, can be caught.
+
 ### `json`
 
 ```python
@@ -1030,8 +1135,8 @@ def main() -> None:
 valid UTF-8.
 
 `exit` takes a status from 0 through 255 and otherwise raises `ValueError` with the
-message `exit status out of range`. It ends the program at once; pending `finally`
-clauses do not run.
+message `exit status out of range`. It flushes stdout and stderr and ends the
+program at once; pending `finally` clauses do not run.
 
 Changing the dictionary `environ` returns does not change the environment. An
 environment name that is empty or contains `=` or NUL raises `ValueError` with the
@@ -1055,8 +1160,8 @@ raises `ValueError` with the message `timestamp out of range` otherwise.
 
 ## Planned application development milestones
 
-Sections 19–24 define accepted targets, in implementation order. They are not yet
-implemented. Sections 1–18 describe the implemented baseline; each planned section
+Sections 20–24 define accepted targets, in implementation order. They are not yet
+implemented. Sections 1–19 describe the implemented baseline; each planned section
 identifies the rules it changes when its milestone lands. Completion and delivery
 examples are tracked in `agents/todo.md`. A planned API is not available merely
 because its signature appears here.
@@ -1072,6 +1177,11 @@ explanatory notation for an existing element type, not user-defined generics.
 `= value` denotes an optional argument. Module functions are called with the module
 prefix. Unless specified otherwise, result records follow §3, and new exceptions
 have only `message: str` and directly extend `Exception`.
+
+New native types follow the `io.File` conventions of §14. Invalid options and
+values raise `ValueError`, and expired waits raise `TimeoutError` (§10). Unless an
+API says otherwise, a timeout is a finite, strictly positive float in seconds,
+`None` means no limit, and elapsed time is measured on a monotonic clock.
 
 ## 15. Text and collection essentials
 
@@ -1093,105 +1203,8 @@ conventions it introduced take effect with §19.
 
 ## 19. Bytes and streaming I/O
 
-### Native types and common conventions
-
-Library modules may export nominal native types with built-in methods. They are
-not user records: only documented factory functions create them, and they expose
-only documented fields and methods. They support annotations, aliases, unions,
-`isinstance`, and passing/storing values, but not equality, printing, inheritance,
-or user-defined methods. References to a value share its resource and state.
-
-A native resource's `close()` is idempotent and invalidates all its aliases.
-Other operations on a closed resource raise `ValueError`. Use `try/finally` for
-cleanup; garbage collection is not a cleanup guarantee. Close failure still
-invalidates the handle and raises `OSError`. There is no general context-manager
-protocol or public FFI.
-
-Invalid options and values raise `ValueError`; expired waits raise the
-built-in `TimeoutError` (§10). Unless an API says otherwise, a timeout is a finite,
-strictly positive float in seconds, and `None` means no limit. All elapsed-time
-limits use a monotonic clock. These additions do not introduce exception
-subclassing beyond §10: `TimeoutError` directly extends `Exception`.
-
-### Bytes
-
-`bytes` becomes a reserved type name, intentionally making it unavailable as an
-identifier. It denotes immutable arbitrary octets, distinct from UTF-8 `str`.
-`bytes(values: list[int]) -> bytes` copies integers in 0–255; an invalid integer
-raises `ValueError`. `bytes([])` is the empty value. There are no byte literals.
-
-Supported operations are `len`, same-type `+`, byte-content `==`/`!=`, indexing,
-and slicing under §7. Indexing returns an `int`; `for` iterates byte integers.
-`text.encode() -> bytes` encodes UTF-8, and `data.decode() -> str` strictly decodes
-UTF-8, raising `ValueError` on invalid input. No other encodings or replacement
-modes are included.
-
-Bytes can appear in unions and `isinstance(value, bytes)`. Equality's §5 type rule
-extends from printable types to unions of printable members and bytes; values of
-different member types remain unequal. Bytes are not printable, usable in
-f-strings, ordered, or dictionary keys. `str(data)` is not an implicit decoding
-operation. Bytes have value semantics; no writable buffer is exposed.
-
-### `io`
-
-`io.open(path: str, mode: str = "r") -> io.File` opens a stream. Modes are `r`
-(read an existing file), `w` (create or truncate), and `a` (create or append).
-There are no combined modes, seeking, encoding flags, or binary/text mode split.
-All streams carry bytes; text convenience operations explicitly use UTF-8.
-
-`io.stdin()`, `io.stdout()`, and `io.stderr()` return `io.File` handles borrowing
-the process standard streams. Closing a borrowed handle raises `ValueError`.
-Their access modes are read, write, and write, respectively.
-
-| `io.File` method | Meaning |
-| --- | --- |
-| `read(size: int) -> bytes` | Read up to positive `size` bytes; empty only at EOF |
-| `readline() -> str \| None` | Read one UTF-8 line, or `None` at EOF |
-| `write(data: bytes) -> None` | Write all bytes, or raise |
-| `write_text(text: str) -> None` | Write its UTF-8 bytes, without adding a newline |
-| `flush() -> None` | Flush pending writes |
-| `close() -> None` | Flush and release an owned file |
-
-`readline` follows `input`: remove LF and a CR immediately before it; return a
-final unterminated line; an empty line is `""`, distinct from EOF. It consumes the
-line even if decoding fails. This is a deliberate difference from Python's
-`readline`, chosen to match Willow's existing line-input convention. Other reads
-and writes do no newline translation. Mixing byte reads with line reads uses the
-same stream position; reading part of a UTF-8 code point may make the subsequent
-text read invalid.
-
-Reads may be short. Writes either complete or raise, although a failed write may
-have written a prefix. Wrong-mode operations and nonpositive read sizes raise
-`ValueError`. File and stream operation failures raise `OSError`.
-
-There is one shared buffering state per stream: `input`, `print`, `sys.eprint`,
-and these borrowed handles preserve output ordering and never lose each other's
-buffered input. Normal return from `main`, an escaping exception, and valid
-`sys.exit` all flush shared stdout and stderr before termination. A flush failure
-is uncatchable and sets exit status one. This amends §14's immediate-exit wording
-without running pending `finally` clauses or guaranteeing cleanup of unclosed
-owned files. Existing convenience functions retain §10's uncatchable standard
-stream failure behavior; explicit `io.File` operations are catchable. Broken pipes
-must follow these error rules rather than terminate the program by signal.
-
-```python
-import io
-
-def main() -> None:
-    source = io.open("input.bin")
-    try:
-        target = io.open("output.bin", mode="w")
-        try:
-            while True:
-                chunk = source.read(65536)
-                if len(chunk) == 0:
-                    break
-                target.write(chunk)
-        finally:
-            target.close()
-    finally:
-        source.close()
-```
+This milestone is implemented. Its rules are part of §2, §4, §5, §7, §10, §11,
+and §14.
 
 ## 20. Subprocess execution and control
 

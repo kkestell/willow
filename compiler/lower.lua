@@ -6,7 +6,7 @@ local M = {}
 -- Runtime helpers for binary operations, keyed by operator and result type.
 -- Other operations are plain Lua operators.
 local binary_helpers = {
-  ["+"] = { int = "add" },
+  ["+"] = { int = "add", bytes = "bytes_concat" },
   ["-"] = { int = "sub" },
   ["*"] = { int = "mul", float = "float_mul" },
   ["/"] = { float = "div" },
@@ -19,9 +19,12 @@ local function binary_helper(node)
   return helpers and helpers[node.type.kind]
 end
 
--- The prefix of the runtime helpers for operations on a string, list, or
--- dictionary of `type`.
+-- The prefix of the runtime helpers for operations on a string, bytes, list,
+-- dictionary, or native value of `type`.
 local function prefix(type)
+  if type.kind == "record" then
+    return type.record.prefix .. "_"
+  end
   return type.kind .. "_"
 end
 
@@ -270,7 +273,8 @@ local function lower_function(fn, sites, helpers)
         end
         return { kind = "Not", operand = spill(contains, mark) }
       end
-      if (node.op == "==" or node.op == "!=") and (types.boxed(left_type) or types.boxed(right_type)) then
+      if (node.op == "==" or node.op == "!=") and (types.boxed(left_type) or types.boxed(right_type)
+        or types.has(left_type, "bytes") or types.has(right_type, "bytes")) then
         local wide = types.boxed(left_type) and left_type or right_type
         local equal = pure("equal", { convert(left, left_type, wide), convert(right, right_type, wide) })
         return node.op == "==" and equal or { kind = "Not", operand = equal }

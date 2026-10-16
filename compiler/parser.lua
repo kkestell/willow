@@ -19,8 +19,8 @@ async await case del from global lambda match nonlocal with yield
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
-local type_names = set("int float bool str None list dict")
-local expression_starts = set("NAME INT FLOAT STRING FSTRING True False None int float str ( [ { - + not")
+local type_names = set("int float bool str bytes None list dict")
+local expression_starts = set("NAME INT FLOAT STRING FSTRING True False None int float str bytes ( [ { - + not")
 local simple_statements = { pass = "Pass", ["break"] = "Break", continue = "Continue" }
 
 local descriptions = {
@@ -219,7 +219,7 @@ function M.parse(tokens)
       else
         node = ast.node("Name", token.span, { name = token.value })
       end
-    elseif (kind == "int" or kind == "float" or kind == "str") and tokens[pos + 1].kind == "(" then
+    elseif (kind == "int" or kind == "float" or kind == "str" or kind == "bytes") and tokens[pos + 1].kind == "(" then
       advance()
       advance()
       node = ast.node("Call", token.span, { name = kind, args = parse_args() })

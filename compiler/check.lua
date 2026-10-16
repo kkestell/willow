@@ -17,7 +17,7 @@ local unary_types = {
 local ARITHMETIC = { ["int int"] = types.int, ["float float"] = types.float }
 local ORDERING = { ["int int"] = types.bool, ["float float"] = types.bool, ["str str"] = types.bool }
 local binary_types = {
-  ["+"] = { ["int int"] = types.int, ["float float"] = types.float, ["str str"] = types.str },
+  ["+"] = { ["int int"] = types.int, ["float float"] = types.float, ["str str"] = types.str, ["bytes bytes"] = types.bytes },
   ["-"] = ARITHMETIC,
   ["*"] = ARITHMETIC,
   ["/"] = { ["int int"] = types.float, ["float float"] = types.float },
@@ -82,6 +82,16 @@ local builtins = {
   monotonic = { params = {}, result = types.float },
   sleep = { params = { types.float }, names = { "seconds" }, result = types.None },
   utc = { params = { types.float }, names = { "timestamp" }, result = types.str },
+  bytes = { params = { types.list(types.int) }, names = { "values" }, result = types.bytes },
+  open = {
+    params = { types.str, types.str },
+    names = { "path", "mode" },
+    defaults = { [2] = { kind = "String", value = "r" } },
+    result = bind.file.type,
+  },
+  stdin = { params = {}, result = bind.file.type },
+  stdout = { params = {}, result = bind.file.type },
+  stderr = { params = {}, result = bind.file.type },
   sorted = {
     params = { "any", types.bool },
     names = { "items", "reverse" },
@@ -128,6 +138,7 @@ local STRING_METHODS = {
   strip = { {}, types.str },
   split = { { types.str }, types.list(types.str) },
   join = { { types.list(types.str) }, types.str },
+  encode = { {}, types.bytes },
   lower = { {}, types.str },
   upper = { {}, types.str },
   ljust = { { types.int }, types.str },
@@ -139,7 +150,8 @@ local SORTABLE = { [types.int] = true, [types.float] = true, [types.str] = true 
 
 local FORMAT_TYPES = { s = types.str, d = types.int, f = types.float }
 
--- Parameter types and result type of method `name` on `type`, or nil.
+-- Parameter types, result type, and parameter names (for methods that accept
+-- keywords) of method `name` on `type`, or nil.
 local function method_signature(type, name)
   if type == types.str then
     local method = STRING_METHODS[name]
@@ -159,6 +171,11 @@ local function method_signature(type, name)
     return { type.key }, optional_of(types.expand(type.value))
   elseif type.kind == "dict" and name == "pop" then
     return { type.key }, types.expand(type.value)
+  elseif type == types.bytes and name == "decode" then
+    return {}, types.str
+  elseif type.kind == "record" and type.record.methods and type.record.methods[name] then
+    local method = type.record.methods[name]
+    return method.params, method.result, method.names
   end
 end
 
@@ -374,7 +391,7 @@ end
 local function check_function(fn)
   -- The type of field `node.name` on a value of `object` type.
   local function field_type(node, object)
-    if object.kind ~= "record" then
+    if object.kind ~= "record" or object.record.native then
       diag.error(node.span, "type " .. object.name .. " has no field '" .. node.name .. "'")
     end
     for _, field in ipairs(object.record.fields) do
@@ -456,7 +473,7 @@ local function check_function(fn)
       end
       local right, right_true, right_false = check_expression(node.right, right_state)
       if op == "==" or op == "!=" then
-        if types.printable(left) and types.printable(right)
+        if types.comparable(left) and types.comparable(right)
           and (types.assignable(left, right) or types.assignable(right, left)) then
           type = types.bool
         end
@@ -486,6 +503,9 @@ local function check_function(fn)
         diag.error(node.span, "'range' can only be used as a 'for' iterable")
       end
       local builtin = target.kind == "Builtin" and builtins[target.name]
+      if target.kind == "Record" and target.native then
+        diag.error(node.span, "cannot construct native type " .. target.type_name)
+      end
       -- A constructor takes one argument per field.
       local params = target.kind == "Record" and target.fields or target.params
       if builtin then
@@ -513,7 +533,7 @@ local function check_function(fn)
         diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type.name .. " to str")
       elseif builtin and conversions[name] and arg_type and not conversions[name][arg_type.kind] then
         diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type.name .. " to " .. name)
-      elseif name == "len" and builtin and arg_type ~= types.str and not index_types(arg_type) then
+      elseif name == "len" and builtin and arg_type ~= types.str and arg_type ~= types.bytes and not index_types(arg_type) then
         diag.error(node.span, "'len' cannot be applied to " .. arg_type.name)
       end
       if builtin == builtins.sorted then
@@ -566,6 +586,8 @@ local function check_function(fn)
       local index, item = index_types(object)
       if object == types.str then
         index, item = types.int, types.str
+      elseif object == types.bytes then
+        index, item = types.int, types.int
       end
       if not index then
         diag.error(node.span, "cannot index a value of type " .. object.name)
@@ -574,7 +596,7 @@ local function check_function(fn)
       type = item
     elseif kind == "Slice" then
       local object = check_expression(node.object, state)
-      if object ~= types.str and object.kind ~= "list" then
+      if object ~= types.str and object ~= types.bytes and object.kind ~= "list" then
         diag.error(node.span, "cannot slice a value of type " .. object.name)
       end
       if node.start then
@@ -586,7 +608,7 @@ local function check_function(fn)
       type = object
     elseif kind == "MethodCall" then
       local object = check_expression(node.object, state)
-      local params, result = method_signature(object, node.name)
+      local params, result, names = method_signature(object, node.name)
       if not params then
         diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
       end
@@ -594,7 +616,7 @@ local function check_function(fn)
         bind_args(node, node.name, SORT_PARAMS, "parameter")
         check_sortable(node, object)
       else
-        bind_args(node, node.name, builtin_params({ params = params }))
+        bind_args(node, node.name, builtin_params({ params = params, names = names }), names and "parameter")
       end
       for i, arg in ipairs(node.args) do
         check_against(arg, state, params[i])
@@ -757,8 +779,8 @@ local function check_function(fn)
     elseif kind == "IndexAssign" then
       local object = check_expression(statement.object, state)
       local index, item = index_types(object)
-      if object == types.str then
-        diag.error(statement.span, "cannot assign to an index of a value of type str")
+      if object == types.str or object == types.bytes then
+        diag.error(statement.span, "cannot assign to an index of a value of type " .. object.name)
       elseif not index then
         diag.error(statement.span, "cannot index a value of type " .. object.name)
       end
@@ -847,7 +869,7 @@ local function check_function(fn)
         item = types.int
       else
         local iterable_type = check_expression(iterable, state)
-        item = item_type(iterable_type)
+        item = iterable_type == types.bytes and types.int or item_type(iterable_type)
         if not item then
           diag.error(iterable.span, "cannot iterate over " .. iterable_type.name)
         end

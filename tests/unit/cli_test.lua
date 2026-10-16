@@ -516,6 +516,70 @@ return {
     end)
   end,
 
+  broken_pipes_are_errors = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/lines.wlo", "def main() -> None:\n    for i in range(100000):\n        print(i)\n")
+      write(dir .. "/handle.wlo", table.concat({
+        "import io",
+        "import sys",
+        "def main() -> None:",
+        "    out = io.stdout()",
+        "    try:",
+        "        for i in range(100000):",
+        "            out.write_text(f'{i}\\n')",
+        "            out.flush()",
+        "    except OSError as error:",
+        "        sys.eprint('caught: ' + error.message)",
+        "",
+      }, "\n"))
+      local status, stdout, stderr = sh(dir, "{ (" .. quote(WILLOW) .. " run lines.wlo; echo \"status $?\" >&2) | head -n 1; }")
+      eq("0\n", stdout)
+      eq("lines.wlo:3:9: error: cannot write output: Broken pipe\n  in main at lines.wlo:3:9\nstatus 1\n", stderr)
+      status, stdout, stderr = sh(dir, "{ (" .. quote(WILLOW) .. " run handle.wlo; echo \"status $?\" >&2) | head -n 1; }")
+      eq("0\n", stdout)
+      -- Whether data is left to flush at exit after the failed write depends on
+      -- the C library, so only the caught error is compared.
+      eq("caught: cannot write <stdout>: Broken pipe\n", stderr:match("^[^\n]*\n"))
+    end)
+  end,
+
+  copy_example = function()
+    in_temp_dir(function(dir)
+      local all = {}
+      for i = 0, 255 do
+        all[#all + 1] = string.char(i)
+      end
+      write(dir .. "/source.bin", table.concat(all):rep(300))
+      local example = quote(ROOT .. "/examples/copy.wlo")
+      local status, stdout = willow(dir, "run " .. example .. " source.bin target.bin")
+      eq(0, status)
+      eq("copied 76800 bytes\n", stdout)
+      eq(read(dir .. "/source.bin"), read(dir .. "/target.bin"))
+      local stderr
+      status, stdout, stderr = willow(dir, "run " .. example .. " missing.bin target.bin")
+      eq(1, status)
+      eq("cannot open missing.bin: No such file or directory\n", stderr)
+    end)
+  end,
+
+  jsonl_example = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/log.jsonl", '{"level": "info", "n": 1}\n{"level": "error", "n": 2}\n[1]\n{"level": "error", "n": 3}\n')
+      local example = quote(ROOT .. "/examples/jsonl.wlo")
+      local status, stdout, stderr = willow(dir, "run " .. example .. " level error <log.jsonl")
+      eq(0, status)
+      eq('{"level": "error", "n": 2}\n{"level": "error", "n": 3}\n', stdout)
+      eq("kept 2 of 4 records\n", stderr)
+      status, stdout = willow(dir, "run " .. example .. " n 1 <log.jsonl")
+      eq('{"level": "info", "n": 1}\n', stdout)
+      write(dir .. "/bad.jsonl", '{"n": 1}\nnope\n')
+      status, stdout, stderr = willow(dir, "run " .. example .. " n 1 <bad.jsonl")
+      eq(1, status)
+      eq('{"n": 1}\n', stdout)
+      eq("line 2: expected 'null' at line 1, column 2\n", stderr)
+    end)
+  end,
+
   standard_library_build_runs_elsewhere = function()
     in_temp_dir(function(dir, base)
       write(dir .. "/prog.wlo", JSON_PROGRAM)

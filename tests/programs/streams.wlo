@@ -1,0 +1,67 @@
+import fs
+import io
+import sys
+import time
+
+def main() -> None:
+    # input() and stdin handles share one buffer.
+    stdin = io.stdin()
+    print(input())
+    print(stdin.readline())
+    print(f"[{input()}]")
+    print(stdin.readline())
+    print(stdin.read(4).decode())
+    print(stdin.readline())
+    print(stdin.readline())
+    print(f"{stdin.readline()} {len(stdin.read(10))} {input()}")
+
+    # print and stdout handles keep their order.
+    out = io.stdout()
+    out.write_text("a")
+    print("b")
+    out.write("c\n".encode())
+    out.flush()
+
+    path = fs.join("/tmp", "wlo_streams_" + str(int(time.time() * 1000000.0)))
+    f = io.open(path, mode="w")
+    f.write_text("one\n")
+    f.close()
+    f.close()
+    g = io.open(path, "a")
+    g.write(bytes([116, 119, 111]))
+    g.close()
+    r = io.open(path)
+    alias = r
+    print(r.readline())
+    print(alias.read(100).decode())
+    print(len(r.read(100)))
+    print(r.readline())
+    r.close()
+    for check in ["closed", "mode", "size", "borrowed", "write", "flush"]:
+        try:
+            if check == "closed":
+                alias.readline()
+            elif check == "mode":
+                out.read(1)
+            elif check == "size":
+                stdin.read(0)
+            elif check == "borrowed":
+                stdin.close()
+            elif check == "write":
+                stdin.write_text("x")
+            else:
+                r.flush()
+        except ValueError as e:
+            print(f"{check}: {e.message}")
+    try:
+        io.open(path, "x")
+    except ValueError as e:
+        print(e.message)
+    fs.remove(path)
+    try:
+        io.open(path)
+    except OSError as error:
+        print(error.message.replace(path, "PATH"))
+    # Buffered output is flushed when the program exits.
+    out.write_text("end")
+    sys.exit(0)

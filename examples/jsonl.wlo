@@ -1,0 +1,36 @@
+# Keeps the JSON Lines records on stdin whose field equals a value:
+# willow run jsonl.wlo <field> <value> < records.jsonl
+
+import io
+import json
+import sys
+
+# The field's value as text: strings as they are, other values as JSON.
+def text_of(value: json.Json) -> str:
+    if isinstance(value, str):
+        return value
+    return json.dump(value)
+
+def main() -> None:
+    args = sys.args()
+    if len(args) != 2:
+        sys.eprint("usage: jsonl <field> <value>")
+        sys.exit(2)
+    stdin = io.stdin()
+    out = io.stdout()
+    number = 0
+    kept = 0
+    line = stdin.readline()
+    while line is not None:
+        number = number + 1
+        try:
+            record = json.parse(line)
+        except json.JsonError as error:
+            sys.eprint(f"line {number}: {error.message}")
+            sys.exit(1)
+        if isinstance(record, dict) and args[0] in record:
+            if text_of(record[args[0]]) == args[1]:
+                out.write_text(line + "\n")
+                kept = kept + 1
+        line = stdin.readline()
+    sys.eprint(f"kept {kept} of {number} records")

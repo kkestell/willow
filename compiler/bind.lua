@@ -16,11 +16,12 @@ local builtins = {
   chr = { kind = "Builtin", name = "chr" },
   isinstance = { kind = "Builtin", name = "isinstance" },
   sorted = { kind = "Builtin", name = "sorted" },
+  bytes = { kind = "Builtin", name = "bytes" },
 }
 
 -- The compiler-provided modules. They have no source: their declarations are
--- built-in targets and records, and a program's own `sys.wlo`, `fs.wlo`, or
--- `time.wlo` shadows them.
+-- built-in targets and records, and a program's own module of the same name
+-- shadows them.
 local function provided(name, functions, records)
   local declarations = records or {}
   for function_name in functions:gmatch("%S+") do
@@ -41,13 +42,35 @@ local stat = {
 }
 stat.type = types.record(stat)
 
+-- A native type is a provided record with no fields that only its module's
+-- functions create. Its methods lower to helpers named after `prefix`.
+local file = {
+  kind = "Record",
+  name = "File",
+  type_name = "io.File",
+  fields = {},
+  native = true,
+  prefix = "file",
+  methods = {
+    read = { params = { types.int }, names = { "size" }, result = types.bytes },
+    readline = { params = {}, result = types.union({ types.str, types.None }) },
+    write = { params = { types.bytes }, names = { "data" }, result = types.None },
+    write_text = { params = { types.str }, names = { "text" }, result = types.None },
+    flush = { params = {}, result = types.None },
+    close = { params = {}, result = types.None },
+  },
+}
+file.type = types.record(file)
+
 M.modules = {
+  io = provided("io", "open stdin stdout stderr", { File = file }),
   sys = provided("sys", "args eprint exit getenv environ getcwd"),
   fs = provided("fs", "read_file write_file join basename dirname listdir stat exists mkdir remove rmdir rename",
     { Stat = stat }),
   time = provided("time", "time monotonic sleep utc"),
 }
 M.stat = stat
+M.file = file
 
 -- The built-in exception classes, records with only a `message` field.
 local exceptions = {}
@@ -108,7 +131,14 @@ local function collect_symbols(fn)
   return scope
 end
 
-local SCALARS = { int = types.int, float = types.float, bool = types.bool, str = types.str, None = types.None }
+local SCALARS = {
+  int = types.int,
+  float = types.float,
+  bool = types.bool,
+  str = types.str,
+  bytes = types.bytes,
+  None = types.None,
+}
 
 -- Returns declaration `name` of `module` as seen from module `from`. Names that
 -- begin with `_` are private to their module.

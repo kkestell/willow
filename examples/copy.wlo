@@ -1,0 +1,33 @@
+# Copies a file in fixed-size chunks: willow run copy.wlo <source> <target>
+
+import io
+import sys
+
+def copy(source_path: str, target_path: str) -> int:
+    total = 0
+    source = io.open(source_path)
+    try:
+        target = io.open(target_path, mode="w")
+        try:
+            while True:
+                chunk = source.read(65536)
+                if len(chunk) == 0:
+                    break
+                target.write(chunk)
+                total = total + len(chunk)
+        finally:
+            target.close()
+    finally:
+        source.close()
+    return total
+
+def main() -> None:
+    args = sys.args()
+    if len(args) != 2:
+        sys.eprint("usage: copy <source> <target>")
+        sys.exit(2)
+    try:
+        print(f"copied {copy(args[0], args[1])} bytes")
+    except OSError as error:
+        sys.eprint(error.message)
+        sys.exit(1)

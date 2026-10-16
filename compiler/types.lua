@@ -2,11 +2,12 @@
 -- records are single objects compared by identity.
 local M = {}
 
-for name in ("int float bool str None"):gmatch("%S+") do
+for name in ("int float bool str None bytes"):gmatch("%S+") do
   M[name] = { kind = name, name = name }
 end
 
-local SCALARS = { int = true, float = true, bool = true, str = true, None = true }
+local SCALARS = { int = true, float = true, bool = true, str = true, None = true, bytes = true }
+local PRINTABLE = { int = true, float = true, bool = true, str = true, None = true }
 
 function M.list(element)
   return { kind = "list", element = element, name = "list[" .. element.name .. "]" }
@@ -62,6 +63,16 @@ function M.optional(t)
 end
 
 function M.printable(t)
+  for _, m in ipairs(M.members(t)) do
+    if not PRINTABLE[m.kind] then
+      return false
+    end
+  end
+  return true
+end
+
+-- Whether `==` applies: every member is printable or bytes.
+function M.comparable(t)
   for _, m in ipairs(M.members(t)) do
     if not SCALARS[m.kind] then
       return false

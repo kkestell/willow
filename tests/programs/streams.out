@@ -1,0 +1,23 @@
+first
+second
+[]
+fourth
+abcd
+line
+last
+None 0 None
+ab
+c
+one
+two
+0
+None
+closed: I/O operation on closed file
+mode: file is not open for reading
+size: read size must be positive
+borrowed: cannot close a standard stream
+write: file is not open for writing
+flush: I/O operation on closed file
+invalid mode 'x'
+cannot open PATH: No such file or directory
+end

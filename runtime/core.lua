@@ -3,7 +3,12 @@
 -- and assigns them before calling __wlo_run.
 
 local __wlo_ffi = require("ffi")
-__wlo_ffi.cdef("int snprintf(char *, size_t, const char *, ...);")
+__wlo_ffi.cdef([[
+int snprintf(char *, size_t, const char *, ...);
+void *__wlo_c_signal(int signal, void *handler) __asm__("signal");
+]])
+-- A write to a closed pipe then fails with EPIPE instead of ending the process.
+__wlo_ffi.C.__wlo_c_signal(13, __wlo_ffi.cast("void *", 1))
 
 local __wlo_source = debug.getinfo(1, "S").source
 local __wlo_MAX_INT = 9007199254740991
@@ -315,16 +320,20 @@ local function __wlo_unbox(value)
   return value
 end
 
--- Equality of printable values where floats may be boxed; any table is a box.
+-- Equality of printable values and bytes where floats may be boxed; the only
+-- tables are boxes and bytes.
 local function __wlo_equal(a, b)
   if type(a) == "table" and type(b) == "table" then
+    if a.__wlo_octets ~= nil or b.__wlo_octets ~= nil then
+      return a.__wlo_octets == b.__wlo_octets
+    end
     return a.__wlo_float == b.__wlo_float
   end
   return a == b
 end
 
--- `kind` is a Lua type name, "box", "list", "dict", "Exception", or a record's
--- class.
+-- `kind` is a Lua type name, "box", "bytes", "list", "dict", "Exception", or
+-- a record's class.
 local function __wlo_isinstance(value, kind)
   if type(value) ~= "table" then
     return type(value) == kind
@@ -334,6 +343,8 @@ local function __wlo_isinstance(value, kind)
     return class == kind or kind == "Exception" and value.__wlo_class ~= nil
   elseif value.__wlo_float ~= nil then
     return kind == "box"
+  elseif value.__wlo_octets ~= nil then
+    return kind == "bytes"
   end
   return kind == (value.n and "list" or "dict")
 end
@@ -408,17 +419,24 @@ local function __wlo_valid_utf8(text)
   return true
 end
 
--- Reads with "*L" so that only a \r before a \n is removed.
+-- The next line of `file` without its \n and a \r just before it, or nil at
+-- end of input, and the read error. Reads with "*L" so that only a \r before
+-- a \n is removed.
+local function __wlo_read_line(file)
+  local line, err = file:read("*L")
+  if line and line:sub(-1) == "\n" then
+    line = line:sub(-2, -2) == "\r" and line:sub(1, -3) or line:sub(1, -2)
+  end
+  return line, err
+end
+
 local function __wlo_input(site)
-  local line, err = io.stdin:read("*L")
+  local line, err = __wlo_read_line(io.stdin)
   if err then
     __wlo_host_fail("cannot read input: " .. tostring(err), site)
   end
   if not line then
     return nil
-  end
-  if line:sub(-1) == "\n" then
-    line = line:sub(-2, -2) == "\r" and line:sub(1, -3) or line:sub(1, -2)
   end
   if not __wlo_valid_utf8(line) then
     __wlo_fail("ValueError", "invalid UTF-8", site)
@@ -463,11 +481,25 @@ local function __wlo_write_file(path, text, site)
   end
 end
 
+-- Flushes the standard streams before the program ends. A failure is
+-- reported as a failed write and ends the program with status 1.
+local function __wlo_flush_streams()
+  local ok, err = io.stdout:flush()
+  if ok then
+    ok, err = io.stderr:flush()
+  end
+  if not ok then
+    io.stderr:write("error: cannot write output: ", tostring(err), "\n")
+    os.exit(1)
+  end
+end
+
 -- os.exit ends the process here, so no pending finally clause runs.
 local function __wlo_exit(status, site)
   if status < 0 or status > 255 then
     __wlo_fail("ValueError", "exit status out of range", site)
   end
+  __wlo_flush_streams()
   os.exit(status)
 end
 
@@ -510,6 +542,8 @@ end
 local function __wlo_len(value, site)
   if type(value) == "string" then
     return __wlo_code_points(value)
+  elseif value.__wlo_octets then
+    return #value.__wlo_octets
   end
   return value.n or #value.keys
 end
@@ -943,7 +977,10 @@ local function __wlo_run(main, ...)
   __wlo_argv = { n = select("#", ...), ... }
   local ok, err = xpcall(main, __wlo_catch)
   if not ok then
+    -- The status is already 1, so a failure to flush stdout adds nothing.
+    io.stdout:flush()
     io.stderr:write(__wlo_report(err), "\n")
     os.exit(1)
   end
+  __wlo_flush_streams()
 end

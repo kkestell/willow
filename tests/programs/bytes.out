@@ -1,0 +1,10 @@
+0 4 [0, 127, 128, 255]
+bytes must be in range(0, 256)
+[0, 127, 128, 255, 195, 169, 226, 134, 146]
+0 146 [127, 128] [134, 146] []
+index out of range
+True True True
+True False
+9 héllo→ hé
+invalid UTF-8
+bytes of length 9

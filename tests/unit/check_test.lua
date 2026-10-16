@@ -660,4 +660,41 @@ return {
       check_errors("import sys\n" .. in_main("x = sys.getenv('A') + 'b'")))
     eq("3:16: expected float, received int", check_errors("import time\n" .. in_main("time.sleep(1)")))
   end,
+
+  bytes_and_files = function()
+    local program = check_source("import io\n" .. in_main(table.concat({
+      "b: bytes = bytes([1, 2]) + 'é'.encode()",
+      "n: int = len(b) + b[-1]",
+      "c: bytes = b[1:]",
+      "for x in b:",
+      "    n = n + x",
+      "t: str = b.decode()",
+      "same: bool = b == c",
+      "v: bytes | str = 'a'",
+      "other: bool = v == 'a'",
+      "f: io.File = io.open('x', mode='w')",
+      "d = io.stdin().read(size=4)",
+      "line: str | None = f.readline()",
+      "f.write(data=b)",
+      "f.write_text('x')",
+      "f.close()",
+    }, "\n")))
+    eq("bytes", program.functions[1].body[10].value.type.name)
+    local function err(statement)
+      return check_errors("import io\n" .. in_main("b = bytes([1])\n" .. statement))
+    end
+    eq("4:11: cannot print a value of type bytes", err("print(b)"))
+    eq("4:12: cannot format a value of type bytes", err("x = f'{b}'"))
+    eq("4:13: cannot convert a value of type bytes to str", err("x = str(b)"))
+    eq("4:11: operator '<' cannot be applied to bytes and bytes", err("x = b < b"))
+    eq("4:11: operator '+' cannot be applied to bytes and str", err("x = b + 'a'"))
+    eq("4:6: cannot assign to an index of a value of type bytes", err("b[0] = 1"))
+    eq("4:16: expected int, received str", err("x = bytes(['a'])"))
+    eq("4:12: cannot construct native type io.File", err("x = io.File()"))
+    eq("5:11: type io.File has no field 'path'", err("f = io.stdin()\nx = f.path"))
+    eq("5:11: operator '==' cannot be applied to io.File and io.File", err("f = io.stdin()\nx = f == f"))
+    eq("5:11: cannot print a value of type io.File", err("f = io.stdin()\nprint(f)"))
+    eq("1:15: dictionary keys must be int or str", check_errors("def f(d: dict[bytes, int]) -> None:\n    pass\n" .. MAIN))
+    eq("2:5: expected an expression, found 'bytes'", check_errors(in_main("bytes = 1")))
+  end,
 }

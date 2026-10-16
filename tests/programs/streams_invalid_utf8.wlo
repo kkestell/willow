@@ -1,0 +1,11 @@
+import io
+
+def main() -> None:
+    stdin = io.stdin()
+    print(stdin.readline())
+    try:
+        stdin.readline()
+    except ValueError as e:
+        print(e.message)
+    print(stdin.readline())
+    print(stdin.readline())
