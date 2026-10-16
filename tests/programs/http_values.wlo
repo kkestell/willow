@@ -1,0 +1,23 @@
+import http
+
+def attempt(method: str, url: str, headers: list[http.Header], timeout: float) -> None:
+    try:
+        http.request(method, url, headers=headers, timeout=timeout)
+    except ValueError as error:
+        print(error.message)
+
+def main() -> None:
+    print(http.urlencode({"q": "a b&c", "é": "x=y~", "empty": ""}))
+    print(f"[{http.urlencode({})}]")
+    headers = [http.Header("Content-Type", "text/plain"), http.Header("X-Twice", "one"), http.Header("x-twice", "two")]
+    print(f"{http.header(headers, 'content-type')} {http.header(headers, 'X-TWICE')} {http.header(headers, 'missing')}")
+    none: list[http.Header] = []
+    for url in ["ftp://example.com/", "http://", "https://user:pw@example.com/", "http://example.com:99999/",
+            "http://example.com:x/", "/relative", "http://exa mple.com/", "http://café.example/"]:
+        attempt("GET", url, none, 1.0)
+    attempt("BAD METHOD", "http://example.com/", none, 1.0)
+    attempt("GET", "http://example.com/", [http.Header("Bad Name", "x")], 1.0)
+    attempt("GET", "http://example.com/", [http.Header("X-Ok", "line\nbreak")], 1.0)
+    attempt("GET", "http://example.com/", [http.Header("Host", "evil")], 1.0)
+    attempt("GET", "http://example.com/", [http.Header("content-length", "1")], 1.0)
+    attempt("GET", "http://example.com/", none, 0.0)

@@ -29,6 +29,7 @@ local optional_runtimes = {
   optional_runtime(read_runtime("runtime.bytes")),
   optional_runtime(read_runtime("runtime.io")),
   optional_runtime(read_runtime("runtime.cli")),
+  optional_runtime(read_runtime("runtime.http")),
 }
 
 local lua_keywords = {}

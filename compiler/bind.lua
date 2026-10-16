@@ -183,8 +183,34 @@ local cli = provided("cli", "parser", {
 })
 cli.declarations.parser.helper = "cli_parser_new"
 
+-- An ordinary record of a provided module with `fields` as { name, type }.
+local function provided_record(module, name, fields)
+  local record = { kind = "Record", name = name, type_name = module .. "." .. name, fields = {} }
+  for i, field in ipairs(fields) do
+    record.fields[i] = { name = field[1], type = field[2] }
+  end
+  record.type = types.record(record)
+  return record
+end
+
+local header = provided_record("http", "Header", { { "name", types.str }, { "value", types.str } })
+local headers = types.list(header.type)
+local http = provided("http", "request download header urlencode", {
+  Header = header,
+  Response = provided_record("http", "Response", {
+    { "status", types.int }, { "headers", headers }, { "body", types.bytes }, { "url", types.str },
+  }),
+  Download = provided_record("http", "Download", {
+    { "status", types.int }, { "headers", headers }, { "url", types.str }, { "bytes_written", types.int },
+  }),
+})
+for _, name in ipairs({ "request", "download", "header", "urlencode" }) do
+  http.declarations[name].helper = "http_" .. name
+end
+
 M.modules = {
   cli = cli,
+  http = http,
   terminal = provided("terminal", "isatty color_enabled style progress finish_progress"),
   io = provided("io", "open stdin stdout stderr", { File = file }),
   subprocess = subprocess,
@@ -198,6 +224,7 @@ M.file = file
 M.result = result
 M.process = process
 M.parser = parser
+M.http = http
 
 -- The built-in exception classes, records with only a `message` field.
 local exceptions = {}

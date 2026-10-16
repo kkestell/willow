@@ -1,0 +1,42 @@
+# Calls a JSON API: willow run api.wlo <url> [json-body]
+# Without a body it sends GET; with one it sends POST with that JSON. Prints
+# the status and the fields of a JSON object response.
+
+import http
+import json
+import sys
+
+def main() -> None:
+    args = sys.args()
+    if len(args) < 1 or len(args) > 2:
+        sys.eprint("usage: api <url> [json-body]")
+        sys.exit(2)
+    try:
+        if len(args) == 1:
+            response = http.request("GET", args[0], headers=[http.Header("Accept", "application/json")])
+        else:
+            body = json.dump(json.parse(args[1])).encode()
+            headers = [http.Header("Content-Type", "application/json"), http.Header("Accept", "application/json")]
+            response = http.request("POST", args[0], headers=headers, body=body)
+    except json.JsonError as invalid:
+        sys.eprint("invalid body: " + invalid.message)
+        sys.exit(2)
+    except OSError as error:
+        sys.eprint(error.message)
+        sys.exit(1)
+    except TimeoutError as timeout:
+        sys.eprint(timeout.message)
+        sys.exit(1)
+    print(f"status {response.status}")
+    try:
+        doc = json.parse(response.body.decode())
+    except json.JsonError:
+        print(response.body.decode())
+        sys.exit(1)
+    if isinstance(doc, dict):
+        for key in doc:
+            print(f"{key}: {json.dump(doc[key])}")
+    else:
+        print(json.dump(doc))
+    if response.status >= 400:
+        sys.exit(1)

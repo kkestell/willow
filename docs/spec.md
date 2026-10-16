@@ -4,7 +4,7 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-Sections 1–21 describe the implemented language. Sections 22–24 describe planned
+Sections 1–22 describe the implemented language. Sections 23–24 describe planned
 milestones, introduced under
 [planned application development milestones](#planned-application-development-milestones).
 
@@ -1079,6 +1079,84 @@ the operation and path and giving the host's reason, such as
 `cannot read <path>: <reason>`, `cannot write <path>: <reason>`,
 `cannot list <path>: <reason>`, or `cannot remove directory <path>: <reason>`.
 
+### `http`
+
+```python
+import http
+import json
+
+def main() -> None:
+    response = http.request("GET", "https://example.com/api/items?" + http.urlencode({"q": "tea"}))
+    if response.status == 200:
+        items = json.parse(response.body.decode())
+    body = json.dump({"name": "tea"}).encode()
+    headers = [http.Header("Content-Type", "application/json")]
+    created = http.request("POST", "https://example.com/api/items", headers=headers, body=body)
+    print(created.status)
+```
+
+| Declaration | Meaning |
+| --- | --- |
+| `request(method: str, url: str, headers: list[Header] \| None = None, body: bytes \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Response` | Make a request and read the whole response |
+| `download(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Download` | `GET` a URL into the file at `path` |
+| `header(headers: list[Header], name: str) -> str \| None` | The value of the first header named `name`, ignoring case, or `None` |
+| `urlencode(values: dict[str, str]) -> str` | `values` as `key=value` pairs joined with `&`, in insertion order |
+| `class Header` | Fields `name: str` and `value: str` |
+| `class Response` | Fields `status: int`, `headers: list[Header]`, `body: bytes`, and `url: str` |
+| `class Download` | Fields `status: int`, `headers: list[Header]`, `url: str`, and `bytes_written: int` |
+
+The module uses the system libcurl, which macOS includes; on Linux, a program
+that makes requests needs the `libcurl4` and `ca-certificates` packages. When
+libcurl cannot be loaded, a request raises `OSError` with the message
+`cannot load libcurl: <reason>`. Programs that do not import `http` have no such
+dependency.
+
+A URL is absolute `http` or `https` with an ASCII host (internationalized names
+must already be in their ASCII form) and an optional port. Its fragment is not
+sent. Bytes outside the URL character set, including UTF-8 text, are
+percent-encoded, and existing `%XX` escapes are kept. Other schemes, relative
+URLs, and malformed hosts or ports raise `ValueError` with the message
+`invalid URL '<url>'`, and user information raises `ValueError` with the message
+`URL user information is not allowed`.
+
+The method is sent as given and must be an HTTP token. Header names must be
+tokens and values printable ASCII or tab; `Host`, `Content-Length`, and
+`Transfer-Encoding` are set by the transport and raise `ValueError` if given.
+Received headers keep their order and repetitions; bytes above 127 in them read
+as U+0080 through U+00FF. `urlencode` keeps ASCII letters, digits, `-`, `.`, `_`,
+and `~`, writes spaces as `+`, and percent-encodes the rest of the UTF-8 text; it
+adds no `?`.
+
+Every completed exchange returns its status, including 4xx and 5xx. The body is
+the received bytes without transport framing; nothing is decompressed or
+decoded. There are no cookies, retries, credentials, or proxies, whatever the
+environment says. Connection, protocol, and TLS failures raise `OSError` with
+the message `cannot fetch <url>: <reason>`.
+
+With `follow_redirects`, `GET` and `HEAD` requests follow 301, 302, 303, 307,
+and 308 responses with a `Location`, resolved against the current URL, for at
+most ten hops; another hop raises `OSError` with the message
+`too many redirects`, and a hop from `https` to `http` raises `OSError` with the
+message `refusing to follow a redirect from https to http`. Other methods get the
+redirect response itself. When a hop changes the scheme, host, or port, the
+caller's headers are not sent again. The result describes the final exchange.
+
+`timeout` limits inactivity: connecting and each wait for more data may each take
+at most that long, so a slow but steady transfer can last longer. On expiry the
+request raises `TimeoutError` with the message
+`request timed out after <timeout> seconds`. Host name lookup is not covered and
+may take longer. A timeout must be finite and positive.
+
+HTTPS always verifies the server's certificate and host name, against the
+platform's trusted certificates or, with `ca_file`, against the PEM bundle at
+that path alone.
+
+`download` writes a 2xx body into a temporary file next to `path` and replaces
+`path` with it only after the whole body is written and closed, so `path` is
+never left partly written. A final response that is not 2xx returns its status
+with `bytes_written` 0 and leaves `path` alone. Failures remove the temporary
+file. The body is written as it arrives rather than held in memory.
+
 ### `io`
 
 ```python
@@ -1335,8 +1413,8 @@ raises `ValueError` with the message `timestamp out of range` otherwise.
 
 ## Planned application development milestones
 
-Sections 22–24 define accepted targets, in implementation order. They are not yet
-implemented. Sections 1–21 describe the implemented baseline; each planned section
+Sections 23–24 define accepted targets, in implementation order. They are not yet
+implemented. Sections 1–22 describe the implemented baseline; each planned section
 identifies the rules it changes when its milestone lands. Completion and delivery
 examples are tracked in `agents/todo.md`. A planned API is not available merely
 because its signature appears here.
@@ -1391,93 +1469,7 @@ This milestone is implemented. Its rules are part of §14.
 
 ## 22. HTTP and HTTPS clients
 
-The `http` module provides synchronous requests without an HTTP server framework.
-It accepts absolute `http` and `https` URLs, with ASCII hostnames (internationalized names must already be in ASCII IDNA
-form) and non-ASCII path/query characters percent-encoded as UTF-8.
-Already valid percent escapes are preserved. URL user information is rejected;
-fragments are removed before sending. Other schemes and malformed URLs raise
-`ValueError`.
-
-The following are ordinary records:
-
-```text
-Header(name: str, value: str)
-Response(status: int, headers: list[Header], body: bytes, url: str)
-Download(status: int, headers: list[Header], url: str, bytes_written: int)
-```
-
-```text
-request(method: str, url: str, headers: list[Header] | None = None,
-        body: bytes | None = None, timeout: float = 30.0,
-        follow_redirects: bool = True, ca_file: str | None = None) -> Response
-
-download(url: str, path: str, headers: list[Header] | None = None,
-         timeout: float = 30.0, follow_redirects: bool = True,
-         ca_file: str | None = None) -> Download
-
-header(headers: list[Header], name: str) -> str | None
-urlencode(values: dict[str, str]) -> str
-```
-
-Methods are nonempty ASCII HTTP tokens, sent as supplied; callers normally use
-uppercase names. Outgoing header names are ASCII HTTP tokens; values must be
-ASCII text or tab, with no CR, LF, NUL, or other controls. Host, Content-Length,
-and Transfer-Encoding are managed by the transport and cannot be supplied.
-Header lists preserve order and duplicate fields. Received non-ASCII header
-bytes are mapped one-to-one to Unicode U+0080–U+00FF; header values are not decoded
-as UTF-8. `header` returns the first case-insensitive name match, or `None`;
-callers scan the list when repeated values matter.
-
-`urlencode` emits dictionary entries in insertion order as form-style query pairs:
-UTF-8 bytes are percent-encoded except ASCII letters, digits, `-`, `.`, `_`, and
-`~`; spaces become `+`. It does not add `?` or merge with an existing query.
-No implicit JSON conversion occurs: compose `json.dump(...).encode()` and
-`json.parse(response.body.decode())` explicitly.
-
-### Requests, redirects, and timeouts
-
-A completed HTTP exchange returns its status, including 4xx and 5xx. Transport,
-protocol, and TLS failures raise `OSError`; invalid arguments raise `ValueError`.
-The body contains the received representation bytes with transport framing
-removed. There is no automatic content decompression or content-type decoding,
-no cookie jar, automatic retry, or ambient credentials or proxy configuration.
-Each request is independent; backend user configuration must not alter behavior.
-
-When enabled, redirects are followed only for GET and HEAD, for statuses 301,
-302, 303, 307, and 308 with Location. Resolve relative targets against the current
-URL, allow at most ten hops, and never follow HTTPS to HTTP. A forbidden downgrade,
-invalid redirect target, or excess hops raises `OSError`. Other methods return the
-redirect response. When origin (scheme, host, or effective port) changes, discard
-all caller-supplied headers for subsequent hops, preventing credential leakage
-through custom header names. Response metadata describes the final exchange.
-
-The timeout is an inactivity limit: connection establishment and each wait for
-network progress may take at most that duration. Progress renews the wait; it is
-not a total download deadline. Redirects also get this limit. Expiry raises
-`TimeoutError`. Hostname resolution uses the host resolver and may block beyond
-this limit; that limitation must be stated in the library documentation.
-
-HTTPS always verifies certificate chains and hostnames. `ca_file=None` uses the
-platform's trusted certificates; a provided path selects an explicit PEM trust
-bundle instead. There is no insecure verification switch.
-
-### Downloads and deployment
-
-`download` makes a GET request and streams a 2xx body into a temporary sibling of
-`path`. Only after a successful flush and close does it replace the destination.
-Existing content remains intact on errors. A non-2xx final response returns a
-`Download` with zero bytes written and leaves the destination untouched; its body
-is discarded. Temporary output is removed on failure. The byte count is the final
-file size; a count outside the integer range raises `OverflowError`. Downloads
-use bounded chunks rather than retaining the whole body.
-
-The backend must use maintained HTTP/TLS libraries. Selection remains an
-implementation gate: prove certificate lookup and dependency behavior on macOS
-and Linux for `run`, compiled Lua, and standalone executables before adopting it.
-Built applications must not require a separately installed command or Willow
-checkout; compiled Lua must retain its documented LuaJIT-only runtime dependency.
-Any necessary change to that deployment contract requires a separate explicit
-scope decision. This specification does not claim a backend has met the gate.
+This milestone is implemented. Its rules are part of §14.
 
 ## 23. TCP clients and simple services
 

@@ -259,13 +259,13 @@ remove obsolete amendment wording, and update implementation status.
   - [x] Deliver a report CLI with help, typed options, terminal presentation, and
     clean piped output
 
-- [ ] HTTP and HTTPS clients (spec §22)
-  - [ ] Prove a maintained backend's dependency/certificate behavior for run,
+- [x] HTTP and HTTPS clients (spec §22)
+  - [x] Prove a maintained backend's dependency/certificate behavior for run,
     compiled Lua, and standalone build on macOS/Linux before adopting it;
     resolve any deployment-contract change explicitly
-  - [ ] Requests/responses, headers, query encoding, redirects, verified TLS,
+  - [x] Requests/responses, headers, query encoding, redirects, verified TLS,
     inactivity timeout, and atomic streamed downloads
-  - [ ] Deliver a JSON API client and binary downloader with local integration
+  - [x] Deliver a JSON API client and binary downloader with local integration
     tests for HTTP failures, transport failures, redirects, and destination safety
 
 - [ ] TCP clients and simple services (spec §23)

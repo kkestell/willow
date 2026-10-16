@@ -74,6 +74,35 @@ local function in_terminal(dir, command)
   return (table.concat(parts):gsub("\r\n", "\n"))
 end
 
+-- Starts a background command whose first stdout line is ready once `path`
+-- holds it, and returns its pid.
+local function start_server(command, path)
+  local shell = io.popen(command .. " >" .. quote(path) .. " 2>/dev/null & echo $!")
+  local pid = shell:read("*l")
+  shell:close()
+  return pid
+end
+
+-- Calls `test` with the base URL of a running tests/http_server.lua.
+local function with_http_server(test)
+  local port_file = os.tmpname()
+  local pid = start_server(quote(LUAJIT) .. " " .. quote(ROOT .. "/tests/http_server.lua"), port_file)
+  local port
+  for _ = 1, 100 do
+    port = (read(port_file) or ""):match("^(%d+)\n")
+    if port then
+      break
+    end
+    os.execute("sleep 0.05")
+  end
+  local ok, err = pcall(test, "http://127.0.0.1:" .. assert(port, "test server did not start"), port)
+  os.execute("kill " .. pid)
+  os.remove(port_file)
+  if not ok then
+    error(err, 0)
+  end
+end
+
 local JSON_PROGRAM = "import json\ndef main() -> None:\n    print(json.dump(json.parse('[1, 2.5]')))\n"
 
 -- Runs `command` in `dir`; returns its exit status, stdout, and stderr.
@@ -679,6 +708,90 @@ return {
       eq("", stdout)
       eq("done\n", stderr)
       eq("\r\27[Kx\r\27[Kdone\n", in_terminal(dir, "TERM=xterm " .. quote(WILLOW) .. " run done.wlo"))
+    end)
+  end,
+
+  http_client = function()
+    with_http_server(function(base, port)
+      in_temp_dir(function(dir)
+        local status, stdout, stderr = willow(dir, "run " .. quote(ROOT .. "/tests/http/client.wlo") .. " "
+          .. base .. " " .. quote(dir))
+        eq("", stderr)
+        eq(0, status)
+        eq(read(ROOT .. "/tests/http/client.out"), (stdout:gsub(port, "PORT")))
+      end)
+    end)
+  end,
+
+  api_and_fetch_examples = function()
+    with_http_server(function(base)
+      in_temp_dir(function(dir)
+        local api, fetch = quote(ROOT .. "/examples/api.wlo"), quote(ROOT .. "/examples/fetch.wlo")
+        local status, stdout = willow(dir, "run " .. api .. " " .. base .. "/json")
+        eq(0, status)
+        eq('status 200\nname: "Willow"\nports: [80,443]\n', stdout)
+        status, stdout = willow(dir, "run " .. api .. " " .. base .. "/echo '{\"x\": [1, 2]}'")
+        eq(0, status)
+        assert(stdout:find('method: "POST"\n', 1, true) and stdout:find('body: "{\\"x\\":[1,2]}"\n', 1, true), stdout)
+        status = willow(dir, "run " .. api .. " " .. base .. "/status/404")
+        eq(1, status)
+        status, stdout = willow(dir, "run " .. fetch .. " " .. base .. "/redirect/1 out.bin")
+        eq(0, status)
+        eq("saved 4 bytes from " .. base .. "/redirect/0 to out.bin\n", stdout)
+        eq("done", read(dir .. "/out.bin"))
+        status, stdout = willow(dir, "run " .. fetch .. " " .. base .. "/status/404 out.bin")
+        eq(1, status)
+        eq("HTTP 404 from " .. base .. "/status/404; out.bin left unchanged\n", stdout)
+        eq("done", read(dir .. "/out.bin"))
+      end)
+    end)
+  end,
+
+  https_client = function()
+    if os.execute("command -v openssl >/dev/null 2>&1") ~= 0 then
+      return
+    end
+    in_temp_dir(function(dir)
+      local made = os.execute("cd " .. quote(dir) .. " && openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem"
+        .. " -out cert.pem -days 1 -subj /CN=localhost -addext subjectAltName=DNS:localhost >/dev/null 2>&1")
+      assert(made == 0, "cannot make a certificate")
+      write(dir .. "/hello.txt", "secure hello")
+      local port = tostring(20000 + os.time() % 20000)
+      local pid = start_server("cd " .. quote(dir) .. " && exec openssl s_server -quiet -accept " .. port
+        .. " -cert cert.pem -key key.pem -WWW", dir .. "/server.log")
+      write(dir .. "/tls.wlo", table.concat({
+        "import http",
+        "import sys",
+        "def attempt(url: str, ca_file: str | None) -> None:",
+        "    try:",
+        "        r = http.request('GET', url, ca_file=ca_file, timeout=5.0)",
+        "        print(f'{r.status} {r.body.decode()}')",
+        "    except OSError as error:",
+        "        print('failed: ' + error.message.split(': ')[0])",
+        "def main() -> None:",
+        "    port = sys.args()[0]",
+        "    attempt('https://localhost:' + port + '/hello.txt', 'cert.pem')",
+        "    attempt('https://localhost:' + port + '/hello.txt', None)",
+        "    attempt('https://127.0.0.1:' + port + '/hello.txt', 'cert.pem')",
+        "",
+      }, "\n"))
+      local ok, err = pcall(function()
+        local stdout
+        for _ = 1, 50 do
+          local _, out = willow(dir, "run tls.wlo " .. port)
+          stdout = out
+          if stdout:match("^200") then
+            break
+          end
+          os.execute("sleep 0.1")
+        end
+        eq("200 secure hello\nfailed: cannot fetch https://localhost:" .. port .. "/hello.txt\n"
+          .. "failed: cannot fetch https://127.0.0.1:" .. port .. "/hello.txt\n", stdout)
+      end)
+      os.execute("kill " .. pid .. " 2>/dev/null")
+      if not ok then
+        error(err, 0)
+      end
     end)
   end,
 

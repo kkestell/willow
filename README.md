@@ -35,6 +35,10 @@ willow test --check examples/cart      # check the tests without running them
 Compiled Lua and built executables receive their own command-line arguments, as
 in `luajit number.lua out.txt` or `./number out.txt`.
 
+Programs that import `http` load the system libcurl when they make a request.
+macOS includes it; on Linux, install `libcurl4` and `ca-certificates`. Programs
+that do not import `http` have no extra dependencies.
+
 Diagnostics go to stderr and program output to stdout. The exit status is 0 on
 success and 1 for invalid usage, source errors, failed output, and runtime
 errors, unless the program chooses its own with `sys.exit`.

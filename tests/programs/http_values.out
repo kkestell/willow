@@ -1,0 +1,17 @@
+q=a+b%26c&%C3%A9=x%3Dy~&empty=
+[]
+text/plain one None
+invalid URL 'ftp://example.com/'
+invalid URL 'http://'
+URL user information is not allowed
+invalid URL 'http://example.com:99999/'
+invalid URL 'http://example.com:x/'
+invalid URL '/relative'
+invalid URL 'http://exa mple.com/'
+invalid URL 'http://café.example/'
+invalid method 'BAD METHOD'
+invalid header name 'Bad Name'
+invalid header value for 'X-Ok'
+header 'Host' is managed by the transport
+header 'content-length' is managed by the transport
+timeout must be finite and positive

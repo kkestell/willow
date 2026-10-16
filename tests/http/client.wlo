@@ -1,0 +1,84 @@
+# Exercises the http module against tests/http_server.lua, whose base URL is
+# the first argument and whose download directory is the second.
+
+import fs
+import http
+import json
+import sys
+
+def show(response: http.Response) -> str:
+    return f"{response.status} {response.url} {response.body.decode()}"
+
+def main() -> None:
+    base = sys.args()[0]
+    directory = sys.args()[1]
+
+    # Statuses and bodies.
+    print(show(http.request("GET", base + "/json")))
+    for code in ["404", "500"]:
+        r = http.request("GET", base + "/status/" + code)
+        print(f"{show(r)} {http.header(r.headers, 'x-code')}")
+    data = http.request("GET", base + "/bytes").body
+    print(f"{len(data)} {data[0]} {data[255]}")
+    r = http.request("GET", base + "/latin1-header")
+    print(f"{http.header(r.headers, 'X-NAME')} {http.header(r.headers, 'x-twice')} {http.header(r.headers, 'missing')}")
+    twice: list[str] = []
+    for h in r.headers:
+        if h.name.lower() == "x-twice":
+            twice.append(h.value)
+    print(", ".join(twice))
+
+    # JSON round trip with headers and a body.
+    payload = json.dump({"name": "Ada", "score": 3}).encode()
+    headers = [http.Header("X-Test", "yes"), http.Header("Content-Type", "application/json")]
+    echoed = http.request("POST", base + "/echo?a=1&b=" + http.urlencode({"q": "x y"}), headers=headers, body=payload)
+    print(echoed.body.decode())
+    print(http.request("GET", base + "/echo", body="q".encode()).body.decode()[:16])
+    print(http.request("HEAD", base + "/json").body.decode() == "")
+
+    # Redirects.
+    print(show(http.request("GET", base + "/redirect/3")))
+    print(show(http.request("GET", base + "/relative")))
+    print(http.request("GET", base + "/redirect/2", follow_redirects=False).status)
+    print(show(http.request("POST", base + "/post-redirect")))
+    moved = http.request("GET", base + "/to-host", headers=[http.Header("X-Test", "secret")])
+    print(moved.body.decode())
+    print(http.request("GET", base + "/redirect/10").status)
+    for path in ["/redirect/11", "/loop"]:
+        try:
+            http.request("GET", base + path)
+        except OSError as error:
+            print(error.message)
+
+    # Failures.
+    try:
+        http.request("GET", base + "/slow", timeout=0.5)
+    except TimeoutError as timeout:
+        print(timeout.message)
+    # The reasons come from libcurl, so only their prefix is compared.
+    try:
+        http.request("GET", base + "/drop")
+    except OSError as error:
+        print(error.message.startswith("cannot fetch " + base + "/drop: "))
+    try:
+        http.request("GET", "http://127.0.0.1:1/")
+    except OSError as error:
+        print(error.message.startswith("cannot fetch http://127.0.0.1:1/: "))
+
+    # Downloads replace the destination only on success.
+    target = fs.join(directory, "data.bin")
+    fs.write_file(target, "old")
+    d = http.download(base + "/bytes", target)
+    print(f"{d.status} {d.bytes_written} {fs.stat(target).size} {d.url == base + '/bytes'}")
+    fs.write_file(target, "kept")
+    d = http.download(base + "/status/404", target)
+    print(f"{d.status} {d.bytes_written} {fs.read_file(target)}")
+    try:
+        http.download(base + "/drop", target)
+    except OSError as error:
+        print("dropped download: " + fs.read_file(target))
+    try:
+        http.download(base + "/bytes", directory)
+    except OSError as error:
+        print(error.message.replace(directory, "DIR"))
+    print(", ".join(fs.listdir(directory)))
