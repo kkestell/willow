@@ -1,0 +1,10 @@
+import io
+import subprocess
+
+def main() -> None:
+    stdin = io.stdin()
+    print(stdin.readline())
+    try:
+        subprocess.spawn(["cat"], stdin=stdin)
+    except ValueError as e:
+        print(e.message)

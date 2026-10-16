@@ -1,5 +1,5 @@
--- Filesystem, environment, and clock helpers, inlined after runtime/core.lua
--- into programs that call them. The helpers are the functions declared without
+-- Filesystem, environment, clock, and process helpers, inlined after
+-- runtime/core.lua into programs that call them. The helpers are the functions declared without
 -- `local`. C functions get __wlo_c_ names so they cannot clash with
 -- declarations the CLI makes in the same process.
 
@@ -61,11 +61,39 @@ char *__wlo_c_getcwd(char *buf, size_t size) __asm__("getcwd");
 char *__wlo_c_strerror(int errnum) __asm__("strerror");
 int __wlo_c_clock_gettime(int clock, __wlo_timespec_t *time) __asm__("clock_gettime");
 int __wlo_c_nanosleep(const __wlo_timespec_t *request, __wlo_timespec_t *remaining) __asm__("nanosleep");
+typedef struct { int fd; short events; short revents; } __wlo_pollfd_t;
+typedef struct { uint64_t data[64]; } __wlo_spawn_buffer_t;
+int __wlo_c_pipe(int fds[2]) __asm__("pipe");
+int __wlo_c_fcntl(int fd, int command, ...) __asm__("fcntl");
+long __wlo_c_read(int fd, void *buffer, size_t size) __asm__("read");
+long __wlo_c_write(int fd, const void *buffer, size_t size) __asm__("write");
+int __wlo_c_close(int fd) __asm__("close");
+int __wlo_c_poll(__wlo_pollfd_t *fds, unsigned long count, int timeout) __asm__("poll");
+int __wlo_c_waitpid(int pid, int *status, int options) __asm__("waitpid");
+int __wlo_c_kill(int pid, int signal) __asm__("kill");
+int __wlo_c_access(const char *path, int mode) __asm__("access");
+int __wlo_c_fileno(void *file) __asm__("fileno");
+int64_t __wlo_c_lseek(int fd, int64_t offset, int whence) __asm__("lseek");
+long __wlo_c_ftell(void *file) __asm__("ftell");
+int __wlo_c_spawn(int *pid, const char *path, void *actions, void *attributes,
+  const char **argv, const char **envp) __asm__("posix_spawn");
+int __wlo_c_actions_init(void *actions) __asm__("posix_spawn_file_actions_init");
+int __wlo_c_actions_destroy(void *actions) __asm__("posix_spawn_file_actions_destroy");
+int __wlo_c_actions_dup2(void *actions, int fd, int target) __asm__("posix_spawn_file_actions_adddup2");
+int __wlo_c_actions_chdir(void *actions, const char *path) __asm__("posix_spawn_file_actions_addchdir_np");
+int __wlo_c_attributes_init(void *attributes) __asm__("posix_spawnattr_init");
+int __wlo_c_attributes_destroy(void *attributes) __asm__("posix_spawnattr_destroy");
+int __wlo_c_attributes_flags(void *attributes, short flags) __asm__("posix_spawnattr_setflags");
+int __wlo_c_attributes_sigdefault(void *attributes, const void *signals) __asm__("posix_spawnattr_setsigdefault");
+int __wlo_c_sigemptyset(void *signals) __asm__("sigemptyset");
+int __wlo_c_sigaddset(void *signals, int signal) __asm__("sigaddset");
 ]]
 __wlo_ffi.cdef((__wlo_host_cdef:gsub("%%s", __wlo_INODE64)))
 
 local __wlo_C = __wlo_ffi.C
-local __wlo_ENOENT, __wlo_ENOTDIR, __wlo_EEXIST, __wlo_EINTR = 2, 20, 17, 4
+local __wlo_ENOENT, __wlo_ENOTDIR, __wlo_EEXIST, __wlo_EINTR, __wlo_EPIPE = 2, 20, 17, 4, 32
+local __wlo_EAGAIN = __wlo_OSX and 35 or 11
+local __wlo_O_NONBLOCK = __wlo_OSX and 0x4 or 0x800
 local __wlo_CLOCK_MONOTONIC = __wlo_OSX and 6 or 1
 
 -- Raises OSError for the failed host call that set errno.
@@ -167,9 +195,17 @@ function __wlo_exists(path, site)
   __wlo_host_error("stat", path, site)
 end
 
-local function __wlo_is_directory(path)
+local function __wlo_has_kind(path, kind)
   local buf = __wlo_ffi.new("__wlo_stat_t")
-  return __wlo_C.__wlo_c_stat(path, buf) == 0 and bit.band(buf.mode, 0xF000) == 0x4000
+  return __wlo_C.__wlo_c_stat(path, buf) == 0 and bit.band(buf.mode, 0xF000) == kind
+end
+
+local function __wlo_is_directory(path)
+  return __wlo_has_kind(path, 0x4000)
+end
+
+local function __wlo_is_regular(path)
+  return __wlo_has_kind(path, 0x8000)
 end
 
 function __wlo_mkdir(path, parents, exist_ok, site)
@@ -309,4 +345,384 @@ function __wlo_utc(timestamp, site)
   local year = yoe + era * 400 + (month <= 2 and 1 or 0)
   return string.format("%04d-%02d-%02dT%02d:%02d:%02dZ", year, month, day,
     math.floor(rest / 3600), math.floor(rest % 3600 / 60), rest % 60)
+end
+
+-- Processes. A child gets the descriptors named in `redirects` and inherits
+-- the others; Willow's own pipe ends are close-on-exec, so only their copies
+-- on 0, 1, and 2 reach it.
+
+local __wlo_SIGPIPE, __wlo_SIGTERM, __wlo_SIGKILL = 13, 15, 9
+local __wlo_POSIX_SPAWN_SETSIGDEF = 4
+local __wlo_F_DUPFD_CLOEXEC = __wlo_OSX and 67 or 1030
+
+local function __wlo_check_timeout(timeout, site)
+  if timeout ~= nil and not (timeout > 0 and timeout < math.huge) then
+    __wlo_fail("ValueError", "timeout must be finite and positive", site)
+  end
+end
+
+-- The descriptor of a Lua file; LuaJIT converts a file to its FILE pointer.
+local function __wlo_fd(file)
+  return __wlo_C.__wlo_c_fileno(__wlo_ffi.cast("void *", file))
+end
+
+local function __wlo_fcntl(fd, command, value)
+  return __wlo_C.__wlo_c_fcntl(fd, command, __wlo_ffi.new("int", value))
+end
+
+-- A pipe whose ends are closed in children: { read, write }.
+local function __wlo_pipe(site)
+  local fds = __wlo_ffi.new("int[2]")
+  if __wlo_C.__wlo_c_pipe(fds) ~= 0 then
+    __wlo_host_error("create a pipe", nil, site)
+  end
+  for i = 0, 1 do
+    __wlo_fcntl(fds[i], 2, 1) -- F_SETFD, FD_CLOEXEC
+  end
+  return { fds[0], fds[1] }
+end
+
+local function __wlo_nonblocking(fd)
+  __wlo_fcntl(fd, 4, bit.bor(__wlo_C.__wlo_c_fcntl(fd, 3), __wlo_O_NONBLOCK)) -- F_SETFL, F_GETFL
+end
+
+-- The exit code, or the negative signal number, from a waitpid status.
+local function __wlo_exit_code(status)
+  local signal = bit.band(status, 0x7f)
+  if signal == 0 then
+    return bit.band(bit.rshift(status, 8), 0xff)
+  end
+  return -signal
+end
+
+-- The child's exit code, or nil when `block` is false and it is running.
+local function __wlo_reap(pid, block)
+  local status = __wlo_ffi.new("int[1]")
+  while true do
+    local result = __wlo_C.__wlo_c_waitpid(pid, status, block and 0 or 1) -- WNOHANG
+    if result == pid then
+      return __wlo_exit_code(status[0])
+    elseif result == 0 or __wlo_ffi.errno() ~= __wlo_EINTR then
+      return nil
+    end
+  end
+end
+
+-- The full path of executable `name`, searched in `path` unless it has a slash.
+local function __wlo_find_program(name, path)
+  if name:find("/", 1, true) then
+    return name
+  end
+  for dir in (path .. ":"):gmatch("([^:]*):") do
+    local candidate = __wlo_join(dir == "" and "." or dir, name)
+    if __wlo_C.__wlo_c_access(candidate, 1) == 0 and __wlo_is_regular(candidate) then
+      return candidate
+    end
+  end
+end
+
+-- The environment `env` (nil to inherit) as `name=value` strings, and its PATH.
+local function __wlo_child_environment(env, site)
+  if not env then
+    local environ = __wlo_OSX and __wlo_C.__wlo_c_environ()[0] or __wlo_C.environ
+    return environ, os.getenv("PATH")
+  end
+  local strings = {}
+  for _, name in ipairs(env.keys) do
+    local value = env.values[name]
+    __wlo_check_name(name, site)
+    if value:find("\0", 1, true) then
+      __wlo_fail("ValueError", "environment value contains a NUL character", site)
+    end
+    strings[#strings + 1] = name .. "=" .. value
+  end
+  return strings, env.values.PATH
+end
+
+-- A C array of `strings` ending in NULL, valid while `strings` is reachable.
+local function __wlo_c_strings(strings)
+  local array = __wlo_ffi.new("const char *[?]", #strings + 1)
+  for i, text in ipairs(strings) do
+    array[i - 1] = text
+  end
+  return array
+end
+
+local function __wlo_flush_file(file, path, site)
+  local ok, err = file:flush()
+  if not ok then
+    __wlo_fail("OSError", "cannot write " .. path .. ": " .. tostring(err), site)
+  end
+end
+
+-- Starts `args` and returns its pid. `redirects` maps 0, 1, and 2 to the
+-- descriptors the child gets for them.
+local function __wlo_launch(args, cwd, env, redirects, site)
+  if args.n == 0 or args[1] == "" then
+    __wlo_fail("ValueError", "args must contain a nonempty executable name", site)
+  end
+  local list = {}
+  for i = 1, args.n do
+    if args[i]:find("\0", 1, true) then
+      __wlo_fail("ValueError", "argument contains a NUL character", site)
+    end
+    list[i] = args[i]
+  end
+  if cwd then
+    __wlo_check_path(cwd, site)
+  end
+  local environment, search_path = __wlo_child_environment(env, site)
+  local program = __wlo_find_program(list[1], search_path or "/usr/bin:/bin")
+  if not program then
+    __wlo_fail("OSError", "cannot run " .. list[1] .. ": No such file or directory", site)
+  end
+  __wlo_flush_file(io.stdout, "<stdout>", site)
+  __wlo_flush_file(io.stderr, "<stderr>", site)
+
+  local actions = __wlo_ffi.new("__wlo_spawn_buffer_t[1]")
+  local attributes = __wlo_ffi.new("__wlo_spawn_buffer_t[1]")
+  local signals = __wlo_ffi.new("uint64_t[16]")
+  __wlo_C.__wlo_c_actions_init(actions)
+  __wlo_C.__wlo_c_attributes_init(attributes)
+  -- A source among 0, 1, and 2 is first copied above them, so that an earlier
+  -- dup2 cannot replace it, as when stdout and stderr are swapped.
+  local copies = {}
+  for target = 0, 2 do
+    local source = redirects[target]
+    if source then
+      if source < 3 and source ~= target then
+        source = __wlo_fcntl(source, __wlo_F_DUPFD_CLOEXEC, 3)
+        copies[#copies + 1] = source
+      end
+      __wlo_C.__wlo_c_actions_dup2(actions, source, target)
+    end
+  end
+  if cwd then
+    __wlo_C.__wlo_c_actions_chdir(actions, cwd)
+  end
+  -- Willow ignores SIGPIPE; children get the default action back.
+  __wlo_C.__wlo_c_sigemptyset(signals)
+  __wlo_C.__wlo_c_sigaddset(signals, __wlo_SIGPIPE)
+  __wlo_C.__wlo_c_attributes_sigdefault(attributes, signals)
+  __wlo_C.__wlo_c_attributes_flags(attributes, __wlo_POSIX_SPAWN_SETSIGDEF)
+
+  -- The Lua strings in `list` and `environment` keep the C strings alive.
+  local argv = __wlo_c_strings(list)
+  local envp = type(environment) == "table" and __wlo_c_strings(environment)
+    or __wlo_ffi.cast("const char **", environment)
+  local pid = __wlo_ffi.new("int[1]")
+  local err = __wlo_C.__wlo_c_spawn(pid, program, actions, attributes, argv, envp)
+  for _, fd in ipairs(copies) do
+    __wlo_C.__wlo_c_close(fd)
+  end
+  __wlo_C.__wlo_c_actions_destroy(actions)
+  __wlo_C.__wlo_c_attributes_destroy(attributes)
+  if err ~= 0 then
+    __wlo_ffi.errno(err)
+    __wlo_host_error("run", list[1], site)
+  end
+  return pid[0]
+end
+
+local function __wlo_close_fd(fd)
+  if fd then
+    __wlo_C.__wlo_c_close(fd)
+  end
+end
+
+-- Reads what `fd` holds now into `parts`; returns false at end of file.
+local function __wlo_drain(fd, parts, buffer)
+  while true do
+    local count = tonumber(__wlo_C.__wlo_c_read(fd, buffer, 65536))
+    if count > 0 then
+      parts[#parts + 1] = __wlo_ffi.string(buffer, count)
+    elseif count == 0 then
+      return false
+    elseif __wlo_ffi.errno() ~= __wlo_EINTR then
+      return __wlo_ffi.errno() == __wlo_EAGAIN
+    end
+  end
+end
+
+function __wlo_process_run(args, input, capture_output, cwd, env, timeout, site)
+  __wlo_check_timeout(timeout, site)
+  local redirects, stdin, stdout, stderr = {}, nil, nil, nil
+  if input then
+    stdin = __wlo_pipe(site)
+    redirects[0] = stdin[1]
+  end
+  if capture_output then
+    stdout, stderr = __wlo_pipe(site), __wlo_pipe(site)
+    redirects[1], redirects[2] = stdout[2], stderr[2]
+  end
+  local ok, pid = pcall(__wlo_launch, args, cwd, env, redirects, site)
+  for _, fd in pairs(redirects) do
+    __wlo_C.__wlo_c_close(fd)
+  end
+  local input_fd = stdin and stdin[2]
+  local readers = {}
+  if capture_output then
+    readers[stdout[1]], readers[stderr[1]] = {}, {}
+  end
+  if not ok then
+    __wlo_close_fd(input_fd)
+    for fd in pairs(readers) do
+      __wlo_C.__wlo_c_close(fd)
+    end
+    error(pid, 0)
+  end
+
+  local octets, offset = input and input.__wlo_octets, 0
+  if input_fd then
+    __wlo_nonblocking(input_fd)
+  end
+  for fd in pairs(readers) do
+    __wlo_nonblocking(fd)
+  end
+  local open = {}
+  for fd in pairs(readers) do
+    open[fd] = true
+  end
+  local buffer = __wlo_ffi.new("char[65536]")
+  local deadline = timeout and __wlo_monotonic() + timeout
+  local code
+  while code == nil do
+    if input_fd and offset >= #octets then
+      __wlo_C.__wlo_c_close(input_fd)
+      input_fd = nil
+    end
+    local fds, count = __wlo_ffi.new("__wlo_pollfd_t[3]"), 0
+    local function watch(fd, events)
+      fds[count].fd = fd
+      fds[count].events = events
+      count = count + 1
+    end
+    if input_fd then
+      watch(input_fd, 4) -- POLLOUT
+    end
+    for fd in pairs(open) do
+      watch(fd, 1) -- POLLIN
+    end
+    -- Without pipes to watch, only the child's exit or the deadline matters.
+    local wait = count > 0 and 50 or 10
+    if deadline then
+      wait = math.max(0, math.min(wait, math.ceil((deadline - __wlo_monotonic()) * 1000)))
+    end
+    if count > 0 then
+      __wlo_C.__wlo_c_poll(fds, count, wait)
+    elseif not deadline then
+      code = __wlo_reap(pid, true)
+    else
+      __wlo_sleep(wait / 1000)
+    end
+    for i = 0, count - 1 do
+      local fd, revents = fds[i].fd, fds[i].revents
+      if fd == input_fd and revents ~= 0 then
+        local rest = octets:sub(offset + 1, offset + 65536)
+        local written = tonumber(__wlo_C.__wlo_c_write(fd, rest, #rest))
+        if written > 0 then
+          offset = offset + written
+        elseif __wlo_ffi.errno() ~= __wlo_EAGAIN and __wlo_ffi.errno() ~= __wlo_EINTR then
+          -- The child closed its input, so the rest is dropped.
+          offset = #octets
+        end
+      elseif open[fd] and revents ~= 0 and not __wlo_drain(fd, readers[fd], buffer) then
+        open[fd] = nil
+      end
+    end
+    code = code or __wlo_reap(pid, false)
+    if code == nil and deadline and __wlo_monotonic() >= deadline then
+      __wlo_C.__wlo_c_kill(pid, __wlo_SIGKILL)
+      __wlo_reap(pid, true)
+      __wlo_close_fd(input_fd)
+      for fd in pairs(readers) do
+        __wlo_C.__wlo_c_close(fd)
+      end
+      __wlo_fail("TimeoutError", "command timed out after " .. __wlo_format_float(timeout) .. " seconds", site)
+    end
+  end
+  -- The child has exited; take what the pipes hold without waiting for any
+  -- descendant that inherited them.
+  __wlo_close_fd(input_fd)
+  local captured = {}
+  for fd, parts in pairs(readers) do
+    if open[fd] then
+      __wlo_drain(fd, parts, buffer)
+    end
+    __wlo_C.__wlo_c_close(fd)
+    captured[fd] = { __wlo_octets = table.concat(parts) }
+  end
+  return {
+    __wlo_record = "subprocess.Result",
+    returncode = code,
+    stdout = capture_output and captured[stdout[1]] or nil,
+    stderr = capture_output and captured[stderr[1]] or nil,
+  }
+end
+
+-- The descriptor of `handle` for the child's `name` stream, after checking it.
+local function __wlo_child_stream(handle, name, reading, site)
+  if handle.closed then
+    __wlo_fail("ValueError", "I/O operation on closed file", site)
+  elseif reading ~= (handle.mode == "r") then
+    __wlo_fail("ValueError", name .. " must be open for " .. (reading and "reading" or "writing"), site)
+  end
+  local file = handle.file
+  if reading and __wlo_read_files[file] then
+    -- A seekable file's buffered input shows as a gap between its stdio and
+    -- descriptor positions; otherwise any earlier read may have buffered some.
+    -- ftell only reports the position, where Lua's seek would drop the buffer.
+    local position = tonumber(__wlo_C.__wlo_c_ftell(__wlo_ffi.cast("void *", file)))
+    if position < 0 or position ~= tonumber(__wlo_C.__wlo_c_lseek(__wlo_fd(file), 0, 1)) then
+      __wlo_fail("ValueError", "stdin has buffered input", site)
+    end
+  elseif not reading then
+    __wlo_flush_file(file, handle.path, site)
+  end
+  return __wlo_fd(file)
+end
+
+function __wlo_process_spawn(args, cwd, env, stdin, stdout, stderr, site)
+  local redirects = {}
+  redirects[0] = stdin and __wlo_child_stream(stdin, "stdin", true, site)
+  redirects[1] = stdout and __wlo_child_stream(stdout, "stdout", false, site)
+  redirects[2] = stderr and __wlo_child_stream(stderr, "stderr", false, site)
+  return { __wlo_record = "subprocess.Process", pid = __wlo_launch(args, cwd, env, redirects, site) }
+end
+
+function __wlo_process_poll(process, site)
+  if process.code == nil then
+    process.code = __wlo_reap(process.pid, false)
+  end
+  return process.code
+end
+
+function __wlo_process_wait(process, timeout, site)
+  __wlo_check_timeout(timeout, site)
+  if process.code == nil and not timeout then
+    process.code = __wlo_reap(process.pid, true)
+  end
+  local deadline = timeout and __wlo_monotonic() + timeout
+  while process.code == nil do
+    process.code = __wlo_reap(process.pid, false)
+    if process.code == nil then
+      if __wlo_monotonic() >= deadline then
+        __wlo_fail("TimeoutError", "process did not exit within " .. __wlo_format_float(timeout) .. " seconds", site)
+      end
+      __wlo_sleep(math.min(0.01, math.max(0, deadline - __wlo_monotonic())))
+    end
+  end
+  return process.code
+end
+
+function __wlo_process_terminate(process, site)
+  if process.code == nil then
+    __wlo_C.__wlo_c_kill(process.pid, __wlo_SIGTERM)
+  end
+end
+
+function __wlo_process_kill(process, site)
+  if process.code == nil then
+    __wlo_C.__wlo_c_kill(process.pid, __wlo_SIGKILL)
+  end
 end

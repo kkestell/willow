@@ -4,7 +4,7 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-Sections 1–19 describe the implemented language. Sections 20–24 describe planned
+Sections 1–20 describe the implemented language. Sections 21–24 describe planned
 milestones, introduced under
 [planned application development milestones](#planned-application-development-milestones).
 
@@ -1103,6 +1103,75 @@ control characters, using `\b`, `\f`, `\n`, `\r`, and `\t` where they exist and
 raise `JsonError` with the message `cannot encode <value>`, as in
 `cannot encode inf`.
 
+### `subprocess`
+
+```python
+import subprocess
+
+def main() -> None:
+    result = subprocess.run(["printf", "%s", "hello"], capture_output=True)
+    output = result.stdout
+    if output is not None:
+        print(output.decode())          # hello
+```
+
+| Declaration | Meaning |
+| --- | --- |
+| `run(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Result` | Run a command to completion |
+| `spawn(args: list[str], cwd: str \| None = None, env: dict[str, str] \| None = None, stdin: io.File \| None = None, stdout: io.File \| None = None, stderr: io.File \| None = None) -> Process` | Start a command and return without waiting |
+| `class Result` | Fields `returncode: int`, `stdout: bytes \| None`, and `stderr: bytes \| None` |
+| `class Process` | A native type with the methods below |
+
+| `Process` method | Meaning |
+| --- | --- |
+| `poll() -> int \| None` | The exit status if the child has exited, otherwise `None` |
+| `wait(timeout: float \| None = None) -> int` | Wait for the child to exit and return its status |
+| `terminate() -> None` | Send `SIGTERM` to the child |
+| `kill() -> None` | Send `SIGKILL` to the child |
+
+`args` is the program and its arguments, passed as they are without a shell.
+A program name containing `/` is a path; any other name is searched for in the
+`PATH` of the child's environment, or in `/usr/bin:/bin` when it has none.
+`cwd` sets the child's working directory and `env` replaces its environment;
+`None` inherits them. A status is the exit code, or the negative number of the
+signal that ended the child. A nonzero status is an ordinary result.
+
+`run` with `input` sends it to the child's stdin and then closes it; empty bytes
+give immediate end of input, and input the child leaves unread is dropped
+without error. Without `input`, the child inherits stdin. With
+`capture_output`, the child's stdout and stderr are collected as bytes while the
+input is written, so full pipes cannot deadlock; otherwise the child inherits
+them and both result fields are `None`. Captured output is held in memory. Once
+the child exits, `run` returns without waiting for processes it left behind.
+
+`timeout` limits `run` from the moment the child starts: on expiry the child is
+killed and collected, and `run` raises `TimeoutError` with the message
+`command timed out after <timeout> seconds`. It does not kill the child's own
+children.
+
+`spawn` connects the child's streams to the given `io.File` handles, which must
+be open for reading (`stdin`) or writing (`stdout` and `stderr`); `None`
+inherits the stream. The parent keeps its handles. A `stdin` handle that may
+hold input already read into its buffer, because it was read before and either
+is not a seekable file or its buffer is not empty, raises `ValueError` with the
+message `stdin has buffered input`. A child that inherits stdin does not see
+what the parent has buffered.
+
+A `Process` remembers its status once collected, so `poll` and `wait` agree, and
+`terminate` and `kill` then do nothing. `wait` with a `timeout` raises
+`TimeoutError` with the message `process did not exit within <timeout> seconds`
+and leaves the child running. A child is not stopped or collected automatically.
+
+Before a child starts, stdout, stderr, and the `io.File` handles given to
+`spawn` for writing are flushed; a flush failure raises `OSError` and the child
+does not start. Children start with the default `SIGPIPE` action. These raise `ValueError`: empty `args` or an empty program name
+(`args must contain a nonempty executable name`), NUL in an argument, `cwd`, or
+an environment value, an invalid environment variable name, a timeout that is
+not finite and positive (`timeout must be finite and positive`), and a closed
+or wrongly opened handle (`stdout must be open for writing`, for example). A
+program that cannot be found or started raises `OSError` with the message
+`cannot run <program>: <reason>`.
+
 ### `sys`
 
 ```python
@@ -1160,8 +1229,8 @@ raises `ValueError` with the message `timestamp out of range` otherwise.
 
 ## Planned application development milestones
 
-Sections 20–24 define accepted targets, in implementation order. They are not yet
-implemented. Sections 1–19 describe the implemented baseline; each planned section
+Sections 21–24 define accepted targets, in implementation order. They are not yet
+implemented. Sections 1–20 describe the implemented baseline; each planned section
 identifies the rules it changes when its milestone lands. Completion and delivery
 examples are tracked in `agents/todo.md`. A planned API is not available merely
 because its signature appears here.
@@ -1208,89 +1277,7 @@ and §14.
 
 ## 20. Subprocess execution and control
 
-The `subprocess` module executes argument lists directly, never through a shell.
-Arguments and environment values are UTF-8 and cannot contain NUL. Arguments must
-contain a nonempty executable name. Names with a slash are paths; other names use
-the child's `PATH`, or `/usr/bin:/bin` when it is absent. Launch failures raise
-`OSError`, not a returned exit status.
-
-```text
-run(args: list[str], input: bytes | None = None,
-    capture_output: bool = False, cwd: str | None = None,
-    env: dict[str, str] | None = None,
-    timeout: float | None = None) -> Result
-
-spawn(args: list[str], cwd: str | None = None,
-      env: dict[str, str] | None = None,
-      stdin: io.File | None = None, stdout: io.File | None = None,
-      stderr: io.File | None = None) -> Process
-```
-
-`cwd=None` inherits the working directory. `env=None` inherits the environment;
-a provided dictionary replaces it. `sys.environ()` is the way to inherit and
-change selected values. Calls snapshot arguments and environment. Child changes
-do not change the parent's environment or working directory.
-
-### Running a command
-
-`Result` has fields `returncode: int`, `stdout: bytes | None`, and
-`stderr: bytes | None`. Nonzero exit codes are ordinary results; a signal exit is
-the negative signal number. With `capture_output=True`, both output streams are
-captured as bytes, including empty bytes, and drained concurrently with supplying
-input so pipe capacity cannot deadlock the child. Otherwise they are inherited
-and both result fields are `None`.
-
-With `input=None`, stdin is inherited. Otherwise the supplied bytes are sent and
-stdin is closed; an empty value supplies immediate EOF. A child that closes input
-early is allowed to finish, and its result is returned without raising a
-broken-pipe error for the unused input. Callers decode captured text explicitly.
-Capture stores output in memory; use `spawn` and file redirection for large output.
-
-The timeout bounds communication and waiting after successful process creation.
-Expiry kills and reaps the direct child, then raises `TimeoutError`; it does not
-promise to kill descendants or return partial captures. Pipe cleanup must not wait
-indefinitely for descendants that inherited descriptors. Process creation itself
-is not promised interruptible.
-
-### Child lifecycle
-
-`spawn` returns a native `Process`. A `None` stream inherits that standard stream;
-a supplied file must be open with the appropriate access mode. Passing buffered
-input with unread prefetched bytes is rejected with `ValueError`, since an OS
-child cannot consume the parent's buffer. The child receives its own descriptor
-references; the parent retains ownership of its files. The API exposes no live
-child pipe handles.
-
-| `Process` method | Meaning |
-| --- | --- |
-| `poll() -> int \| None` | Collect an exit status if ready, otherwise return `None` |
-| `wait(timeout: float \| None = None) -> int` | Wait for and collect exit status |
-| `terminate() -> None` | Send SIGTERM to the running direct child |
-| `kill() -> None` | Send SIGKILL to the running direct child |
-
-Collected statuses are cached; repeated `poll` and `wait` agree. Signals to an
-already collected child do nothing. A `wait` timeout leaves the child alive;
-callers must explicitly stop it if needed and eventually call `wait` to reap it.
-There is no `Process.close()` and no automatic termination at garbage collection.
-
-Before launching either kind of child, flush parent stdout/stderr and supplied
-writable files. Failure prevents launch and raises `OSError`. Implicitly inherited
-stdin uses the underlying descriptor, as in Python: unread bytes already prefetched by the
-parent stay in its buffer and are not passed to the child. This does not cause a
-launch error; callers that need those bytes must supply explicit `input` instead.
-The unread-buffer rejection applies only to explicitly supplied `stdin` handles.
-Children start with the ordinary POSIX
-SIGPIPE disposition even if Willow suppresses it for its own checked writes.
-
-```python
-import subprocess
-
-def main() -> None:
-    result = subprocess.run(["printf", "%s", "hello"], capture_output=True)
-    output = result.stdout
-    if output is not None:
-        print(output.decode())
-```
+This milestone is implemented. Its rules are part of §14.
 
 ## 21. Command-line and terminal tools
 

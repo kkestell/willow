@@ -61,6 +61,7 @@ function __wlo_file_read(handle, size, site)
   if size <= 0 then
     __wlo_fail("ValueError", "read size must be positive", site)
   end
+  __wlo_read_files[handle.file] = true
   local data, err = handle.file:read(size)
   if err then
     __wlo_io_fail("read", handle, err, site)

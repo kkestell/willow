@@ -697,4 +697,27 @@ return {
     eq("1:15: dictionary keys must be int or str", check_errors("def f(d: dict[bytes, int]) -> None:\n    pass\n" .. MAIN))
     eq("2:5: expected an expression, found 'bytes'", check_errors(in_main("bytes = 1")))
   end,
+
+  subprocess_module = function()
+    local program = check_source("import subprocess\n" .. in_main(table.concat({
+      "r = subprocess.run(['x'], capture_output=True, timeout=1.5)",
+      "out = r.stdout",
+      "if out is not None:",
+      "    print(len(out))",
+      "p = subprocess.spawn(['sleep', '1'], cwd='/')",
+      "code: int = p.wait(timeout=1.0)",
+      "status: int | None = p.poll()",
+      "p.terminate()",
+      "p.kill()",
+    }, "\n")))
+    eq("subprocess.Result", program.functions[1].body[1].value.type.name)
+    local function err(statement)
+      return check_errors("import subprocess\n" .. in_main(statement))
+    end
+    eq("4:12: expected float | None, received int", err("p = subprocess.spawn(['x'])\np.wait(1)"))
+    eq("3:20: cannot construct native type subprocess.Process", err("p = subprocess.Process()"))
+    eq("3:20: expected list[str], received str", err("subprocess.run('x')"))
+    eq("3:59: operator '+' cannot be applied to bytes | None and int",
+      err("x = subprocess.run(['x'], capture_output=True).stdout + 1"))
+  end,
 }

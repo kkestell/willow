@@ -62,8 +62,48 @@ local file = {
 }
 file.type = types.record(file)
 
+local result = {
+  kind = "Record",
+  name = "Result",
+  type_name = "subprocess.Result",
+  fields = {
+    { name = "returncode", type = types.int },
+    { name = "stdout", type = types.union({ types.bytes, types.None }) },
+    { name = "stderr", type = types.union({ types.bytes, types.None }) },
+  },
+}
+result.type = types.record(result)
+
+local optional_int = types.union({ types.int, types.None })
+local process = {
+  kind = "Record",
+  name = "Process",
+  type_name = "subprocess.Process",
+  fields = {},
+  native = true,
+  prefix = "process",
+  methods = {
+    poll = { params = {}, result = optional_int },
+    wait = {
+      params = { types.union({ types.float, types.None }) },
+      names = { "timeout" },
+      defaults = { { kind = "None" } },
+      result = types.int,
+    },
+    terminate = { params = {}, result = types.None },
+    kill = { params = {}, result = types.None },
+  },
+}
+process.type = types.record(process)
+
+local subprocess = provided("subprocess", "run spawn", { Result = result, Process = process })
+-- A runtime helper named `run` would replace the one that runs `main`.
+subprocess.declarations.run.helper = "process_run"
+subprocess.declarations.spawn.helper = "process_spawn"
+
 M.modules = {
   io = provided("io", "open stdin stdout stderr", { File = file }),
+  subprocess = subprocess,
   sys = provided("sys", "args eprint exit getenv environ getcwd"),
   fs = provided("fs", "read_file write_file join basename dirname listdir stat exists mkdir remove rmdir rename",
     { Stat = stat }),
@@ -71,6 +111,8 @@ M.modules = {
 }
 M.stat = stat
 M.file = file
+M.result = result
+M.process = process
 
 -- The built-in exception classes, records with only a `message` field.
 local exceptions = {}

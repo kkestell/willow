@@ -580,6 +580,28 @@ return {
     end)
   end,
 
+  wrap_example = function()
+    in_temp_dir(function(dir)
+      local example = quote(ROOT .. "/examples/wrap.wlo")
+      local function wrap(args)
+        return willow(dir, "run " .. example .. " " .. args)
+      end
+      local status, stdout = wrap("5 printf 'a b\\n'")
+      eq(0, status)
+      eq("status 0\nstdout: a b\nstderr: (empty)\nhelper stopped: -15\n", stdout)
+      status, stdout = wrap("5 printf '\\377\\000'")
+      eq("status 0\nstdout: 2 bytes, not UTF-8\nstderr: (empty)\nhelper stopped: -15\n", stdout)
+      status, stdout = wrap("5 sh -c 'echo oops >&2; exit 4'")
+      eq(1, status)
+      eq("status 4\nstdout: (empty)\nstderr: oops\nhelper stopped: -15\n", stdout)
+      status, stdout = wrap("0.2 sleep 5")
+      eq(1, status)
+      eq("timed out: command timed out after 0.2 seconds\nhelper stopped: -15\n", stdout)
+      status, stdout = wrap("1 nosuchprogram")
+      eq("failed: cannot run nosuchprogram: No such file or directory\nhelper stopped: -15\n", stdout)
+    end)
+  end,
+
   standard_library_build_runs_elsewhere = function()
     in_temp_dir(function(dir, base)
       write(dir .. "/prog.wlo", JSON_PROGRAM)

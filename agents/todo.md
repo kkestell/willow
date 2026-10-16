@@ -243,12 +243,12 @@ remove obsolete amendment wording, and update implementation status.
   - [x] Deliver a bounded-chunk binary copier and a JSONL filter that retains only
     the current record
 
-- [ ] Subprocess execution and control (spec §20)
-  - [ ] Shell-free run/capture, cwd/environment, statuses, timeout and reaping;
+- [x] Subprocess execution and control (spec §20)
+  - [x] Shell-free run/capture, cwd/environment, statuses, timeout and reaping;
     drain input and both output pipes without deadlock
-  - [ ] Spawn with inherited/file stdio and poll/wait/terminate/kill; implement
+  - [x] Spawn with inherited/file stdio and poll/wait/terminate/kill; implement
     the specified shared-buffer and child-descriptor rules
-  - [ ] Deliver a command wrapper handling literal arguments, binary output,
+  - [x] Deliver a command wrapper handling literal arguments, binary output,
     nonzero status, timeout, and background-helper cleanup
 
 - [ ] Friendly command-line and terminal tools (spec §21)

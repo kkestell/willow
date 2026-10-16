@@ -419,10 +419,15 @@ local function __wlo_valid_utf8(text)
   return true
 end
 
+-- The files read through C stdio, which may hold buffered input that a child
+-- process would not see.
+local __wlo_read_files = setmetatable({}, { __mode = "k" })
+
 -- The next line of `file` without its \n and a \r just before it, or nil at
 -- end of input, and the read error. Reads with "*L" so that only a \r before
 -- a \n is removed.
 local function __wlo_read_line(file)
+  __wlo_read_files[file] = true
   local line, err = file:read("*L")
   if line and line:sub(-1) == "\n" then
     line = line:sub(-2, -2) == "\r" and line:sub(1, -3) or line:sub(1, -2)

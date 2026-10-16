@@ -304,7 +304,7 @@ local function lower_function(fn, sites, helpers)
           exception = node.target.exception,
         }
       elseif node.target.kind == "Builtin" then
-        local name = node.target.name
+        local name = node.target.helper or node.target.name
         if name == "str" then
           return text(args[1], node.args[1].type)
         elseif (name == "print" or name == "eprint") and is_float(node.args[1].type) then

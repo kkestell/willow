@@ -1,0 +1,29 @@
+0 a b|$HOME * []
+[0, 255]
+None
+3
+-15
+1 out err
+y 141
+hello
+[]
+1048576 True
+0
+/
+A=1
+B=two words
+cannot run printf: No such file or directory
+empty: args must contain a nonempty executable name
+nul: argument contains a NUL character
+timeout: timeout must be finite and positive
+missing: cannot run /nonexistent/program: No such file or directory
+command timed out after 0.2 seconds True
+None
+process did not exit within 0.1 seconds
+-15 -15 -15
+0
+from parent / from child
+stdout must be open for writing
+swapped
+0
+parent then child

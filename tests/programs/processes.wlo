@@ -1,0 +1,112 @@
+import fs
+import io
+import subprocess
+import time
+
+def show(data: bytes | None) -> str:
+    if data is None:
+        return "None"
+    parts: list[str] = []
+    for octet in data:
+        parts.append(str(octet))
+    return "[" + ", ".join(parts) + "]"
+
+def text(data: bytes | None) -> str:
+    if data is None:
+        return "None"
+    return data.decode()
+
+def main() -> None:
+    # Arguments reach the program literally; output is captured as bytes.
+    r = subprocess.run(["printf", "%s|%s", "a b", "$HOME *"], capture_output=True)
+    print(f"{r.returncode} {text(r.stdout)} {show(r.stderr)}")
+    r = subprocess.run(["printf", "\\000\\377"], capture_output=True)
+    print(show(r.stdout))
+    print(show(subprocess.run(["true"]).stdout))
+
+    # Statuses.
+    print(subprocess.run(["sh", "-c", "exit 3"]).returncode)
+    print(subprocess.run(["sh", "-c", "kill -TERM $$"]).returncode)
+    r = subprocess.run(["sh", "-c", "echo out; echo err >&2; exit 1"], capture_output=True)
+    print(f"{r.returncode} {text(r.stdout).strip()} {text(r.stderr).strip()}")
+
+    # Children get the default SIGPIPE action back, so `yes` dies of it.
+    r = subprocess.run(["sh", "-c", "(yes; echo $? >&2) | head -n 1"], capture_output=True)
+    print(f"{text(r.stdout).strip()} {text(r.stderr).strip()}")
+
+    # Input.
+    print(text(subprocess.run(["cat"], input="hello".encode(), capture_output=True).stdout))
+    print(show(subprocess.run(["cat"], input=bytes([]), capture_output=True).stdout))
+    chunk = "0123456789abcdef".encode()
+    big = chunk
+    while len(big) < 1048576:
+        big = big + big
+    copied = subprocess.run(["cat"], input=big, capture_output=True).stdout
+    if copied is not None:
+        print(f"{len(copied)} {copied == big}")
+    print(subprocess.run(["true"], input=big).returncode)
+
+    # Working directory and environment.
+    print(text(subprocess.run(["pwd"], cwd="/", capture_output=True).stdout).strip())
+    print(text(subprocess.run(["env"], env={"A": "1", "B": "two words"}, capture_output=True).stdout).strip())
+    try:
+        subprocess.run(["printf", "x"], env={"PATH": "/nonexistent"})
+    except OSError as error:
+        print(error.message)
+
+    # Invalid calls.
+    for kind in ["empty", "nul", "timeout", "missing"]:
+        try:
+            if kind == "empty":
+                subprocess.run([])
+            elif kind == "nul":
+                subprocess.run(["printf", "a\x00b"])
+            elif kind == "timeout":
+                subprocess.run(["true"], timeout=-1.0)
+            else:
+                subprocess.run(["/nonexistent/program"])
+        except ValueError as v:
+            print(f"{kind}: {v.message}")
+        except OSError as o:
+            print(f"{kind}: {o.message}")
+
+    # Timeouts.
+    start = time.monotonic()
+    try:
+        subprocess.run(["sleep", "5"], timeout=0.2)
+    except TimeoutError as t:
+        print(f"{t.message} {time.monotonic() - start < 2.0}")
+
+    # Spawned children.
+    p = subprocess.spawn(["sleep", "5"])
+    print(p.poll())
+    try:
+        p.wait(timeout=0.1)
+    except TimeoutError as t:
+        print(t.message)
+    p.terminate()
+    print(f"{p.wait()} {p.poll()} {p.wait(timeout=1.0)}")
+    p.kill()
+
+    path = fs.join("/tmp", "wlo_subprocess_" + str(int(time.time() * 1000000.0)))
+    f = io.open(path, "w")
+    f.write_text("from parent\n")
+    child = subprocess.spawn(["printf", "from child\n"], stdout=f)
+    print(child.wait())
+    f.close()
+    print(fs.read_file(path).strip().replace("\n", " / "))
+    reader = io.open(path)
+    try:
+        subprocess.spawn(["true"], stdout=reader)
+    except ValueError as v:
+        print(v.message)
+    reader.close()
+    fs.remove(path)
+
+    # The child's stdout and stderr can be swapped.
+    swapped = subprocess.spawn(["sh", "-c", "echo swapped >&2"], stdout=io.stderr(), stderr=io.stdout())
+    print(swapped.wait())
+
+    # Output written before a child runs comes first.
+    io.stdout().write_text("parent then ")
+    subprocess.run(["echo", "child"])

@@ -90,6 +90,44 @@ local builtins = {
     result = bind.file.type,
   },
   stdin = { params = {}, result = bind.file.type },
+  run = {
+    params = {
+      types.list(types.str),
+      types.union({ types.bytes, types.None }),
+      types.bool,
+      types.union({ types.str, types.None }),
+      types.union({ types.dict(types.str, types.str), types.None }),
+      types.union({ types.float, types.None }),
+    },
+    names = { "args", "input", "capture_output", "cwd", "env", "timeout" },
+    defaults = {
+      [2] = { kind = "None" },
+      [3] = { kind = "Bool", value = false },
+      [4] = { kind = "None" },
+      [5] = { kind = "None" },
+      [6] = { kind = "None" },
+    },
+    result = bind.result.type,
+  },
+  spawn = {
+    params = {
+      types.list(types.str),
+      types.union({ types.str, types.None }),
+      types.union({ types.dict(types.str, types.str), types.None }),
+      types.union({ bind.file.type, types.None }),
+      types.union({ bind.file.type, types.None }),
+      types.union({ bind.file.type, types.None }),
+    },
+    names = { "args", "cwd", "env", "stdin", "stdout", "stderr" },
+    defaults = {
+      [2] = { kind = "None" },
+      [3] = { kind = "None" },
+      [4] = { kind = "None" },
+      [5] = { kind = "None" },
+      [6] = { kind = "None" },
+    },
+    result = bind.process.type,
+  },
   stdout = { params = {}, result = bind.file.type },
   stderr = { params = {}, result = bind.file.type },
   sorted = {
@@ -150,8 +188,8 @@ local SORTABLE = { [types.int] = true, [types.float] = true, [types.str] = true 
 
 local FORMAT_TYPES = { s = types.str, d = types.int, f = types.float }
 
--- Parameter types, result type, and parameter names (for methods that accept
--- keywords) of method `name` on `type`, or nil.
+-- Parameter types, result type, and, for methods that accept keywords, the
+-- parameter names and defaults of method `name` on `type`, or nil.
 local function method_signature(type, name)
   if type == types.str then
     local method = STRING_METHODS[name]
@@ -175,7 +213,7 @@ local function method_signature(type, name)
     return {}, types.str
   elseif type.kind == "record" and type.record.methods and type.record.methods[name] then
     local method = type.record.methods[name]
-    return method.params, method.result, method.names
+    return method.params, method.result, method.names, method.defaults
   end
 end
 
@@ -608,7 +646,7 @@ local function check_function(fn)
       type = object
     elseif kind == "MethodCall" then
       local object = check_expression(node.object, state)
-      local params, result, names = method_signature(object, node.name)
+      local params, result, names, defaults = method_signature(object, node.name)
       if not params then
         diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
       end
@@ -616,7 +654,8 @@ local function check_function(fn)
         bind_args(node, node.name, SORT_PARAMS, "parameter")
         check_sortable(node, object)
       else
-        bind_args(node, node.name, builtin_params({ params = params, names = names }), names and "parameter")
+        local method = { params = params, names = names, defaults = defaults }
+        bind_args(node, node.name, builtin_params(method), names and "parameter")
       end
       for i, arg in ipairs(node.args) do
         check_against(arg, state, params[i])
