@@ -225,15 +225,15 @@ remove obsolete amendment wording, and update implementation status.
   - [x] Deliver passing and deliberately failing tests for a multi-module app;
     keep standalone test files alongside imported modules until project roots land
 
-- [ ] Filesystem, environment, and time (spec §18)
-  - [ ] Native nominal types and built-in methods without user-defined methods or
-    public FFI; common error and resource lifetime conventions
-  - [ ] Filesystem/path operations, typed metadata, environment lookup/snapshots,
+- [x] Filesystem, environment, and time (spec §18)
+  - [x] Filesystem/path operations, typed metadata, environment lookup/snapshots,
     working directory, clocks, sleep, and UTC formatting
-  - [ ] Deliver an environment-configured directory inventory with elapsed time
+  - [x] Deliver an environment-configured directory inventory with elapsed time
     on macOS and Linux
 
 - [ ] Bytes and streaming I/O (spec §19)
+  - [ ] Native nominal types and built-in methods without user-defined methods or
+    public FFI; common error and resource lifetime conventions
   - [ ] Bytes typing, construction, sequence operations, equality, iteration, and
     strict UTF-8 conversions without implicit printing or decoding
   - [ ] File and standard-stream handles, byte/text operations, close/flush, and

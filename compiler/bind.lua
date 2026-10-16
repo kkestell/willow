@@ -19,29 +19,40 @@ local builtins = {
 }
 
 -- The compiler-provided modules. They have no source: their declarations are
--- built-in targets, and a program's own `sys.wlo` or `fs.wlo` shadows them.
-M.modules = {
-  sys = {
-    name = "sys",
-    declarations = {
-      args = { kind = "Builtin", name = "args" },
-      eprint = { kind = "Builtin", name = "eprint" },
-      exit = { kind = "Builtin", name = "exit" },
-    },
-  },
-  fs = {
-    name = "fs",
-    declarations = {
-      read_file = { kind = "Builtin", name = "read_file" },
-      write_file = { kind = "Builtin", name = "write_file" },
-    },
+-- built-in targets and records, and a program's own `sys.wlo`, `fs.wlo`, or
+-- `time.wlo` shadows them.
+local function provided(name, functions, records)
+  local declarations = records or {}
+  for function_name in functions:gmatch("%S+") do
+    declarations[function_name] = { kind = "Builtin", name = function_name }
+  end
+  return { name = name, declarations = declarations }
+end
+
+local stat = {
+  kind = "Record",
+  name = "Stat",
+  type_name = "fs.Stat",
+  fields = {
+    { name = "kind", type = types.str },
+    { name = "size", type = types.int },
+    { name = "modified", type = types.float },
   },
 }
+stat.type = types.record(stat)
+
+M.modules = {
+  sys = provided("sys", "args eprint exit getenv environ getcwd"),
+  fs = provided("fs", "read_file write_file join basename dirname listdir stat exists mkdir remove rmdir rename",
+    { Stat = stat }),
+  time = provided("time", "time monotonic sleep utc"),
+}
+M.stat = stat
 
 -- The built-in exception classes, records with only a `message` field.
 local exceptions = {}
 M.exceptions = exceptions
-for name in ("Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError"):gmatch("%S+") do
+for name in ("Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError TimeoutError"):gmatch("%S+") do
   exceptions[name] = {
     kind = "Record",
     name = name,

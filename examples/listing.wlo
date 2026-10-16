@@ -1,0 +1,36 @@
+# Lists the directory named by LISTING_DIR (default: the current directory)
+# with each entry's kind, size, and modification time, then totals per kind.
+
+import fs
+import sys
+import time
+
+def main() -> None:
+    start = time.monotonic()
+    directory = sys.getenv("LISTING_DIR")
+    if directory is None:
+        directory = "."
+    counts: dict[str, int] = {}
+    sizes: dict[str, int] = {}
+    print(f"{'name':<16}{'kind':<10}{'size':>8}  modified")
+    for name in fs.listdir(directory):
+        info = fs.stat(fs.join(directory, name), follow_symlinks=False)
+        print(f"{name:<16}{info.kind:<10}{info.size:>8d}  {time.utc(info.modified)}")
+        seen = counts.get(info.kind)
+        if seen is None:
+            counts[info.kind] = 1
+            sizes[info.kind] = info.size
+        else:
+            counts[info.kind] = seen + 1
+            sizes[info.kind] = sizes[info.kind] + info.size
+    print("")
+    for kind in sorted(keys(counts)):
+        print(f"{kind:<10}{counts[kind]:>4d} entries{sizes[kind]:>10d} bytes")
+    elapsed = time.monotonic() - start
+    print(f"listed {directory} in {elapsed:.3f}s")
+
+def keys(items: dict[str, int]) -> list[str]:
+    result: list[str] = []
+    for key in items:
+        result.append(key)
+    return result

@@ -485,6 +485,37 @@ return {
     end)
   end,
 
+  listing_example = function()
+    in_temp_dir(function(dir)
+      os.execute("cd " .. quote(dir) .. " && mkdir notes && printf hello > a.txt && ln -s a.txt link"
+        .. " && TZ=UTC touch -t 202401020304.05 a.txt notes && TZ=UTC touch -h -t 202401020304.05 link")
+      local status, stdout, stderr = sh(dir, "LISTING_DIR=. " .. quote(WILLOW) .. " run "
+        .. quote(ROOT .. "/examples/listing.wlo"))
+      eq(0, status)
+      eq("", stderr)
+      local lines = {}
+      for line in stdout:gmatch("([^\n]*)\n") do
+        lines[#lines + 1] = line
+      end
+      eq(9, #lines)
+      eq("name            kind          size  modified", lines[1])
+      eq("a.txt           file             5  2024-01-02T03:04:05Z", lines[2])
+      eq("link            symlink          5  2024-01-02T03:04:05Z", lines[3])
+      assert(lines[4]:match("^notes           directory +%d+  2024%-01%-02T03:04:05Z$"), lines[4])
+      eq("", lines[5])
+      assert(lines[6]:match("^directory    1 entries +%d+ bytes$"), lines[6])
+      eq("file         1 entries         5 bytes", lines[7])
+      eq("symlink      1 entries         5 bytes", lines[8])
+      assert(lines[9]:match("^listed %. in %d+%.%d%d%ds$"), lines[9])
+
+      write(dir .. "/link.wlo", "import fs\ndef main() -> None:\n"
+        .. "    print(fs.stat('link').kind + ' ' + fs.stat('link', follow_symlinks=False).kind)\n")
+      status, stdout = willow(dir, "run link.wlo")
+      eq(0, status)
+      eq("file symlink\n", stdout)
+    end)
+  end,
+
   standard_library_build_runs_elsewhere = function()
     in_temp_dir(function(dir, base)
       write(dir .. "/prog.wlo", JSON_PROGRAM)

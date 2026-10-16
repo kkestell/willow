@@ -69,6 +69,11 @@ return {
     assert(emit_source("def main() -> None:\n    print('a'.upper())\n"):find("__wlo_LOWER_RUNS", 1, true))
   end,
 
+  host_runtime_only_when_used = function()
+    eq(nil, emit_source("def main() -> None:\n    print(1)\n"):find("__wlo_c_stat", 1, true))
+    assert(emit_source("import fs\ndef main() -> None:\n    print(fs.exists('x'))\n"):find("__wlo_c_stat", 1, true))
+  end,
+
   one_call_per_line = function()
     local text = emit_source(table.concat({
       "def f(a: int, b: int) -> int:",

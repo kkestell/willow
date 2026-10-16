@@ -1,0 +1,4 @@
+import time
+
+def main() -> None:
+    print(time.time())

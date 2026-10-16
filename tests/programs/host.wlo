@@ -1,0 +1,60 @@
+import fs
+import sys
+import time
+
+def main() -> None:
+    print(fs.join("a", "b") + " " + fs.join("a/", "b") + " " + fs.join("a", "/b") + " " + fs.join("", "b") + " " + fs.join("a", ""))
+    for p in ["a/b", "a/b/", "/", "a", "//a", "a//b", ""]:
+        print(f"[{fs.basename(p)}] [{fs.dirname(p)}]")
+    base = fs.join("/tmp", "wlo_host_" + str(int(time.time() * 1000000.0)))
+    fs.mkdir(fs.join(base, "x/y"), parents=True)
+    fs.mkdir(base, exist_ok=True)
+    fs.write_file(fs.join(base, "é.txt"), "hi")
+    fs.write_file(fs.join(base, "b.txt"), "hello")
+    print(", ".join(fs.listdir(base)))
+    st: fs.Stat = fs.stat(fs.join(base, "b.txt"), follow_symlinks=False)
+    print(f"{st.kind} {st.size} {st.modified > 0.0}")
+    print(fs.stat(fs.join(base, "x")).kind)
+    print(fs.exists(fs.join(base, "nope")))
+    print(fs.exists(fs.join(base, "b.txt/x")))
+    fs.rename(fs.join(base, "b.txt"), fs.join(base, "é.txt"))
+    print(fs.read_file(fs.join(base, "é.txt")))
+    try:
+        fs.rmdir(fs.join(base, "x"))
+    except OSError as e:
+        print(e.message.replace(base, "BASE"))
+    try:
+        fs.mkdir(fs.join(base, "é.txt"), exist_ok=True)
+    except OSError as e:
+        print(e.message.replace(base, "BASE"))
+    fs.remove(fs.join(base, "é.txt"))
+    fs.rmdir(fs.join(base, "x/y"))
+    fs.rmdir(fs.join(base, "x"))
+    fs.rmdir(base)
+    print(fs.exists(base))
+    try:
+        fs.exists("a\x00b")
+    except ValueError as v:
+        print(v.message)
+    w = sys.getenv("WILLOW")
+    if w is not None:
+        print(w.endswith("/willow"))
+    print(sys.getenv("NO_SUCH_VARIABLE_X"))
+    env = sys.environ()
+    print("WILLOW" in env)
+    env["WILLOW"] = "x"
+    print(sys.getenv("WILLOW") != "x")
+    print(sys.getcwd().startswith("/"))
+    for t in [0.0, -1.0, 951782400.5, -62135596800.0, 253402300799.0]:
+        print(time.utc(t))
+    try:
+        print(time.utc(253402300800.0))
+    except ValueError as v:
+        print(v.message)
+    start = time.monotonic()
+    time.sleep(0.01)
+    print(time.monotonic() - start >= 0.01)
+    try:
+        time.sleep(-1.0)
+    except ValueError as v:
+        print(v.message)

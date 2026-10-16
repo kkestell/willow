@@ -1,5 +1,6 @@
 -- Unicode case conversion, inlined after runtime/case_data.lua into programs
--- that call lower or upper.
+-- that call lower or upper. The helpers are the functions declared without
+-- `local`.
 
 -- Expands simple-mapping runs into a code point map on first use.
 local function __wlo_case_map(runs)
@@ -70,7 +71,7 @@ local function __wlo_convert_case(text, full, map, lower)
   return table.concat(parts)
 end
 
-local function __wlo_str_lower(text, site)
+function __wlo_str_lower(text, site)
   if not text:find("[\128-\255]") then
     return text:lower()
   end
@@ -78,7 +79,7 @@ local function __wlo_str_lower(text, site)
   return __wlo_convert_case(text, __wlo_LOWER_FULL, __wlo_lower_map, true)
 end
 
-local function __wlo_str_upper(text, site)
+function __wlo_str_upper(text, site)
   if not text:find("[\128-\255]") then
     return text:upper()
   end

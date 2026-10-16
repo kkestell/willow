@@ -4,7 +4,7 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-Sections 1–17 describe the implemented language. Sections 18–24 describe planned
+Sections 1–18 describe the implemented language. Sections 19–24 describe planned
 milestones, introduced under
 [planned application development milestones](#planned-application-development-milestones).
 
@@ -766,7 +766,8 @@ These built-in exception classes have only the `message` field:
 | `IndexError` | List indexes and `pop` from an empty list |
 | `KeyError` | Missing dictionary keys |
 | `RuntimeError` | Dictionary size changes during iteration |
-| `OSError` | File read and write failures |
+| `OSError` | Failed filesystem and host operations |
+| `TimeoutError` | Expired time limits |
 
 Programs may construct and raise them like their own classes.
 
@@ -916,19 +917,50 @@ like a program's own (§12).
 
 ### `fs`
 
-| Function | Meaning |
+| Declaration | Meaning |
 | --- | --- |
 | `read_file(path: str) -> str` | The contents of the file |
 | `write_file(path: str, text: str) -> None` | Create the file, or replace its contents, with `text` |
+| `join(a: str, b: str) -> str` | `a` and `b` joined with `/`; an absolute `b` replaces `a` |
+| `basename(path: str) -> str` | The text after the last `/`; empty after a trailing `/` |
+| `dirname(path: str) -> str` | The text before the last `/`, or empty when there is none |
+| `listdir(path: str) -> list[str]` | The directory's entry names, without `.` and `..`, sorted by code point |
+| `stat(path: str, follow_symlinks: bool = True) -> Stat` | The file's metadata |
+| `exists(path: str) -> bool` | Whether the path, followed through symlinks, exists |
+| `mkdir(path: str, parents: bool = False, exist_ok: bool = False) -> None` | Create a directory |
+| `remove(path: str) -> None` | Remove a file or symlink |
+| `rmdir(path: str) -> None` | Remove an empty directory |
+| `rename(source: str, destination: str) -> None` | Rename, replacing the destination where POSIX allows |
+| `class Stat` | Fields `kind: str`, `size: int`, and `modified: float` |
 
-Both transfer text exactly, without line-ending translation, and `write_file` does
-not replace the file atomically. Relative paths resolve against the current
-working directory.
+Paths are strings, relative to the working directory unless absolute. `read_file`
+and `write_file` transfer text exactly, without line-ending translation, and
+`write_file` does not replace the file atomically.
 
-Text read by `read_file` must be valid UTF-8, or the call raises `ValueError` with
-the message `invalid UTF-8`. When either function cannot open, read, or write a
-file, it raises `OSError` with the message `cannot read <path>: <reason>` or
-`cannot write <path>: <reason>`, where the host supplies the reason.
+`join`, `basename`, and `dirname` work on the text alone, as Python's
+`posixpath` does: they do not touch the filesystem, follow symlinks, or collapse
+`..`. `join("a", "")` is `a/`, `join("", "b")` is `b`, and a head of only slashes
+stays whole, so `dirname("//a")` is `//`.
+
+`Stat` is an ordinary record. `kind` is `file`, `directory`, `symlink`, or
+`other`; `size` is the size in bytes; `modified` is the modification time in
+seconds since the Unix epoch. With `follow_symlinks`, it describes the symlink's
+target. A size above the `int` range raises `OverflowError` with the message
+`file size out of range`.
+
+`exists` is false for a missing path, a dangling symlink, or a path through a
+non-directory; any other failure raises. `mkdir` with `parents` creates missing
+parent directories, and with `exist_ok` accepts an existing directory but not a
+file. New directories get the host's default permissions under its umask.
+`rename` does not move across filesystems.
+
+A path containing NUL raises `ValueError` with the message
+`path contains a NUL character`. Text read by `read_file` and names from
+`listdir` must be valid UTF-8, or the call raises `ValueError` with the message
+`invalid UTF-8`. A failed host operation raises `OSError` with a message naming
+the operation and path and giving the host's reason, such as
+`cannot read <path>: <reason>`, `cannot write <path>: <reason>`,
+`cannot list <path>: <reason>`, or `cannot remove directory <path>: <reason>`.
 
 ### `json`
 
@@ -990,6 +1022,9 @@ def main() -> None:
 | `args() -> list[str]` | A new list of the program's arguments in order, without the program or source name |
 | `eprint(value) -> None` | Write a printable value and `\n` to stderr |
 | `exit(status: int) -> None` | End the program with exit status `status` |
+| `getenv(name: str) -> str \| None` | The value of environment variable `name`, or `None` when it is unset |
+| `environ() -> dict[str, str]` | A new dictionary of the environment, in name order |
+| `getcwd() -> str` | The absolute path of the working directory |
 
 `args` raises `ValueError` with the message `invalid UTF-8` when an argument is not
 valid UTF-8.
@@ -998,10 +1033,30 @@ valid UTF-8.
 message `exit status out of range`. It ends the program at once; pending `finally`
 clauses do not run.
 
+Changing the dictionary `environ` returns does not change the environment. An
+environment name that is empty or contains `=` or NUL raises `ValueError` with the
+message `invalid environment variable name`. Values, and the working directory,
+must be valid UTF-8, or the call raises `ValueError` with the message
+`invalid UTF-8`.
+
+### `time`
+
+| Function | Meaning |
+| --- | --- |
+| `time() -> float` | Seconds since the Unix epoch |
+| `monotonic() -> float` | Seconds on a clock that never goes back, from an unspecified start |
+| `sleep(seconds: float) -> None` | Wait at least `seconds` |
+| `utc(timestamp: float) -> str` | The UTC time `timestamp` as `YYYY-MM-DDTHH:MM:SSZ` |
+
+`sleep` raises `ValueError` with the message
+`sleep length must be finite and nonnegative` for a negative or non-finite
+duration. `utc` rounds down to whole seconds, covers years 0001 through 9999, and
+raises `ValueError` with the message `timestamp out of range` otherwise.
+
 ## Planned application development milestones
 
-Sections 18–24 define accepted targets, in implementation order. They are not yet
-implemented. Sections 1–17 describe the implemented baseline; each planned section
+Sections 19–24 define accepted targets, in implementation order. They are not yet
+implemented. Sections 1–18 describe the implemented baseline; each planned section
 identifies the rules it changes when its milestone lands. Completion and delivery
 examples are tracked in `agents/todo.md`. A planned API is not available merely
 because its signature appears here.
@@ -1033,12 +1088,10 @@ Editor support is described in `README.md`.
 
 ## 18. Filesystem, environment, and time
 
-This milestone extends §14 with filesystem and host operations. Paths are UTF-8
-strings, interpreted relative to the process working directory unless absolute.
-NUL in a path, argument, or environment string raises `ValueError`. Host operation
-failures raise `OSError` with the operation, relevant path, and host reason.
-Returned text must be UTF-8; unrepresentable host names or values raise
-`ValueError` rather than being silently replaced.
+This milestone is implemented. Its rules are part of §10 and §14. The native-type
+conventions it introduced take effect with §19.
+
+## 19. Bytes and streaming I/O
 
 ### Native types and common conventions
 
@@ -1054,70 +1107,11 @@ cleanup; garbage collection is not a cleanup guarantee. Close failure still
 invalidates the handle and raises `OSError`. There is no general context-manager
 protocol or public FFI.
 
-Invalid options and values raise `ValueError`; expired waits raise the new
-built-in `TimeoutError`. Unless an API says otherwise, a timeout is a finite,
+Invalid options and values raise `ValueError`; expired waits raise the
+built-in `TimeoutError` (§10). Unless an API says otherwise, a timeout is a finite,
 strictly positive float in seconds, and `None` means no limit. All elapsed-time
 limits use a monotonic clock. These additions do not introduce exception
 subclassing beyond §10: `TimeoutError` directly extends `Exception`.
-
-### `fs`
-
-| Function | Meaning |
-| --- | --- |
-| `join(a: str, b: str) -> str` | Join POSIX path components; absolute `b` replaces `a` |
-| `basename(path: str) -> str` | Text after the final slash; empty for a trailing slash |
-| `dirname(path: str) -> str` | Directory portion, or empty when there is none |
-| `listdir(path: str) -> list[str]` | Entry names, excluding `.` and `..`, sorted by code point |
-| `stat(path: str, follow_symlinks: bool = True) -> Stat` | File metadata |
-| `exists(path: str) -> bool` | Whether the followed path exists |
-| `mkdir(path: str, parents: bool = False, exist_ok: bool = False) -> None` | Create a directory |
-| `remove(path: str) -> None` | Remove a file or symlink, not a directory |
-| `rmdir(path: str) -> None` | Remove an empty directory |
-| `rename(source: str, destination: str) -> None` | Rename with POSIX replacement rules |
-
-The path helpers are lexical: they do not access the filesystem, resolve symlinks,
-or collapse `..`. They follow Python's POSIX path behavior for their supported
-arguments. An empty first part in `join` contributes no separator; an empty second
-part preserves a trailing separator. There is no implicit home or environment
-expansion.
-
-`Stat` is an ordinary record with fields `kind: str`, `size: int`, and
-`modified: float`. Kind is `file`, `directory`, `symlink`, or `other`; size is the
-host's byte size and modified is seconds since the Unix epoch. With symlink
-following enabled, metadata describes the target. An unrepresentable integer size
-raises `OverflowError`.
-
-`exists` returns false only for a missing path or missing/non-directory component,
-including a dangling symlink. Other failures, such as denied access, raise
-`OSError`; unlike Python's path-existence predicate, these failures are not
-converted to false. `mkdir` with `parents=True` creates missing parents; `exist_ok=True`
-accepts an existing directory, never a file. Permissions use the host's ordinary
-creation defaults and umask. `rename` replaces an existing destination when POSIX
-permits it; it does not emulate cross-filesystem moves. Recursive deletion,
-globbing, file watching, and permission-management APIs are outside this slice.
-
-### `sys` and `time`
-
-`sys.getenv(name: str) -> str | None` returns an environment value or `None`.
-`sys.environ() -> dict[str, str]` returns a fresh environment snapshot, so callers
-can modify it before passing it to a subprocess. Mutating the snapshot does not
-change the current process environment. Empty names or names containing `=` or
-NUL are invalid. `sys.getcwd() -> str` returns the absolute working directory.
-
-The new `time` module exports:
-
-| Function | Meaning |
-| --- | --- |
-| `time() -> float` | Seconds since the Unix epoch |
-| `monotonic() -> float` | Monotonic seconds from an unspecified origin |
-| `sleep(seconds: float) -> None` | Wait for at least the finite, nonnegative duration |
-| `utc(timestamp: float) -> str` | UTC timestamp as `YYYY-MM-DDTHH:MM:SSZ` |
-
-`utc` floors to whole seconds, supports years 0001–9999, and raises `ValueError`
-for non-finite or unsupported timestamps. There are no timezone objects, locale
-formatting, or date arithmetic in this milestone.
-
-## 19. Bytes and streaming I/O
 
 ### Bytes
 

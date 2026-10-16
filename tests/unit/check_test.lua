@@ -643,4 +643,21 @@ return {
     eq("6:11: variable 'y' may be used before assignment",
       check_errors(in_main("c = True\nif c:\n    y = 1\nassert c\nprint(y)")))
   end,
+
+  host_modules = function()
+    local program = check_source("import fs\nimport sys\nimport time\n" .. in_main(table.concat({
+      "s: fs.Stat = fs.stat(path='x', follow_symlinks=False)",
+      "k = s.kind",
+      "made = fs.Stat(kind='file', size=1, modified=0.5)",
+      "names: list[str] = fs.listdir('.')",
+      "env: dict[str, str] = sys.environ()",
+      "fs.mkdir('d', exist_ok=True)",
+      "t: str = time.utc(time.time())",
+      "e = TimeoutError('slow')",
+    }, "\n")))
+    eq("str", program.functions[1].body[2].value.type.name)
+    eq("3:25: operator '+' cannot be applied to str | None and str",
+      check_errors("import sys\n" .. in_main("x = sys.getenv('A') + 'b'")))
+    eq("3:16: expected float, received int", check_errors("import time\n" .. in_main("time.sleep(1)")))
+  end,
 }
