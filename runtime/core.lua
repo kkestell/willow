@@ -2,6 +2,9 @@
 -- emitter declares __wlo_paths, __wlo_sites, and __wlo_lines before this text
 -- and assigns them before calling __wlo_run.
 
+local __wlo_ffi = require("ffi")
+__wlo_ffi.cdef("int snprintf(char *, size_t, const char *, ...);")
+
 local __wlo_source = debug.getinfo(1, "S").source
 local __wlo_MAX_INT = 9007199254740991
 local __wlo_MAX_FRAMES = 20
@@ -507,20 +510,90 @@ local function __wlo_len(value, site)
   return value.n or #value.keys
 end
 
-local function __wlo_check_index(list, i, site)
-  if i < 0 or i >= list.n then
-    __wlo_fail("IndexError", "list index out of range", site)
+-- Adds `n` once to a negative index; nil when the result is outside 0..n-1.
+local function __wlo_normalize_index(i, n)
+  if i < 0 then
+    i = i + n
+  end
+  if i >= 0 and i < n then
+    return i
   end
 end
 
+-- Applies a slice's defaults, adds `n` once to negative bounds, and clamps
+-- both to 0..n.
+local function __wlo_slice_bounds(start, stop, n)
+  start, stop = start or 0, stop or n
+  if start < 0 then
+    start = start + n
+  end
+  if stop < 0 then
+    stop = stop + n
+  end
+  return math.min(math.max(start, 0), n), math.min(math.max(stop, 0), n)
+end
+
 local function __wlo_list_index(list, i, site)
-  __wlo_check_index(list, i, site)
-  return list[i + 1]
+  local j = __wlo_normalize_index(i, list.n)
+  if not j then
+    __wlo_fail("IndexError", "list index out of range", site)
+  end
+  return list[j + 1]
 end
 
 local function __wlo_list_set(list, i, value, site)
-  __wlo_check_index(list, i, site)
-  list[i + 1] = value
+  local j = __wlo_normalize_index(i, list.n)
+  if not j then
+    __wlo_fail("IndexError", "list index out of range", site)
+  end
+  list[j + 1] = value
+end
+
+-- A new list sharing the elements of the slice.
+local function __wlo_list_slice(list, start, stop, site)
+  start, stop = __wlo_slice_bounds(start, stop, list.n)
+  local items = {}
+  for i = start + 1, stop do
+    items[i - start] = list[i]
+  end
+  return __wlo_list(items, math.max(stop - start, 0))
+end
+
+-- Values are int, float, or str, so NaN is the only value unequal to itself.
+-- Equal values keep their order, in either direction.
+local function __wlo_sorted_values(list, reverse, site)
+  local order = {}
+  for i = 1, list.n do
+    if list[i] ~= list[i] then
+      __wlo_fail("ValueError", "cannot sort NaN", site)
+    end
+    order[i] = i
+  end
+  table.sort(order, function(i, j)
+    local a, b = list[i], list[j]
+    if a == b then
+      return i < j
+    elseif reverse then
+      return a > b
+    end
+    return a < b
+  end)
+  local values = {}
+  for i, index in ipairs(order) do
+    values[i] = list[index]
+  end
+  return values
+end
+
+local function __wlo_sorted(list, reverse, site)
+  return __wlo_list(__wlo_sorted_values(list, reverse, site), list.n)
+end
+
+local function __wlo_list_sort(list, reverse, site)
+  local values = __wlo_sorted_values(list, reverse, site)
+  for i = 1, list.n do
+    list[i] = values[i]
+  end
 end
 
 local function __wlo_list_append(list, value, site)
@@ -696,6 +769,86 @@ end
 
 local function __wlo_str_join(sep, items, site)
   return table.concat(items, sep, 1, items.n)
+end
+
+-- The byte position of code point `k`, counting from 0, or one past the end.
+local function __wlo_offset(text, k)
+  local count = 0
+  for pos in text:gmatch("()[^\128-\191]") do
+    if count == k then
+      return pos
+    end
+    count = count + 1
+  end
+  return #text + 1
+end
+
+-- Code points `first` up to but excluding `last` of a string of `n` code
+-- points. ASCII text has one byte per code point.
+local function __wlo_str_sub(text, n, first, last)
+  if n == #text then
+    return text:sub(first + 1, last)
+  end
+  return text:sub(__wlo_offset(text, first), __wlo_offset(text, last) - 1)
+end
+
+local function __wlo_str_index(text, i, site)
+  local n = __wlo_code_points(text)
+  local j = __wlo_normalize_index(i, n)
+  if not j then
+    __wlo_fail("IndexError", "string index out of range", site)
+  end
+  return __wlo_str_sub(text, n, j, j + 1)
+end
+
+local function __wlo_str_slice(text, start, stop, site)
+  local n = __wlo_code_points(text)
+  start, stop = __wlo_slice_bounds(start, stop, n)
+  if stop <= start then
+    return ""
+  end
+  return __wlo_str_sub(text, n, start, stop)
+end
+
+-- Pads `text` with spaces to `width` code points. A nil `align` is left for a
+-- string `value` and right otherwise; `^` puts an odd space on the right.
+local function __wlo_pad(text, width, align, value)
+  local pad = width - __wlo_code_points(text)
+  if pad <= 0 then
+    return text
+  end
+  align = align or (type(value) == "string" and "<" or ">")
+  if align == "<" then
+    return text .. (" "):rep(pad)
+  elseif align == ">" then
+    return (" "):rep(pad) .. text
+  end
+  local left = math.floor(pad / 2)
+  return (" "):rep(left) .. text .. (" "):rep(pad - left)
+end
+
+local function __wlo_str_ljust(text, width, site)
+  return __wlo_pad(text, width, "<")
+end
+
+local function __wlo_str_rjust(text, width, site)
+  return __wlo_pad(text, width, ">")
+end
+
+-- The C library converts exactly, rounding ties to even, at any precision;
+-- string.format rejects precisions above 99.
+local function __wlo_format_fixed(x, precision)
+  if x ~= x then
+    return "nan"
+  elseif x == math.huge then
+    return "inf"
+  elseif x == -math.huge then
+    return "-inf"
+  end
+  local size = 330 + precision
+  local buffer = __wlo_ffi.new("char[?]", size)
+  local length = __wlo_ffi.C.snprintf(buffer, size, "%.*f", __wlo_ffi.new("int", precision), x)
+  return __wlo_ffi.string(buffer, length)
 end
 
 local function __wlo_ord(text, site)

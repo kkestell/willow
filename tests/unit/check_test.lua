@@ -288,9 +288,8 @@ return {
     eq("2:13: cannot convert a value of type list[int] to str", check_errors(in_main("x = str([1])")))
     eq("2:12: unknown name 'y'", check_errors(in_main("x = f'{y}'")))
     eq("3:16: expected str, received int", check_errors(in_main("s = 'a'\nx = s.find(1)")))
-    eq("3:11: type str has no method 'upper'", check_errors(in_main("s = 'a'\nx = s.upper()")))
     eq("3:22: expected str, received int", check_errors(in_main("s = 'a'\nx = s.join(['a', 1])")))
-    eq("3:10: cannot index a value of type str", check_errors(in_main("s = 'a'\nx = s[0]")))
+    eq("3:6: cannot assign to an index of a value of type str", check_errors(in_main("s = 'a'\ns[0] = 'b'")))
     eq("2:11: operator 'in' cannot be applied to int and str", check_errors(in_main("x = 1 in 'abc'")))
     eq("2:14: operator 'in' cannot be applied to int | str and str",
       check_errors("def f(x: int | str) -> bool:\n    return x in 'a5b'\n" .. MAIN))
@@ -562,5 +561,41 @@ return {
       check_errors(f("if not isinstance(x, int):\n    return\nx = None\nprint(x + 1)")))
     eq("7:17: operator '+' cannot be applied to int | str | list[int] | P | None and int",
       check_errors(f("if not isinstance(x, int):\n    return\nwhile True:\n    print(x + 1)\n    x = None")))
+  end,
+
+  text_and_collections = function()
+    local program = check_source(in_main(table.concat({
+      "s = 'abc'",
+      "xs = [3, 1]",
+      "c: str = s[-1] + s[1:] + s[:2].upper().lower()",
+      "ys: list[int] = xs[:]",
+      "zs: list[int] = sorted(xs)",
+      "zs = sorted(xs, True)",
+      "ws: list[str] = sorted(['b', 'a'], reverse=True)",
+      "xs.sort()",
+      "xs.sort(reverse=False)",
+      "t: str = s.ljust(5) + s.rjust(-1)",
+      "v: int | str = 1",
+      "f: str = f'{s:s}{1:>3d}{1.5:.2f}{v:>5}{True:^4}'",
+    }, "\n")))
+    eq("str", program.functions[1].body[3].value.type.name)
+    eq("2:15: cannot slice a value of type dict[int, int]", check_errors(in_main("x = {1: 2}[1:]")))
+    eq("3:11: expected int, received str", check_errors(in_main("s = 'a'\nx = s['a':]")))
+    eq("2:16: cannot sort a value of type list[bool]", check_errors(in_main("x = sorted([True])")))
+    eq("3:16: cannot sort a value of type list[int | None]",
+      check_errors(in_main("x: list[int | None] = []\ny = sorted(x)")))
+    eq("3:16: cannot sort a value of type list[P]", check_errors(in_main("x = [P(1)]\ny = sorted(x)", "class P:\n    n: int\n")))
+    eq("2:9: 'sorted' expects 1 to 2 arguments, received 3", check_errors(in_main("x = sorted([1], True, True)")))
+    eq("3:7: 'sort' expects 0 to 1 arguments, received 2", check_errors(in_main("x = [1]\nx.sort(True, True)")))
+    eq("2:11: keyword arguments are not supported", check_errors(in_main("print(end='')")))
+    eq("2:21: 'sorted' has no parameter 'key'", check_errors(in_main("x = sorted([1], key=True)")))
+    eq("2:16: misplaced keyword argument 'reverse'", check_errors(in_main("x = sorted(reverse=True)")))
+    eq("3:16: expected int, received None", check_errors(in_main("x = [1]\ny: int = x.sort()")))
+    eq("2:12: format type 'd' requires int, received str", check_errors(in_main("x = f'{\"a\":d}'")))
+    eq("2:12: format type 'f' requires float, received int", check_errors(in_main("x = f'{1:f}'")))
+    eq("2:15: format type 'd' requires int, received int | str",
+      check_errors("def f(v: int | str) -> str:\n    return f'{v:d}'\n" .. MAIN))
+    check_source(in_main("sorted = 1\nprint(sorted)"))
+    eq("1:5: cannot redefine built-in function 'sorted'", check_errors("def sorted() -> None:\n    pass\n" .. MAIN))
   end,
 }

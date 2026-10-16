@@ -184,11 +184,25 @@ return {
     eq("1:9: f-string fields cannot contain a backslash", lex_error('x = f"{a\\n}"\n'))
     eq("1:9: f-string fields cannot contain '#'", lex_error('x = f"{a#}"\n'))
     eq("1:8: f-string fields cannot contain the f-string's quote character", lex_error('x = f"{"a"}"\n'))
-    eq("1:9: format specifications are not supported", lex_error('x = f"{a:2}"\n'))
     eq("1:9: conversions are not supported", lex_error('x = f"{a!r}"\n'))
     eq("1:7: unterminated f-string field", lex_error("x = f'{a\n"))
-    eq("2:3: format specifications are not supported", lex_error('x = f"""{a +\n b:2}"""\n'))
     eq("1:10: unterminated string literal", lex_error("x = f\"\"\"{'a\nb'}\"\"\"\n"))
+  end,
+
+  format_specifications = function()
+    local spec = single('f"{x:>10.2f}"').value[2].spec
+    eq("> 10 2 f", spec.align .. " " .. spec.width .. " " .. spec.precision .. " " .. spec.type)
+    local field = single('f"{t[1:3]}"').value[2]
+    eq(nil, field.spec)
+    eq(7, #field)
+    eq(2, #single('f"{a:}"').value[2])
+    for _, text in ipairs({ "05", ".01f", "x", ",", "0>5" }) do
+      eq("1:9: invalid format specification '" .. text .. "'", lex_error('x = f"{a:' .. text .. '}"\n'))
+    end
+    eq("1:9: invalid format specification '{b'", lex_error('x = f"{a:{b}}"\n'))
+    eq("1:9: format precision requires type 'f'", lex_error('x = f"{a:.2}"\n'))
+    eq("1:9: format precision requires type 'f'", lex_error('x = f"{a:.2s}"\n'))
+    eq("2:3: invalid format specification 'q'", lex_error('x = f"""{a +\n b:q}"""\n'))
   end,
 
   spans_carry_the_path = function()

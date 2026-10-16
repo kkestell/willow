@@ -78,6 +78,11 @@ show = function(node)
     return "{" .. table.concat(parts, ", ") .. "}"
   elseif kind == "Index" then
     return show(node.object) .. "[" .. show(node.index) .. "]"
+  elseif kind == "Slice" then
+    return show(node.object) .. "[" .. (node.start and show(node.start) or "") .. ":"
+      .. (node.stop and show(node.stop) or "") .. "]"
+  elseif kind == "Keyword" then
+    return node.name .. "=" .. show(node.value)
   elseif kind == "MethodCall" then
     return show(node.object) .. "." .. node.name .. "(" .. show_list(node.args, ", ") .. ")"
   elseif kind == "Field" then
@@ -401,6 +406,16 @@ return {
 
   unclosed_parenthesis_at_end_of_file = function()
     eq("3:1: expected ',' or ')', found end of file", body_error("f(1"))
+  end,
+
+  slices_and_keywords = function()
+    eq("a[:]", expr("a[:]"))
+    eq("a[1:]", expr("a[1:]"))
+    eq("a[:(- 1)]", expr("a[:-1]"))
+    eq("a[i:j][0]", expr("a[i:j][0]"))
+    eq("sorted(xs, reverse=True)", expr("sorted(xs, reverse=True)"))
+    eq("2:14: slice steps are not supported", body_error("x = a[1:2:3]"))
+    eq("2:12: cannot assign to this expression", body_error("a[1:2] = x"))
   end,
 
   unsupported_reserved_words = function()

@@ -1,0 +1,36 @@
+# Reads text from standard input and reports how often each word appears, most
+# frequent first.
+
+def keys(items: dict[int, list[str]]) -> list[int]:
+    result: list[int] = []
+    for key in items:
+        result.append(key)
+    return result
+
+def main() -> None:
+    counts: dict[str, int] = {}
+    total = 0
+    line = input()
+    while line is not None:
+        for word in line.lower().split(" "):
+            if word != "":
+                seen = counts.get(word)
+                if seen is None:
+                    counts[word] = 1
+                else:
+                    counts[word] = seen + 1
+                total = total + 1
+        line = input()
+
+    by_count: dict[int, list[str]] = {}
+    for word in counts:
+        count = counts[word]
+        if count not in by_count:
+            by_count[count] = []
+        by_count[count].append(word)
+
+    print(f"{'word':<12}{'count':>6}{'share':>9}")
+    for count in sorted(keys(by_count), reverse=True):
+        for word in sorted(by_count[count]):
+            share = float(count) / float(total) * 100.0
+            print(f"{word:<12}{count:>6d}{share:>8.1f}%")

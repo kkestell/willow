@@ -373,6 +373,25 @@ return {
     end)
   end,
 
+  words_example = function()
+    in_temp_dir(function(dir)
+      local example = quote(ROOT .. "/examples/words.wlo")
+      local status, stdout = sh(dir, "printf 'The cat and the dog\\nthe Stra\\303\\237e and STRASSE\\n\\n  cat\\n' | "
+        .. quote(WILLOW) .. " run " .. example)
+      eq(0, status)
+      eq(table.concat({
+        "word         count    share",
+        "the              3    30.0%",
+        "and              2    20.0%",
+        "cat              2    20.0%",
+        "dog              1    10.0%",
+        "strasse          1    10.0%",
+        "stra\195\159e           1    10.0%",
+        "",
+      }, "\n"), stdout)
+    end)
+  end,
+
   standard_library_build_runs_elsewhere = function()
     in_temp_dir(function(dir, base)
       write(dir .. "/prog.wlo", JSON_PROGRAM)

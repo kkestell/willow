@@ -79,7 +79,7 @@ local function is_pure(node)
         return false
       end
     end
-  elseif kind == "Call" or kind == "Index" or kind == "MethodCall" or kind == "Field" then
+  elseif kind == "Call" or kind == "Index" or kind == "Slice" or kind == "MethodCall" or kind == "Field" then
     return false
   elseif kind == "Unary" then
     return not (node.op == "-" and node.type == types.int) and is_pure(node.operand)
@@ -110,7 +110,7 @@ local function is_pure(node)
   return true
 end
 
-local function lower_function(fn, sites)
+local function lower_function(fn, sites, helpers)
   local out
   local depth, temps, labels = 0, 0, 0
   local loop
@@ -135,6 +135,7 @@ local function lower_function(fn, sites)
 
   local function helper(name, args, span)
     sites[#sites + 1] = span
+    helpers[name] = true
     return { kind = "Helper", name = name, args = args, site = #sites, span = span }
   end
 
@@ -146,6 +147,33 @@ local function lower_function(fn, sites)
       return operand
     end
     return { kind = "Str", value = operand, float = is_float(type) }
+  end
+
+  -- The text of f-string field `part` under format specification `spec`. A
+  -- width without an alignment pads strings on the right and other values on
+  -- the left; a union with a str member decides from the value it holds.
+  local function formatted(part, spec)
+    local operand = lower_operand(part)
+    local value
+    if spec and spec.type == "f" then
+      value = pure("format_fixed", { operand, { kind = "Literal", value = spec.precision or 6 } })
+    else
+      value = text(operand, part.type)
+    end
+    if not (spec and spec.width) then
+      return value
+    end
+    local align = spec.align
+    if not align and part.type == types.str then
+      align = "<"
+    elseif not align and not types.has(part.type, "str") then
+      align = ">"
+    end
+    local args = { value, { kind = "Literal", value = spec.width }, { kind = "Literal", value = align } }
+    if not align then
+      args[4] = operand
+    end
+    return pure("pad", args)
   end
 
   -- Moves a call or helper call into a temporary. It consumes its operands'
@@ -269,6 +297,8 @@ local function lower_function(fn, sites)
           name = name .. "_float"
         elseif (name == "int" or name == "float") and node.args[1].type == types.str then
           name = "parse_" .. name
+        elseif name == "sorted" then
+          args[2] = args[2] or { kind = "Literal", value = false }
         end
         return helper(name, args, node.span)
       end
@@ -278,7 +308,7 @@ local function lower_function(fn, sites)
     elseif kind == "FString" then
       local parts = {}
       for i, part in ipairs(node.parts) do
-        parts[i] = text(lower_operand(part), part.type)
+        parts[i] = formatted(part, node.specs[i])
       end
       if #parts == 0 then
         return { kind = "Literal", value = "" }
@@ -291,10 +321,18 @@ local function lower_function(fn, sites)
       local index = lower_operand(node.index)
       local name = prefix(node.object.type) .. "index"
       return helper(name, { object, index }, node.span)
+    elseif kind == "Slice" then
+      local object = lower_operand(node.object)
+      local start = node.start and lower_operand(node.start) or { kind = "Literal" }
+      local stop = node.stop and lower_operand(node.stop) or { kind = "Literal" }
+      return helper(prefix(node.object.type) .. "slice", { object, start, stop }, node.span)
     elseif kind == "MethodCall" then
       local args = { lower_operand(node.object) }
       for _, arg in ipairs(node.args) do
         args[#args + 1] = lower_operand(arg)
+      end
+      if node.object.type.kind == "list" and node.name == "sort" then
+        args[2] = args[2] or { kind = "Literal", value = false }
       end
       return helper(prefix(node.object.type) .. node.name, args, node.span)
     elseif kind == "ListDisplay" then
@@ -516,14 +554,14 @@ end
 
 -- Lowers every function of `modules`, the entry module first.
 function M.lower(modules)
-  local sites = {}
+  local sites, helpers = {}, {}
   local functions = {}
   for _, module in ipairs(modules) do
     for _, fn in ipairs(module.functions) do
-      functions[#functions + 1] = lower_function(fn, sites)
+      functions[#functions + 1] = lower_function(fn, sites, helpers)
     end
   end
-  return { modules = modules, functions = functions, sites = sites }
+  return { modules = modules, functions = functions, sites = sites, helpers = helpers }
 end
 
 return M

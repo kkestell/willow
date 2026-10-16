@@ -54,6 +54,7 @@ local builtins = {
   exit = { params = { types.int }, result = types.None },
   ord = { params = { types.str }, result = types.int },
   chr = { params = { types.int }, result = types.str },
+  sorted = { params = { "any", types.bool }, required = 1 },
 }
 
 -- The argument kinds `int` and `float` convert from.
@@ -95,9 +96,19 @@ local STRING_METHODS = {
   strip = { {}, types.str },
   split = { { types.str }, types.list(types.str) },
   join = { { types.list(types.str) }, types.str },
+  lower = { {}, types.str },
+  upper = { {}, types.str },
+  ljust = { { types.int }, types.str },
+  rjust = { { types.int }, types.str },
 }
 
--- Parameter types and result type of method `name` on `type`, or nil.
+-- The element types sorted and sort accept.
+local SORTABLE = { [types.int] = true, [types.float] = true, [types.str] = true }
+
+local FORMAT_TYPES = { s = types.str, d = types.int, f = types.float }
+
+-- Parameter types, result type, and the number of required arguments when
+-- some are optional, of method `name` on `type`, or nil.
 local function method_signature(type, name)
   if type == types.str then
     local method = STRING_METHODS[name]
@@ -111,6 +122,8 @@ local function method_signature(type, name)
     return { element }, types.None
   elseif element and name == "pop" then
     return {}, element
+  elseif element and name == "sort" then
+    return { types.bool }, types.None, 0
   elseif type.kind == "dict" and name == "get" then
     return { type.key }, optional_of(types.expand(type.value))
   elseif type.kind == "dict" and name == "pop" then
@@ -250,6 +263,40 @@ local function arguments(count)
   return count .. (count == 1 and " argument" or " arguments")
 end
 
+-- Checks that `node` (a call) receives between `required` and `count`
+-- arguments.
+local function check_arity(node, name, required, count)
+  local received = #node.args
+  if received < required or received > count then
+    local expected = required == count and arguments(count) or required .. " to " .. count .. " arguments"
+    diag.error(node.span, "'" .. name .. "' expects " .. expected .. ", received " .. received)
+  end
+end
+
+-- Replaces a `reverse` keyword of sorted or sort at argument `reverse_index`
+-- with its value. Other calls take only positional arguments.
+local function positional_args(node, name, reverse_index)
+  for i, arg in ipairs(node.args) do
+    if arg.kind == "Keyword" then
+      if not reverse_index then
+        diag.error(arg.span, "keyword arguments are not supported")
+      elseif arg.name ~= "reverse" then
+        diag.error(arg.span, "'" .. name .. "' has no parameter '" .. arg.name .. "'")
+      elseif i ~= reverse_index then
+        diag.error(arg.span, "misplaced keyword argument 'reverse'")
+      end
+      node.args[i] = arg.value
+    end
+  end
+end
+
+-- Checks that a list of `type` can be sorted.
+local function check_sortable(node, type)
+  if not (type.kind == "list" and SORTABLE[list_element(type)]) then
+    diag.error(node.span, "cannot sort a value of type " .. type.name)
+  end
+end
+
 local function check_function(fn)
   -- The type of field `node.name` on a value of `object` type.
   local function field_type(node, object)
@@ -365,12 +412,11 @@ local function check_function(fn)
         diag.error(node.span, "'range' can only be used as a 'for' iterable")
       end
       local builtin = target.kind == "Builtin" and builtins[target.name]
+      positional_args(node, node.name, builtin == builtins.sorted and 2)
       -- A constructor takes one argument per field.
       local params = target.kind == "Record" and target.fields or target.params
       local count = builtin and #builtin.params or #params
-      if #node.args ~= count then
-        diag.error(node.span, "'" .. node.name .. "' expects " .. arguments(count) .. ", received " .. #node.args)
-      end
+      check_arity(node, node.name, builtin and builtin.required or count, count)
       for i, arg in ipairs(node.args) do
         local param
         if builtin then
@@ -394,7 +440,10 @@ local function check_function(fn)
       elseif name == "len" and builtin and arg_type ~= types.str and not index_types(arg_type) then
         diag.error(node.span, "'len' cannot be applied to " .. arg_type.name)
       end
-      if builtin then
+      if builtin == builtins.sorted then
+        check_sortable(node.args[1], arg_type)
+        type = arg_type
+      elseif builtin then
         type = builtin.result
       elseif target.kind == "Record" then
         type = target.type
@@ -425,9 +474,13 @@ local function check_function(fn)
       type = field_type(node, check_expression(node.object, state))
     elseif kind == "FString" then
       -- Literal text is a String part.
-      for _, part in ipairs(node.parts) do
+      for i, part in ipairs(node.parts) do
         local field = check_expression(part, state)
-        if not types.printable(field) then
+        local spec = node.specs[i]
+        local required = spec and FORMAT_TYPES[spec.type]
+        if required and field ~= required then
+          diag.error(part.span, "format type '" .. spec.type .. "' requires " .. required.name .. ", received " .. field.name)
+        elseif not types.printable(field) then
           diag.error(part.span, "cannot format a value of type " .. field.name)
         end
       end
@@ -435,19 +488,37 @@ local function check_function(fn)
     elseif kind == "Index" then
       local object = check_expression(node.object, state)
       local index, item = index_types(object)
+      if object == types.str then
+        index, item = types.int, types.str
+      end
       if not index then
         diag.error(node.span, "cannot index a value of type " .. object.name)
       end
       check_against(node.index, state, index)
       type = item
+    elseif kind == "Slice" then
+      local object = check_expression(node.object, state)
+      if object ~= types.str and object.kind ~= "list" then
+        diag.error(node.span, "cannot slice a value of type " .. object.name)
+      end
+      if node.start then
+        check_against(node.start, state, types.int)
+      end
+      if node.stop then
+        check_against(node.stop, state, types.int)
+      end
+      type = object
     elseif kind == "MethodCall" then
       local object = check_expression(node.object, state)
-      local params, result = method_signature(object, node.name)
+      local params, result, required = method_signature(object, node.name)
       if not params then
         diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
       end
-      if #node.args ~= #params then
-        diag.error(node.span, "'" .. node.name .. "' expects " .. arguments(#params) .. ", received " .. #node.args)
+      local sort = object.kind == "list" and node.name == "sort"
+      positional_args(node, node.name, sort and 1)
+      check_arity(node, node.name, required or #params, #params)
+      if sort then
+        check_sortable(node, object)
       end
       for i, arg in ipairs(node.args) do
         check_against(arg, state, params[i])
@@ -610,7 +681,9 @@ local function check_function(fn)
     elseif kind == "IndexAssign" then
       local object = check_expression(statement.object, state)
       local index, item = index_types(object)
-      if not index then
+      if object == types.str then
+        diag.error(statement.span, "cannot assign to an index of a value of type str")
+      elseif not index then
         diag.error(statement.span, "cannot index a value of type " .. object.name)
       end
       check_against(statement.index, state, index)
@@ -675,6 +748,7 @@ local function check_function(fn)
       local iterable = statement.iterable
       local item
       if iterable.kind == "Call" and iterable.name == "range" then
+        positional_args(iterable, "range")
         local count = #iterable.args
         if count < 1 or count > 3 then
           diag.error(iterable.span, "'range' expects 1 to 3 arguments, received " .. count)

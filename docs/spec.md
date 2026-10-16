@@ -4,7 +4,8 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-The next ten milestones and their implementation status are described under
+Sections 1–15 describe the implemented language. Sections 16–24 describe planned
+milestones, introduced under
 [planned application development milestones](#planned-application-development-milestones).
 
 ## 1. Programs
@@ -111,10 +112,10 @@ f"{name} has {len(name)} letters"
 ```
 
 Each field holds one expression of a printable type (§4) and contributes the text
-`str(...)` would produce. Fields are evaluated left to right. `{{` and `}}` denote
-literal braces. A field cannot be empty or contain a backslash, a `#`, or the
-f-string's own quote character, and a lone `}` is an error. There are no format
-specifications or conversions.
+`str(...)` would produce, shaped by an optional format specification (§7). Fields
+are evaluated left to right. `{{` and `}}` denote literal braces. A field cannot be
+empty or contain a backslash, a `#`, or the f-string's own quote character, and a
+lone `}` is an error. There are no `!` conversions.
 
 ## 3. Declarations
 
@@ -242,7 +243,7 @@ def describe(value: int | str | None) -> str:
 ## 5. Expressions
 
 The expression forms are literals, names, parenthesized expressions, list and dict
-displays, calls, indexing, field access, and unary and binary operations.
+displays, calls, indexing, slicing, field access, and unary and binary operations.
 
 Precedence, from lowest to highest:
 
@@ -253,7 +254,8 @@ Precedence, from lowest to highest:
 5. Binary `+`, `-`
 6. `*`, `/`, `//`, `%`
 7. Unary `+`, `-`
-8. Postfix: calls, indexing `a[i]`, and field or method access `a.name`
+8. Postfix: calls, indexing `a[i]`, slicing `a[i:j]`, and field or method access
+   `a.name`
 9. Literals, names, parenthesized expressions, and displays
 
 Binary operators associate left to right, and postfix operations chain left to
@@ -265,7 +267,9 @@ error. Comparison chains such as `0 <= x < 10` are errors.
 
 A call names a function, built-in, conversion, or record by bare name (`area(p)`),
 a module member (`geometry.area(p)`), or a method on a value (`items.append(x)`).
-Arguments are positional with exact arity. Functions and methods are not values,
+Arguments are positional with exact arity, except the optional `reverse` argument
+of `sorted` and `list.sort` (§7), which may also be written `reverse=value` in its
+position. Functions and methods are not values,
 so `(f)(x)`, `items[0](x)`, and an uncalled `items.append` are errors. A call has
 exactly one value.
 
@@ -292,7 +296,8 @@ There is no exponentiation or bitwise operator.
 Operands, arguments, and display elements are evaluated left to right, each once,
 and an operand that raises stops evaluation of the rest. Dict displays evaluate each
 key, then its value, entry by entry. Index and field assignments evaluate the
-right-hand side, then the object, then the index.
+right-hand side, then the object, then the index. A slice evaluates the object,
+then the start, then the stop.
 
 ## 6. Numbers
 
@@ -345,12 +350,14 @@ Unlike Python's, the string conversions accept neither whitespace nor underscore
 ### Strings
 
 Strings compare by exact contents, without Unicode normalization. Length, ordering,
-and iteration use code points, as do the indexes `find` returns.
+indexing, slicing, and iteration use code points, as do the indexes `find` returns.
 
 | Expression | Type | Meaning |
 | --- | --- | --- |
 | `a + b` | `str` | Concatenation |
 | `len(s)` | `int` | Number of code points |
+| `s[i]` | `str` | The code point at index `i` |
+| `s[i:j]` | `str` | The code points from index `i` up to `j` |
 | `a < b`, `<=`, `>`, `>=` | `bool` | Lexicographic order by code point |
 | `sub in s` | `bool` | `sub` occurs in `s` |
 | `s.startswith(prefix)` | `bool` | `s` begins with `prefix` |
@@ -359,6 +366,10 @@ and iteration use code points, as do the indexes `find` returns.
 | `s.replace(old, new)` | `str` | Every non-overlapping `old`, left to right, replaced by `new` |
 | `s.strip()` | `str` | `s` without leading and trailing ASCII whitespace |
 | `s.split(sep)` | `list[str]` | Pieces of `s` between occurrences of `sep` |
+| `s.lower()` | `str` | Unicode lowercase text |
+| `s.upper()` | `str` | Unicode uppercase text |
+| `s.ljust(width)` | `str` | `s` padded on the right with spaces to at least `width` code points |
+| `s.rjust(width)` | `str` | `s` padded on the left with spaces to at least `width` code points |
 | `sep.join(items)` | `str` | The `list[str]` items joined with `sep` |
 | `str(value)` | `str` | The text `print` writes for a printable value, without the newline |
 | `ord(c)` | `int` | The code point of the one-code-point string `c` |
@@ -368,8 +379,61 @@ Results match Python's, except that `strip` removes only space, tab, LF, VT, FF,
 and CR. `split` with an empty separator raises `ValueError` with the message
 `empty separator`. `ord` of any other length raises `ValueError` with the message
 `expected one character`. `chr` of a surrogate or a value outside 0 through
-0x10FFFF raises `ValueError` with the message `invalid code point`. Strings have no
-indexing or slicing.
+0x10FFFF raises `ValueError` with the message `invalid code point`. An invalid
+string index raises `IndexError` with the message `string index out of range`.
+Strings cannot be assigned through an index.
+
+Case conversion uses the Unicode 17.0 default full case mappings, including the
+Final_Sigma rule for `Σ`, without locale tailoring or normalization, so a result
+may differ in length from its argument. Widths measure code points, not terminal
+display cells, and a width at most the text's length leaves it unchanged.
+
+String iteration is the idiom for sequential scans; indexing and slicing take time
+proportional to the string's length.
+
+### Indexes and slices
+
+Indexes and slice bounds of strings and lists are integers. A negative index
+counts from the end: the sequence length is added once, and the result must then
+lie within the sequence. A slice `a[start:stop]` includes `start` and excludes
+`stop`. An omitted start means zero and an omitted stop means the length; negative
+bounds count from the end, and bounds are clamped to the sequence. A stop at or
+before the start gives an empty result. A list slice is a new list of the same
+type sharing the original's elements. Slices have no step and cannot be assigned
+to.
+
+```python
+text = "café"
+print(text[-1])       # é
+print(text[1:3])      # af
+items = [10, 20, 30]
+items[-1] = 40
+copy = items[:]
+```
+
+### Format specifications
+
+An f-string field may end in a format specification, `{expression:spec}`. The
+separating colon is the first one outside nested parentheses, brackets, braces,
+and string literals, so `f"{text[1:3]}"` contains a slice and no specification. A
+specification has the form `[alignment][width][.precision][type]`: alignment is
+`<`, `>`, or `^`; width and precision are unsigned decimal integers without leading
+zeros; type is `s`, `d`, or `f`. An empty specification has no effect.
+
+- Without a type, a field formats any printable value as `str` does. Precision
+  requires `f`. `s` requires `str`, `d` requires `int`, and `f` requires `float`;
+  a union must be narrowed first.
+- `f` writes fixed-point notation with six fractional digits by default, rounding
+  to nearest with ties to even; NaN and infinities keep their usual spelling.
+- Padding uses spaces. Alignment defaults to left for strings and right for other
+  values, judged by the value a union holds. Center alignment puts an odd extra
+  space on the right. Width is a minimum length in code points and never truncates.
+- A malformed specification or a mismatched type is a compile-time error. There are
+  no fill characters, grouping, signs, zero padding, or nested fields.
+
+```python
+print(f"{'total':<12s}{12:>6d}{2.5:>10.2f}")
+```
 
 ### Text of printable values
 
@@ -411,8 +475,10 @@ a missing key.
 | `len(xs)` | `int` | Number of elements |
 | `xs[i]` | `T` | Element at index `i` |
 | `xs[i] = v` | | Replace the element at index `i` |
+| `xs[i:j]` | `list[T]` | A new list of the elements from index `i` up to `j` |
 | `xs.append(v)` | `None` | Add `v` at the end |
 | `xs.pop()` | `T` | Remove and return the last element |
+| `xs.sort(reverse)` | `None` | Sort the list in place |
 | `v in xs` | `bool` | Some element equals `v` |
 | `len(d)` | `int` | Number of entries |
 | `d[k]` | `V` | Value for key `k` |
@@ -421,15 +487,22 @@ a missing key.
 | `d.pop(k)` | `V` | Remove the entry for `k` and return its value |
 | `k in d` | `bool` | `k` is a key |
 
-List indexes are zero-based, with `0 <= i < len(xs)`; any other index, including a
-negative one, raises `IndexError` with the message `list index out of range`.
-Lists have no slicing. `pop()` on an empty list raises `IndexError` with the
+List indexes are zero-based and may be negative (§7, Indexes and slices); an index
+outside the list raises `IndexError` with the message `list index out of range`.
+`pop()` on an empty list raises `IndexError` with the
 message `pop from empty list`. `d[k]` and `d.pop(k)` raise `KeyError` with the
 message `key not found` for a missing key. When `V` is already optional, `d.get(k)`
 has type `V`. `v in xs` requires an element type that supports `==`.
 
 Replacing a dictionary value keeps the entry's position; a key removed and inserted
 again moves to the end.
+
+`sorted(xs, reverse)` returns a new sorted list and `xs.sort(reverse)` sorts `xs`
+in place. `reverse` is a `bool`, `False` when omitted, and may be written
+`reverse=value`. The element type must be exactly `int`, `float`, or `str`.
+Sorting is stable in both directions, compares strings by code point, and keeps
+the usual comparisons for infinities and signed zeros. A list containing NaN
+raises `ValueError` with the message `cannot sort NaN` before anything changes.
 
 ## 8. Statements
 
@@ -691,7 +764,7 @@ to read stdin terminate the program with status 1. They cannot be caught.
 | --- | --- |
 | `print(value) -> None` | Write a printable value and `\n` to stdout |
 | `input() -> str \| None` | The next line of stdin without its line ending, or `None` at end of input |
-| `len`, `range`, `int`, `float`, `str`, `ord`, `chr`, `isinstance` | See §4, §6, §7, and §8 |
+| `len`, `range`, `int`, `float`, `str`, `ord`, `chr`, `isinstance`, `sorted` | See §4, §6, §7, and §8 |
 
 The built-in names are these functions and the built-in exception classes.
 
@@ -846,8 +919,8 @@ clauses do not run.
 
 ## Planned application development milestones
 
-Sections 15–24 define accepted targets, in implementation order. They are not yet
-implemented. Sections 1–14 describe the implemented baseline; each planned section
+Sections 16–24 define accepted targets, in implementation order. They are not yet
+implemented. Sections 1–15 describe the implemented baseline; each planned section
 identifies the rules it changes when its milestone lands. Completion and delivery
 examples are tracked in `agents/todo.md`. A planned API is not available merely
 because its signature appears here.
@@ -866,88 +939,7 @@ have only `message: str` and directly extend `Exception`.
 
 ## 15. Text and collection essentials
 
-This milestone amends indexing, strings, lists, built-ins, and f-strings (§2,
-§5, §7, §11). Keyword spelling for the optional `reverse` argument is available
-here for `sorted` and `list.sort` only; general keyword arguments follow in §16.
-These two APIs also accept positional `reverse`, consistently with §16. This is
-an intentional difference from Python's keyword-only sorting option.
-
-### Indexes and slices
-
-Strings and lists support `value[index]` and `value[start:stop]`, with integer
-indexes and bounds. Negative indexes count from the end: add the sequence length
-once, then require an index within the sequence. This deliberately replaces the
-old rejection of negative list indexes, including on list assignment. An invalid
-index raises `IndexError`; string indexing returns a one-code-point string.
-
-Slices include `start` and exclude `stop`. Omitted bounds mean zero and length;
-negative bounds count from the end, and bounds are clamped to the sequence.
-A stop at or before the start produces an empty sequence. A list slice is a new
-list with the same element type, sharing its elements. The receiver, start, and
-stop are evaluated in that order, once each. Step syntax and slice assignment are
-not included. The same rules apply to bytes when §19 lands.
-
-```python
-text = "café"
-print(text[-1])       # é
-print(text[1:3])      # af
-items = [10, 20, 30]
-items[-1] = 40
-copy = items[:]
-```
-
-### Sorting and text operations
-
-`sorted(items: list[T], reverse: bool = False) -> list[T]` returns a new list;
-`items.sort(reverse: bool = False) -> None` sorts the existing list. `T` must be
-exactly `int`, `float`, or `str`. Sorting is stable, including in reverse order;
-strings use code-point ordering. A float list containing NaN raises `ValueError`
-before mutation. Infinities and signed zero use their existing comparison rules.
-There is no key function or record sorting. `sorted` becomes a built-in name.
-
-String operations added here are:
-
-| Method | Result |
-| --- | --- |
-| `s.lower() -> str` | Unicode lowercase text |
-| `s.upper() -> str` | Unicode uppercase text |
-| `s.ljust(width: int) -> str` | Pad on the right with spaces to at least `width` code points |
-| `s.rjust(width: int) -> str` | Pad on the left with spaces to at least `width` code points |
-
-Case conversion uses Unicode 17.0 default full case mappings, including
-context-sensitive rules, without locale tailoring or normalization. A mapping may
-change length. A width smaller than the text's length leaves it unchanged.
-Widths measure code points, not terminal display cells.
-
-### Formatting
-
-An f-string field may end in a literal format specification:
-`{expression:spec}`. The separating colon is the first colon outside nested
-parentheses, brackets, braces, and string literals, so `f"{text[1:3]}"` contains
-a slice and no format specification. The supported grammar is
-`[alignment][width][.precision][type]`: alignment is `<`, `>`, or `^`; width and
-precision are unsigned decimal integers (no leading zeros except zero itself);
-type is `s`, `d`, or `f`.
-
-- No type code formats any printable value as `str` does. Precision requires
-  `f`; `s` requires `str`, `d` requires `int`, and `f` requires `float`. A union
-  must be narrowed for a typed specification.
-- `f` uses fixed-point notation, six fractional digits by default, with rounding
-  to nearest and ties to even; NaN and infinities keep their usual spelling.
-- Padding uses spaces. Default alignment is left for strings and right for other
-  values. Center alignment puts an odd extra space on the right. Width is a
-  minimum code-point length and never truncates a value.
-- Malformed specifications and incompatible static types are compile-time errors.
-  There are no fill characters, grouping, signs, zero padding, nested replacement
-  fields, or `!` conversions.
-
-```python
-print(f"{'total':<12s}{12:>6d}{2.5:>10.2f}")
-```
-
-String iteration remains the idiom for sequential scans. This milestone promises
-no constant-time arbitrary code-point indexing. Its implementation should measure
-representative Unicode scanning before changing the JSON parser's representation.
+This milestone is implemented. Its rules are part of §2, §5, §7, and §11.
 
 ## 16. Readable function and record APIs
 
@@ -1137,7 +1129,7 @@ identifier. It denotes immutable arbitrary octets, distinct from UTF-8 `str`.
 raises `ValueError`. `bytes([])` is the empty value. There are no byte literals.
 
 Supported operations are `len`, same-type `+`, byte-content `==`/`!=`, indexing,
-and slicing under §15. Indexing returns an `int`; `for` iterates byte integers.
+and slicing under §7. Indexing returns an `int`; `for` iterates byte integers.
 `text.encode() -> bytes` encodes UTF-8, and `data.decode() -> str` strictly decodes
 UTF-8, raising `ValueError` on invalid input. No other encodings or replacement
 modes are included.

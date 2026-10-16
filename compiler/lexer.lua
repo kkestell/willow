@@ -149,6 +149,24 @@ function M.lex(source, path)
 
   local lex_token
 
+  -- Reads the format specification `text` after the colon at `colon`:
+  -- [alignment][width][.precision][type].
+  local function read_spec(colon, text)
+    local align, width, dot, precision, kind = text:match("^([<>^]?)(%d*)(%.?)(%d*)([sdf]?)$")
+    if not align or dot == "." and precision == "" or width:match("^0%d") or precision:match("^0%d") then
+      fail(colon, "invalid format specification '" .. text .. "'")
+    end
+    if dot == "." and kind ~= "f" then
+      fail(colon, "format precision requires type 'f'")
+    end
+    return {
+      align = align ~= "" and align or nil,
+      width = tonumber(width),
+      precision = tonumber(precision),
+      type = kind ~= "" and kind or nil,
+    }
+  end
+
   -- Reads the f-string field whose `{` is at `open`, up to byte `last`, for an
   -- f-string quoted with `quote`. Returns the position after its `}` and its
   -- tokens, which end with a FIELD_END token at the `}`.
@@ -193,21 +211,30 @@ function M.lex(source, path)
         end
         nesting = nesting - 1
       elseif nesting == 0 and c == ":" then
-        fail(pos, "format specifications are not supported")
+        break
       elseif nesting == 0 and c == "!" and source:sub(pos + 1, pos + 1) ~= "=" then
         fail(pos, "conversions are not supported")
       end
       pos = pos + 1
     end
-    local close = pos
+    local close, spec = pos, nil
+    if source:sub(pos, pos) == ":" then
+      close = source:find("}", pos + 1, true)
+      if not close or close > last then
+        line, line_start = open_line, open_line_start
+        fail(open, "unterminated f-string field")
+      end
+      spec = read_spec(pos, source:sub(pos + 1, close - 1))
+    end
+    local stop = pos
     line, line_start = open_line, open_line_start
-    if source:sub(open + 1, close - 1):match("^[ \r\n]*$") then
+    if source:sub(open + 1, stop - 1):match("^[ \r\n]*$") then
       fail(open, "empty f-string field")
     end
     local outer = tokens
     tokens = {}
     pos = open + 1
-    while pos < close do
+    while pos < stop do
       local c = source:sub(pos, pos)
       if c == "\n" then
         line, line_start = line + 1, pos + 1
@@ -215,11 +242,12 @@ function M.lex(source, path)
       elseif c == "\r" then
         pos = pos + 1
       else
-        pos = lex_token(pos, close - 1)
+        pos = lex_token(pos, stop - 1)
       end
     end
-    add("FIELD_END", close, close)
+    add("FIELD_END", stop, stop)
     local field = tokens
+    field.spec = spec
     tokens = outer
     return close + 1, field
   end

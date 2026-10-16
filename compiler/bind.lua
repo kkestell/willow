@@ -15,6 +15,7 @@ local builtins = {
   ord = { kind = "Builtin", name = "ord" },
   chr = { kind = "Builtin", name = "chr" },
   isinstance = { kind = "Builtin", name = "isinstance" },
+  sorted = { kind = "Builtin", name = "sorted" },
 }
 
 -- The compiler-provided modules. They have no source: their declarations are
@@ -284,6 +285,16 @@ local function resolve_function(fn, scope, module)
     elseif kind == "Index" then
       resolve_expression(node.object)
       resolve_expression(node.index)
+    elseif kind == "Slice" then
+      resolve_expression(node.object)
+      if node.start then
+        resolve_expression(node.start)
+      end
+      if node.stop then
+        resolve_expression(node.stop)
+      end
+    elseif kind == "Keyword" then
+      resolve_expression(node.value)
     elseif kind == "Field" then
       resolve_expression(node.object)
     elseif kind == "FString" then

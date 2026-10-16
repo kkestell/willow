@@ -135,8 +135,18 @@ function M.parse(tokens)
     return items
   end
 
+  -- An argument is an expression or a `Keyword` node for `name=expression`.
+  local function parse_arg()
+    if peek().kind == "NAME" and tokens[pos + 1].kind == "=" then
+      local name = advance()
+      advance()
+      return ast.node("Keyword", name.span, { name = name.value, value = parse_expression() })
+    end
+    return parse_expression()
+  end
+
   local function parse_args()
-    return parse_list(")", parse_expression)
+    return parse_list(")", parse_arg)
   end
 
   local function parse_entry()
@@ -157,20 +167,21 @@ function M.parse(tokens)
       node = ast.node("Float", token.span, { value = token.value })
     elseif kind == "FSTRING" then
       advance()
-      local parts = {}
+      local parts, specs = {}, {}
       for _, part in ipairs(token.value) do
         if type(part) == "table" then
           -- Each field is its own token list ending in FIELD_END.
           local outer_tokens, outer_pos = tokens, pos
           tokens, pos = part, 1
           parts[#parts + 1] = parse_expression()
+          specs[#parts] = part.spec
           expect("FIELD_END", "'}'")
           tokens, pos = outer_tokens, outer_pos
         elseif part ~= "" then
           parts[#parts + 1] = ast.node("String", token.span, { value = part })
         end
       end
-      node = ast.node("FString", token.span, { parts = parts })
+      node = ast.node("FString", token.span, { parts = parts, specs = specs })
     elseif kind == "True" or kind == "False" then
       advance()
       node = ast.node("Bool", token.span, { value = kind == "True" })
@@ -229,7 +240,21 @@ function M.parse(tokens)
       local token = peek()
       if token.kind == "[" then
         advance()
-        node = ast.node("Index", token.span, { object = node, index = parse_expression() })
+        local start, stop
+        if peek().kind ~= ":" then
+          start = parse_expression()
+        end
+        if accept(":") then
+          if peek().kind ~= "]" and peek().kind ~= ":" then
+            stop = parse_expression()
+          end
+          if peek().kind == ":" then
+            diag.error(peek().span, "slice steps are not supported")
+          end
+          node = ast.node("Slice", token.span, { object = node, start = start, stop = stop })
+        else
+          node = ast.node("Index", token.span, { object = node, index = start })
+        end
         expect("]")
       elseif token.kind == "." then
         advance()

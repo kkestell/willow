@@ -196,15 +196,15 @@ a runnable example, concise API/usage documentation, and `make test` before code
 delivery. As milestones land, fold their definitions into the baseline spec,
 remove obsolete amendment wording, and update implementation status.
 
-- [ ] Text and collection essentials (spec §15)
-  - [ ] String indexing and contiguous string/list slicing; deliberately replace
+- [x] Text and collection essentials (spec §15)
+  - [x] String indexing and contiguous string/list slicing; deliberately replace
     negative-list-index rejection with the common negative-index rule
-  - [ ] Stable scalar sorting, Unicode 17.0 case conversion, space justification,
+  - [x] Stable scalar sorting, Unicode 17.0 case conversion, space justification,
     and the specified f-string format subset; sorting-only named `reverse`
     arguments before general keyword calls land
-  - [ ] Verify boundaries, alias-preserving list copies, sorting failures before
+  - [x] Verify boundaries, alias-preserving list copies, sorting failures before
     mutation, formatting types, and representative Unicode behavior
-  - [ ] Deliver a sorted, aligned log-summary or word-frequency report; measure
+  - [x] Deliver a sorted, aligned log-summary or word-frequency report; measure
     sequential Unicode scanning before changing the JSON scanner
 
 - [ ] Readable function and record APIs (spec §16)

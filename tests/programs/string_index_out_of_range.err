@@ -1,0 +1,2 @@
+string_index_out_of_range.wlo:3:12: error: IndexError: string index out of range
+  in main at string_index_out_of_range.wlo:3:12
