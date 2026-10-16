@@ -1,7 +1,8 @@
 # TODO
 
-Milestones and tasks for implementing the slices described in `willow.md`.
-Section numbers refer to that document.
+Completed slices record the implementation history. Older section numbers refer
+to the specification at the time. New milestones reference `docs/spec.md`, which
+owns language and library semantics.
 
 ## First slice
 
@@ -186,3 +187,99 @@ Section numbers refer to that document.
   - [x] Runtime: `sys.args()` returning a new list of the arguments on each call and raising `ValueError` `invalid UTF-8` for a malformed argument; no validation before `main` runs; existing helpers reused for the moved functions
   - [x] Update `examples/number.wlo` and the existing tests to the new names
   - [x] Tests: each moved function under its module name, the old built-in names now free for user declarations, `main(args)` rejected, `sys.args()` through `run`, compiled, and built output, a malformed argument raising from `sys.args()`, `sys.exit` as a transfer, shadowing `sys` with a local module; the §14 `sys` example
+
+## Application development milestones
+
+Implement these ten milestones in order. Sections 15–24 of `docs/spec.md` define
+accepted, unimplemented behavior. Each milestone includes focused behavior tests,
+a runnable example, concise API/usage documentation, and `make test` before code
+delivery. As milestones land, fold their definitions into the baseline spec,
+remove obsolete amendment wording, and update implementation status.
+
+- [ ] Text and collection essentials (spec §15)
+  - [ ] String indexing and contiguous string/list slicing; deliberately replace
+    negative-list-index rejection with the common negative-index rule
+  - [ ] Stable scalar sorting, Unicode 17.0 case conversion, space justification,
+    and the specified f-string format subset; sorting-only named `reverse`
+    arguments before general keyword calls land
+  - [ ] Verify boundaries, alias-preserving list copies, sorting failures before
+    mutation, formatting types, and representative Unicode behavior
+  - [ ] Deliver a sorted, aligned log-summary or word-frequency report; measure
+    sequential Unicode scanning before changing the JSON scanner
+
+- [ ] Readable function and record APIs (spec §16)
+  - [ ] Trailing immutable literal defaults and named arguments for functions,
+    records, and the specified library signatures
+  - [ ] Check default types and missing, duplicate, unknown, or misplaced
+    arguments; preserve written argument evaluation order
+  - [ ] Deliver a configurable application using a typed options record without
+    positional boilerplate
+
+- [ ] Application tests and editor basics (spec §17)
+  - [ ] Assertions with lazy messages, useful locations, and successful-condition
+    narrowing
+  - [ ] `willow test` discovery, checking before execution, process isolation,
+    deterministic reports, `--check`, and detection of explicit exits as failures
+  - [ ] Basic `.wlo` syntax highlighting, four-space indentation, and editor
+    check tasks for program entries/projects and test files
+  - [ ] Deliver passing and deliberately failing tests for a multi-module app;
+    keep standalone test files alongside imported modules until project roots land
+
+- [ ] Filesystem, environment, and time (spec §18)
+  - [ ] Native nominal types and built-in methods without user-defined methods or
+    public FFI; common error and resource lifetime conventions
+  - [ ] Filesystem/path operations, typed metadata, environment lookup/snapshots,
+    working directory, clocks, sleep, and UTC formatting
+  - [ ] Deliver an environment-configured directory inventory with elapsed time
+    on macOS and Linux
+
+- [ ] Bytes and streaming I/O (spec §19)
+  - [ ] Bytes typing, construction, sequence operations, equality, iteration, and
+    strict UTF-8 conversions without implicit printing or decoding
+  - [ ] File and standard-stream handles, byte/text operations, close/flush, and
+    deterministic cleanup through `try/finally`
+  - [ ] Cover shared buffering with existing `input`/`print`, EOF versus empty
+    lines, invalid UTF-8, closed resources, and ordinary broken-pipe behavior
+  - [ ] Deliver a bounded-chunk binary copier and a JSONL filter that retains only
+    the current record
+
+- [ ] Subprocess execution and control (spec §20)
+  - [ ] Shell-free run/capture, cwd/environment, statuses, timeout and reaping;
+    drain input and both output pipes without deadlock
+  - [ ] Spawn with inherited/file stdio and poll/wait/terminate/kill; implement
+    the specified shared-buffer and child-descriptor rules
+  - [ ] Deliver a command wrapper handling literal arguments, binary output,
+    nonzero status, timeout, and background-helper cleanup
+
+- [ ] Friendly command-line and terminal tools (spec §21)
+  - [ ] Typed parser declarations/accessors, options/positionals, generated help,
+    and separate usage/help/programming errors
+  - [ ] TTY detection, explicit color policy, styling, progress, and finish;
+    preserve clean stdout when output is redirected
+  - [ ] Deliver a report CLI with help, typed options, terminal presentation, and
+    clean piped output
+
+- [ ] HTTP and HTTPS clients (spec §22)
+  - [ ] Prove a maintained backend's dependency/certificate behavior for run,
+    compiled Lua, and standalone build on macOS/Linux before adopting it;
+    resolve any deployment-contract change explicitly
+  - [ ] Requests/responses, headers, query encoding, redirects, verified TLS,
+    inactivity timeout, and atomic streamed downloads
+  - [ ] Deliver a JSON API client and binary downloader with local integration
+    tests for HTTP failures, transport failures, redirects, and destination safety
+
+- [ ] TCP clients and simple services (spec §23)
+  - [ ] Blocking TCP connections/listeners, native methods, operation timeouts,
+    EOF, partial I/O, and resource/error behavior
+  - [ ] Deliver a sequential line/JSON client and server sharing framing code;
+    handle split UTF-8 sequences before decoding complete messages
+  - [ ] Exercise the pair through `willow test`, with subprocess startup, an
+    ephemeral port, and deterministic child cleanup
+
+- [ ] Small projects and reusable modules (spec §24)
+  - [ ] Qualified imports, namespace conflicts, explicit source/dependency roots,
+    module identity, and missing/ambiguous-module diagnostics
+  - [ ] Minimal `willow.json`, project command forms, recursive project tests,
+    and preservation of explicit-file workflows
+  - [ ] Deliver a multi-module network/CLI application using a local dependency,
+    with a documented clean-checkout-to-distributed-executable workflow

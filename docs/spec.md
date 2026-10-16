@@ -4,6 +4,9 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
+The next ten milestones and their implementation status are described under
+[planned application development milestones](#planned-application-development-milestones).
+
 ## 1. Programs
 
 ```python
@@ -840,3 +843,785 @@ valid UTF-8.
 `exit` takes a status from 0 through 255 and otherwise raises `ValueError` with the
 message `exit status out of range`. It ends the program at once; pending `finally`
 clauses do not run.
+
+## Planned application development milestones
+
+Sections 15–24 define accepted targets, in implementation order. They are not yet
+implemented. Sections 1–14 describe the implemented baseline; each planned section
+identifies the rules it changes when its milestone lands. Completion and delivery
+examples are tracked in `agents/todo.md`. A planned API is not available merely
+because its signature appears here.
+
+Prefer Python's familiar spelling and behavior where they fit Willow's static
+types and small scope. Keep differences explicit. These milestones retain strict
+boolean conditions, explicit numeric conversions, declaration-only modules, and
+functions that are not values. They introduce neither general inheritance nor
+user-defined protocols, callbacks, async execution, or a package registry.
+
+Library signatures below describe the public contract. `T` in a signature is
+explanatory notation for an existing element type, not user-defined generics.
+`= value` denotes an optional argument. Module functions are called with the module
+prefix. Unless specified otherwise, result records follow §3, and new exceptions
+have only `message: str` and directly extend `Exception`.
+
+## 15. Text and collection essentials
+
+This milestone amends indexing, strings, lists, built-ins, and f-strings (§2,
+§5, §7, §11). Keyword spelling for the optional `reverse` argument is available
+here for `sorted` and `list.sort` only; general keyword arguments follow in §16.
+These two APIs also accept positional `reverse`, consistently with §16. This is
+an intentional difference from Python's keyword-only sorting option.
+
+### Indexes and slices
+
+Strings and lists support `value[index]` and `value[start:stop]`, with integer
+indexes and bounds. Negative indexes count from the end: add the sequence length
+once, then require an index within the sequence. This deliberately replaces the
+old rejection of negative list indexes, including on list assignment. An invalid
+index raises `IndexError`; string indexing returns a one-code-point string.
+
+Slices include `start` and exclude `stop`. Omitted bounds mean zero and length;
+negative bounds count from the end, and bounds are clamped to the sequence.
+A stop at or before the start produces an empty sequence. A list slice is a new
+list with the same element type, sharing its elements. The receiver, start, and
+stop are evaluated in that order, once each. Step syntax and slice assignment are
+not included. The same rules apply to bytes when §19 lands.
+
+```python
+text = "café"
+print(text[-1])       # é
+print(text[1:3])      # af
+items = [10, 20, 30]
+items[-1] = 40
+copy = items[:]
+```
+
+### Sorting and text operations
+
+`sorted(items: list[T], reverse: bool = False) -> list[T]` returns a new list;
+`items.sort(reverse: bool = False) -> None` sorts the existing list. `T` must be
+exactly `int`, `float`, or `str`. Sorting is stable, including in reverse order;
+strings use code-point ordering. A float list containing NaN raises `ValueError`
+before mutation. Infinities and signed zero use their existing comparison rules.
+There is no key function or record sorting. `sorted` becomes a built-in name.
+
+String operations added here are:
+
+| Method | Result |
+| --- | --- |
+| `s.lower() -> str` | Unicode lowercase text |
+| `s.upper() -> str` | Unicode uppercase text |
+| `s.ljust(width: int) -> str` | Pad on the right with spaces to at least `width` code points |
+| `s.rjust(width: int) -> str` | Pad on the left with spaces to at least `width` code points |
+
+Case conversion uses Unicode 17.0 default full case mappings, including
+context-sensitive rules, without locale tailoring or normalization. A mapping may
+change length. A width smaller than the text's length leaves it unchanged.
+Widths measure code points, not terminal display cells.
+
+### Formatting
+
+An f-string field may end in a literal format specification:
+`{expression:spec}`. The separating colon is the first colon outside nested
+parentheses, brackets, braces, and string literals, so `f"{text[1:3]}"` contains
+a slice and no format specification. The supported grammar is
+`[alignment][width][.precision][type]`: alignment is `<`, `>`, or `^`; width and
+precision are unsigned decimal integers (no leading zeros except zero itself);
+type is `s`, `d`, or `f`.
+
+- No type code formats any printable value as `str` does. Precision requires
+  `f`; `s` requires `str`, `d` requires `int`, and `f` requires `float`. A union
+  must be narrowed for a typed specification.
+- `f` uses fixed-point notation, six fractional digits by default, with rounding
+  to nearest and ties to even; NaN and infinities keep their usual spelling.
+- Padding uses spaces. Default alignment is left for strings and right for other
+  values. Center alignment puts an odd extra space on the right. Width is a
+  minimum code-point length and never truncates a value.
+- Malformed specifications and incompatible static types are compile-time errors.
+  There are no fill characters, grouping, signs, zero padding, nested replacement
+  fields, or `!` conversions.
+
+```python
+print(f"{'total':<12s}{12:>6d}{2.5:>10.2f}")
+```
+
+String iteration remains the idiom for sequential scans. This milestone promises
+no constant-time arbitrary code-point indexing. Its implementation should measure
+representative Unicode scanning before changing the JSON parser's representation.
+
+## 16. Readable function and record APIs
+
+This milestone replaces exact positional arity in §3 and §5 with named arguments
+and trailing defaults.
+
+```python
+class Options:
+    output: str = "-"
+    verbose: bool = False
+
+def greet(name: str, prefix: str = "Hello") -> str:
+    return prefix + ", " + name
+
+def main() -> None:
+    options = Options(verbose=True)
+    print(greet(prefix="Welcome", name="Ada"))
+```
+
+A parameter or record field may have a default after its annotation. Defaults are
+`None`, booleans, string literals, and integer or float literals optionally preceded
+by unary `+` or `-`. F-strings, names, calls, collections, and other expressions
+are not defaults. The default must be assignable to the declared type. A required
+parameter or field cannot follow a defaulted one. Exception records inherit the
+required `message` field before their own fields.
+
+Calls may pass positional arguments followed by `name=expression` arguments.
+Positional arguments fill parameters in declaration order; keywords name the
+remaining parameters. Duplicate values, unknown keywords, missing required values,
+and positional arguments after keywords are compile-time errors. Supplied argument
+expressions are evaluated once in their written order, even when keywords are
+out of declaration order. Omitted arguments use their literal defaults.
+
+Constructors follow the same rules using field names. Function identity and
+signature matching are unchanged: defaults do not create overloads, and functions
+remain non-values. There are no variadic parameters, argument unpacking,
+positional-only markers, or keyword-only markers.
+
+Fixed-signature library functions and methods accept keywords using the parameter
+names in this specification. Existing built-ins and methods whose parameters are
+not given typed names in §§6–11 remain positional-only; in particular the overloaded
+`range`, conversions, `len`, `isinstance`, `print`, and `input` are positional-only.
+No existing positional call becomes invalid.
+
+## 17. Application tests and editor basics
+
+### Assertions
+
+`assert condition` and `assert condition, message` are statements. The condition
+must be `bool`; the optional message must be `str`. The condition is evaluated
+once; a false condition evaluates the message and raises the new built-in
+`AssertionError`, using `assertion failed` when no message is supplied. Assertions
+are always enabled. A true condition does not evaluate the message.
+
+After an assertion, narrowing follows the condition's true facts (§9). The checker
+checks the message under the condition's false facts. An assertion is not a
+structural control transfer, including `assert False`. Assertions do not establish definite assignment.
+
+### Test command
+
+`willow test [path]` accepts a file or directory, defaulting to `.`. In directory
+mode it discovers immediate files named `test_*.wlo`; an explicit file need not
+have that name. Each discovered file is a test entry module. Its public top-level
+functions named `test_*` must have no parameters and return `None`. Other functions
+are helpers. Tests do not require or invoke `main`.
+
+All discovered test modules and their imports are checked before any test runs.
+Discovery and execution order are by relative file path, then function name.
+Each test function runs in a fresh process with no program arguments, empty stdin,
+and the invoking working directory; imports use the test file's directory until
+project roots are introduced in §24. A normal return passes. An escaping exception
+or abnormal process termination fails. Explicit `sys.exit`, even with status zero,
+fails because the test did not return normally. Failures do not skip later tests.
+
+The runner captures each test's output, shows it for failures with Willow locations
+and frames, and prints a pass/fail summary. It returns zero only if at least one
+test ran and all passed; usage, checking, discovery, and test failures return one.
+Tests share the external filesystem and environment; process isolation does not
+provide fixtures or roll back external effects.
+
+`willow test --check [path]` performs the same discovery and static validation
+without running any tests. It returns zero for a valid, nonempty test suite and
+one for errors or no tests. `willow run` and `willow test` expose `WILLOW` in the
+program environment as the absolute installed launcher path, replacing any
+inherited value. Tests can use it to start Willow helpers without relying on
+`PATH`. Compiled and built applications do not inject this development variable.
+
+Basic syntax highlighting and four-space indentation are delivery requirements
+tracked in the milestone. The editor check task checks a program entry (or a
+project once §24 lands); test files use `willow test --check`. Arbitrary library
+modules are checked through an entry that imports them, not as standalone apps.
+These features do not require a language server.
+
+## 18. Filesystem, environment, and time
+
+This milestone extends §14 with filesystem and host operations. Paths are UTF-8
+strings, interpreted relative to the process working directory unless absolute.
+NUL in a path, argument, or environment string raises `ValueError`. Host operation
+failures raise `OSError` with the operation, relevant path, and host reason.
+Returned text must be UTF-8; unrepresentable host names or values raise
+`ValueError` rather than being silently replaced.
+
+### Native types and common conventions
+
+Library modules may export nominal native types with built-in methods. They are
+not user records: only documented factory functions create them, and they expose
+only documented fields and methods. They support annotations, aliases, unions,
+`isinstance`, and passing/storing values, but not equality, printing, inheritance,
+or user-defined methods. References to a value share its resource and state.
+
+A native resource's `close()` is idempotent and invalidates all its aliases.
+Other operations on a closed resource raise `ValueError`. Use `try/finally` for
+cleanup; garbage collection is not a cleanup guarantee. Close failure still
+invalidates the handle and raises `OSError`. There is no general context-manager
+protocol or public FFI.
+
+Invalid options and values raise `ValueError`; expired waits raise the new
+built-in `TimeoutError`. Unless an API says otherwise, a timeout is a finite,
+strictly positive float in seconds, and `None` means no limit. All elapsed-time
+limits use a monotonic clock. These additions do not introduce exception
+subclassing beyond §10: `TimeoutError` directly extends `Exception`.
+
+### `fs`
+
+| Function | Meaning |
+| --- | --- |
+| `join(a: str, b: str) -> str` | Join POSIX path components; absolute `b` replaces `a` |
+| `basename(path: str) -> str` | Text after the final slash; empty for a trailing slash |
+| `dirname(path: str) -> str` | Directory portion, or empty when there is none |
+| `listdir(path: str) -> list[str]` | Entry names, excluding `.` and `..`, sorted by code point |
+| `stat(path: str, follow_symlinks: bool = True) -> Stat` | File metadata |
+| `exists(path: str) -> bool` | Whether the followed path exists |
+| `mkdir(path: str, parents: bool = False, exist_ok: bool = False) -> None` | Create a directory |
+| `remove(path: str) -> None` | Remove a file or symlink, not a directory |
+| `rmdir(path: str) -> None` | Remove an empty directory |
+| `rename(source: str, destination: str) -> None` | Rename with POSIX replacement rules |
+
+The path helpers are lexical: they do not access the filesystem, resolve symlinks,
+or collapse `..`. They follow Python's POSIX path behavior for their supported
+arguments. An empty first part in `join` contributes no separator; an empty second
+part preserves a trailing separator. There is no implicit home or environment
+expansion.
+
+`Stat` is an ordinary record with fields `kind: str`, `size: int`, and
+`modified: float`. Kind is `file`, `directory`, `symlink`, or `other`; size is the
+host's byte size and modified is seconds since the Unix epoch. With symlink
+following enabled, metadata describes the target. An unrepresentable integer size
+raises `OverflowError`.
+
+`exists` returns false only for a missing path or missing/non-directory component,
+including a dangling symlink. Other failures, such as denied access, raise
+`OSError`; unlike Python's path-existence predicate, these failures are not
+converted to false. `mkdir` with `parents=True` creates missing parents; `exist_ok=True`
+accepts an existing directory, never a file. Permissions use the host's ordinary
+creation defaults and umask. `rename` replaces an existing destination when POSIX
+permits it; it does not emulate cross-filesystem moves. Recursive deletion,
+globbing, file watching, and permission-management APIs are outside this slice.
+
+### `sys` and `time`
+
+`sys.getenv(name: str) -> str | None` returns an environment value or `None`.
+`sys.environ() -> dict[str, str]` returns a fresh environment snapshot, so callers
+can modify it before passing it to a subprocess. Mutating the snapshot does not
+change the current process environment. Empty names or names containing `=` or
+NUL are invalid. `sys.getcwd() -> str` returns the absolute working directory.
+
+The new `time` module exports:
+
+| Function | Meaning |
+| --- | --- |
+| `time() -> float` | Seconds since the Unix epoch |
+| `monotonic() -> float` | Monotonic seconds from an unspecified origin |
+| `sleep(seconds: float) -> None` | Wait for at least the finite, nonnegative duration |
+| `utc(timestamp: float) -> str` | UTC timestamp as `YYYY-MM-DDTHH:MM:SSZ` |
+
+`utc` floors to whole seconds, supports years 0001–9999, and raises `ValueError`
+for non-finite or unsupported timestamps. There are no timezone objects, locale
+formatting, or date arithmetic in this milestone.
+
+## 19. Bytes and streaming I/O
+
+### Bytes
+
+`bytes` becomes a reserved type name, intentionally making it unavailable as an
+identifier. It denotes immutable arbitrary octets, distinct from UTF-8 `str`.
+`bytes(values: list[int]) -> bytes` copies integers in 0–255; an invalid integer
+raises `ValueError`. `bytes([])` is the empty value. There are no byte literals.
+
+Supported operations are `len`, same-type `+`, byte-content `==`/`!=`, indexing,
+and slicing under §15. Indexing returns an `int`; `for` iterates byte integers.
+`text.encode() -> bytes` encodes UTF-8, and `data.decode() -> str` strictly decodes
+UTF-8, raising `ValueError` on invalid input. No other encodings or replacement
+modes are included.
+
+Bytes can appear in unions and `isinstance(value, bytes)`. Equality's §5 type rule
+extends from printable types to unions of printable members and bytes; values of
+different member types remain unequal. Bytes are not printable, usable in
+f-strings, ordered, or dictionary keys. `str(data)` is not an implicit decoding
+operation. Bytes have value semantics; no writable buffer is exposed.
+
+### `io`
+
+`io.open(path: str, mode: str = "r") -> io.File` opens a stream. Modes are `r`
+(read an existing file), `w` (create or truncate), and `a` (create or append).
+There are no combined modes, seeking, encoding flags, or binary/text mode split.
+All streams carry bytes; text convenience operations explicitly use UTF-8.
+
+`io.stdin()`, `io.stdout()`, and `io.stderr()` return `io.File` handles borrowing
+the process standard streams. Closing a borrowed handle raises `ValueError`.
+Their access modes are read, write, and write, respectively.
+
+| `io.File` method | Meaning |
+| --- | --- |
+| `read(size: int) -> bytes` | Read up to positive `size` bytes; empty only at EOF |
+| `readline() -> str \| None` | Read one UTF-8 line, or `None` at EOF |
+| `write(data: bytes) -> None` | Write all bytes, or raise |
+| `write_text(text: str) -> None` | Write its UTF-8 bytes, without adding a newline |
+| `flush() -> None` | Flush pending writes |
+| `close() -> None` | Flush and release an owned file |
+
+`readline` follows `input`: remove LF and a CR immediately before it; return a
+final unterminated line; an empty line is `""`, distinct from EOF. It consumes the
+line even if decoding fails. This is a deliberate difference from Python's
+`readline`, chosen to match Willow's existing line-input convention. Other reads
+and writes do no newline translation. Mixing byte reads with line reads uses the
+same stream position; reading part of a UTF-8 code point may make the subsequent
+text read invalid.
+
+Reads may be short. Writes either complete or raise, although a failed write may
+have written a prefix. Wrong-mode operations and nonpositive read sizes raise
+`ValueError`. File and stream operation failures raise `OSError`.
+
+There is one shared buffering state per stream: `input`, `print`, `sys.eprint`,
+and these borrowed handles preserve output ordering and never lose each other's
+buffered input. Normal return from `main`, an escaping exception, and valid
+`sys.exit` all flush shared stdout and stderr before termination. A flush failure
+is uncatchable and sets exit status one. This amends §14's immediate-exit wording
+without running pending `finally` clauses or guaranteeing cleanup of unclosed
+owned files. Existing convenience functions retain §10's uncatchable standard
+stream failure behavior; explicit `io.File` operations are catchable. Broken pipes
+must follow these error rules rather than terminate the program by signal.
+
+```python
+import io
+
+def main() -> None:
+    source = io.open("input.bin")
+    try:
+        target = io.open("output.bin", mode="w")
+        try:
+            while True:
+                chunk = source.read(65536)
+                if len(chunk) == 0:
+                    break
+                target.write(chunk)
+        finally:
+            target.close()
+    finally:
+        source.close()
+```
+
+## 20. Subprocess execution and control
+
+The `subprocess` module executes argument lists directly, never through a shell.
+Arguments and environment values are UTF-8 and cannot contain NUL. Arguments must
+contain a nonempty executable name. Names with a slash are paths; other names use
+the child's `PATH`, or `/usr/bin:/bin` when it is absent. Launch failures raise
+`OSError`, not a returned exit status.
+
+```text
+run(args: list[str], input: bytes | None = None,
+    capture_output: bool = False, cwd: str | None = None,
+    env: dict[str, str] | None = None,
+    timeout: float | None = None) -> Result
+
+spawn(args: list[str], cwd: str | None = None,
+      env: dict[str, str] | None = None,
+      stdin: io.File | None = None, stdout: io.File | None = None,
+      stderr: io.File | None = None) -> Process
+```
+
+`cwd=None` inherits the working directory. `env=None` inherits the environment;
+a provided dictionary replaces it. `sys.environ()` is the way to inherit and
+change selected values. Calls snapshot arguments and environment. Child changes
+do not change the parent's environment or working directory.
+
+### Running a command
+
+`Result` has fields `returncode: int`, `stdout: bytes | None`, and
+`stderr: bytes | None`. Nonzero exit codes are ordinary results; a signal exit is
+the negative signal number. With `capture_output=True`, both output streams are
+captured as bytes, including empty bytes, and drained concurrently with supplying
+input so pipe capacity cannot deadlock the child. Otherwise they are inherited
+and both result fields are `None`.
+
+With `input=None`, stdin is inherited. Otherwise the supplied bytes are sent and
+stdin is closed; an empty value supplies immediate EOF. A child that closes input
+early is allowed to finish, and its result is returned without raising a
+broken-pipe error for the unused input. Callers decode captured text explicitly.
+Capture stores output in memory; use `spawn` and file redirection for large output.
+
+The timeout bounds communication and waiting after successful process creation.
+Expiry kills and reaps the direct child, then raises `TimeoutError`; it does not
+promise to kill descendants or return partial captures. Pipe cleanup must not wait
+indefinitely for descendants that inherited descriptors. Process creation itself
+is not promised interruptible.
+
+### Child lifecycle
+
+`spawn` returns a native `Process`. A `None` stream inherits that standard stream;
+a supplied file must be open with the appropriate access mode. Passing buffered
+input with unread prefetched bytes is rejected with `ValueError`, since an OS
+child cannot consume the parent's buffer. The child receives its own descriptor
+references; the parent retains ownership of its files. The API exposes no live
+child pipe handles.
+
+| `Process` method | Meaning |
+| --- | --- |
+| `poll() -> int \| None` | Collect an exit status if ready, otherwise return `None` |
+| `wait(timeout: float \| None = None) -> int` | Wait for and collect exit status |
+| `terminate() -> None` | Send SIGTERM to the running direct child |
+| `kill() -> None` | Send SIGKILL to the running direct child |
+
+Collected statuses are cached; repeated `poll` and `wait` agree. Signals to an
+already collected child do nothing. A `wait` timeout leaves the child alive;
+callers must explicitly stop it if needed and eventually call `wait` to reap it.
+There is no `Process.close()` and no automatic termination at garbage collection.
+
+Before launching either kind of child, flush parent stdout/stderr and supplied
+writable files. Failure prevents launch and raises `OSError`. Implicitly inherited
+stdin uses the underlying descriptor, as in Python: unread bytes already prefetched by the
+parent stay in its buffer and are not passed to the child. This does not cause a
+launch error; callers that need those bytes must supply explicit `input` instead.
+The unread-buffer rejection applies only to explicitly supplied `stdin` handles.
+Children start with the ordinary POSIX
+SIGPIPE disposition even if Willow suppresses it for its own checked writes.
+
+```python
+import subprocess
+
+def main() -> None:
+    result = subprocess.run(["printf", "%s", "hello"], capture_output=True)
+    output = result.stdout
+    if output is not None:
+        print(output.decode())
+```
+
+## 21. Command-line and terminal tools
+
+### `cli`
+
+`cli.parser(prog: str, description: str = "") -> cli.Parser` creates a native
+argument parser. Its schema is explicit; it does not inspect user records or
+require callbacks. Typed option defaults are required, making getters nonoptional.
+
+```text
+Parser.add_str(name: str, default: str, help: str = "",
+               short: str | None = None, required: bool = False) -> None
+Parser.add_int(name: str, default: int, help: str = "",
+               short: str | None = None, required: bool = False) -> None
+Parser.add_float(name: str, default: float, help: str = "",
+                 short: str | None = None, required: bool = False) -> None
+Parser.add_flag(name: str, help: str = "", short: str | None = None) -> None
+Parser.add_positional(name: str, help: str = "") -> None
+Parser.add_rest(name: str, help: str = "") -> None
+Parser.parse(args: list[str]) -> Args
+Parser.help() -> str
+
+Args.get_str(name: str) -> str
+Args.get_int(name: str) -> int
+Args.get_float(name: str) -> float
+Args.get_bool(name: str) -> bool
+Args.get_list(name: str) -> list[str]
+```
+
+An option name contains ASCII letters, digits, and single interior hyphens,
+begins with a letter, and denotes `--name`. A short spelling, when present, is
+one ASCII letter without a dash and denotes `-x`. Names and spellings must be
+unique; `--help` and `-h` are reserved. Getter names are the registered names.
+Positionals use the same naming rules and share the name namespace.
+
+Options accept `--name value`, `--name=value`, or `-x value`. Flags take no value
+and default to false. Repeated value options use the last value; repeated flags
+remain true. `--` ends option processing. There is no abbreviation, short-option
+bundling, subcommand system, environment lookup, or response-file expansion.
+A value-taking option consumes the next argument even if it starts with `-`;
+for signed numeric positionals use `--` when needed. Options may appear among
+positionals. Fixed positionals are required strings. At most one `add_rest`
+collects zero or more remaining positionals into `list[str]`, and it must follow
+all fixed positionals.
+
+Integer and float values use §6's conversions. `required=True` requires an
+explicit occurrence even though the schema supplies a typed default. A missing
+value, unknown option, conversion failure, or wrong positional count raises
+`cli.UsageError` with a useful message. Encountering help in option position
+raises `cli.HelpRequested`, whose message is the generated help. Both are exception
+classes; neither prints nor exits. Applications handle them with statuses 2 and 0
+respectively. Help includes usage, description, declared options/positionals,
+required markers, and defaults in declaration order, with a trailing newline.
+
+Invalid schemas and wrong getter names or types raise `ValueError`, not
+`UsageError`. Parse results are independent snapshots; `get_list` returns a copy.
+User code may construct its own options record from the typed getters.
+
+```python
+import cli
+import io
+import sys
+
+def main() -> None:
+    parser = cli.parser("report", description="Summarize a log file")
+    parser.add_int("limit", 10, help="Maximum rows", short="n")
+    parser.add_positional("file")
+    try:
+        args = parser.parse(sys.args())
+    except cli.HelpRequested as help:
+        io.stdout().write_text(help.message)
+        sys.exit(0)
+    except cli.UsageError as error:
+        sys.eprint(error.message)
+        sys.exit(2)
+    print(args.get_str("file"))
+    print(args.get_int("limit"))
+```
+
+### `terminal`
+
+| Function | Meaning |
+| --- | --- |
+| `isatty(file: io.File) -> bool` | Whether the stream is a terminal |
+| `color_enabled(file: io.File) -> bool` | TTY, `TERM` is not `dumb`, and `NO_COLOR` is absent |
+| `style(text: str, color: str = "default", bold: bool = False, enabled: bool = True) -> str` | Wrap text in ANSI style/reset sequences, or return it unchanged |
+| `progress(message: str) -> None` | Replace the current stderr progress line and flush |
+| `finish_progress(message: str = "") -> None` | Clear an active progress line and write any final message to stderr |
+
+Colors are `default`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`,
+and `white`; unknown names raise `ValueError`. `style` is independent of the host;
+applications pass `enabled=terminal.color_enabled(stream)` or an explicit override.
+`progress` does nothing when stderr is not a terminal or `TERM=dumb`.
+`finish_progress` clears the line only on a capable terminal, then writes any
+nonempty message followed by a newline on every destination and flushes. An empty
+message only clears the line. Progress messages must contain no CR or LF, or
+raise `ValueError`. These operations use the shared stderr buffer and leave stdout
+untouched. There is no raw keyboard
+mode, cursor-positioning API, terminal-size model, or full-screen UI system.
+
+## 22. HTTP and HTTPS clients
+
+The `http` module provides synchronous requests without an HTTP server framework.
+It accepts absolute `http` and `https` URLs, with ASCII hostnames (internationalized names must already be in ASCII IDNA
+form) and non-ASCII path/query characters percent-encoded as UTF-8.
+Already valid percent escapes are preserved. URL user information is rejected;
+fragments are removed before sending. Other schemes and malformed URLs raise
+`ValueError`.
+
+The following are ordinary records:
+
+```text
+Header(name: str, value: str)
+Response(status: int, headers: list[Header], body: bytes, url: str)
+Download(status: int, headers: list[Header], url: str, bytes_written: int)
+```
+
+```text
+request(method: str, url: str, headers: list[Header] | None = None,
+        body: bytes | None = None, timeout: float = 30.0,
+        follow_redirects: bool = True, ca_file: str | None = None) -> Response
+
+download(url: str, path: str, headers: list[Header] | None = None,
+         timeout: float = 30.0, follow_redirects: bool = True,
+         ca_file: str | None = None) -> Download
+
+header(headers: list[Header], name: str) -> str | None
+urlencode(values: dict[str, str]) -> str
+```
+
+Methods are nonempty ASCII HTTP tokens, sent as supplied; callers normally use
+uppercase names. Outgoing header names are ASCII HTTP tokens; values must be
+ASCII text or tab, with no CR, LF, NUL, or other controls. Host, Content-Length,
+and Transfer-Encoding are managed by the transport and cannot be supplied.
+Header lists preserve order and duplicate fields. Received non-ASCII header
+bytes are mapped one-to-one to Unicode U+0080–U+00FF; header values are not decoded
+as UTF-8. `header` returns the first case-insensitive name match, or `None`;
+callers scan the list when repeated values matter.
+
+`urlencode` emits dictionary entries in insertion order as form-style query pairs:
+UTF-8 bytes are percent-encoded except ASCII letters, digits, `-`, `.`, `_`, and
+`~`; spaces become `+`. It does not add `?` or merge with an existing query.
+No implicit JSON conversion occurs: compose `json.dump(...).encode()` and
+`json.parse(response.body.decode())` explicitly.
+
+### Requests, redirects, and timeouts
+
+A completed HTTP exchange returns its status, including 4xx and 5xx. Transport,
+protocol, and TLS failures raise `OSError`; invalid arguments raise `ValueError`.
+The body contains the received representation bytes with transport framing
+removed. There is no automatic content decompression or content-type decoding,
+no cookie jar, automatic retry, or ambient credentials or proxy configuration.
+Each request is independent; backend user configuration must not alter behavior.
+
+When enabled, redirects are followed only for GET and HEAD, for statuses 301,
+302, 303, 307, and 308 with Location. Resolve relative targets against the current
+URL, allow at most ten hops, and never follow HTTPS to HTTP. A forbidden downgrade,
+invalid redirect target, or excess hops raises `OSError`. Other methods return the
+redirect response. When origin (scheme, host, or effective port) changes, discard
+all caller-supplied headers for subsequent hops, preventing credential leakage
+through custom header names. Response metadata describes the final exchange.
+
+The timeout is an inactivity limit: connection establishment and each wait for
+network progress may take at most that duration. Progress renews the wait; it is
+not a total download deadline. Redirects also get this limit. Expiry raises
+`TimeoutError`. Hostname resolution uses the host resolver and may block beyond
+this limit; that limitation must be stated in the library documentation.
+
+HTTPS always verifies certificate chains and hostnames. `ca_file=None` uses the
+platform's trusted certificates; a provided path selects an explicit PEM trust
+bundle instead. There is no insecure verification switch.
+
+### Downloads and deployment
+
+`download` makes a GET request and streams a 2xx body into a temporary sibling of
+`path`. Only after a successful flush and close does it replace the destination.
+Existing content remains intact on errors. A non-2xx final response returns a
+`Download` with zero bytes written and leaves the destination untouched; its body
+is discarded. Temporary output is removed on failure. The byte count is the final
+file size; a count outside the integer range raises `OverflowError`. Downloads
+use bounded chunks rather than retaining the whole body.
+
+The backend must use maintained HTTP/TLS libraries. Selection remains an
+implementation gate: prove certificate lookup and dependency behavior on macOS
+and Linux for `run`, compiled Lua, and standalone executables before adopting it.
+Built applications must not require a separately installed command or Willow
+checkout; compiled Lua must retain its documented LuaJIT-only runtime dependency.
+Any necessary change to that deployment contract requires a separate explicit
+scope decision. This specification does not claim a backend has met the gate.
+
+## 23. TCP clients and simple services
+
+The `net` module exposes blocking TCP connections and listeners with native
+methods. Hostnames use the host resolver; literal IPv4 and IPv6 addresses are
+accepted. Host strings must be ASCII (use an ASCII IDNA name when needed).
+Ports are integers in 1–65535, except a listener may use zero for a host-selected
+port. Invalid inputs raise `ValueError`; host network failures raise `OSError`.
+
+```text
+connect(host: str, port: int, timeout: float | None = 30.0) -> Connection
+listen(host: str, port: int, backlog: int = 16) -> Listener
+
+Connection.recv(size: int, timeout: float | None = None) -> bytes
+Connection.sendall(data: bytes, timeout: float | None = None) -> None
+Connection.close() -> None
+
+Listener.accept(timeout: float | None = None) -> Connection
+Listener.local_port() -> int
+Listener.close() -> None
+```
+
+`listen` binds the specified address, with positive backlog. No wildcard default
+is supplied: use an explicit loopback address for local services. If a hostname
+resolves to multiple addresses, `connect` tries them in resolver order with one
+shared connect-time budget; `listen` binds the first usable address and does not
+promise dual-stack coverage. Name resolution precedes the connect-time budget
+and is subject to §22's resolver limitation.
+
+`recv` requires positive size and returns one available chunk of up to that many
+bytes; empty bytes mean the peer closed its sending side. It does not wait to fill
+the requested size. `sendall` completes the entire byte string or raises; empty
+input returns immediately. Its timeout bounds the entire send, not each partial
+write. After any send failure, the caller cannot know how much the peer received
+and must close the connection before further I/O; subsequent I/O raises
+`ValueError`. A receive or accept timeout leaves the handle usable.
+
+Timeouts bound individual calls, never an application's multi-call message loop.
+An application needing a total message deadline computes its remaining budget
+with `time.monotonic()`. Stream framing is the application's responsibility;
+a read may contain part of a message or several messages. Close is idempotent,
+and broken-peer writes raise rather than terminating by SIGPIPE.
+
+The initial service model is deliberately sequential. There is no scheduler,
+nonblocking API, TLS socket wrapper, UDP, Unix-domain sockets, or HTTP server.
+The delivery example shares framing code between a line/JSON client and server;
+it handles split UTF-8 bytes before decoding a complete message. Integration tests
+use the `WILLOW` launcher variable to start a server through `subprocess.spawn`.
+The test passes a port-file path; after binding, the server publishes its selected
+port by writing a sibling file and renaming it. The test polls with `time.sleep`
+and a monotonic deadline, exchanges messages, and stops and reaps the child and
+removes the port file in cleanup. No live subprocess pipe API is required.
+
+## 24. Small projects and reusable modules
+
+### Qualified imports
+
+`import app.util` loads `app/util.wlo` under a search root and binds the qualified
+name `app.util`. Each component is an identifier. References use
+`app.util.function`, `app.util.Record`, or `app.util.Alias` wherever §12 permits a
+module member. Importing a child does not execute or require a parent module;
+directories are namespaces without `__init__` files or initialization code.
+
+Multiple imports may share a namespace prefix. A module cannot also serve as a
+namespace prefix: importing both `app` and `app.util` is an error. The root name
+cannot conflict with another file-level declaration; a local of that name shadows
+the entire qualified namespace. Imports are absolute from search roots, not
+relative to the importing file's subdirectory. Privacy remains about member names
+beginning with `_`, and cycles remain legal because modules contain declarations.
+
+In explicit-file mode, the entry directory remains the first search root,
+followed by the standard library. Qualified imports do not introduce automatic
+project discovery or change the process working directory.
+
+### Project configuration
+
+An optional `willow.json` in the invocation directory describes a project:
+
+```json
+{
+  "entry": "main.wlo",
+  "source": "src",
+  "dependencies": ["vendor/shared"],
+  "tests": "tests"
+}
+```
+
+The file is a JSON object. The only keys are `entry: str`, `source: str`,
+`dependencies: list[str]`, and `tests: str`; omitted values default to `main.wlo`,
+`.`, `[]`, and `tests`. Unknown keys and wrong types are configuration errors;
+repeated keys use the last value, as in the existing JSON library. Entry is
+relative to the source root; other paths are relative to the manifest directory.
+Entry must stay within the source root, end in `.wlo`, and have identifier
+components after removing the extension. Root paths are nonempty; absolute paths
+and `..` are allowed for explicit local dependencies. These roots contain `.wlo`
+modules, not manifests to resolve recursively. There is no package download, version solver, or lockfile.
+
+A module is resolved from the source root first, then the explicit dependency
+roots, then the standard library. More than one dependency match is an ambiguity
+error, not an order-dependent choice. Source modules intentionally shadow
+libraries. Missing modules are reported at their imports, and resolved physical
+files load only once; two qualified names resolving to the same file are rejected.
+The entry is registered under its source-relative qualified name, preventing a
+second copy through an import. Private members retain their declaration module's
+identity across all imports.
+
+### Commands and tests
+
+When the source argument is omitted, `willow check`, `run`, `compile`, and `build`
+use the current directory's `willow.json`; there is no ancestor search. `run --`
+passes following arguments to the project entry. Compile and build still require
+`-o`. A missing manifest is an error. An explicit source file continues to use the
+existing file workflow and ignores the manifest.
+
+With a manifest and no explicit test path, `willow test` discovers `test_*.wlo`
+recursively under the configured tests directory, using source/dependency/library
+roots for imports. Directory symlinks are not traversed. Test entries need no
+`main`; discovery order and process isolation follow §17. Test-only helper modules
+belong under a source or dependency root; the tests directory is not an implicit
+import root. With an explicit test path, that path narrows discovery while
+retaining the project roots; directories are still searched recursively. Without a manifest,
+§17's standalone discovery and roots apply. The same rules apply to
+`willow test --check [path]`.
+
+Commands retain the invoking working directory for application I/O; module paths
+and test discovery are resolved using the roots above. Diagnostics identify actual
+source files. Compile/build bundle all reachable Willow modules, including local
+dependencies, and the overwrite check covers them all. Outputs must run outside
+the source tree with the deployment dependencies stated in README and §22.
+
+### Scope references
+
+The familiar conventions above were checked against Python's documentation for
+[sequence operations](https://docs.python.org/3/library/stdtypes.html),
+[calls](https://docs.python.org/3/reference/expressions.html#calls),
+[format specifications](https://docs.python.org/3/library/string.html#format-specification-mini-language),
+[subprocesses](https://docs.python.org/3/library/subprocess.html), and
+[sockets](https://docs.python.org/3/library/socket.html).
+Unicode case data is specified by
+[Unicode 17.0](https://www.unicode.org/versions/Unicode17.0.0/).
+These are design references, not blanket incorporation of those APIs or semantics;
+Willow's rules are the ones stated here.
