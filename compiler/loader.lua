@@ -3,7 +3,7 @@ local ffi = require("ffi")
 local diag = require("compiler.diag")
 local lexer = require("compiler.lexer")
 local parser = require("compiler.parser")
-local bind = require("compiler.bind")
+local stdlib = require("compiler.stdlib")
 
 -- Only the device and inode are read; the padding covers the rest of any
 -- platform's struct stat.
@@ -20,7 +20,7 @@ end
 
 local M = {}
 
-local ENOENT = 2
+M.ENOENT = 2
 
 -- The device and inode of the existing file at `path`, following symlinks,
 -- which identify it; nil when there is no such file.
@@ -64,7 +64,7 @@ function M.load(path, source, roots)
     local relative = name:gsub("%.", "/") .. ".wlo"
     local primary_path = roots.primary .. relative
     local text, err, code = M.read(primary_path)
-    if text or code ~= ENOENT then
+    if text or code ~= M.ENOENT then
       if not text then
         diag.error(import.span, "cannot load module '" .. name .. "': " .. err)
       end
@@ -76,7 +76,7 @@ function M.load(path, source, roots)
       local candidate_text, candidate_err, candidate_code = M.read(candidate)
       if candidate_text then
         found[#found + 1] = { candidate, candidate_text }
-      elseif candidate_code ~= ENOENT then
+      elseif candidate_code ~= M.ENOENT then
         diag.error(import.span, "cannot load module '" .. name .. "': " .. candidate_err)
       end
     end
@@ -84,7 +84,7 @@ function M.load(path, source, roots)
       diag.error(import.span, "module '" .. name .. "' is ambiguous: found in " .. found[1][1] .. " and " .. found[2][1])
     elseif #found == 1 then
       return found[1][1], found[1][2]
-    elseif bind.modules[name] then
+    elseif stdlib.modules[name] then
       return nil
     end
     diag.error(import.span, "cannot load module '" .. name .. "': " .. err)

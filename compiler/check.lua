@@ -1,6 +1,8 @@
 -- Checks types, definite assignment, and narrowing, annotating the tree in place.
+local ast = require("compiler.ast")
 local bind = require("compiler.bind")
 local diag = require("compiler.diag")
+local stdlib = require("compiler.stdlib")
 local types = require("compiler.types")
 
 local M = {}
@@ -206,31 +208,9 @@ end
 -- Adds the symbol of every assignment, loop name, and `as` name in `body`,
 -- including nested blocks.
 local function assigned_symbols(body, result)
-  for _, statement in ipairs(body) do
-    local kind = statement.kind
-    if kind == "Assign" or kind == "For" then
-      result[statement.symbol] = true
-    end
-    if kind == "If" then
-      assigned_symbols(statement.body, result)
-      if statement.else_body then
-        assigned_symbols(statement.else_body, result)
-      end
-    elseif kind == "While" or kind == "For" then
-      assigned_symbols(statement.body, result)
-    elseif kind == "Try" then
-      assigned_symbols(statement.body, result)
-      for _, handler in ipairs(statement.handlers) do
-        if handler.symbol then
-          result[handler.symbol] = true
-        end
-        assigned_symbols(handler.body, result)
-      end
-      if statement.finally_body then
-        assigned_symbols(statement.finally_body, result)
-      end
-    end
-  end
+  ast.assignments(body, function(node)
+    result[node.symbol] = true
+  end)
   return result
 end
 
@@ -654,7 +634,7 @@ local function check_function(fn)
     local named = {}
     for _, handler in ipairs(statement.handlers) do
       local class = handler.record.type
-      if named[bind.exceptions.Exception] or named[handler.record] then
+      if named[stdlib.exceptions.Exception] or named[handler.record] then
         diag.error(handler.span, "unreachable 'except' clause")
       end
       named[handler.record] = true

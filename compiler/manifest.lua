@@ -41,7 +41,7 @@ end
 -- none, or the project, or false and an error message.
 function M.read()
   local text, err, code = loader.read("willow.json")
-  if code == 2 then -- ENOENT
+  if code == loader.ENOENT then
     return nil
   elseif not text then
     return false, err

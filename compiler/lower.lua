@@ -126,6 +126,16 @@ local function lower_function(fn, sites, helpers)
     out[#out + 1] = statement
   end
 
+  -- Runs `f`, returning the statements it emits and its result.
+  local function capture(f)
+    local outer = out
+    out = {}
+    local value = f()
+    local body = out
+    out = outer
+    return body, value
+  end
+
   -- A statement's span is its call or helper's span when it has one.
   local function set(target, value, span)
     emit({ kind = "Set", target = target, value = value, span = value.span or span })
@@ -212,11 +222,9 @@ local function lower_function(fn, sites, helpers)
     if not (left.kind == "Temp" and left.index == result.index) then
       set(result, left, node.span)
     end
-    local outer = out
-    out = {}
-    set(result, lower_value(node.right), node.span)
-    local body = out
-    out = outer
+    local body = capture(function()
+      set(result, lower_value(node.right), node.span)
+    end)
     depth = mark + 1
     local condition = node.op == "and" and result or { kind = "Not", operand = result }
     emit({ kind = "If", condition = condition, body = body, span = node.span })
@@ -460,11 +468,9 @@ local function lower_function(fn, sites, helpers)
     elseif kind == "While" then
       labels = labels + 1
       local node = { kind = "While", label = labels, tries = #tries, span = statement.span }
-      local outer = out
-      out = {}
-      node.condition = lower_operand(statement.condition)
-      node.setup = out
-      out = outer
+      node.setup, node.condition = capture(function()
+        return lower_operand(statement.condition)
+      end)
       local enclosing = loop
       loop = node
       node.body = lower_block(statement.body)
@@ -501,13 +507,11 @@ local function lower_function(fn, sites, helpers)
     elseif kind == "Assert" then
       -- The message is evaluated only when the condition is false.
       local condition = lower_operand(statement.condition)
-      local outer = out
-      out = {}
-      local message = statement.message and lower_operand(statement.message)
-        or { kind = "Literal", value = "assertion failed" }
-      emit({ kind = "Eval", value = helper("assert_fail", { message }, statement.span), span = statement.span })
-      local body = out
-      out = outer
+      local body = capture(function()
+        local message = statement.message and lower_operand(statement.message)
+          or { kind = "Literal", value = "assertion failed" }
+        emit({ kind = "Eval", value = helper("assert_fail", { message }, statement.span), span = statement.span })
+      end)
       emit({ kind = "If", condition = { kind = "Not", operand = condition }, body = body, span = statement.span })
     elseif kind == "Raise" then
       local value
@@ -533,33 +537,27 @@ local function lower_function(fn, sites, helpers)
       end
       node.finally_body = statement.finally_body and lower_block(statement.finally_body)
       -- Resume what left the protected blocks, in the try's own context.
-      local outer = out
-      out = {}
-      local value = { kind = "TryValue", index = node.index }
-      if node.returns then
-        departure("Return", value)
-      end
-      if node.breaks then
-        departure("Break")
-      end
-      if node.continues then
-        departure("Continue")
-      end
-      node.resume = out
-      out = outer
+      node.resume = capture(function()
+        if node.returns then
+          departure("Return", { kind = "TryValue", index = node.index })
+        end
+        if node.breaks then
+          departure("Break")
+        end
+        if node.continues then
+          departure("Continue")
+        end
+      end)
       emit(node)
     end
   end
 
   lower_block = function(body)
-    local outer = out
-    out = {}
-    for _, statement in ipairs(body) do
-      lower_statement(statement)
-    end
-    local result = out
-    out = outer
-    return result
+    return (capture(function()
+      for _, statement in ipairs(body) do
+        lower_statement(statement)
+      end
+    end))
   end
 
   local params = {}
