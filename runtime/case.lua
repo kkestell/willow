@@ -33,14 +33,7 @@ end
 local function __wlo_decode(text)
   local codes = {}
   for char in text:gmatch(__wlo_CODE_POINT) do
-    local value = char:byte(1)
-    if #char > 1 then
-      value = value % 2 ^ (7 - #char)
-      for i = 2, #char do
-        value = value * 64 + char:byte(i) % 64
-      end
-    end
-    codes[#codes + 1] = value
+    codes[#codes + 1] = __wlo_code_point(char)
   end
   return codes
 end

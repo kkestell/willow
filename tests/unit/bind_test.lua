@@ -3,11 +3,7 @@ local parser = require("compiler.parser")
 local bind = require("compiler.bind")
 local diag = require("compiler.diag")
 
-local function eq(expected, actual)
-  if expected ~= actual then
-    error(string.format("expected %q, got %q", tostring(expected), tostring(actual)), 2)
-  end
-end
+local eq = require("tests.support").eq
 
 local function bind_source(source)
   local program = parser.parse(lexer.lex(source))

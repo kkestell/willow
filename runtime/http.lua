@@ -2,11 +2,9 @@
 -- into programs that use the http module. libcurl is loaded on first use. The
 -- helpers are the functions declared without `local`.
 
-local __wlo_curl_ffi = require("ffi")
-__wlo_curl_ffi.cdef([[
+__wlo_ffi.cdef([[
 typedef void __wlo_curl_t;
 typedef struct __wlo_curl_slist __wlo_curl_slist_t;
-typedef struct { int64_t sec; long nsec; } __wlo_curl_timespec_t;
 int curl_global_init(long flags);
 __wlo_curl_t *curl_easy_init(void);
 void curl_easy_cleanup(__wlo_curl_t *handle);
@@ -16,12 +14,10 @@ int curl_easy_getinfo(__wlo_curl_t *handle, int info, ...);
 const char *curl_easy_strerror(int code);
 __wlo_curl_slist_t *curl_slist_append(__wlo_curl_slist_t *list, const char *text);
 void curl_slist_free_all(__wlo_curl_slist_t *list);
-int __wlo_curl_clock_gettime(int clock, __wlo_curl_timespec_t *time) __asm__("clock_gettime");
 int __wlo_curl_getpid(void) __asm__("getpid");
 ]])
 
-local __wlo_CURL_NAME = __wlo_curl_ffi.os == "OSX" and "libcurl.4.dylib" or "libcurl.so.4"
-local __wlo_CURL_MONOTONIC = __wlo_curl_ffi.os == "OSX" and 6 or 1
+local __wlo_CURL_NAME = __wlo_ffi.os == "OSX" and "libcurl.4.dylib" or "libcurl.so.4"
 local __wlo_curl_library
 
 local __wlo_OPT = {
@@ -39,7 +35,7 @@ local __wlo_TOKEN = "^[!#$%%&'*+%-.^_`|~%w]+$"
 
 local function __wlo_curl(site)
   if not __wlo_curl_library then
-    local ok, library = pcall(__wlo_curl_ffi.load, __wlo_CURL_NAME)
+    local ok, library = pcall(__wlo_ffi.load, __wlo_CURL_NAME)
     if not ok then
       __wlo_fail("OSError", "cannot load libcurl: " .. tostring(library), site)
     end
@@ -47,12 +43,6 @@ local function __wlo_curl(site)
     __wlo_curl_library = library
   end
   return __wlo_curl_library
-end
-
-local function __wlo_curl_now()
-  local now = __wlo_curl_ffi.new("__wlo_curl_timespec_t")
-  __wlo_curl_ffi.C.__wlo_curl_clock_gettime(__wlo_CURL_MONOTONIC, now)
-  return tonumber(now.sec) + tonumber(now.nsec) / 1e9
 end
 
 local function __wlo_percent(byte)
@@ -128,17 +118,10 @@ local function __wlo_check_headers(headers, site)
   return lines
 end
 
-local function __wlo_check_http_timeout(timeout, site)
-  if not (timeout > 0 and timeout < math.huge) then
-    __wlo_fail("ValueError", "timeout must be finite and positive", site)
-  end
-end
-
 -- Received header bytes above 127 stand for U+0080 through U+00FF.
 local function __wlo_latin1(text)
   return (text:gsub("[\128-\255]", function(char)
-    local byte = char:byte()
-    return string.char(0xC0 + math.floor(byte / 64), 0x80 + byte % 64)
+    return __wlo_chr(char:byte())
   end))
 end
 
@@ -162,7 +145,7 @@ jit.off(__wlo_curl_perform)
 -- headers as { name, value } pairs, and the redirect target if any.
 local function __wlo_http_exchange(method, url, header_lines, body, timeout, ca_file, body_sink, site)
   local curl = __wlo_curl(site)
-  local ffi = __wlo_curl_ffi
+  local ffi = __wlo_ffi
   local handle = curl.curl_easy_init()
   local function set(option, value)
     if type(value) == "number" then
@@ -172,7 +155,7 @@ local function __wlo_http_exchange(method, url, header_lines, body, timeout, ca_
   end
   local errors = ffi.new("char[256]")
   local response_headers, failure = {}, nil
-  local last_bytes, last_time = -1, __wlo_curl_now()
+  local last_bytes, last_time = -1, __wlo_clock(__wlo_CLOCK_MONOTONIC)
   local timed_out = false
 
   local write = ffi.cast("size_t (*)(char *, size_t, size_t, void *)", function(data, size, count)
@@ -200,7 +183,7 @@ local function __wlo_http_exchange(method, url, header_lines, body, timeout, ca_
   end)
   local progress = ffi.cast("int (*)(void *, int64_t, int64_t, int64_t, int64_t)", function(_, _, now_down, _, now_up)
     local bytes = tonumber(now_down + now_up)
-    local now = __wlo_curl_now()
+    local now = __wlo_clock(__wlo_CLOCK_MONOTONIC)
     if bytes ~= last_bytes then
       last_bytes, last_time = bytes, now
     elseif now - last_time > timeout then
@@ -282,7 +265,7 @@ local function __wlo_http_fetch(method, url, headers, body, timeout, follow, ca_
   end
   local current = __wlo_http_url(url, site)
   local lines = __wlo_check_headers(headers, site)
-  __wlo_check_http_timeout(timeout, site)
+  __wlo_check_timeout(timeout, site)
   local hops = 0
   while true do
     local hop = hops
@@ -330,15 +313,13 @@ function __wlo_http_request(method, url, headers, body, timeout, follow_redirect
 end
 
 function __wlo_http_download(url, path, headers, timeout, follow_redirects, ca_file, site)
-  if path:find("\0", 1, true) then
-    __wlo_fail("ValueError", "path contains a NUL character", site)
-  end
+  __wlo_check_path(path, site)
   local directory, name = path:match("^(.-)([^/]*)$")
   -- The process id keeps concurrent downloads to one path apart.
-  local temp = string.format("%s.%s.%d.part", directory, name, __wlo_curl_ffi.C.__wlo_curl_getpid())
+  local temp = string.format("%s.%s.%d.part", directory, name, __wlo_ffi.C.__wlo_curl_getpid())
   local file, open_error = io.open(temp, "wb")
   if not file then
-    __wlo_fail("OSError", "cannot write " .. path .. ": " .. open_error:sub(#temp + 3), site)
+    __wlo_fail("OSError", "cannot write " .. path .. ": " .. __wlo_open_reason(open_error, temp), site)
   end
   local written = 0
   local ok, status, response_headers, final = pcall(__wlo_http_fetch, "GET", url, headers, nil, timeout,
@@ -357,7 +338,7 @@ function __wlo_http_download(url, path, headers, timeout, follow_redirects, ca_f
     local reason = close_error
     if closed then
       local renamed, rename_error = os.rename(temp, path)
-      reason = not renamed and rename_error:sub(#temp + 3)
+      reason = not renamed and __wlo_open_reason(rename_error, temp)
     end
     if reason then
       os.remove(temp)

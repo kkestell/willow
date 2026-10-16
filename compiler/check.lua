@@ -38,186 +38,6 @@ local function optional_of(type)
   return types.union({ type, types.None })
 end
 
--- Built-in signatures. An "any" parameter is checked separately by name. A
--- built-in with `names` accepts keyword arguments; `defaults` holds the literal
--- nodes of its optional parameters. range is checked only as a `for` iterable.
-local builtins = {
-  print = { params = { "any" }, result = types.None },
-  eprint = { params = { "any" }, result = types.None },
-  str = { params = { "any" }, result = types.str },
-  int = { params = { "any" }, result = types.int },
-  float = { params = { "any" }, result = types.float },
-  len = { params = { "any" }, result = types.int },
-  input = { params = {}, result = optional_of(types.str) },
-  args = { params = {}, result = types.list(types.str) },
-  read_file = { params = { types.str }, names = { "path" }, result = types.str },
-  write_file = { params = { types.str, types.str }, names = { "path", "text" }, result = types.None },
-  exit = { params = { types.int }, names = { "status" }, result = types.None },
-  ord = { params = { types.str }, result = types.int },
-  chr = { params = { types.int }, result = types.str },
-  join = { params = { types.str, types.str }, names = { "a", "b" }, result = types.str },
-  basename = { params = { types.str }, names = { "path" }, result = types.str },
-  dirname = { params = { types.str }, names = { "path" }, result = types.str },
-  listdir = { params = { types.str }, names = { "path" }, result = types.list(types.str) },
-  stat = {
-    params = { types.str, types.bool },
-    names = { "path", "follow_symlinks" },
-    defaults = { [2] = { kind = "Bool", value = true } },
-    result = bind.stat.type,
-  },
-  exists = { params = { types.str }, names = { "path" }, result = types.bool },
-  mkdir = {
-    params = { types.str, types.bool, types.bool },
-    names = { "path", "parents", "exist_ok" },
-    defaults = { [2] = { kind = "Bool", value = false }, [3] = { kind = "Bool", value = false } },
-    result = types.None,
-  },
-  remove = { params = { types.str }, names = { "path" }, result = types.None },
-  rmdir = { params = { types.str }, names = { "path" }, result = types.None },
-  rename = { params = { types.str, types.str }, names = { "source", "destination" }, result = types.None },
-  getenv = { params = { types.str }, names = { "name" }, result = optional_of(types.str) },
-  environ = { params = {}, result = types.dict(types.str, types.str) },
-  getcwd = { params = {}, result = types.str },
-  time = { params = {}, result = types.float },
-  monotonic = { params = {}, result = types.float },
-  sleep = { params = { types.float }, names = { "seconds" }, result = types.None },
-  utc = { params = { types.float }, names = { "timestamp" }, result = types.str },
-  bytes = { params = { types.list(types.int) }, names = { "values" }, result = types.bytes },
-  open = {
-    params = { types.str, types.str },
-    names = { "path", "mode" },
-    defaults = { [2] = { kind = "String", value = "r" } },
-    result = bind.file.type,
-  },
-  stdin = { params = {}, result = bind.file.type },
-  connect = {
-    params = { types.str, types.int, types.union({ types.float, types.None }) },
-    names = { "host", "port", "timeout" },
-    defaults = { [3] = { kind = "Float", value = 30.0 } },
-    result = bind.net.declarations.Connection.type,
-  },
-  listen = {
-    params = { types.str, types.int, types.int },
-    names = { "host", "port", "backlog" },
-    defaults = { [3] = { kind = "Int", value = 16 } },
-    result = bind.net.declarations.Listener.type,
-  },
-  request = {
-    params = {
-      types.str,
-      types.str,
-      types.union({ types.list(bind.http.declarations.Header.type), types.None }),
-      types.union({ types.bytes, types.None }),
-      types.float,
-      types.bool,
-      types.union({ types.str, types.None }),
-    },
-    names = { "method", "url", "headers", "body", "timeout", "follow_redirects", "ca_file" },
-    defaults = {
-      [3] = { kind = "None" },
-      [4] = { kind = "None" },
-      [5] = { kind = "Float", value = 30.0 },
-      [6] = { kind = "Bool", value = true },
-      [7] = { kind = "None" },
-    },
-    result = bind.http.declarations.Response.type,
-  },
-  download = {
-    params = {
-      types.str,
-      types.str,
-      types.union({ types.list(bind.http.declarations.Header.type), types.None }),
-      types.float,
-      types.bool,
-      types.union({ types.str, types.None }),
-    },
-    names = { "url", "path", "headers", "timeout", "follow_redirects", "ca_file" },
-    defaults = {
-      [3] = { kind = "None" },
-      [4] = { kind = "Float", value = 30.0 },
-      [5] = { kind = "Bool", value = true },
-      [6] = { kind = "None" },
-    },
-    result = bind.http.declarations.Download.type,
-  },
-  header = {
-    params = { types.list(bind.http.declarations.Header.type), types.str },
-    names = { "headers", "name" },
-    result = types.union({ types.str, types.None }),
-  },
-  urlencode = { params = { types.dict(types.str, types.str) }, names = { "values" }, result = types.str },
-  parser = {
-    params = { types.str, types.str },
-    names = { "prog", "description" },
-    defaults = { [2] = { kind = "String", value = "" } },
-    result = bind.parser.type,
-  },
-  isatty = { params = { bind.file.type }, names = { "file" }, result = types.bool },
-  color_enabled = { params = { bind.file.type }, names = { "file" }, result = types.bool },
-  style = {
-    params = { types.str, types.str, types.bool, types.bool },
-    names = { "text", "color", "bold", "enabled" },
-    defaults = {
-      [2] = { kind = "String", value = "default" },
-      [3] = { kind = "Bool", value = false },
-      [4] = { kind = "Bool", value = true },
-    },
-    result = types.str,
-  },
-  progress = { params = { types.str }, names = { "message" }, result = types.None },
-  finish_progress = {
-    params = { types.str },
-    names = { "message" },
-    defaults = { [1] = { kind = "String", value = "" } },
-    result = types.None,
-  },
-  run = {
-    params = {
-      types.list(types.str),
-      types.union({ types.bytes, types.None }),
-      types.bool,
-      types.union({ types.str, types.None }),
-      types.union({ types.dict(types.str, types.str), types.None }),
-      types.union({ types.float, types.None }),
-    },
-    names = { "args", "input", "capture_output", "cwd", "env", "timeout" },
-    defaults = {
-      [2] = { kind = "None" },
-      [3] = { kind = "Bool", value = false },
-      [4] = { kind = "None" },
-      [5] = { kind = "None" },
-      [6] = { kind = "None" },
-    },
-    result = bind.result.type,
-  },
-  spawn = {
-    params = {
-      types.list(types.str),
-      types.union({ types.str, types.None }),
-      types.union({ types.dict(types.str, types.str), types.None }),
-      types.union({ bind.file.type, types.None }),
-      types.union({ bind.file.type, types.None }),
-      types.union({ bind.file.type, types.None }),
-    },
-    names = { "args", "cwd", "env", "stdin", "stdout", "stderr" },
-    defaults = {
-      [2] = { kind = "None" },
-      [3] = { kind = "None" },
-      [4] = { kind = "None" },
-      [5] = { kind = "None" },
-      [6] = { kind = "None" },
-    },
-    result = bind.process.type,
-  },
-  stdout = { params = {}, result = bind.file.type },
-  stderr = { params = {}, result = bind.file.type },
-  sorted = {
-    params = { "any", types.bool },
-    names = { "items", "reverse" },
-    defaults = { [2] = { kind = "Bool", value = false } },
-  },
-}
-
 -- The argument kinds `int` and `float` convert from.
 local conversions = {
   int = { float = true, str = true },
@@ -621,7 +441,7 @@ local function check_function(fn)
       if target.kind == "Builtin" and target.name == "range" then
         diag.error(node.span, "'range' can only be used as a 'for' iterable")
       end
-      local builtin = target.kind == "Builtin" and builtins[target.name]
+      local builtin = target.kind == "Builtin" and target
       if target.kind == "Record" and target.native then
         diag.error(node.span, "cannot construct native type " .. target.type_name)
       end
@@ -655,7 +475,7 @@ local function check_function(fn)
       elseif name == "len" and builtin and arg_type ~= types.str and arg_type ~= types.bytes and not index_types(arg_type) then
         diag.error(node.span, "'len' cannot be applied to " .. arg_type.name)
       end
-      if builtin == builtins.sorted then
+      if builtin and name == "sorted" then
         check_sortable(node.args[1], arg_type)
         type = arg_type
       elseif builtin then

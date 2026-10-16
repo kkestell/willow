@@ -4,43 +4,83 @@ local types = require("compiler.types")
 
 local M = {}
 
-local builtins = {
-  print = { kind = "Builtin", name = "print" },
-  int = { kind = "Builtin", name = "int" },
-  float = { kind = "Builtin", name = "float" },
-  str = { kind = "Builtin", name = "str" },
-  len = { kind = "Builtin", name = "len" },
-  range = { kind = "Builtin", name = "range" },
-  input = { kind = "Builtin", name = "input" },
-  ord = { kind = "Builtin", name = "ord" },
-  chr = { kind = "Builtin", name = "chr" },
-  isinstance = { kind = "Builtin", name = "isinstance" },
-  sorted = { kind = "Builtin", name = "sorted" },
-  bytes = { kind = "Builtin", name = "bytes" },
-}
+local optional_str = types.union({ types.str, types.None })
+local optional_int = types.union({ types.int, types.None })
+local optional_float = types.union({ types.float, types.None })
+local optional_bytes = types.union({ types.bytes, types.None })
 
--- The compiler-provided modules. They have no source: their declarations are
--- built-in targets and records, and a program's own module of the same name
--- shadows them.
+-- Gives each entry of `signatures`, keyed by function name, the fields of a
+-- built-in function target. A signature's `params` holds the parameter types,
+-- where "any" is checked separately by name. A built-in with `names` accepts
+-- keyword arguments; `defaults` holds the literal nodes of its optional
+-- parameters; `helper` names its runtime helper when that is not its name.
+local function builtins_of(signatures)
+  for name, signature in pairs(signatures) do
+    signature.kind, signature.name = "Builtin", name
+  end
+  return signatures
+end
+
+-- range is checked only as a `for` iterable, and isinstance is its own node.
+local builtins = builtins_of({
+  print = { params = { "any" }, result = types.None },
+  str = { params = { "any" }, result = types.str },
+  int = { params = { "any" }, result = types.int },
+  float = { params = { "any" }, result = types.float },
+  len = { params = { "any" }, result = types.int },
+  range = {},
+  input = { params = {}, result = optional_str },
+  ord = { params = { types.str }, result = types.int },
+  chr = { params = { types.int }, result = types.str },
+  isinstance = {},
+  sorted = {
+    params = { "any", types.bool },
+    names = { "items", "reverse" },
+    defaults = { [2] = { kind = "Bool", value = false } },
+  },
+  bytes = { params = { types.list(types.int) }, names = { "values" }, result = types.bytes },
+})
+
+-- An exception class: a record with only a `message` field.
+local function exception(name, type_name)
+  local record = {
+    kind = "Record",
+    name = name,
+    type_name = type_name,
+    exception = true,
+    fields = { { name = "message", type = types.str } },
+  }
+  record.type = types.record(record)
+  return record
+end
+
+-- The built-in exception classes.
+local exceptions = {}
+M.exceptions = exceptions
+for name in ("Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError TimeoutError"):gmatch("%S+") do
+  exceptions[name] = exception(name, name)
+end
+
+-- An ordinary record of a provided module with `fields` as { name, type }.
+local function provided_record(module, name, fields)
+  local record = { kind = "Record", name = name, type_name = module .. "." .. name, fields = {} }
+  for i, field in ipairs(fields) do
+    record.fields[i] = { name = field[1], type = field[2] }
+  end
+  record.type = types.record(record)
+  return record
+end
+
+-- A compiler-provided module. It has no source: its declarations are the
+-- built-in targets for `functions`, keyed by name, and the records and aliases
+-- in `records`. A program's own module of the same name shadows it.
 local function provided(name, functions, records)
   local declarations = records or {}
-  for function_name in functions:gmatch("%S+") do
-    declarations[function_name] = { kind = "Builtin", name = function_name }
+  for function_name, target in pairs(builtins_of(functions)) do
+    declarations[function_name] = target
   end
   return { name = name, declarations = declarations }
 end
-
-local stat = {
-  kind = "Record",
-  name = "Stat",
-  type_name = "fs.Stat",
-  fields = {
-    { name = "kind", type = types.str },
-    { name = "size", type = types.int },
-    { name = "modified", type = types.float },
-  },
-}
-stat.type = types.record(stat)
 
 -- A native type is a provided record with no fields that only its module's
 -- functions create. Its methods lower to helpers named after `prefix`.
@@ -53,7 +93,7 @@ local file = {
   prefix = "file",
   methods = {
     read = { params = { types.int }, names = { "size" }, result = types.bytes },
-    readline = { params = {}, result = types.union({ types.str, types.None }) },
+    readline = { params = {}, result = optional_str },
     write = { params = { types.bytes }, names = { "data" }, result = types.None },
     write_text = { params = { types.str }, names = { "text" }, result = types.None },
     flush = { params = {}, result = types.None },
@@ -61,20 +101,88 @@ local file = {
   },
 }
 file.type = types.record(file)
+local optional_file = types.union({ file.type, types.None })
 
-local result = {
-  kind = "Record",
-  name = "Result",
-  type_name = "subprocess.Result",
-  fields = {
-    { name = "returncode", type = types.int },
-    { name = "stdout", type = types.union({ types.bytes, types.None }) },
-    { name = "stderr", type = types.union({ types.bytes, types.None }) },
+local io = provided("io", {
+  open = {
+    params = { types.str, types.str },
+    names = { "path", "mode" },
+    defaults = { [2] = { kind = "String", value = "r" } },
+    result = file.type,
   },
-}
-result.type = types.record(result)
+  stdin = { params = {}, result = file.type },
+  stdout = { params = {}, result = file.type },
+  stderr = { params = {}, result = file.type },
+}, { File = file })
 
-local optional_int = types.union({ types.int, types.None })
+local sys = provided("sys", {
+  args = { params = {}, result = types.list(types.str) },
+  eprint = { params = { "any" }, result = types.None },
+  exit = { params = { types.int }, names = { "status" }, result = types.None },
+  getenv = { params = { types.str }, names = { "name" }, result = optional_str },
+  environ = { params = {}, result = types.dict(types.str, types.str) },
+  getcwd = { params = {}, result = types.str },
+})
+
+local stat = provided_record("fs", "Stat", { { "kind", types.str }, { "size", types.int }, { "modified", types.float } })
+local fs = provided("fs", {
+  read_file = { params = { types.str }, names = { "path" }, result = types.str },
+  write_file = { params = { types.str, types.str }, names = { "path", "text" }, result = types.None },
+  join = { params = { types.str, types.str }, names = { "a", "b" }, result = types.str },
+  basename = { params = { types.str }, names = { "path" }, result = types.str },
+  dirname = { params = { types.str }, names = { "path" }, result = types.str },
+  listdir = { params = { types.str }, names = { "path" }, result = types.list(types.str) },
+  stat = {
+    params = { types.str, types.bool },
+    names = { "path", "follow_symlinks" },
+    defaults = { [2] = { kind = "Bool", value = true } },
+    result = stat.type,
+  },
+  exists = { params = { types.str }, names = { "path" }, result = types.bool },
+  mkdir = {
+    params = { types.str, types.bool, types.bool },
+    names = { "path", "parents", "exist_ok" },
+    defaults = { [2] = { kind = "Bool", value = false }, [3] = { kind = "Bool", value = false } },
+    result = types.None,
+  },
+  remove = { params = { types.str }, names = { "path" }, result = types.None },
+  rmdir = { params = { types.str }, names = { "path" }, result = types.None },
+  rename = { params = { types.str, types.str }, names = { "source", "destination" }, result = types.None },
+}, { Stat = stat })
+
+local time = provided("time", {
+  time = { params = {}, result = types.float },
+  monotonic = { params = {}, result = types.float },
+  sleep = { params = { types.float }, names = { "seconds" }, result = types.None },
+  utc = { params = { types.float }, names = { "timestamp" }, result = types.str },
+})
+
+local terminal = provided("terminal", {
+  isatty = { params = { file.type }, names = { "file" }, result = types.bool },
+  color_enabled = { params = { file.type }, names = { "file" }, result = types.bool },
+  style = {
+    params = { types.str, types.str, types.bool, types.bool },
+    names = { "text", "color", "bold", "enabled" },
+    defaults = {
+      [2] = { kind = "String", value = "default" },
+      [3] = { kind = "Bool", value = false },
+      [4] = { kind = "Bool", value = true },
+    },
+    result = types.str,
+  },
+  progress = { params = { types.str }, names = { "message" }, result = types.None },
+  finish_progress = {
+    params = { types.str },
+    names = { "message" },
+    defaults = { [1] = { kind = "String", value = "" } },
+    result = types.None,
+  },
+})
+
+local result = provided_record("subprocess", "Result", {
+  { "returncode", types.int }, { "stdout", optional_bytes }, { "stderr", optional_bytes },
+})
+
 local process = {
   kind = "Record",
   name = "Process",
@@ -85,7 +193,7 @@ local process = {
   methods = {
     poll = { params = {}, result = optional_int },
     wait = {
-      params = { types.union({ types.float, types.None }) },
+      params = { optional_float },
       names = { "timeout" },
       defaults = { { kind = "None" } },
       result = types.int,
@@ -96,12 +204,37 @@ local process = {
 }
 process.type = types.record(process)
 
-local subprocess = provided("subprocess", "run spawn", { Result = result, Process = process })
+local optional_env = types.union({ types.dict(types.str, types.str), types.None })
 -- A runtime helper named `run` would replace the one that runs `main`.
-subprocess.declarations.run.helper = "process_run"
-subprocess.declarations.spawn.helper = "process_spawn"
+local subprocess = provided("subprocess", {
+  run = {
+    params = { types.list(types.str), optional_bytes, types.bool, optional_str, optional_env, optional_float },
+    names = { "args", "input", "capture_output", "cwd", "env", "timeout" },
+    defaults = {
+      [2] = { kind = "None" },
+      [3] = { kind = "Bool", value = false },
+      [4] = { kind = "None" },
+      [5] = { kind = "None" },
+      [6] = { kind = "None" },
+    },
+    result = result.type,
+    helper = "process_run",
+  },
+  spawn = {
+    params = { types.list(types.str), optional_str, optional_env, optional_file, optional_file, optional_file },
+    names = { "args", "cwd", "env", "stdin", "stdout", "stderr" },
+    defaults = {
+      [2] = { kind = "None" },
+      [3] = { kind = "None" },
+      [4] = { kind = "None" },
+      [5] = { kind = "None" },
+      [6] = { kind = "None" },
+    },
+    result = process.type,
+    helper = "process_spawn",
+  },
+}, { Result = result, Process = process })
 
-local optional_str = types.union({ types.str, types.None })
 local function value_option(kind)
   return {
     params = { types.str, kind, types.str, optional_str, types.bool },
@@ -162,53 +295,86 @@ local parser = {
 }
 parser.type = types.record(parser)
 
--- An exception class of a provided module, with only a `message` field.
-local function provided_exception(module, name)
-  local record = {
-    kind = "Record",
-    name = name,
-    type_name = module .. "." .. name,
-    exception = true,
-    fields = { { name = "message", type = types.str } },
-  }
-  record.type = types.record(record)
-  return record
-end
-
-local cli = provided("cli", "parser", {
+local cli = provided("cli", {
+  parser = {
+    params = { types.str, types.str },
+    names = { "prog", "description" },
+    defaults = { [2] = { kind = "String", value = "" } },
+    result = parser.type,
+    helper = "cli_parser_new",
+  },
+}, {
   Parser = parser,
   Args = args,
-  UsageError = provided_exception("cli", "UsageError"),
-  HelpRequested = provided_exception("cli", "HelpRequested"),
+  UsageError = exception("UsageError", "cli.UsageError"),
+  HelpRequested = exception("HelpRequested", "cli.HelpRequested"),
 })
-cli.declarations.parser.helper = "cli_parser_new"
-
--- An ordinary record of a provided module with `fields` as { name, type }.
-local function provided_record(module, name, fields)
-  local record = { kind = "Record", name = name, type_name = module .. "." .. name, fields = {} }
-  for i, field in ipairs(fields) do
-    record.fields[i] = { name = field[1], type = field[2] }
-  end
-  record.type = types.record(record)
-  return record
-end
 
 local header = provided_record("http", "Header", { { "name", types.str }, { "value", types.str } })
 local headers = types.list(header.type)
-local http = provided("http", "request download header urlencode", {
-  Header = header,
-  Response = provided_record("http", "Response", {
-    { "status", types.int }, { "headers", headers }, { "body", types.bytes }, { "url", types.str },
-  }),
-  Download = provided_record("http", "Download", {
-    { "status", types.int }, { "headers", headers }, { "url", types.str }, { "bytes_written", types.int },
-  }),
+local optional_headers = types.union({ headers, types.None })
+local response = provided_record("http", "Response", {
+  { "status", types.int }, { "headers", headers }, { "body", types.bytes }, { "url", types.str },
 })
-for _, name in ipairs({ "request", "download", "header", "urlencode" }) do
-  http.declarations[name].helper = "http_" .. name
-end
+local download = provided_record("http", "Download", {
+  { "status", types.int }, { "headers", headers }, { "url", types.str }, { "bytes_written", types.int },
+})
+local http = provided("http", {
+  request = {
+    params = { types.str, types.str, optional_headers, optional_bytes, types.float, types.bool, optional_str },
+    names = { "method", "url", "headers", "body", "timeout", "follow_redirects", "ca_file" },
+    defaults = {
+      [3] = { kind = "None" },
+      [4] = { kind = "None" },
+      [5] = { kind = "Float", value = 30.0 },
+      [6] = { kind = "Bool", value = true },
+      [7] = { kind = "None" },
+    },
+    result = response.type,
+    helper = "http_request",
+  },
+  download = {
+    params = { types.str, types.str, optional_headers, types.float, types.bool, optional_str },
+    names = { "url", "path", "headers", "timeout", "follow_redirects", "ca_file" },
+    defaults = {
+      [3] = { kind = "None" },
+      [4] = { kind = "Float", value = 30.0 },
+      [5] = { kind = "Bool", value = true },
+      [6] = { kind = "None" },
+    },
+    result = download.type,
+    helper = "http_download",
+  },
+  header = {
+    params = { headers, types.str },
+    names = { "headers", "name" },
+    result = optional_str,
+    helper = "http_header",
+  },
+  urlencode = {
+    params = { types.dict(types.str, types.str) },
+    names = { "values" },
+    result = types.str,
+    helper = "http_urlencode",
+  },
+}, { Header = header, Response = response, Download = download })
 
-local optional_float = types.union({ types.float, types.None })
+-- `type Json = None | bool | int | float | str | list[Json] | dict[str, Json]`,
+-- built as bind builds a recursive alias.
+local json_value = { kind = "union", name = "json.Json" }
+local json_element = { kind = "lazy", name = "json.Json", type = json_value }
+json_value.members = {
+  types.None, types.bool, types.int, types.float, types.str,
+  types.list(json_element), types.dict(types.str, json_element),
+}
+local json = provided("json", {
+  parse = { params = { types.str }, names = { "text" }, result = json_value, helper = "json_parse" },
+  dump = { params = { json_value }, names = { "value" }, result = types.str, helper = "json_dump" },
+}, {
+  Json = { kind = "Alias", name = "Json", type_name = "json.Json", type = json_value },
+  JsonError = exception("JsonError", "json.JsonError"),
+})
+
 local connection = {
   kind = "Record",
   name = "Connection",
@@ -252,43 +418,35 @@ local listener = {
   },
 }
 listener.type = types.record(listener)
-local net = provided("net", "connect listen", { Connection = connection, Listener = listener })
-net.declarations.connect.helper = "net_connect"
-net.declarations.listen.helper = "net_listen"
+local net = provided("net", {
+  connect = {
+    params = { types.str, types.int, optional_float },
+    names = { "host", "port", "timeout" },
+    defaults = { [3] = { kind = "Float", value = 30.0 } },
+    result = connection.type,
+    helper = "net_connect",
+  },
+  listen = {
+    params = { types.str, types.int, types.int },
+    names = { "host", "port", "backlog" },
+    defaults = { [3] = { kind = "Int", value = 16 } },
+    result = listener.type,
+    helper = "net_listen",
+  },
+}, { Connection = connection, Listener = listener })
 
 M.modules = {
   cli = cli,
+  fs = fs,
   http = http,
+  io = io,
+  json = json,
   net = net,
-  terminal = provided("terminal", "isatty color_enabled style progress finish_progress"),
-  io = provided("io", "open stdin stdout stderr", { File = file }),
   subprocess = subprocess,
-  sys = provided("sys", "args eprint exit getenv environ getcwd"),
-  fs = provided("fs", "read_file write_file join basename dirname listdir stat exists mkdir remove rmdir rename",
-    { Stat = stat }),
-  time = provided("time", "time monotonic sleep utc"),
+  sys = sys,
+  terminal = terminal,
+  time = time,
 }
-M.stat = stat
-M.file = file
-M.result = result
-M.process = process
-M.parser = parser
-M.http = http
-M.net = net
-
--- The built-in exception classes, records with only a `message` field.
-local exceptions = {}
-M.exceptions = exceptions
-for name in ("Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError TimeoutError"):gmatch("%S+") do
-  exceptions[name] = {
-    kind = "Record",
-    name = name,
-    type_name = name,
-    exception = true,
-    fields = { { name = "message", type = types.str } },
-  }
-  exceptions[name].type = types.record(exceptions[name])
-end
 
 -- Gives the function one symbol per parameter and per assigned or loop name,
 -- recording non-parameter symbols in `fn.locals` in order of first assignment.

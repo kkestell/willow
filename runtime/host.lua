@@ -48,7 +48,6 @@ extern char **environ;
 ]])
 end
 local __wlo_host_cdef = [[
-typedef struct { int64_t sec; long nsec; } __wlo_timespec_t;
 int __wlo_c_stat(const char *path, __wlo_stat_t *buf) __asm__("stat%s");
 int __wlo_c_lstat(const char *path, __wlo_stat_t *buf) __asm__("lstat%s");
 void *__wlo_c_opendir(const char *path) __asm__("opendir%s");
@@ -59,7 +58,6 @@ int __wlo_c_rmdir(const char *path) __asm__("rmdir");
 int __wlo_c_rename(const char *source, const char *destination) __asm__("rename");
 char *__wlo_c_getcwd(char *buf, size_t size) __asm__("getcwd");
 char *__wlo_c_strerror(int errnum) __asm__("strerror");
-int __wlo_c_clock_gettime(int clock, __wlo_timespec_t *time) __asm__("clock_gettime");
 int __wlo_c_nanosleep(const __wlo_timespec_t *request, __wlo_timespec_t *remaining) __asm__("nanosleep");
 typedef struct { int fd; short events; short revents; } __wlo_pollfd_t;
 typedef struct { uint64_t data[64]; } __wlo_spawn_buffer_t;
@@ -94,25 +92,11 @@ local __wlo_C = __wlo_ffi.C
 local __wlo_ENOENT, __wlo_ENOTDIR, __wlo_EEXIST, __wlo_EINTR, __wlo_EPIPE = 2, 20, 17, 4, 32
 local __wlo_EAGAIN = __wlo_OSX and 35 or 11
 local __wlo_O_NONBLOCK = __wlo_OSX and 0x4 or 0x800
-local __wlo_CLOCK_MONOTONIC = __wlo_OSX and 6 or 1
 
 -- Raises OSError for the failed host call that set errno.
 local function __wlo_host_error(action, path, site)
   local reason = __wlo_ffi.string(__wlo_C.__wlo_c_strerror(__wlo_ffi.errno()))
   __wlo_fail("OSError", "cannot " .. action .. (path and " " .. path or "") .. ": " .. reason, site)
-end
-
-local function __wlo_check_path(path, site)
-  if path:find("\0", 1, true) then
-    __wlo_fail("ValueError", "path contains a NUL character", site)
-  end
-end
-
-local function __wlo_check_text(text, site)
-  if not __wlo_valid_utf8(text) then
-    __wlo_fail("ValueError", "invalid UTF-8", site)
-  end
-  return text
 end
 
 function __wlo_join(a, b, site)
@@ -296,12 +280,6 @@ function __wlo_getcwd(site)
   return __wlo_check_text(__wlo_ffi.string(buf), site)
 end
 
-local function __wlo_clock(clock)
-  local now = __wlo_ffi.new("__wlo_timespec_t")
-  __wlo_C.__wlo_c_clock_gettime(clock, now)
-  return tonumber(now.sec) + tonumber(now.nsec) / 1e9
-end
-
 function __wlo_time(site)
   return __wlo_clock(0)
 end
@@ -354,12 +332,6 @@ end
 local __wlo_SIGPIPE, __wlo_SIGTERM, __wlo_SIGKILL = 13, 15, 9
 local __wlo_POSIX_SPAWN_SETSIGDEF = 4
 local __wlo_F_DUPFD_CLOEXEC = __wlo_OSX and 67 or 1030
-
-local function __wlo_check_timeout(timeout, site)
-  if timeout ~= nil and not (timeout > 0 and timeout < math.huge) then
-    __wlo_fail("ValueError", "timeout must be finite and positive", site)
-  end
-end
 
 -- The descriptor of a Lua file; LuaJIT converts a file to its FILE pointer.
 local function __wlo_fd(file)
@@ -768,22 +740,12 @@ function __wlo_style(text, color, bold, enabled, site)
   return "\27[" .. table.concat(codes, ";") .. "m" .. text .. "\27[0m"
 end
 
-local function __wlo_write_stderr(text, site)
-  local ok, err = io.stderr:write(text)
-  if ok then
-    ok, err = io.stderr:flush()
-  end
-  if not ok then
-    __wlo_host_fail("cannot write output: " .. tostring(err), site)
-  end
-end
-
 function __wlo_progress(message, site)
   if message:find("[\r\n]") then
     __wlo_fail("ValueError", "progress message cannot contain a line break", site)
   end
   if __wlo_capable(2) then
-    __wlo_write_stderr("\r\27[K" .. message, site)
+    __wlo_write(io.stderr, site, "\r\27[K", message)
   end
 end
 
@@ -792,7 +754,7 @@ function __wlo_finish_progress(message, site)
   if message ~= "" then
     text = text .. message .. "\n"
   end
-  __wlo_write_stderr(text, site)
+  __wlo_write(io.stderr, site, text)
 end
 
 -- TCP sockets. Every socket is non-blocking and close-on-exec, and each call

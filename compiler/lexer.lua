@@ -1,16 +1,19 @@
 -- Turns UTF-8 source text into a list of tokens with spans.
 local diag = require("compiler.diag")
+local runtime = require("compiler.runtime")
 local span = require("compiler.span")
 
 local M = {}
 
-local function set(words)
+-- The set of the words in `words`.
+function M.set(words)
   local result = {}
   for word in words:gmatch("%S+") do
     result[word] = true
   end
   return result
 end
+local set = M.set
 
 local keywords = set([[
 False None True and as assert async await break case class continue def del
@@ -28,33 +31,12 @@ local MAX_INT = "9007199254740991"
 
 local TABS = "tabs are not allowed outside strings and comments"
 
--- Well-formed UTF-8 sequences: no overlong forms, surrogates, or code points
--- above U+10FFFF.
-local utf8_sequences = {
-  "^[%z\1-\127]",
-  "^[\194-\223][\128-\191]",
-  "^\224[\160-\191][\128-\191]",
-  "^[\225-\236\238\239][\128-\191][\128-\191]",
-  "^\237[\128-\159][\128-\191]",
-  "^\240[\144-\191][\128-\191][\128-\191]",
-  "^[\241-\243][\128-\191][\128-\191][\128-\191]",
-  "^\244[\128-\143][\128-\191][\128-\191]",
-}
-
--- Returns the UTF-8 character starting at byte `pos`, or nil if it is malformed.
-local function char_at(source, pos)
-  for _, pattern in ipairs(utf8_sequences) do
-    local char = source:match(pattern, pos)
-    if char then
-      return char
-    end
-  end
-end
+-- Source text uses the runtime's UTF-8 rules.
+local char_at, chr, code_points = runtime.load({}, { "__wlo_utf8_char", "__wlo_chr", "__wlo_code_points" })
 
 -- Code-point column of byte `pos` on the line starting at byte `line_start`.
 local function column(source, line_start, pos)
-  local _, continuation = source:sub(line_start, pos - 1):gsub("[\128-\191]", "")
-  return pos - line_start + 1 - continuation
+  return code_points(source:sub(line_start, pos - 1)) + 1
 end
 
 -- Rejects malformed UTF-8 and bare CRs anywhere in the file, including comments
@@ -80,18 +62,6 @@ local function validate(source, path)
 end
 
 local hex_digits = { x = 2, u = 4, U = 8 }
-
-local function utf8_encode(code)
-  if code < 0x80 then
-    return string.char(code)
-  elseif code < 0x800 then
-    return string.char(0xC0 + math.floor(code / 0x40), 0x80 + code % 0x40)
-  elseif code < 0x10000 then
-    return string.char(0xE0 + math.floor(code / 0x1000), 0x80 + math.floor(code / 0x40) % 0x40, 0x80 + code % 0x40)
-  end
-  return string.char(0xF0 + math.floor(code / 0x40000), 0x80 + math.floor(code / 0x1000) % 0x40,
-    0x80 + math.floor(code / 0x40) % 0x40, 0x80 + code % 0x40)
-end
 
 -- Returns the first byte of the line terminator at or after `pos` (one past the
 -- end of the source on the last line) and the position of its LF, if any.
@@ -144,7 +114,7 @@ function M.lex(source, path)
     if code >= 0xD800 and code <= 0xDFFF or code > 0x10FFFF then
       fail(pos, "escape '\\" .. escaped .. digits .. "' is not a valid code point")
     end
-    return utf8_encode(code), pos + 2 + count
+    return chr(code), pos + 2 + count
   end
 
   local lex_token

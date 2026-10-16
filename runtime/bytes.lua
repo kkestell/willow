@@ -50,8 +50,5 @@ function __wlo_str_encode(text, site)
 end
 
 function __wlo_bytes_decode(data, site)
-  if not __wlo_valid_utf8(data.__wlo_octets) then
-    __wlo_fail("ValueError", "invalid UTF-8", site)
-  end
-  return data.__wlo_octets
+  return __wlo_check_text(data.__wlo_octets, site)
 end

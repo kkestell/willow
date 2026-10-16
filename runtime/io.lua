@@ -33,13 +33,11 @@ end
 function __wlo_open(path, mode, site)
   if mode ~= "r" and mode ~= "w" and mode ~= "a" then
     __wlo_fail("ValueError", "invalid mode '" .. mode .. "'", site)
-  elseif path:find("\0", 1, true) then
-    __wlo_fail("ValueError", "path contains a NUL character", site)
   end
+  __wlo_check_path(path, site)
   local file, err = io.open(path, mode .. "b")
   if not file then
-    -- io.open reports "<path>: <reason>".
-    __wlo_fail("OSError", "cannot open " .. path .. ": " .. err:sub(#path + 3), site)
+    __wlo_fail("OSError", "cannot open " .. path .. ": " .. __wlo_open_reason(err, path), site)
   end
   return __wlo_handle(file, path, mode, false)
 end
@@ -76,10 +74,7 @@ function __wlo_file_readline(handle, site)
   if err then
     __wlo_io_fail("read", handle, err, site)
   end
-  if line and not __wlo_valid_utf8(line) then
-    __wlo_fail("ValueError", "invalid UTF-8", site)
-  end
-  return line
+  return line and __wlo_check_text(line, site)
 end
 
 local function __wlo_write_octets(handle, octets, site)

@@ -13,18 +13,6 @@ local lower = require("compiler.lower")
 local emit = require("compiler.emit")
 local runner = require("compiler.runner")
 
--- Only the device and inode are read; the padding covers the rest of any
--- platform's struct stat.
-if ffi.os == "OSX" then
-  ffi.cdef([[typedef struct { int32_t dev; uint16_t mode; uint16_t nlink; uint64_t ino; uint8_t rest[256]; } willow_stat;]])
-else
-  ffi.cdef([[typedef struct { uint64_t dev; uint64_t ino; uint8_t rest[256]; } willow_stat;]])
-end
-if ffi.os == "OSX" and ffi.arch == "x64" then
-  ffi.cdef([[int stat(const char *path, willow_stat *buf) __asm__("stat$INODE64");]])
-else
-  ffi.cdef([[int stat(const char *path, willow_stat *buf);]])
-end
 if ffi.os == "OSX" then
   ffi.cdef([[int chmod(const char *path, uint16_t mode);]])
 else
@@ -115,11 +103,8 @@ end
 
 -- True when both paths name the same existing file, following symlinks.
 local function same_file(a, b)
-  local stat_a, stat_b = ffi.new("willow_stat"), ffi.new("willow_stat")
-  if ffi.C.stat(a, stat_a) ~= 0 or ffi.C.stat(b, stat_b) ~= 0 then
-    return false
-  end
-  return stat_a.dev == stat_b.dev and stat_a.ino == stat_b.ino
+  local id = loader.file_id(a)
+  return id ~= nil and id == loader.file_id(b)
 end
 
 -- Writes through an exclusively created sibling and renames it into place, so
@@ -211,14 +196,13 @@ end
 local function file_roots(path)
   return {
     primary = path:match("^(.*/)") or "",
-    library = root .. "/lib/",
     entry_name = (path:match("([^/]*)$"):gsub("%.wlo$", "")),
   }
 end
 
 -- Module roots for `project` whose entry module is named `entry_name`.
 local function project_roots(project, entry_name)
-  return { primary = project.source, dependencies = project.dependencies, library = root .. "/lib/", entry_name = entry_name }
+  return { primary = project.source, dependencies = project.dependencies, entry_name = entry_name }
 end
 
 -- The project in the current directory, or nil; a broken manifest fails.
@@ -233,14 +217,9 @@ end
 -- The test chunk and test names of the test file at `path`, or false and the
 -- diagnostics. Imports use `project`'s roots when there is a project.
 local function compile_test(path, project)
-  local file, err = io.open(path, "rb")
-  if not file then
-    return false, "error: " .. err
-  end
-  local source, read_err = file:read("*a")
-  file:close()
+  local source, err = loader.read(path)
   if not source then
-    return false, "error: " .. path .. ": " .. read_err
+    return false, "error: " .. err
   end
   local roots = project and project_roots(project, file_roots(path).entry_name) or file_roots(path)
   local ok, modules, text = xpcall(translate, report, "test", path, source, roots, true)
@@ -276,14 +255,9 @@ else
   path, roots = project.entry, project_roots(project, project.entry_name)
 end
 
-local file, err = io.open(path, "rb")
-if not file then
-  fail("error: " .. err)
-end
-local source, read_err = file:read("*a")
-file:close()
+local source, err = loader.read(path)
 if not source then
-  fail("error: " .. path .. ": " .. read_err)
+  fail("error: " .. err)
 end
 
 if output and same_file(path, output) then

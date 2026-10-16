@@ -36,6 +36,14 @@ def main() -> None:
         fs.exists("a\x00b")
     except ValueError as v:
         print(v.message)
+    try:
+        fs.read_file("a\x00b")
+    except ValueError as v:
+        print(v.message)
+    try:
+        fs.write_file("a\x00b", "")
+    except ValueError as v:
+        print(v.message)
     w = sys.getenv("WILLOW")
     if w is not None:
         print(w.endswith("/willow"))

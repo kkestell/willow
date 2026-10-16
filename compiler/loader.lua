@@ -5,20 +5,36 @@ local lexer = require("compiler.lexer")
 local parser = require("compiler.parser")
 local bind = require("compiler.bind")
 
-ffi.cdef([[char *realpath(const char *path, char *resolved);]])
+-- Only the device and inode are read; the padding covers the rest of any
+-- platform's struct stat.
+if ffi.os == "OSX" then
+  ffi.cdef([[typedef struct { int32_t dev; uint16_t mode; uint16_t nlink; uint64_t ino; uint8_t rest[256]; } willow_stat;]])
+else
+  ffi.cdef([[typedef struct { uint64_t dev; uint64_t ino; uint8_t rest[256]; } willow_stat;]])
+end
+if ffi.os == "OSX" and ffi.arch == "x64" then
+  ffi.cdef([[int stat(const char *path, willow_stat *buf) __asm__("stat$INODE64");]])
+else
+  ffi.cdef([[int stat(const char *path, willow_stat *buf);]])
+end
 
 local M = {}
 
 local ENOENT = 2
 
--- The canonical path of an existing file, which identifies it.
-local function real_path(path)
-  local buffer = ffi.new("char[4096]")
-  local result = ffi.C.realpath(path, buffer)
-  return result ~= nil and ffi.string(result) or path
+-- The device and inode of the existing file at `path`, following symlinks,
+-- which identify it; nil when there is no such file.
+function M.file_id(path)
+  local buf = ffi.new("willow_stat")
+  if ffi.C.stat(path, buf) ~= 0 then
+    return nil
+  end
+  return tostring(buf.dev) .. ":" .. tostring(buf.ino)
 end
 
-local function read(path)
+-- The text of the file at `path`, or nil, a message naming the path, and the
+-- open error code.
+function M.read(path)
   local file, err, code = io.open(path, "rb")
   if not file then
     return nil, err, code
@@ -37,8 +53,8 @@ end
 --
 -- `roots` gives where module `a.b` (file `a/b.wlo`) is looked for, in order:
 -- `primary`, a directory prefix ending in a slash or empty; each prefix in
--- `dependencies`, where more than one match is an error; the compiler-provided
--- modules; and `library`. The entry is registered as `roots.entry_name`.
+-- `dependencies`, where more than one match is an error; and the
+-- compiler-provided modules. The entry is registered as `roots.entry_name`.
 function M.load(path, source, roots)
   local modules, by_name, by_file = {}, {}, {}
 
@@ -47,7 +63,7 @@ function M.load(path, source, roots)
     local name = import.name
     local relative = name:gsub("%.", "/") .. ".wlo"
     local primary_path = roots.primary .. relative
-    local text, err, code = read(primary_path)
+    local text, err, code = M.read(primary_path)
     if text or code ~= ENOENT then
       if not text then
         diag.error(import.span, "cannot load module '" .. name .. "': " .. err)
@@ -57,7 +73,7 @@ function M.load(path, source, roots)
     local found = {}
     for _, dependency in ipairs(roots.dependencies or {}) do
       local candidate = dependency .. relative
-      local candidate_text, candidate_err, candidate_code = read(candidate)
+      local candidate_text, candidate_err, candidate_code = M.read(candidate)
       if candidate_text then
         found[#found + 1] = { candidate, candidate_text }
       elseif candidate_code ~= ENOENT then
@@ -71,16 +87,11 @@ function M.load(path, source, roots)
     elseif bind.modules[name] then
       return nil
     end
-    local library_path = roots.library .. relative
-    local library_text = read(library_path)
-    if library_text then
-      return library_path, library_text
-    end
     diag.error(import.span, "cannot load module '" .. name .. "': " .. err)
   end
 
   local function visit(name, module_path, text, span)
-    local file = real_path(module_path)
+    local file = M.file_id(module_path)
     if by_file[file] then
       diag.error(span, "module '" .. name .. "' is the same file as module '" .. by_file[file] .. "'")
     end

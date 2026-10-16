@@ -5,11 +5,7 @@ local check = require("compiler.check")
 local lower = require("compiler.lower")
 local emit = require("compiler.emit")
 
-local function eq(expected, actual)
-  if expected ~= actual then
-    error(string.format("expected %q, got %q", tostring(expected), tostring(actual)), 2)
-  end
-end
+local eq = require("tests.support").eq
 
 local function emit_source(source)
   local program = parser.parse(lexer.lex(source, "test.wlo"))

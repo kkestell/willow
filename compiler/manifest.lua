@@ -1,163 +1,21 @@
 -- Reads a project's willow.json.
+local loader = require("compiler.loader")
+local runtime = require("compiler.runtime")
+
 local M = {}
 
--- Parses the JSON text `text`, returning the value or nil and a message. Objects
--- become { keys = ordered keys, values = { key = value } }, so later repeated
--- keys replace earlier values; `null` becomes `M.null`.
-M.null = {}
+-- Parses the JSON text `text` with the json module's runtime, returning the
+-- value or nil and a message. Values have their Willow representation: objects
+-- are { keys, values }, lists have `n`, and `null` is nil.
 local function parse_json(text)
-  local pos = 1
-  local fail
-
-  local function skip()
-    pos = text:find("[^ \t\r\n]", pos) or #text + 1
+  local parse = runtime.load({ json_parse = true }, { "__wlo_json_parse" })
+  local ok, result = pcall(parse, text)
+  if ok then
+    return result
+  elseif type(result) == "table" and result.__wlo_class == "json.JsonError" then
+    return nil, result.message
   end
-
-  local function position()
-    local line, col = 1, 1
-    for i = 1, pos - 1 do
-      if text:sub(i, i) == "\n" then
-        line, col = line + 1, 1
-      else
-        col = col + 1
-      end
-    end
-    return "line " .. line .. ", column " .. col
-  end
-
-  fail = function(problem)
-    error({ message = problem .. " at " .. position() }, 0)
-  end
-
-  local value
-
-  local function string_value()
-    pos = pos + 1
-    local parts = {}
-    while true do
-      local char = text:sub(pos, pos)
-      if char == "" then
-        fail("unterminated string")
-      elseif char == '"' then
-        pos = pos + 1
-        return table.concat(parts)
-      elseif char == "\\" then
-        local escape = text:sub(pos + 1, pos + 1)
-        local simple = ({ ['"'] = '"', ["\\"] = "\\", ["/"] = "/", b = "\b", f = "\f", n = "\n", r = "\r", t = "\t" })[escape]
-        if simple then
-          parts[#parts + 1] = simple
-          pos = pos + 2
-        elseif escape == "u" and text:sub(pos + 2, pos + 5):match("^%x%x%x%x$") then
-          local code = tonumber(text:sub(pos + 2, pos + 5), 16)
-          if code < 0x80 then
-            parts[#parts + 1] = string.char(code)
-          elseif code < 0x800 then
-            parts[#parts + 1] = string.char(0xC0 + math.floor(code / 64), 0x80 + code % 64)
-          else
-            parts[#parts + 1] = string.char(0xE0 + math.floor(code / 4096), 0x80 + math.floor(code / 64) % 64, 0x80 + code % 64)
-          end
-          pos = pos + 6
-        else
-          fail("invalid escape")
-        end
-      elseif char:byte() < 32 then
-        fail("control character in string")
-      else
-        parts[#parts + 1] = char
-        pos = pos + 1
-      end
-    end
-  end
-
-  value = function()
-    skip()
-    local char = text:sub(pos, pos)
-    if char == "{" then
-      pos = pos + 1
-      local object = { keys = {}, values = {} }
-      skip()
-      if text:sub(pos, pos) == "}" then
-        pos = pos + 1
-        return object
-      end
-      while true do
-        skip()
-        if text:sub(pos, pos) ~= '"' then
-          fail("expected a string key")
-        end
-        local key = string_value()
-        skip()
-        if text:sub(pos, pos) ~= ":" then
-          fail("expected ':'")
-        end
-        pos = pos + 1
-        if object.values[key] == nil then
-          object.keys[#object.keys + 1] = key
-        end
-        object.values[key] = value()
-        skip()
-        local next_char = text:sub(pos, pos)
-        pos = pos + 1
-        if next_char == "}" then
-          return object
-        elseif next_char ~= "," then
-          pos = pos - 1
-          fail("expected ',' or '}'")
-        end
-      end
-    elseif char == "[" then
-      pos = pos + 1
-      local list = {}
-      skip()
-      if text:sub(pos, pos) == "]" then
-        pos = pos + 1
-        return list
-      end
-      while true do
-        list[#list + 1] = value()
-        skip()
-        local next_char = text:sub(pos, pos)
-        pos = pos + 1
-        if next_char == "]" then
-          return list
-        elseif next_char ~= "," then
-          pos = pos - 1
-          fail("expected ',' or ']'")
-        end
-      end
-    elseif char == '"' then
-      return string_value()
-    end
-    for word, result in pairs({ ["true"] = true, ["false"] = false, null = M.null }) do
-      if text:sub(pos, pos + #word - 1) == word then
-        pos = pos + #word
-        return result
-      end
-    end
-    local literal = text:match("^-?%d+%.?%d*[eE]?[-+]?%d*", pos)
-    local number = literal and tonumber(literal)
-    if number then
-      pos = pos + #literal
-      return number
-    end
-    fail("expected a value")
-  end
-
-  local ok, result = pcall(function()
-    local parsed = value()
-    skip()
-    if pos <= #text then
-      fail("unexpected text after the value")
-    end
-    return parsed
-  end)
-  if not ok then
-    if type(result) == "table" then
-      return nil, result.message
-    end
-    error(result, 0)
-  end
-  return result
+  error(result, 0)
 end
 
 local DEFAULTS = { entry = "main.wlo", source = ".", dependencies = {}, tests = "tests" }
@@ -176,13 +34,14 @@ end
 -- Reads `willow.json` in the current directory. Returns nil when there is
 -- none, or the project, or false and an error message.
 function M.read()
-  local file = io.open("willow.json", "rb")
-  if not file then
+  local text, err, code = loader.read("willow.json")
+  if code then
     return nil
+  elseif not text then
+    return false, err
   end
-  local text = file:read("*a")
-  file:close()
-  local data, err = parse_json(text)
+  local data
+  data, err = parse_json(text)
   if not data then
     return false, "willow.json: " .. err
   end
@@ -195,10 +54,11 @@ function M.read()
     if DEFAULTS[key] == nil then
       return false, "willow.json: unknown key '" .. key .. "'"
     elseif key == "dependencies" then
-      if type(value) ~= "table" or value.keys or value == M.null then
+      if type(value) ~= "table" or not value.n then
         return false, "willow.json: 'dependencies' must be a list of strings"
       end
-      for _, item in ipairs(value) do
+      for i = 1, value.n do
+        local item = value[i]
         if type(item) ~= "string" then
           return false, "willow.json: 'dependencies' must be a list of strings"
         elseif item == "" then

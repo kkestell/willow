@@ -4,11 +4,11 @@
 
 local __wlo_ffi = require("ffi")
 __wlo_ffi.cdef([[
+typedef struct { int64_t sec; long nsec; } __wlo_timespec_t;
 int snprintf(char *, size_t, const char *, ...);
 void *__wlo_c_signal(int signal, void *handler) __asm__("signal");
+int __wlo_c_clock_gettime(int clock, __wlo_timespec_t *time) __asm__("clock_gettime");
 ]])
--- A write to a closed pipe then fails with EPIPE instead of ending the process.
-__wlo_ffi.C.__wlo_c_signal(13, __wlo_ffi.cast("void *", 1))
 
 local __wlo_source = debug.getinfo(1, "S").source
 local __wlo_MAX_INT = 9007199254740991
@@ -54,6 +54,34 @@ end
 
 local function __wlo_host_fail(message, site)
   error({ message = message, __wlo_location = __wlo_sites[site], __wlo_frames = __wlo_frames() }, 0)
+end
+
+-- Raises ValueError for a path the host would silently truncate.
+local function __wlo_check_path(path, site)
+  if path:find("\0", 1, true) then
+    __wlo_fail("ValueError", "path contains a NUL character", site)
+  end
+end
+
+-- io.open and os.rename report "<path>: <reason>"; returns the reason.
+local function __wlo_open_reason(err, path)
+  return err:sub(#path + 3)
+end
+
+-- A timeout is None or finite and positive.
+local function __wlo_check_timeout(timeout, site)
+  if timeout ~= nil and not (timeout > 0 and timeout < math.huge) then
+    __wlo_fail("ValueError", "timeout must be finite and positive", site)
+  end
+end
+
+local __wlo_CLOCK_MONOTONIC = __wlo_ffi.os == "OSX" and 6 or 1
+
+-- Seconds on `clock`, a clock_gettime clock id.
+local function __wlo_clock(clock)
+  local now = __wlo_ffi.new("__wlo_timespec_t")
+  __wlo_ffi.C.__wlo_c_clock_gettime(clock, now)
+  return tonumber(now.sec) + tonumber(now.nsec) / 1e9
 end
 
 -- The xpcall message handler. It runs where the error happened, so a raw VM
@@ -293,9 +321,10 @@ local function __wlo_format_float(x)
   return sign .. text
 end
 
--- Flushes every line so a write failure is reported at the print that hit it.
-local function __wlo_write(file, text, site)
-  local ok, err = file:write(text, "\n")
+-- Writes the strings `...` and flushes, so a write failure is reported at the
+-- call that hit it.
+local function __wlo_write(file, site, ...)
+  local ok, err = file:write(...)
   if ok then
     ok, err = file:flush()
   end
@@ -374,24 +403,25 @@ local function __wlo_str_float(value)
 end
 
 local function __wlo_print(value, site)
-  __wlo_write(io.stdout, __wlo_str(value), site)
+  __wlo_write(io.stdout, site, __wlo_str(value), "\n")
 end
 
 local function __wlo_print_float(value, site)
-  __wlo_write(io.stdout, __wlo_str_float(value), site)
+  __wlo_write(io.stdout, site, __wlo_str_float(value), "\n")
 end
 
 local function __wlo_eprint(value, site)
-  __wlo_write(io.stderr, __wlo_str(value), site)
+  __wlo_write(io.stderr, site, __wlo_str(value), "\n")
 end
 
 local function __wlo_eprint_float(value, site)
-  __wlo_write(io.stderr, __wlo_str_float(value), site)
+  __wlo_write(io.stderr, site, __wlo_str_float(value), "\n")
 end
 
--- Well-formed multibyte UTF-8 sequences: no overlong forms, surrogates, or
--- code points above U+10FFFF.
+-- Well-formed UTF-8 sequences: no overlong forms, surrogates, or code points
+-- above U+10FFFF.
 local __wlo_UTF8_SEQUENCES = {
+  "^[%z\1-\127]",
   "^[\194-\223][\128-\191]",
   "^\224[\160-\191][\128-\191]",
   "^[\225-\236\238\239][\128-\191][\128-\191]",
@@ -401,22 +431,47 @@ local __wlo_UTF8_SEQUENCES = {
   "^\244[\128-\143][\128-\191][\128-\191]",
 }
 
+-- The UTF-8 character starting at byte `pos` of `text`, or nil if it is
+-- malformed.
+local function __wlo_utf8_char(text, pos)
+  for _, pattern in ipairs(__wlo_UTF8_SEQUENCES) do
+    local char = text:match(pattern, pos)
+    if char then
+      return char
+    end
+  end
+end
+
+-- The code point of the UTF-8 character `char`.
+local function __wlo_code_point(char)
+  local value = char:byte(1)
+  if #char > 1 then
+    -- The lead byte of an n-byte sequence carries 7 - n value bits.
+    value = value % 2 ^ (7 - #char)
+    for i = 2, #char do
+      value = value * 64 + char:byte(i) % 64
+    end
+  end
+  return value
+end
+
 local function __wlo_valid_utf8(text)
   local pos = text:find("[\128-\255]")
   while pos do
-    local char
-    for _, pattern in ipairs(__wlo_UTF8_SEQUENCES) do
-      char = text:match(pattern, pos)
-      if char then
-        break
-      end
-    end
+    local char = __wlo_utf8_char(text, pos)
     if not char then
       return false
     end
     pos = text:find("[\128-\255]", pos + #char)
   end
   return true
+end
+
+local function __wlo_check_text(text, site)
+  if not __wlo_valid_utf8(text) then
+    __wlo_fail("ValueError", "invalid UTF-8", site)
+  end
+  return text
 end
 
 -- The files read through C stdio, which may hold buffered input that a child
@@ -440,20 +495,14 @@ local function __wlo_input(site)
   if err then
     __wlo_host_fail("cannot read input: " .. tostring(err), site)
   end
-  if not line then
-    return nil
-  end
-  if not __wlo_valid_utf8(line) then
-    __wlo_fail("ValueError", "invalid UTF-8", site)
-  end
-  return line
+  return line and __wlo_check_text(line, site)
 end
 
--- io.open reports "<path>: <reason>"; reads and writes report the reason alone.
 local function __wlo_read_file(path, site)
+  __wlo_check_path(path, site)
   local file, err = io.open(path, "rb")
   if not file then
-    __wlo_fail("OSError", "cannot read " .. path .. ": " .. err:sub(#path + 3), site)
+    __wlo_fail("OSError", "cannot read " .. path .. ": " .. __wlo_open_reason(err, path), site)
   end
   local text
   text, err = file:read("*a")
@@ -461,16 +510,14 @@ local function __wlo_read_file(path, site)
   if not text then
     __wlo_fail("OSError", "cannot read " .. path .. ": " .. tostring(err), site)
   end
-  if not __wlo_valid_utf8(text) then
-    __wlo_fail("ValueError", "invalid UTF-8", site)
-  end
-  return text
+  return __wlo_check_text(text, site)
 end
 
 local function __wlo_write_file(path, text, site)
+  __wlo_check_path(path, site)
   local file, err = io.open(path, "wb")
   if not file then
-    __wlo_fail("OSError", "cannot write " .. path .. ": " .. err:sub(#path + 3), site)
+    __wlo_fail("OSError", "cannot write " .. path .. ": " .. __wlo_open_reason(err, path), site)
   end
   local ok
   ok, err = file:write(text)
@@ -898,15 +945,7 @@ local function __wlo_ord(text, site)
   if __wlo_code_points(text) ~= 1 then
     __wlo_fail("ValueError", "expected one character", site)
   end
-  local value = text:byte(1)
-  if #text > 1 then
-    -- The lead byte of an n-byte sequence carries 7 - n value bits.
-    value = value % 2 ^ (7 - #text)
-    for i = 2, #text do
-      value = value * 64 + text:byte(i) % 64
-    end
-  end
-  return value
+  return __wlo_code_point(text)
 end
 
 -- Surrogates are U+D800 through U+DFFF, and U+10FFFF is the last code point.
@@ -970,15 +1009,14 @@ end
 local function __wlo_args(site)
   local args = {}
   for i = 1, __wlo_argv.n do
-    if not __wlo_valid_utf8(__wlo_argv[i]) then
-      __wlo_fail("ValueError", "invalid UTF-8", site)
-    end
-    args[i] = __wlo_argv[i]
+    args[i] = __wlo_check_text(__wlo_argv[i], site)
   end
   return __wlo_list(args, __wlo_argv.n)
 end
 
 local function __wlo_run(main, ...)
+  -- A write to a closed pipe then fails with EPIPE instead of ending the process.
+  __wlo_ffi.C.__wlo_c_signal(13, __wlo_ffi.cast("void *", 1))
   __wlo_argv = { n = select("#", ...), ... }
   local ok, err = xpcall(main, __wlo_catch)
   if not ok then

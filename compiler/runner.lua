@@ -2,9 +2,11 @@
 -- `test_*` function in its own process.
 local M = {}
 
-local function quote(s)
+-- `s` quoted for the shell.
+function M.quote(s)
   return "'" .. s:gsub("'", "'\\''") .. "'"
 end
+local quote = M.quote
 
 -- The test files at `path`, sorted: the `test_*.wlo` files inside a
 -- directory, directly or, when `recursive`, at any depth without following

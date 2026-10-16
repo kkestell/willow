@@ -12,19 +12,8 @@
 local root = (arg[0]:match("^(.*)/tests/[^/]*$") or ".")
 package.path = root .. "/?.lua"
 
-local function quote(s)
-  return "'" .. s:gsub("'", "'\\''") .. "'"
-end
-
-local function read(path)
-  local file = io.open(path, "rb")
-  if not file then
-    return nil
-  end
-  local text = file:read("*a")
-  file:close()
-  return text
-end
+local quote = require("compiler.runner").quote
+local read = require("compiler.loader").read
 
 -- Program tests change directory, so the launcher path must be absolute.
 local pwd = io.popen("cd " .. quote(root) .. " && pwd")

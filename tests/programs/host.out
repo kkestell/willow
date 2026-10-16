@@ -16,6 +16,8 @@ cannot remove directory BASE/x: Directory not empty
 cannot create directory BASE/é.txt: File exists
 False
 path contains a NUL character
+path contains a NUL character
+path contains a NUL character
 True
 None
 True

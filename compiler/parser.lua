@@ -1,17 +1,12 @@
 -- Parses tokens into the program syntax tree.
 local ast = require("compiler.ast")
 local diag = require("compiler.diag")
+local lexer = require("compiler.lexer")
 local span = require("compiler.span")
 
 local M = {}
 
-local function set(words)
-  local result = {}
-  for word in words:gmatch("%S+") do
-    result[word] = true
-  end
-  return result
-end
+local set = lexer.set
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[

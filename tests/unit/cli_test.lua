@@ -1,22 +1,6 @@
-local function eq(expected, actual)
-  if expected ~= actual then
-    error(string.format("expected %q, got %q", tostring(expected), tostring(actual)), 2)
-  end
-end
-
-local function quote(s)
-  return "'" .. s:gsub("'", "'\\''") .. "'"
-end
-
-local function read(path)
-  local file = io.open(path, "rb")
-  if not file then
-    return nil
-  end
-  local text = file:read("*a")
-  file:close()
-  return text
-end
+local eq = require("tests.support").eq
+local quote = require("compiler.runner").quote
+local read = require("compiler.loader").read
 
 local function write(path, text)
   local file = assert(io.open(path, "wb"))
@@ -892,9 +876,9 @@ return {
       eq("error: willow.json: 'source' must be a string\n", manifest_error('{"source": 1}'))
       eq("error: willow.json: 'dependencies' must be a list of strings\n", manifest_error('{"dependencies": "vendor"}'))
       eq("error: willow.json: 'dependencies' must be a list of strings\n", manifest_error('{"dependencies": null}'))
-      eq("error: willow.json: expected a value at line 1, column 19\n", manifest_error('{"dependencies": [1-2]}'))
+      eq("error: willow.json: expected ',' or ']' at line 1, column 20\n", manifest_error('{"dependencies": [1-2]}'))
       eq("error: willow.json: expected an object\n", manifest_error('[]'))
-      eq("error: willow.json: expected a value at line 1, column 11\n", manifest_error('{"entry": }'))
+      eq("error: willow.json: expected value at line 1, column 11\n", manifest_error('{"entry": }'))
       local entry_message = "error: willow.json: 'entry' must be a .wlo path inside the source root with identifier components\n"
       eq(entry_message, manifest_error('{"entry": "../main.wlo"}'))
       eq(entry_message, manifest_error('{"entry": "main.py"}'))
