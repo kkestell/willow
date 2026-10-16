@@ -5,6 +5,7 @@ class Options:
     width: int = 10
     ratio: float = 0.5
     label: str | None = None
+    zero: float = -0.0
 
 class Problem(Exception):
     code: int = 2
@@ -18,6 +19,9 @@ def greet(name: str, prefix: str = "Hello", times: int = 1) -> str:
 def scale(x: float | int = 2.5) -> str:
     return str(x)
 
+def zero(x: float = -0.0) -> float:
+    return x
+
 def show(label: str, value: int) -> int:
     print(label)
     return value
@@ -29,6 +33,8 @@ def triple(a: int, b: int = 0, c: int = 0) -> str:
     return f"{a} {b} {c}"
 
 def main() -> None:
+    assert str(zero()) == "-0.0"
+    assert str(Options("report").zero) == "-0.0"
     print(greet("Ada"))
     print(greet("Ada", "Hi"))
     print(greet(prefix="Welcome", name="Ada"))

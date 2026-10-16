@@ -4,6 +4,7 @@ local bind = require("compiler.bind")
 local check = require("compiler.check")
 local lower = require("compiler.lower")
 local emit = require("compiler.emit")
+local runtime = require("compiler.runtime")
 
 local eq = require("tests.support").eq
 
@@ -37,6 +38,15 @@ local function run(source, redirect)
 end
 
 return {
+  load_core_and_optional_helpers = function()
+    local count, parse = runtime.load({ json_parse = true }, { "__wlo_code_points", "__wlo_json_parse" })
+    eq(2, count("é→"))
+    local value = parse('["é", 3]')
+    eq(2, value.n)
+    eq("é", value[1])
+    eq(3, value[2])
+  end,
+
   quote_round_trips = function()
     for _, s in ipairs({ "\\ ' \" \n \r \t", "\0" .. "1", "\1\31\127", "日本語 ✓ café", "" }) do
       eq(s, load("return " .. emit.quote(s))())

@@ -421,7 +421,7 @@ local function check_function(fn)
         local item = item_type(right)
         if right == types.str then
           type = left == types.str and types.bool or nil
-        elseif item and types.printable(left) and types.printable(item)
+        elseif item and types.comparable(left) and types.comparable(item)
           and (types.assignable(left, item) or types.assignable(item, left)) then
           type = types.bool
         end

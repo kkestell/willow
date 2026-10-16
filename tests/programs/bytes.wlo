@@ -7,7 +7,14 @@ def show(data: bytes) -> str:
 def matches(value: bytes | str, text: str) -> bool:
     return value == text
 
+def contains(value: bytes | str, items: list[bytes | str]) -> bool:
+    return value in items
+
 def main() -> None:
+    assert bytes([1]) in [bytes([1])]
+    assert bytes([2]) not in [bytes([1])]
+    assert contains("a".encode(), ["a", "a".encode()])
+    assert not contains("a".encode(), ["a"])
     empty = bytes([])
     data = bytes([0, 127, 128, 255])
     print(f"{len(empty)} {len(data)} {show(data)}")

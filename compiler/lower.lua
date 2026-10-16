@@ -314,7 +314,10 @@ local function lower_function(fn, sites, helpers)
         end
         return helper(name, args, node.span)
       end
-      return { kind = "Call", target = node.target, args = args, span = node.span }
+      return {
+        kind = "Call", target = node.target, args = args, span = node.span,
+        qualified = node.name ~= node.target.name,
+      }
     elseif kind == "Field" then
       return { kind = "Field", object = lower_object(node.object), name = node.name }
     elseif kind == "FString" then

@@ -22,12 +22,18 @@ local DEFAULTS = { entry = "main.wlo", source = ".", dependencies = {}, tests = 
 
 -- `path` relative to the manifest directory, as a prefix-free path.
 local function under(path)
+  if path:match("^/+$") then
+    return "/"
+  end
   return path == "." and "" or path:gsub("/+$", "")
 end
 
 -- A directory prefix for `path`: empty for the manifest directory.
 local function prefix(path)
   local dir = under(path)
+  if dir == "/" then
+    return dir
+  end
   return dir == "" and "" or dir .. "/"
 end
 
@@ -35,14 +41,14 @@ end
 -- none, or the project, or false and an error message.
 function M.read()
   local text, err, code = loader.read("willow.json")
-  if code then
+  if code == 2 then -- ENOENT
     return nil
   elseif not text then
     return false, err
   end
   local data
   data, err = parse_json(text)
-  if not data then
+  if err then
     return false, "willow.json: " .. err
   end
   if type(data) ~= "table" or not data.keys then

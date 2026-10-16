@@ -50,6 +50,9 @@ end
 -- Integers print as integers; other numbers use the fewest significant digits
 -- that read back as the same value.
 local function number(value)
+  if value == 0 and 1 / value < 0 then
+    return "-0.0"
+  end
   if value == math.floor(value) and math.abs(value) <= 9007199254740991 then
     return string.format("%d", value)
   end
@@ -86,8 +89,8 @@ function M.emit(lowered)
   end
 
   -- Functions of the entry module are locals. Every other module keeps its
-  -- functions in a table, and so does the entry module when another module
-  -- imports it, so that a caller's local cannot shadow the function.
+  -- functions in a table, and so does the entry module when imported (including
+  -- by itself), so that a caller's local cannot shadow a qualified call.
   -- Escaping `_` as `__` and `.` as `_0` keeps distinct module names distinct.
   local function module_table(module)
     return "__wlo_module_" .. module.name:gsub("_", "__"):gsub("%.", "_0")
@@ -96,14 +99,14 @@ function M.emit(lowered)
   local entry_imported = false
   for _, module in ipairs(lowered.modules) do
     for _, imported in pairs(module.imported) do
-      if imported == entry and module ~= entry then
+      if imported == entry then
         entry_imported = true
       end
     end
   end
 
-  local function function_name(fn)
-    if fn.module == entry and fn_module == entry then
+  local function function_name(fn, qualified)
+    if fn.module == entry and fn_module == entry and not qualified then
       return M.mangle(fn.name)
     end
     return module_table(fn.module) .. "." .. M.mangle(fn.name)
@@ -149,11 +152,11 @@ function M.emit(lowered)
       local text = expr(e.left, true) .. " " .. binary_ops[e.op] .. " " .. expr(e.right, true)
       return nested and "(" .. text .. ")" or text
     elseif kind == "Call" then
-      return function_name(e.target) .. "(" .. args(e.args) .. ")"
+      return function_name(e.target, e.qualified) .. "(" .. args(e.args) .. ")"
     elseif kind == "Helper" then
-      return "__wlo_" .. e.name .. "(" .. args(e.args, e.site) .. ")"
+      return runtime.reference(e.name) .. "(" .. args(e.args, e.site) .. ")"
     elseif kind == "Pure" then
-      return "__wlo_" .. e.name .. "(" .. args(e.args) .. ")"
+      return runtime.reference(e.name) .. "(" .. args(e.args) .. ")"
     elseif kind == "Item" then
       return "__wlo_item"
     elseif kind == "Str" then
@@ -307,6 +310,9 @@ function M.emit(lowered)
   for runtime_line in runtime.text(lowered.helpers):gmatch("([^\n]*)\n") do
     line(0, runtime_line)
   end
+  if entry.tests then
+    line(0, "local __wlo_test_open = io.open")
+  end
 
   local names = {}
   for _, fn in ipairs(lowered.functions) do
@@ -386,7 +392,7 @@ function M.emit(lowered)
     line(0, "}")
     line(0, "local __wlo_name, __wlo_result = ...")
     line(0, "__wlo_run(__wlo_tests[__wlo_name])")
-    line(0, 'assert(io.open(__wlo_result, "wb")):close()')
+    line(0, 'assert(__wlo_test_open(__wlo_result, "wb")):close()')
   else
     -- The program arguments arrive as the chunk's varargs.
     line(0, "__wlo_run(" .. M.mangle("main") .. ", ...)")

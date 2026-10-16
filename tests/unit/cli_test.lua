@@ -504,7 +504,7 @@ return {
     in_temp_dir(function(dir)
       write(dir .. "/test_a.wlo", "def test_a() -> None:\n    print('ran')\n    assert False\n")
       write(dir .. "/test_b.wlo", "def test_b() -> None:\n    x: int = 'b'\n")
-      write(dir .. "/helper.wlo", "def test_helper() -> None:\n    pass\n")
+      write(dir .. "/helper.wlo", "def io() -> None:\n    pass\ndef test_helper() -> None:\n    pass\n")
       local status, stdout, stderr = willow(dir, "test")
       eq(1, status)
       eq("", stdout)
@@ -878,6 +878,8 @@ return {
       eq("error: willow.json: 'dependencies' must be a list of strings\n", manifest_error('{"dependencies": null}'))
       eq("error: willow.json: expected ',' or ']' at line 1, column 20\n", manifest_error('{"dependencies": [1-2]}'))
       eq("error: willow.json: expected an object\n", manifest_error('[]'))
+      eq("error: willow.json: expected an object\n", manifest_error('false'))
+      eq("error: willow.json: expected an object\n", manifest_error('null'))
       eq("error: willow.json: expected value at line 1, column 11\n", manifest_error('{"entry": }'))
       local entry_message = "error: willow.json: 'entry' must be a .wlo path inside the source root with identifier components\n"
       eq(entry_message, manifest_error('{"entry": "../main.wlo"}'))
@@ -913,6 +915,68 @@ return {
       eq('{"target":"127.0.0.1:1","open":false,"detail":"cannot connect to 127.0.0.1:1: Connection refused"}\n', stdout)
       local _, _, err = sh(base, quote(dir .. "/portcheck") .. " nope")
       eq("portcheck: error: expected host:port, received 'nope'\n", err)
+    end)
+  end,
+
+  qualified_entry_call = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/prog.wlo", table.concat({
+        "import prog",
+        "def f() -> int:",
+        "    return 7",
+        "def main() -> None:",
+        "    f = 1",
+        "    print(prog.f())",
+        "",
+      }, "\n"))
+      local status, stdout, stderr = willow(dir, "run prog.wlo")
+      eq("", stderr)
+      eq(0, status)
+      eq("7\n", stdout)
+    end)
+  end,
+
+  combined_optional_runtimes = function()
+    in_temp_dir(function(dir)
+      local source = table.concat({
+        "import fs",
+        "import io",
+        "import cli",
+        "import http",
+        "import json",
+        "def exercise() -> None:",
+        "    assert fs.join('a', 'b') == 'a/b'",
+        "    io.stdout().flush()",
+        "    parser = cli.parser('mixed')",
+        "    parser.add_str('name', 'default')",
+        "    args = parser.parse(['--name', 'Willow'])",
+        "    assert args.get_str('name') == 'Willow'",
+        "    assert 'mixed' in parser.help()",
+        "    assert http.urlencode({'x': 'a b'}) == 'x=a+b'",
+        "    assert json.dump(json.parse('[1,2.5]')) == '[1,2.5]'",
+        "    assert bytes([195, 169]).decode().upper() == 'É'",
+        "",
+      }, "\n")
+      write(dir .. "/prog.wlo", source .. "def main() -> None:\n    exercise()\n    print('ok')\n")
+      local status, stdout, stderr = willow(dir, "run prog.wlo")
+      eq("", stderr)
+      eq(0, status)
+      eq("ok\n", stdout)
+      eq(0, willow(dir, "compile prog.wlo -o out.lua"))
+      status, stdout, stderr = sh(dir, quote(LUAJIT) .. " out.lua")
+      eq("", stderr)
+      eq(0, status)
+      eq("ok\n", stdout)
+      eq(0, willow(dir, "build prog.wlo -o out"))
+      status, stdout, stderr = sh(dir, "./out")
+      eq("", stderr)
+      eq(0, status)
+      eq("ok\n", stdout)
+      write(dir .. "/test_mixed.wlo", source .. "def test_mixed() -> None:\n    exercise()\n")
+      status, stdout, stderr = willow(dir, "test test_mixed.wlo")
+      eq("", stderr)
+      eq(0, status)
+      eq("PASS test_mixed.wlo test_mixed\n1 passed, 0 failed\n", stdout)
     end)
   end,
 

@@ -10,18 +10,23 @@ local function read_runtime(name)
 end
 
 local core = read_runtime("runtime.core")
+local optional_helpers = {}
 -- Runtime files that only programs using their helpers get: the case
--- conversion data is large, and the host helpers declare C structures. Each
--- runs in its own block so that its internal locals do not count toward the
--- chunk's limit of 200 locals; the helpers it defines without `local` are
--- declared before the block.
+-- conversion data is large, and the host helpers declare C structures. Helpers
+-- stay local to each block and are exported through one table, so libraries'
+-- locals do not accumulate toward the chunk's limit of 200.
 local function optional_runtime(text)
-  local names, helpers = {}, {}
+  local names, helpers, exports = {}, {}, {}
   for name in text:gmatch("\nfunction __wlo_([%w_]+)") do
     names[#names + 1] = "__wlo_" .. name
     helpers[name] = true
+    optional_helpers[name] = true
+    exports[#exports + 1] = "__wlo_runtime." .. name .. " = __wlo_" .. name .. "\n"
   end
-  return { text = "local " .. table.concat(names, ", ") .. "\ndo\n" .. text .. "end\n", helpers = helpers }
+  return {
+    text = "do\nlocal " .. table.concat(names, ", ") .. "\n" .. text .. table.concat(exports) .. "end\n",
+    helpers = helpers,
+  }
 end
 
 local optional_runtimes = {
@@ -34,11 +39,16 @@ local optional_runtimes = {
   optional_runtime(read_runtime("runtime.json")),
 }
 
+-- The generated reference to a helper named without its __wlo_ prefix.
+function M.reference(name)
+  return (optional_helpers[name] and "__wlo_runtime." or "__wlo_") .. name
+end
+
 -- The runtime text for a program that uses the helpers named in the set
 -- `helpers`. It expects __wlo_paths, __wlo_sites, and __wlo_lines declared
 -- before it.
 function M.text(helpers)
-  local text = core
+  local text = "local __wlo_runtime = {}\n" .. core
   for _, optional in ipairs(optional_runtimes) do
     for name in pairs(helpers) do
       if optional.helpers[name] then
@@ -53,8 +63,12 @@ end
 -- Loads the runtime for `helpers` and returns its values named in `names`.
 -- Loading has no effect on the process beyond declaring C functions and types.
 function M.load(helpers, names)
+  local references = {}
+  for i, name in ipairs(names) do
+    references[i] = M.reference(name:sub(7))
+  end
   return assert(load("local __wlo_paths, __wlo_sites, __wlo_lines = {}, {}, {}\n" .. M.text(helpers)
-    .. "return " .. table.concat(names, ", "), "=runtime"))()
+    .. "return " .. table.concat(references, ", "), "=runtime"))()
 end
 
 return M
