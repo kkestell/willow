@@ -1,12 +1,7 @@
 # Willow Language Specification
 
-Willow is a small, statically typed language with Python-like syntax that compiles
-to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
-aim for Python source compatibility or access to Lua libraries.
-
-Sections 1–14 describe the language. Sections 15–24 record the
-[application development milestones](#application-development-milestones) that
-extended it; each now points to where its rules live.
+Willow is a small, statically typed language with Python-like syntax. It compiles
+to Lua and runs on LuaJIT. Source files use the `.wlo` extension.
 
 ## 1. Programs
 
@@ -34,49 +29,51 @@ Hello, Willow
 55
 ```
 
-A program is an entry file and the modules it imports (§12), optionally organized
-as a project with a `willow.json` (§12). A file contains
-`import` statements followed by `def`, `class`, and `type` declarations in any
-order.
-Nothing else appears at file scope.
+A program consists of an entry file and the modules it imports (§12). A program
+can also be organized as a project with a `willow.json` file (§12). A file
+contains `import` statements followed by `def`, `class`, and `type` declarations
+in any order. No other statements may appear at file scope.
 
-The entry file defines exactly one `main`, with the signature
+The entry file must define exactly one `main` function, with the signature
 `def main() -> None:`. In other modules, `main` is an ordinary function name. The
-program's arguments come from `sys.args()` (§14).
+program reads its command-line arguments with `sys.args()` (§14).
 
-Test files (§12) are entry files without `main`; `willow test` runs their test
-functions.
+Test files (§12) are entry files that have no `main` function. `willow test` runs
+the test functions they define.
 
-The whole program is checked before any of it runs; an error in any module
-prevents execution. The program then calls `main` once. A call to `main` from user
-code is an ordinary call. Programs have no access to Lua globals or `require`.
+The whole program is checked before any of it runs, and an error in any module
+prevents the program from running. When the program runs, it calls `main` once.
+User code may also call `main`, and such a call behaves like any other function
+call. Programs cannot access Lua globals or `require`.
 
-The exit status is 0 when `main` returns, 1 when an exception leaves `main` or the
-program otherwise fails, and the given status when the program calls `sys.exit`
-(§14).
+The exit status is 0 when `main` returns and 1 when an exception propagates out
+of `main` or the program fails in another way. When the program calls `sys.exit`
+(§14), the exit status is the status passed to it.
 
 ## 2. Lexical structure
 
-Source text is UTF-8. Lines end with LF or CRLF; a bare CR anywhere, including in
-comments and strings, is an error. A missing final newline is allowed.
+Source text is UTF-8. Lines end with LF or CRLF. A carriage return that is not
+followed by LF is an error anywhere in the file, including in comments and
+strings. The final line does not need to end with a newline.
 
-A comment runs from `#` to the end of the line.
+A comment starts with `#` and continues to the end of the line.
 
 ### Indentation
 
-A block is a colon followed by an indented suite. Each indentation level is four
-spaces. Tabs are errors anywhere outside string literals and comments, including on
-blank lines. Blank lines and comment-only lines do not affect indentation and need
-not align.
+A block is a colon followed by an indented suite of statements. Each level of
+indentation is four spaces. Tabs are errors everywhere except inside string
+literals and comments, and this includes blank lines. Blank lines and lines that
+contain only a comment do not affect indentation, and their indentation does not
+need to match the surrounding code.
 
-A statement ends at a newline. Newlines inside parentheses, brackets, and braces do
-not end statements and do not affect indentation. There is no backslash
-continuation, semicolon separator, or one-line block.
+A newline ends a statement. Newlines inside parentheses, brackets, and braces do
+not end a statement and do not affect indentation. Willow has no backslash line
+continuation, no semicolon statement separator, and no one-line blocks.
 
 ### Identifiers and reserved words
 
-Identifiers are case-sensitive ASCII letters, digits, and underscores, and do not
-begin with a digit. These words are reserved:
+Identifiers consist of ASCII letters, digits, and underscores, and cannot begin
+with a digit. They are case-sensitive. These words are reserved:
 
 ```text
 False None True and as assert async await break case class continue def del
@@ -84,42 +81,48 @@ elif else except finally for from global if import in is lambda match nonlocal
 not or pass raise return try type while with yield
 ```
 
-The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, and `dict` are also
-reserved. A reserved word that begins no construct described here is an error
-where that construct would appear.
+The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, and `dict` are
+also reserved. Using a reserved word that does not begin one of the constructs in
+this specification is an error.
 
 ### Numeric literals
 
-Integer literals are decimal digits without leading zeros, except `0` itself. A
-leading minus is the unary operator. A literal outside the `int` range (§4) is an
-error. There are no hexadecimal, binary, or underscore-separated literals.
+An integer literal is a sequence of decimal digits with no leading zeros, except
+for `0` itself. A minus sign before a literal is the unary minus operator, not
+part of the literal. An integer literal outside the `int` range (§4) is an error.
+Hexadecimal literals, binary literals, and underscores in literals are not
+supported.
 
-A float literal has a fractional part, an exponent, or both: `1.0`, `0.25`, `1e9`,
-`2.5e-3`. Digits are required on both sides of a decimal point, and the integer
-part follows the leading-zero rule. A literal that rounds to infinity is an error.
+A float literal has a fractional part, an exponent, or both, as in `1.0`, `0.25`,
+`1e9`, and `2.5e-3`. A decimal point must have digits on both sides, and the
+integer part follows the same leading-zero rule as integer literals. A float
+literal that rounds to infinity is an error.
 
 ### String literals
 
-Strings are single- or double-quoted and cannot contain an unescaped newline.
-Triple-quoted strings (`"""..."""` and `'''...'''`) may span lines; each line break
-becomes `\n` and indentation is kept. There are no raw strings.
+A string literal is enclosed in single or double quotes and cannot contain an
+unescaped newline. Triple-quoted strings (`"""..."""` and `'''...'''`) may span
+multiple lines. Each line break in a triple-quoted string becomes `\n`, and
+indentation is preserved. Raw strings are not supported.
 
-The escapes are `\\`, `\'`, `\"`, `\n`, `\r`, `\t`, and `\xhh`, `\uhhhh`, and
-`\Uhhhhhhhh`, which denote the code point with that hexadecimal value. Unknown
-escapes, surrogates (U+D800 through U+DFFF), and values above U+10FFFF are errors.
+The escape sequences are `\\`, `\'`, `\"`, `\n`, `\r`, `\t`, `\xhh`, `\uhhhh`,
+and `\Uhhhhhhhh`. The last three denote the code point with the given hexadecimal
+value. An unknown escape sequence is an error, as is an escape that denotes a
+surrogate (U+D800 through U+DFFF) or a value above U+10FFFF.
 
-An f-string (`f"..."`, `f'...'`, or a triple-quoted form) interpolates expressions
-in braces:
+An f-string (`f"..."`, `f'...'`, or a triple-quoted form) inserts the values of
+expressions written in braces:
 
 ```python
 f"{name} has {len(name)} letters"
 ```
 
-Each field holds one expression of a printable type (§4) and contributes the text
-`str(...)` would produce, shaped by an optional format specification (§7). Fields
-are evaluated left to right. `{{` and `}}` denote literal braces. A field cannot be
-empty or contain a backslash, a `#`, or the f-string's own quote character, and a
-lone `}` is an error. There are no `!` conversions.
+Each field contains one expression of a printable type (§4). The field produces
+the same text as `str(...)` would, formatted by an optional format specification
+(§7). Fields are evaluated from left to right. `{{` and `}}` produce literal
+braces. A field cannot be empty and cannot contain a backslash, a `#`, or the
+quote character that delimits the f-string. A `}` without a matching `{` is an
+error. Conversions such as `!r` are not supported.
 
 ## 3. Declarations
 
@@ -130,19 +133,20 @@ def function_name(parameter: Type, other: Type) -> Type:
     statements
 ```
 
-Parameter and return annotations are required. A parameter may have a default
-after its annotation, as in `prefix: str = "Hello"`. A default is `None`, `True`,
-`False`, a string literal, or an integer or float literal optionally preceded by
-`+` or `-`, and must be assignable to the parameter's type. A parameter without a
-default cannot follow one with a default. There are no variadic parameters,
-nested functions, or lambdas. Trailing commas are allowed in parameter and
-argument lists. Functions may call functions declared later, and may recurse
-directly or mutually.
+Every parameter and the return type must have a type annotation. A parameter may
+have a default value after its annotation, as in `prefix: str = "Hello"`. A
+default value must be `None`, `True`, `False`, a string literal, or an integer or
+float literal with an optional `+` or `-` sign, and it must be assignable to the
+parameter's type. A parameter without a default cannot follow a parameter that
+has one. Variadic parameters, nested functions, and lambdas are not supported.
+Parameter lists and argument lists may end with a trailing comma. A function may
+call functions declared later in the file, and functions may be directly or
+mutually recursive.
 
 ### Records
 
-A `class` declaration defines a record type. Its body holds one or more field
-declarations and nothing else:
+A `class` declaration defines a record type. The body of the declaration contains
+one or more field declarations and nothing else:
 
 ```python
 class Node:
@@ -150,14 +154,15 @@ class Node:
     next: Node | None
 ```
 
-Field names are unique within a record. Field types may name any record, including
-the record itself and records declared later. Records are nominal: two records with
-the same fields are different types.
+Field names must be unique within a record. A field's type may name any record,
+including the record being declared and records declared later. Records are
+nominal, so two records with the same fields are different types.
 
-Calling a record by name constructs a value. The constructor takes one argument per
-field, bound like a function's arguments (§5) with the field names as parameter
-names; each argument must be assignable to its field's type. A field may have a
-default under the rules for parameter defaults, which an omitted argument takes:
+Calling a record by name constructs a new value. The constructor takes one
+argument for each field. Arguments are bound the same way as function arguments
+(§5), with the field names as the parameter names, and each argument must be
+assignable to its field's type. A field may have a default value, following the
+rules for parameter defaults. An omitted argument takes the field's default:
 
 ```python
 class Options:
@@ -167,11 +172,12 @@ class Options:
 options = Options(verbose=True)
 ```
 
-`p.x` reads a field and `p.x = v` replaces it, where `v` must be assignable to the
-field's type. Naming an unknown field is an error.
+`p.x` reads the field `x`, and `p.x = v` replaces its value. The new value `v`
+must be assignable to the field's type. Referring to a field that the record does
+not have is an error.
 
-Exception classes (§10) are records declared with the base `Exception`. Their
-`message` field comes first and has no default.
+Exception classes (§10) are records declared with the base class `Exception`.
+Their first field is `message`, which has no default.
 
 ### Type aliases
 
@@ -179,13 +185,15 @@ Exception classes (§10) are records declared with the base `Exception`. Their
 type Json = None | bool | int | float | str | list[Json] | dict[str, Json]
 ```
 
-A `type` declaration gives a type a name. The alias and the type it names are the
-same type, and an annotation may use either. Aliases may name records and aliases
-declared later, including themselves, but an alias cannot expand to itself except
-inside `list[...]` or `dict[...]`, so `type Loop = int | Loop` is an error. An alias
-cannot be called or named in `isinstance`.
+A `type` declaration gives a name to a type. The alias and the type it names are
+the same type, and annotations may use either one. An alias may refer to records
+and aliases declared later, and to itself. An alias cannot expand to itself
+except inside `list[...]` or `dict[...]`, so `type Loop = int | Loop` is an
+error. An alias cannot be called and cannot be used in `isinstance`.
 
 ### Annotations
+
+The forms of type annotations are:
 
 ```text
 int  float  bool  str  None
@@ -207,46 +215,52 @@ A | B | ...
 | `None` | The single value `None` |
 | `A \| B \| ...` | A value of any member type |
 | `list[T]` | Ordered, mutable sequences of `T` |
-| `dict[K, V]` | Mutable, insertion-ordered maps from `K` to `V` |
+| `dict[K, V]` | Mutable maps from `K` to `V` that keep insertion order |
 | Records | Values of a declared record or exception class |
 | Native types | Library values such as `io.File` (§14) |
 
-The scalar types are `int`, `float`, `bool`, `str`, `bytes`, and `None`. A type is
-printable if it is a scalar type other than `bytes` or a union of them. Lists, dictionaries, and
-records have reference semantics: assignment and argument passing share a value
-rather than copy it.
+The scalar types are `int`, `float`, `bool`, `str`, `bytes`, and `None`. A type
+is printable if it is a scalar type other than `bytes`, or a union of such types.
+Lists, dictionaries, and records are reference types. Assigning one or passing it
+as an argument shares the same value instead of copying it.
 
 ### Assignability
 
-There are no implicit conversions; in particular `bool` is not a number and `int`
-is not a `float`. A value is assignable to its own type, and also:
+Willow has no implicit conversions. In particular, `bool` is not a numeric type,
+and an `int` is not assignable to `float`. A value is assignable to its own type.
+In addition:
 
-- A value is assignable to a union if it is assignable to one of its members, and
-  a union is assignable to a type if each of its members is.
+- A value is assignable to a union if it is assignable to one of the union's
+  members. A union is assignable to a type if each of its members is assignable
+  to that type.
 - A value of any exception class is assignable to `Exception`.
 
-Assignability applies to initializers, assignments, arguments, returns, display
-elements, and constructor arguments. Collection types are invariant: `list[int]` is
-not assignable to `list[int | None]`, and `list[ParseError]` is not assignable to
+Assignability rules apply to variable initializers, assignments, function
+arguments, return values, elements of list and dict displays, and constructor
+arguments. Collection types are invariant. For example, `list[int]` is not
+assignable to `list[int | None]`, and `list[ParseError]` is not assignable to
 `list[Exception]`.
 
 ### Unions
 
-A union's members may appear in any order, and unions with the same members are the
-same type. A member that is itself a union, such as an alias of one, contributes
-its members. No member may be assignable to another, and a union has at most one
-`list` member and at most one `dict` member, so `int | int`,
-`Exception | ParseError`, and `list[int] | list[str]` are errors. A union with a
-`None` member, such as `str | None`, is called optional.
+The members of a union may be written in any order, and two unions with the same
+members are the same type. When a member is itself a union, such as an alias for
+a union, its members become members of the enclosing union. No member may be
+assignable to another member, and a union may have at most one `list` member and
+at most one `dict` member. So `int | int`, `Exception | ParseError`, and
+`list[int] | list[str]` are errors. A union that has `None` as a member, such as
+`str | None`, is called an optional type.
 
-A union value can be assigned, passed, returned, compared, printed, and tested with
-`is None`, `is not None`, and `isinstance`. Arithmetic, conditions, indexing, field
-access, and method calls require narrowing it to one member first (§9).
+A value of a union type can be assigned, passed as an argument, returned,
+compared, and printed, and it can be tested with `is None`, `is not None`, and
+`isinstance`. To use it in arithmetic, as a condition, or with indexing, field
+access, or method calls, it must first be narrowed to a single member (§9).
 
-`isinstance(value, C)` is `True` when `value` holds a value of `C`. `C` is `int`,
-`float`, `bool`, `str`, `list`, `dict`, or a record or exception class name,
-possibly module-qualified, and must name `value`'s type or one of its members;
-`list` and `dict` name the list or dict member.
+`isinstance(value, C)` is `True` when `value` holds a value of type `C`. `C` must
+be `int`, `float`, `bool`, `str`, `list`, `dict`, or the name of a record or
+exception class, optionally qualified with a module name. `C` must name the type
+of `value` or one of its members. `list` and `dict` refer to the union's list
+member and dict member.
 
 ```python
 def describe(value: int | str | None) -> str:
@@ -259,15 +273,17 @@ def describe(value: int | str | None) -> str:
 
 ### `None`
 
-`None` is the return value of functions annotated `-> None`. A bare `return` is
-`return None`, and such a function may fall off its end.
+Functions annotated `-> None` return `None`. A `return` statement with no value
+returns `None`, and such a function may also return by reaching the end of its
+body.
 
 ## 5. Expressions
 
-The expression forms are literals, names, parenthesized expressions, list and dict
-displays, calls, indexing, slicing, field access, and unary and binary operations.
+The forms of expressions are literals, names, parenthesized expressions, list and
+dict displays, calls, indexing, slicing, field access, and unary and binary
+operations.
 
-Precedence, from lowest to highest:
+Operator precedence, from lowest to highest:
 
 1. `or`
 2. `and`
@@ -276,25 +292,29 @@ Precedence, from lowest to highest:
 5. Binary `+`, `-`
 6. `*`, `/`, `//`, `%`
 7. Unary `+`, `-`
-8. Postfix: calls, indexing `a[i]`, slicing `a[i:j]`, and field or method access
-   `a.name`
+8. Postfix operations: calls, indexing `a[i]`, slicing `a[i:j]`, and field or
+   method access `a.name`
 9. Literals, names, parenthesized expressions, and displays
 
-Binary operators associate left to right, and postfix operations chain left to
-right, as in `text.strip().split(",")`. Operands of a level 4 operator come from
-level 5 or higher, so `not a == b` is `not (a == b)` and `a == not b` is a syntax
-error. Comparison chains such as `0 <= x < 10` are errors.
+Binary operators are left-associative. Postfix operations are applied from left
+to right, as in `text.strip().split(",")`. The operands of a level 4 operator
+must be expressions at level 5 or higher. As a result, `not a == b` means
+`not (a == b)`, and `a == not b` is a syntax error. Chained comparisons such as
+`0 <= x < 10` are errors.
 
 ### Calls
 
-A call names a function, built-in, conversion, or record by bare name (`area(p)`),
-a module member (`geometry.area(p)`), or a method on a value (`items.append(x)`).
-Functions and methods are not values, so `(f)(x)`, `items[0](x)`, and an uncalled
-`items.append` are errors. A call has exactly one value.
+A call can name a function, built-in function, conversion, or record by its bare
+name (`area(p)`), a member of a module (`geometry.area(p)`), or a method of a
+value (`items.append(x)`). Functions and methods are not values. Because of this,
+`(f)(x)`, `items[0](x)`, and `items.append` without a call are errors. Every call
+produces exactly one value.
 
-Arguments are positional arguments followed by keyword arguments,
-`name=expression`. Positional arguments fill parameters in declaration order and
-keyword arguments name the rest; omitted parameters take their defaults (§3).
+A call's arguments are zero or more positional arguments followed by zero or
+more keyword arguments of the form `name=expression`. Positional arguments are
+matched to parameters in declaration order, and keyword arguments are matched to
+the remaining parameters by name. Parameters with no matching argument take their
+default values (§3).
 
 ```python
 def greet(name: str, prefix: str = "Hello") -> str:
@@ -303,57 +323,64 @@ def greet(name: str, prefix: str = "Hello") -> str:
 print(greet(prefix="Welcome", name="Ada"))
 ```
 
-A positional argument after a keyword, an unknown name, a second value for one
-parameter, a missing argument for a parameter without a default, and too many
-arguments are compile-time errors. Functions, constructors, `fs.read_file`,
-`fs.write_file`, `sys.exit`, `sorted`, and `list.sort` accept keywords with the
-parameter names §7 and §14 give. Other built-ins and methods take only
-positional arguments.
+These are compile-time errors: a positional argument after a keyword argument, a
+keyword that names no parameter, two values for the same parameter, a missing
+argument for a parameter that has no default, and too many arguments. Functions,
+record constructors, `fs.read_file`, `fs.write_file`, `sys.exit`, `sorted`, and
+`list.sort` accept keyword arguments, using the parameter names given in §7 and
+§14. Other built-in functions and methods accept only positional arguments.
 
 ### Operators
 
-- `and`, `or`, and `not` take and produce `bool`; `and` and `or` short-circuit.
-- `==` and `!=` take two operands of scalar types or unions of them where one's
-  type is assignable to the other's, so `count == 3` and `count == None` are valid
-  for `count: int | None`. Values of different types are unequal, so a union
-  holding `1` does not equal one holding `1.0`. Bytes compare by content. Lists,
-  dictionaries, records, and native values do not support `==`.
+- `and`, `or`, and `not` take `bool` operands and produce a `bool`. `and` and
+  `or` evaluate their right operand only when needed.
+- `==` and `!=` take two operands whose types are scalar types or unions of
+  scalar types, where the type of one operand is assignable to the type of the
+  other. For example, if `count` has type `int | None`, both `count == 3` and
+  `count == None` are valid. Values of different types are never equal, so a
+  union holding `1` is not equal to a union holding `1.0`. Bytes values are equal
+  when their contents are equal. Lists, dictionaries, records, and native values
+  cannot be compared with `==`.
 - `<`, `<=`, `>`, and `>=` take two integers, two floats, or two strings.
-- `is` appears only as `e is None` or `e is not None`, where `e` has an optional
-  type.
-- `in` and `not in` test list elements, dictionary keys, and substrings (§7).
-- `+` adds numbers of the same type or concatenates strings. `-`, `*`, unary `+`,
-  and unary `-` take numbers.
+- `is` may only be used as `e is None` or `e is not None`, where `e` has an
+  optional type.
+- `in` and `not in` test for an element in a list, a key in a dictionary, or a
+  substring in a string (§7).
+- `+` adds two numbers of the same type or concatenates two strings. `-`, `*`,
+  unary `+`, and unary `-` take numbers.
 - `/`, `//`, and `%` are described in §6.
 
-There is no exponentiation or bitwise operator.
+Willow has no exponentiation operator and no bitwise operators.
 
 ### Evaluation order
 
-Operands, arguments, and display elements are evaluated left to right, each once,
-and an operand that raises stops evaluation of the rest. Dict displays evaluate each
-key, then its value, entry by entry. Index and field assignments evaluate the
-right-hand side, then the object, then the index. A slice evaluates the object,
-then the start, then the stop. Call arguments are evaluated in the order they are
-written, even when keywords name parameters out of order.
+Operands, arguments, and display elements are evaluated from left to right, and
+each is evaluated exactly once. If an operand raises an exception, the remaining
+operands are not evaluated. A dict display evaluates each entry's key and then
+its value, one entry at a time. An index or field assignment evaluates the
+right-hand side first, then the object, then the index. A slice evaluates the
+object, then the start, then the stop. Call arguments are evaluated in the order
+they are written, even when keyword arguments are given in a different order
+from the parameters.
 
 ## 6. Numbers
 
 ### Integers
 
-`+`, `-`, `*`, and unary operators on integers are exact. A result outside the
-`int` range raises `OverflowError` with the message `integer overflow`. Integers
-have no negative zero.
+Integer `+`, `-`, `*`, unary `+`, and unary `-` are exact. A result outside the
+`int` range raises `OverflowError` with the message `integer overflow`. There is
+no integer negative zero.
 
 ### Floats
 
 Float arithmetic follows IEEE 754 with round-to-nearest. Results may be infinite
-or NaN. `-0.0` is distinct from `0.0` but equal to it. NaN is unequal to every
-value, including itself, and every ordering comparison with NaN is `False`.
+or NaN. `-0.0` and `0.0` are distinct values, but they compare equal. NaN is not
+equal to any value, including itself, and every ordering comparison involving NaN
+is `False`.
 
 ### Division
 
-Division operators take two operands of the same numeric type:
+Both operands of a division operator must have the same numeric type:
 
 | Operator | `int` operands | `float` operands |
 | --- | --- | --- |
@@ -361,34 +388,38 @@ Division operators take two operands of the same numeric type:
 | `//` | `int`, floor of the quotient | `float`, floor of the quotient |
 | `%` | `int` remainder | `float` remainder |
 
-The remainder has the sign of the divisor, and `(a // b) * b + a % b == a` for
-integers. A zero divisor, including `-0.0`, raises `ZeroDivisionError` with the
-message `division by zero`. Results match Python: `7 // -2` is `-4`, `7 % -2` is
-`-1`, `-7.5 // 2.0` is `-4.0`, and `1 / 3` is `0.3333333333333333`.
+The remainder has the same sign as the divisor, and for integers
+`(a // b) * b + a % b == a`. Dividing by zero, including by `-0.0`, raises
+`ZeroDivisionError` with the message `division by zero`. Results are the same as
+in Python: `7 // -2` is `-4`, `7 % -2` is `-1`, `-7.5 // 2.0` is `-4.0`, and
+`1 / 3` is `0.3333333333333333`.
 
 ### Conversions
 
-- `float(n: int) -> float` is exact.
-- `int(x: float) -> int` truncates toward zero. NaN, infinity, and results outside
-  the `int` range raise `ValueError` with the message
+- `float(n: int) -> float` converts exactly.
+- `int(x: float) -> int` truncates toward zero. If `x` is NaN or infinite, or the
+  result is outside the `int` range, it raises `ValueError` with the message
   `cannot convert float to int`.
-- `int(s: str) -> int` reads an optional `+` or `-` followed by one or more decimal
-  digits; leading zeros are allowed. Other text and results outside the `int` range
-  raise `ValueError` with the message `cannot convert str to int`.
-- `float(s: str) -> float` reads an optional `+` or `-` followed by decimal digits
-  with an optional fraction and exponent, as in `7`, `2.5`, `.5`, `5.`, and `1e-3`,
-  or by `inf`, `infinity`, or `nan` in any letter case. The result is the nearest
-  float, and magnitudes beyond the float range are infinite. Other text raises
+- `int(s: str) -> int` accepts an optional `+` or `-` followed by one or more
+  decimal digits. Leading zeros are allowed. Any other text, or a result outside
+  the `int` range, raises `ValueError` with the message
+  `cannot convert str to int`.
+- `float(s: str) -> float` accepts an optional `+` or `-` followed by either a
+  decimal number or one of `inf`, `infinity`, and `nan` in any letter case. A
+  decimal number consists of digits with an optional fraction and exponent, as in
+  `7`, `2.5`, `.5`, `5.`, and `1e-3`. The result is the nearest float, and values
+  too large for the float range become infinite. Any other text raises
   `ValueError` with the message `cannot convert str to float`.
 
-Unlike Python's, the string conversions accept neither whitespace nor underscores.
+The string conversions do not accept surrounding whitespace or underscores.
 
 ## 7. Strings and collections
 
 ### Strings
 
-Strings compare by exact contents, without Unicode normalization. Length, ordering,
-indexing, slicing, and iteration use code points, as do the indexes `find` returns.
+Strings are compared by their exact contents, without Unicode normalization.
+Length, ordering, indexing, slicing, iteration, and the indexes returned by
+`find` are all measured in code points.
 
 | Expression | Type | Meaning |
 | --- | --- | --- |
@@ -401,44 +432,48 @@ indexing, slicing, and iteration use code points, as do the indexes `find` retur
 | `s.startswith(prefix)` | `bool` | `s` begins with `prefix` |
 | `s.endswith(suffix)` | `bool` | `s` ends with `suffix` |
 | `s.find(sub)` | `int` | Index of the first occurrence of `sub`, or `-1` |
-| `s.replace(old, new)` | `str` | Every non-overlapping `old`, left to right, replaced by `new` |
+| `s.replace(old, new)` | `str` | `s` with every non-overlapping occurrence of `old`, from left to right, replaced by `new` |
 | `s.strip()` | `str` | `s` without leading and trailing ASCII whitespace |
-| `s.split(sep)` | `list[str]` | Pieces of `s` between occurrences of `sep` |
-| `s.lower()` | `str` | Unicode lowercase text |
-| `s.upper()` | `str` | Unicode uppercase text |
+| `s.split(sep)` | `list[str]` | The pieces of `s` between occurrences of `sep` |
+| `s.lower()` | `str` | `s` converted to Unicode lowercase |
+| `s.upper()` | `str` | `s` converted to Unicode uppercase |
 | `s.ljust(width)` | `str` | `s` padded on the right with spaces to at least `width` code points |
 | `s.rjust(width)` | `str` | `s` padded on the left with spaces to at least `width` code points |
-| `sep.join(items)` | `str` | The `list[str]` items joined with `sep` |
+| `sep.join(items)` | `str` | The items of a `list[str]` joined with `sep` |
 | `str(value)` | `str` | The text `print` writes for a printable value, without the newline |
-| `ord(c)` | `int` | The code point of the one-code-point string `c` |
-| `chr(n)` | `str` | The one-code-point string for code point `n` |
+| `ord(c)` | `int` | The code point of `c`, which must be a single code point |
+| `chr(n)` | `str` | The single-code-point string for code point `n` |
 
-Results match Python's, except that `strip` removes only space, tab, LF, VT, FF,
-and CR. `split` with an empty separator raises `ValueError` with the message
-`empty separator`. `ord` of any other length raises `ValueError` with the message
-`expected one character`. `chr` of a surrogate or a value outside 0 through
-0x10FFFF raises `ValueError` with the message `invalid code point`. An invalid
-string index raises `IndexError` with the message `string index out of range`.
-Strings cannot be assigned through an index.
+These operations return the same results as in Python, except that `strip`
+removes only space, tab, LF, VT, FF, and CR. `split` with an empty separator
+raises `ValueError` with the message `empty separator`. `ord` of a string whose
+length is not 1 raises `ValueError` with the message `expected one character`.
+`chr` of a surrogate, or of a value outside the range 0 through 0x10FFFF, raises
+`ValueError` with the message `invalid code point`. An index outside the string
+raises `IndexError` with the message `string index out of range`. Strings cannot
+be modified by assigning to an index.
 
-Case conversion uses the Unicode 17.0 default full case mappings, including the
-Final_Sigma rule for `Σ`, without locale tailoring or normalization, so a result
-may differ in length from its argument. Widths measure code points, not terminal
-display cells, and a width at most the text's length leaves it unchanged.
+`lower` and `upper` use the default full case mappings of Unicode 17.0,
+including the Final_Sigma rule for `Σ`. They apply no locale-specific rules and
+no normalization, so the result may have a different length from the original.
+`ljust` and `rjust` measure width in code points, not in terminal display
+columns. If the width is less than or equal to the length of the string, the
+string is returned unchanged.
 
-String iteration is the idiom for sequential scans; indexing and slicing take time
-proportional to the string's length.
+Indexing and slicing a string take time proportional to the string's length. To
+process a string one code point at a time, iterate over it with `for`.
 
 ### Indexes and slices
 
-Indexes and slice bounds of strings and lists are integers. A negative index
-counts from the end: the sequence length is added once, and the result must then
-lie within the sequence. A slice `a[start:stop]` includes `start` and excludes
-`stop`. An omitted start means zero and an omitted stop means the length; negative
-bounds count from the end, and bounds are clamped to the sequence. A stop at or
-before the start gives an empty result. A list slice is a new list of the same
-type sharing the original's elements. Slices have no step and cannot be assigned
-to.
+Indexes and slice bounds for strings and lists are integers. A negative index
+counts from the end of the sequence: the sequence's length is added to it once,
+and the result must be a valid index. A slice `a[start:stop]` includes the
+element at `start` and excludes the element at `stop`. An omitted start defaults
+to zero and an omitted stop defaults to the length of the sequence. Negative
+bounds count from the end, and bounds outside the sequence are clamped to it. If
+the stop is at or before the start, the slice is empty. Slicing a list produces a
+new list of the same type that contains the same elements. Slices cannot have a
+step, and a slice cannot be the target of an assignment.
 
 ```python
 text = "café"
@@ -451,23 +486,31 @@ copy = items[:]
 
 ### Format specifications
 
-An f-string field may end in a format specification, `{expression:spec}`. The
-separating colon is the first one outside nested parentheses, brackets, braces,
-and string literals, so `f"{text[1:3]}"` contains a slice and no specification. A
-specification has the form `[alignment][width][.precision][type]`: alignment is
-`<`, `>`, or `^`; width and precision are unsigned decimal integers without leading
-zeros; type is `s`, `d`, or `f`. An empty specification has no effect.
+An f-string field may end with a format specification, written
+`{expression:spec}`. The specification starts after the first colon that is not
+inside nested parentheses, brackets, braces, or string literals. So
+`f"{text[1:3]}"` contains a slice and has no format specification. A
+specification has the form `[alignment][width][.precision][type]`. The alignment
+is `<`, `>`, or `^`. The width and precision are unsigned decimal integers with
+no leading zeros. The type is `s`, `d`, or `f`. An empty specification has no
+effect.
 
-- Without a type, a field formats any printable value as `str` does. Precision
-  requires `f`. `s` requires `str`, `d` requires `int`, and `f` requires `float`;
-  a union must be narrowed first.
-- `f` writes fixed-point notation with six fractional digits by default, rounding
-  to nearest with ties to even; NaN and infinities keep their usual spelling.
-- Padding uses spaces. Alignment defaults to left for strings and right for other
-  values, judged by the value a union holds. Center alignment puts an odd extra
-  space on the right. Width is a minimum length in code points and never truncates.
-- A malformed specification or a mismatched type is a compile-time error. There are
-  no fill characters, grouping, signs, zero padding, or nested fields.
+- A field without a type formats any printable value the way `str` does. A
+  precision may only be given with the `f` type. The `s` type requires a `str`
+  value, `d` requires an `int`, and `f` requires a `float`. A value of a union
+  type must be narrowed before it can be formatted with a type.
+- The `f` type writes the number in fixed-point notation with six digits after
+  the decimal point unless a precision is given. It rounds to the nearest value,
+  with ties going to the even digit. NaN and infinities are written as they are
+  by `str`.
+- Padding uses spaces. Strings are left-aligned by default and other values are
+  right-aligned. For a union, the default depends on the type of the value the
+  union holds. With center alignment, when the padding cannot be split evenly,
+  the extra space goes on the right. The width is a minimum length in code
+  points, and longer values are not truncated.
+- A malformed specification, or a type that does not match the value, is a
+  compile-time error. Fill characters, digit grouping, sign options, zero
+  padding, and nested fields are not supported.
 
 ```python
 print(f"{'total':<12s}{12:>6d}{2.5:>10.2f}")
@@ -475,13 +518,16 @@ print(f"{'total':<12s}{12:>6d}{2.5:>10.2f}")
 
 ### Text of printable values
 
-- Strings are their contents, without quotation marks.
-- Integers are decimal.
-- Floats are Python's `repr`: the shortest decimal text that reads back as the
-  same value; scientific notation when the decimal exponent is below -4 or at
-  least 16, otherwise fixed notation with at least one fractional digit; and
-  `inf`, `-inf`, or `nan` for non-finite values.
-- Booleans are `True` and `False`, and `None` is `None`.
+`print`, `str`, and f-string fields write printable values as follows:
+
+- A string is written as its contents, without quotation marks.
+- An integer is written in decimal.
+- A float is written as Python's `repr` writes it. This is the shortest decimal
+  text that reads back as the same value. Scientific notation is used when the
+  decimal exponent is less than -4 or at least 16. Otherwise fixed notation is
+  used, with at least one digit after the decimal point. Non-finite values are
+  written as `inf`, `-inf`, and `nan`.
+- Booleans are written as `True` and `False`, and `None` is written as `None`.
 
 ### Displays
 
@@ -492,15 +538,19 @@ names: list[str] = []
 scores: dict[str, int | None] = {"ada": None}
 ```
 
-A display with an expected type, from an annotation, an existing target, a
-parameter, a return type, a field, or an enclosing display, checks each element
-against that type, and an empty display takes that type. When the expected type is
-a union, a list display expects its list member and a dict display its dict member.
-Without an expected type,
-a non-empty display takes the types of its first element or entry, later ones must
-be assignable to them, and an empty display is an error. In a dict display, a
-repeated key keeps its first position and its last value. Displays allow trailing
-commas.
+A display can have an expected type, which comes from an annotation, an existing
+assignment target, a parameter, a return type, a record field, or an enclosing
+display. When a display has an expected type, each element is checked against
+it, and an empty display takes that type. If the expected type is a union, a list
+display uses the union's list member and a dict display uses its dict member.
+
+When a display has no expected type, a non-empty display takes its type from its
+first element or entry, and every later element or entry must be assignable to
+that type. An empty display with no expected type is an error.
+
+If a dict display contains the same key more than once, the entry keeps the
+position of the first occurrence and the value of the last. Displays may end
+with a trailing comma.
 
 ### Bytes
 
@@ -513,7 +563,7 @@ print(data[:3].decode())    # caf
 
 | Expression | Type | Meaning |
 | --- | --- | --- |
-| `bytes(values)` | `bytes` | The octets of a `list[int]` of values from 0 through 255 |
+| `bytes(values)` | `bytes` | The octets in a `list[int]` of values from 0 through 255 |
 | `a + b` | `bytes` | Concatenation |
 | `len(data)` | `int` | Number of octets |
 | `data[i]` | `int` | The octet at index `i` |
@@ -521,18 +571,21 @@ print(data[:3].decode())    # caf
 | `s.encode()` | `bytes` | The UTF-8 encoding of the string `s` |
 | `data.decode()` | `str` | The text whose UTF-8 encoding is `data` |
 
-`for` over bytes yields each octet as an `int`. Indexes and slices follow the
-string and list rules. `bytes` of a value outside 0 through 255 raises
-`ValueError` with the message `bytes must be in range(0, 256)`, an invalid index
-raises `IndexError` with the message `index out of range`, and `decode` of
-anything but valid UTF-8 raises `ValueError` with the message `invalid UTF-8`.
-There are no byte literals. Bytes cannot be printed, formatted, converted with
-`str`, ordered, used as dictionary keys, or assigned through an index.
+A `for` loop over a bytes value produces each octet as an `int`. Indexes and
+slices follow the same rules as for strings and lists. `bytes` raises
+`ValueError` with the message `bytes must be in range(0, 256)` if a value is
+outside 0 through 255. An index outside the value raises `IndexError` with the
+message `index out of range`. `decode` raises `ValueError` with the message
+`invalid UTF-8` if the data is not valid UTF-8. There is no literal syntax for
+bytes. Bytes values cannot be printed, formatted, converted with `str`, compared
+with ordering operators, used as dictionary keys, or modified by assigning to an
+index.
 
 ### Lists and dictionaries
 
-Dictionary keys are `int` or `str`. Element and value types can be any type.
-Collections store `None`; a stored `None` counts toward length and is distinct from
+Dictionary keys must be `int` or `str`. List elements and dictionary values can
+have any type. A list or dictionary can store `None`. A stored `None` counts
+toward the collection's length, and a key whose value is `None` is different from
 a missing key.
 
 | Expression | Type | Meaning |
@@ -541,33 +594,35 @@ a missing key.
 | `xs[i]` | `T` | Element at index `i` |
 | `xs[i] = v` | | Replace the element at index `i` |
 | `xs[i:j]` | `list[T]` | A new list of the elements from index `i` up to `j` |
-| `xs.append(v)` | `None` | Add `v` at the end |
+| `xs.append(v)` | `None` | Add `v` to the end |
 | `xs.pop()` | `T` | Remove and return the last element |
 | `xs.sort(reverse)` | `None` | Sort the list in place |
 | `v in xs` | `bool` | Some element equals `v` |
 | `len(d)` | `int` | Number of entries |
 | `d[k]` | `V` | Value for key `k` |
 | `d[k] = v` | | Insert or replace the entry for `k` |
-| `d.get(k)` | `V \| None` | Value for `k`, or `None` when missing |
+| `d.get(k)` | `V \| None` | Value for `k`, or `None` if `k` is missing |
 | `d.pop(k)` | `V` | Remove the entry for `k` and return its value |
 | `k in d` | `bool` | `k` is a key |
 
-List indexes are zero-based and may be negative (§7, Indexes and slices); an index
-outside the list raises `IndexError` with the message `list index out of range`.
-`pop()` on an empty list raises `IndexError` with the
+List indexes start at zero and may be negative (see Indexes and slices above). An
+index outside the list raises `IndexError` with the message
+`list index out of range`. `pop()` on an empty list raises `IndexError` with the
 message `pop from empty list`. `d[k]` and `d.pop(k)` raise `KeyError` with the
-message `key not found` for a missing key. When `V` is already optional, `d.get(k)`
-has type `V`. `v in xs` requires an element type that supports `==`.
+message `key not found` when `k` is missing. When `V` is already an optional
+type, `d.get(k)` has type `V`. `v in xs` requires an element type that supports
+`==`.
 
-Replacing a dictionary value keeps the entry's position; a key removed and inserted
-again moves to the end.
+Replacing the value of an existing key keeps the entry in its current position.
+A key that is removed and then inserted again moves to the end.
 
-`sorted(items, reverse)` returns a new sorted list of `items`, and
-`xs.sort(reverse)` sorts `xs` in place. `reverse` is a `bool` and defaults to
-`False`. The element type must be exactly `int`, `float`, or `str`. Sorting is
-stable in both directions, compares strings by code point, and keeps the usual
-comparisons for infinities and signed zeros. A list containing NaN raises
-`ValueError` with the message `cannot sort NaN` before anything changes.
+`sorted(items, reverse)` returns a new sorted list containing the elements of
+`items`, and `xs.sort(reverse)` sorts `xs` in place. `reverse` is a `bool` and
+defaults to `False`. The element type must be exactly `int`, `float`, or `str`.
+Sorting is stable in both directions and compares strings by code point.
+Infinities and signed zeros are ordered by the usual comparisons. If the list
+contains NaN, sorting raises `ValueError` with the message `cannot sort NaN`
+before changing anything.
 
 ## 8. Statements
 
@@ -608,63 +663,71 @@ finally:
     statements
 ```
 
-A block contains at least one statement; `pass` is an empty body. Only calls may
-be expression statements. An assignment has one target and one value; there is no
-chained, destructuring, or augmented assignment, and no assignment expression.
+A block must contain at least one statement. Use `pass` for an empty block. The
+only expressions that may be used as statements are calls. An assignment has
+exactly one target and one value. Chained assignment, destructuring assignment,
+augmented assignment such as `+=`, and assignment expressions are not supported.
 
-Conditions have type `bool`. Other values have no truthiness, so `if count:` is a
-type error.
+Conditions must have type `bool`. Other types cannot be used as conditions, so
+`if count:` is a type error.
 
-`break` and `continue` apply to the nearest enclosing `while` or `for` and are
-errors outside one. Loops have no `else` clause.
+`break` and `continue` apply to the innermost enclosing `while` or `for` loop. It
+is an error to use them outside a loop. Loops cannot have an `else` clause.
 
-`assert` takes a `bool` condition and an optional `str` message and is always
-enabled. When the condition is false, the message is evaluated and the statement
-raises `AssertionError` with it, or with `assertion failed` when there is none; a
-true condition does not evaluate the message.
+`assert` takes a `bool` condition and an optional `str` message. Assertions are
+always checked. If the condition is false, the message is evaluated and the
+statement raises `AssertionError` with that message, or with the message
+`assertion failed` if none is given. If the condition is true, the message is not
+evaluated.
 
 ### `for`
 
-`for name in iterable:` runs its body once per item of a list (elements in index
-order), a dictionary (keys in insertion order), a string (each code point as a
-one-code-point string), or a `range` call.
+`for name in iterable:` runs its body once for each item of the iterable. The
+iterable can be a list, which produces its elements in index order; a
+dictionary, which produces its keys in insertion order; a string, which produces
+each code point as a one-code-point string; or a call to `range`.
 
 - `range(stop)`, `range(start, stop)`, and `range(start, stop, step)` take
-  integers and produce the same sequence as in Python. A zero step raises
-  `ValueError` with the message `range step must not be zero`. `range` appears
-  only as a `for` iterable.
-- The iterable and the `range` arguments are evaluated once, before the first
+  integers and produce the same sequence as in Python. A step of zero raises
+  `ValueError` with the message `range step must not be zero`. `range` can only
+  be used as the iterable of a `for` loop.
+- The iterable and the arguments to `range` are evaluated once, before the first
   iteration.
-- Assigning the loop name in the body does not affect iteration. After the loop,
-  the name keeps its last value.
-- List iteration continues while the index is below the list's current length, so
-  appended elements are visited.
-- Adding or removing keys of a dictionary during iteration over it raises
-  `RuntimeError` with the message `dictionary changed size during iteration` at
-  the next step. Replacing values is allowed.
+- Assigning to the loop variable inside the body does not change the iteration.
+  After the loop ends, the loop variable keeps the last value it had.
+- Iteration over a list continues as long as the current index is less than the
+  list's current length, so elements appended during the loop are visited.
+- If keys are added to or removed from a dictionary while a loop iterates over
+  it, the next step of the loop raises `RuntimeError` with the message
+  `dictionary changed size during iteration`. Replacing the values of existing
+  keys is allowed.
 
 ## 9. Names and static checking
 
 ### Scope
 
-Each function has one local scope. Parameters, assignment targets, `for` loop
-names, and `except ... as` names anywhere in a function are locals throughout the
-whole function. There are no block scopes, module variables, or globals.
+Each function has a single local scope. Parameters, assignment targets, `for`
+loop variables, and names bound by `except ... as` are local to the whole
+function, wherever in the function they appear. Blocks do not create scopes, and
+there are no module-level variables or global variables.
 
-File scope holds functions, records, aliases, and imports, and these share one
-namespace with the built-in names (§11). Duplicate declarations, duplicate
-parameters, and file-level declarations that use a built-in name are errors. A
-local shadows a function, record, alias, import, or built-in of the same name
-throughout its function.
-Calling a local is an error, even before its first assignment; annotations still
-name the shadowed record or alias.
+The file scope contains functions, records, aliases, and imports. These share a
+single namespace with the built-in names (§11). It is an error to declare the
+same name twice, to give two parameters the same name, or to declare a file-level
+name that is also a built-in name. A local variable with the same name as a
+function, record, alias, import, or built-in hides it throughout the function.
+Calling a local variable is an error, even before the variable's first
+assignment. Type annotations in the function still refer to the hidden record or
+alias.
 
 ### Local types
 
-A local's lexically first assignment fixes its type: from the annotation if present,
-otherwise from the value. Every later assignment must be assignable to that type.
-An annotation requires a value and may appear only on a local's lexically first
-assignment, never on a parameter.
+The type of a local variable is set by its first assignment in the source text.
+If that assignment has an annotation, the variable has the annotated type.
+Otherwise it has the type of the assigned value. Every later assignment must be
+assignable to that type. An annotation must have a value, and it may only appear
+on a variable's first assignment. An assignment to a parameter cannot have an
+annotation.
 
 ```python
 count: int = 3
@@ -673,68 +736,74 @@ count = "four"        # type error
 best: str | None = None
 ```
 
-A `for` loop or `except ... as` clause assigns its name; the item or handled
-exception type must be assignable to the local's type, and fixes it when the clause
-is the lexically first assignment.
+A `for` loop or an `except ... as` clause assigns to its variable. The item type
+or the handled exception type must be assignable to the variable's type. If the
+clause is the variable's first assignment in the source text, it sets the
+variable's type.
 
 ### Definite assignment
 
-A local may be read only where it is assigned on every path that reaches the read.
-Facts flow structurally:
+A local variable may only be read at points where it has been assigned on every
+path that reaches that point. This is determined from the structure of the code:
 
-- After an `if`, a local is assigned if every branch that falls through assigns
-  it. An `if` without `else` has an implicit empty branch that falls through.
-- A `while` or `for` body may run zero times, so its assignments do not carry past
-  the loop.
-- An `except ... as` name is assigned inside its clause.
+- After an `if` statement, a variable is assigned if every branch that completes
+  normally assigns it. An `if` without an `else` has an implicit empty `else`
+  branch that completes normally.
+- The body of a `while` or `for` loop may run zero times, so assignments in the
+  body do not count as assignments after the loop.
+- A variable bound by `except ... as` is assigned inside its `except` clause.
 
-The checker does not evaluate conditions: both sides of every branch are checked,
-and `if False:` and `while True:` are treated like any other condition.
+The checker does not evaluate conditions. Both branches of every `if` are
+checked, and `if False:` and `while True:` are treated the same as any other
+condition.
 
 ### Control transfer
 
 `return`, `break`, `continue`, `raise`, and a statement that calls the standard
-library's `sys.exit` (§14) transfer control; `assert`, even `assert False`, does
-not. An `if` whose branches all transfer, including an `else`, transfers. A
-statement after a transfer in the same block is an unreachable-code error.
+library function `sys.exit` (§14) transfer control. `assert` does not, even
+`assert False`. An `if` statement with an `else` branch transfers control if all
+of its branches do. A statement that follows a control transfer in the same block
+is an unreachable-code error.
 
-A function not annotated `-> None` must return a value on every path. A loop never
-establishes that a function returns, so a trailing `return` is required even after
-`while True:`.
+A function whose return type is not `None` must return a value on every path. The
+checker never treats a loop as guaranteeing a return, so a final `return` is
+required even after `while True:`.
 
 ### Narrowing
 
-A local or parameter of a union type narrows to some of its members where a check
-proves its value belongs to them; with one member left, it has that member's type.
-Each condition yields facts that hold when it is true and facts that hold when it
-is false:
+A local variable or parameter that has a union type is narrowed to a subset of
+its members wherever a check proves that its value has one of those types. When
+only one member remains, the variable has that member's type. Each condition
+produces facts that hold when it is true and facts that hold when it is false:
 
-- `name is not None` narrows `name` to its other members when true; `name is None`
-  does so when false.
-- `isinstance(name, C)` narrows `name` to `C`'s member when true and to its other
-  members when false.
-- `not C` swaps the facts of `C`.
-- `A and B` has the true facts of both operands when true. `B` is checked with the
-  true facts of `A`.
-- `A or B` has the false facts of both operands when false. `B` is checked with the
-  false facts of `A`.
-- Other conditions yield no facts.
+- `name is not None`, when true, narrows `name` to its members other than
+  `None`. `name is None` does the same when false.
+- `isinstance(name, C)`, when true, narrows `name` to the member named by `C`.
+  When false, it narrows `name` to its other members.
+- `not C` swaps the true and false facts of `C`.
+- `A and B`, when true, has the true facts of both `A` and `B`. `B` is checked
+  with the true facts of `A`.
+- `A or B`, when false, has the false facts of both `A` and `B`. `B` is checked
+  with the false facts of `A`.
+- Other conditions produce no facts.
 
-Field and index expressions do not narrow; copy them into a local first. Facts
-flow through statements:
+Field access and index expressions are not narrowed. To narrow such a value,
+assign it to a local variable first. Facts apply to statements as follows:
 
 - An `if` or `elif` branch starts with the true facts of its condition and the
-  false facts of the conditions before it. An `else` branch, or the implicit empty
-  branch, starts with the false facts of every condition.
-- After an `if`, a local has the members it has at the end of any branch that
-  falls through.
+  false facts of all earlier conditions in the statement. An `else` branch, or
+  the implicit empty `else` branch, starts with the false facts of every
+  condition.
+- After an `if` statement, a variable's possible members are those it has at the
+  end of any branch that completes normally.
 - A `while` body starts with the true facts of its condition.
 - The statements after an `assert` have the true facts of its condition, and its
   message is checked with the false facts.
-- Assigning a value whose type is one member other than `None` narrows a local to
-  that member; assigning anything else ends its narrowing.
-- At the start of a loop body and after the loop, narrowing from before the loop
-  holds only for locals the body does not assign.
+- Assigning a value whose type is a single member other than `None` narrows the
+  variable to that member. Assigning any other value removes the variable's
+  narrowing.
+- At the start of a loop body and after the loop, narrowing established before
+  the loop still applies only to variables that the body does not assign.
 
 ```python
 def describe(name: str | None) -> str:
@@ -745,15 +814,16 @@ def describe(name: str | None) -> str:
 
 ### `try`
 
-- A `try` body may stop at any statement. An `except` clause therefore starts with
-  the definite assignments from before the `try`, and with the narrowing from
-  before the `try` only for locals the body does not assign. A `finally` clause
-  starts the same way, also excluding locals the `except` clauses assign.
-- After the `try`, the body and the `except` clauses join like the branches of an
-  `if` with an `else`, counting those that fall through. The `finally` clause then
-  applies as ordinary statements.
-- A `try` transfers control when its body and every `except` clause transfer, or
-  when its `finally` clause transfers.
+- A `try` body may be interrupted at any statement. Each `except` clause
+  therefore starts with the definite assignments that held before the `try`. It
+  also keeps the narrowing from before the `try`, but only for variables that the
+  body does not assign. A `finally` clause starts the same way, and additionally
+  loses narrowing for variables assigned in the `except` clauses.
+- After the `try` statement, the body and the `except` clauses are joined like
+  the branches of an `if` with an `else`, counting only those that complete
+  normally. The `finally` clause is then checked as ordinary statements.
+- A `try` statement transfers control when its body and every `except` clause
+  transfer control, or when its `finally` clause transfers control.
 
 ## 10. Exceptions
 
@@ -779,11 +849,13 @@ def main() -> None:
 
 ### Exception classes
 
-`Exception` is a built-in class with one field, `message: str`. A class that names
-`Exception` as its base is an exception class. Its fields are `message` followed by
-the declared fields, and its constructor takes them in that order. Its body may be
-`pass` instead of fields, and no declared field may be named `message`. The base
-must be `Exception`. Otherwise exception classes follow the record rules.
+`Exception` is a built-in class with one field, `message: str`. A class declared
+with `Exception` as its base is an exception class. Its fields are `message`
+followed by the fields it declares, and its constructor takes them in that order.
+The body of an exception class may be `pass` instead of field declarations. None
+of its declared fields may be named `message`. The base class must be
+`Exception`. In all other respects, exception classes follow the rules for
+records.
 
 These built-in exception classes have only the `message` field:
 
@@ -793,48 +865,55 @@ These built-in exception classes have only the `message` field:
 | `OverflowError` | Integer overflow |
 | `ZeroDivisionError` | Division by zero |
 | `ValueError` | Invalid values for conversions, `ord`, `chr`, `range`, `split`, `sys.exit`, and UTF-8 input |
-| `IndexError` | List indexes and `pop` from an empty list |
+| `IndexError` | Invalid list indexes and `pop` from an empty list |
 | `KeyError` | Missing dictionary keys |
 | `RuntimeError` | Dictionary size changes during iteration |
 | `OSError` | Failed filesystem and host operations |
 | `TimeoutError` | Expired time limits |
 
-Programs may construct and raise them like their own classes.
+Programs can construct and raise these classes in the same way as their own
+exception classes.
 
 ### `raise`
 
-`raise expression` raises a value of an exception type. It records its source
-location and the active Willow call frames; a runtime failure records the failing
-operation's location instead.
+`raise expression` raises a value of an exception type. The exception records the
+source location of the `raise` statement and the Willow call frames that are
+active. When an exception is raised by a failing runtime operation, it records the
+location of that operation instead.
 
-A bare `raise` appears only inside an `except` clause and raises the exception that
-clause handles again, with its original location and frames. `raise ... from ...`
-is an error.
+A `raise` statement with no expression may only appear inside an `except` clause.
+It raises the exception handled by that clause again, keeping the exception's
+original location and frames. `raise ... from ...` is an error.
 
 ### `try`
 
-A `try` has one or more `except` clauses, a `finally` clause, or both. Each `except`
-names one exception class, possibly module-qualified, and may bind the exception
-with `as name`. A bare `except:`, a parenthesized list of classes, `except*`, and an
-`else` clause are errors.
+A `try` statement has one or more `except` clauses, a `finally` clause, or both.
+Each `except` clause names one exception class, optionally qualified with a
+module name, and may bind the exception to a variable with `as name`. A bare
+`except:`, a parenthesized list of classes, `except*`, and an `else` clause are
+errors.
 
-If the body raises, the `except` clauses are tested in order, and the first that
-names the exception's class or `Exception` handles it. If none does, the exception
-propagates. A clause after `except Exception`, or one naming the same class as an
-earlier clause, is an error.
+If the body raises an exception, the `except` clauses are tested in order. The
+first clause that names the exception's class, or names `Exception`, handles it.
+If no clause matches, the exception propagates. It is an error to write an
+`except` clause after `except Exception`, or to name the same class in two
+clauses.
 
-`finally` runs however the `try` is left: by falling through, by `return`, `break`,
-or `continue`, or by an exception from the body or an `except` clause. The departure
-then resumes; a `return` value is evaluated before `finally` runs. An exception
-raised in `finally` replaces the one in flight. `return`, `break`, and `continue`
-directly inside `finally` are errors.
+The `finally` clause runs whenever control leaves the `try` statement: when the
+body completes normally, when `return`, `break`, or `continue` leaves it, and
+when the body or an `except` clause raises an exception. After `finally`
+completes, control continues as it would have without it. The value of a
+`return` is evaluated before `finally` runs. If the `finally` clause raises an
+exception, that exception replaces the one being propagated. `return`, `break`,
+and `continue` cannot appear directly inside a `finally` clause.
 
 ### Failures that are not exceptions
 
-Stack exhaustion, memory exhaustion, failure to write stdout or stderr through
-`print`, `sys.eprint`, or the final flush (§14), and failure to read stdin through
-`input` terminate the program with status 1. They cannot be caught. A write to a
-closed pipe is such a failure rather than a signal.
+The following failures end the program with exit status 1 and cannot be caught:
+running out of stack space or memory, failing to write to stdout or stderr
+through `print`, `sys.eprint`, or the final flush (§14), and failing to read
+stdin through `input`. Writing to a closed pipe is one of these failures; it does
+not deliver a signal to the program.
 
 ## 11. Built-in functions
 
@@ -846,9 +925,10 @@ closed pipe is such a failure rather than a signal.
 
 The built-in names are these functions and the built-in exception classes.
 
-A line of input ends at `\n`; `input` removes the `\n` and a `\r` just before it,
-and returns a final line that has no line ending. Text read by `input` must be
-valid UTF-8, or the call raises `ValueError` with the message `invalid UTF-8`.
+A line of input ends at `\n`. `input` removes the `\n` and a `\r` immediately
+before it. A final line with no line ending is returned as it is. Text read by
+`input` must be valid UTF-8, or the call raises `ValueError` with the message
+`invalid UTF-8`.
 
 ## 12. Modules
 
@@ -874,35 +954,44 @@ def main() -> None:
     print(geometry.distance_squared(origin, corner))    # 25.0
 ```
 
-- `import name` loads `name.wlo` and `import app.util` loads `app/util.wlo`, each
-  component an identifier, from the search roots below. Each import names one
-  module. Directories are only namespaces: importing `app.util` neither needs nor
-  loads an `app.wlo`.
-- An import binds its first component in the importing file's namespace (§9).
-  Several imports may share it, but it may not also name a function, record, or
-  alias, and a module cannot also be a namespace: importing both `app` and
-  `app.util` is an error. A local with that name shadows the whole namespace.
-- `module.name`, with the module's full name such as `app.util.name`, refers to
-  a function, record, or alias declared in that module, in calls, constructors,
-  annotations, `except` clauses, and `isinstance`. Modules and namespaces are not
-  values. Names that begin with `_` are private to their module.
-- Imports may form cycles. Modules contain only declarations, so they have no
-  initialization order.
+- `import name` loads the file `name.wlo`, and `import app.util` loads
+  `app/util.wlo`, from the search roots described below. Each component of a
+  module name is an identifier, and each import names one module. Directories
+  serve only as namespaces, so importing `app.util` does not require or load a
+  file named `app.wlo`.
+- An import binds its first component as a name in the importing file's
+  namespace (§9). Several imports may share the same first component, but that
+  name cannot also be used for a function, record, or alias. A name cannot be
+  both a module and a namespace, so importing both `app` and `app.util` is an
+  error. A local variable with the same name hides the whole namespace.
+- `module.name`, written with the module's full name, as in `app.util.name`,
+  refers to a function, record, or alias declared in that module. It can be used
+  in calls, constructors, annotations, `except` clauses, and `isinstance`.
+  Modules and namespaces are not values. Names that begin with `_` are private to
+  the module that declares them.
+- Imports may form cycles. Modules contain only declarations, so the order in
+  which they are loaded has no effect.
 
-A module is looked for in the search roots in order: the entry file's
-directory, or a project's source root; then a project's dependency roots, where
-more than one match raises the error `module '<name>' is ambiguous: found in
-<file> and <file>`; then the standard library. A program's own module therefore
-shadows a standard one. Imports are absolute: a module in `app/` imports its
-neighbor as `app.other`. A module that is not found is an error at its import.
-Each file loads once and has one module name: a second name for a loaded file is
-the error `module '<name>' is the same file as module '<name>'`. The entry
-file's own module name, its path under its root without `.wlo` and with `/` as
-`.`, refers to the entry itself.
+Modules are searched for in these roots, in order:
+
+1. The directory of the entry file or, in a project, the project's source root.
+2. The project's dependency roots. If a module is found in more than one
+   dependency root, it is the error `module '<name>' is ambiguous: found in
+   <file> and <file>`.
+3. The standard library.
+
+As a result, a program's own module takes precedence over a standard library
+module with the same name. Imports are always absolute, so a module in `app/`
+imports a module next to it as `app.other`. An import of a module that cannot be
+found is an error at the import. Each file is loaded once and has a single module
+name. Importing a loaded file under a second name is the error
+`module '<name>' is the same file as module '<name>'`. The entry file has a
+module name too, formed from its path under its root with `.wlo` removed and `/`
+replaced by `.`, and an import of that name refers to the entry file itself.
 
 ### Projects
 
-A `willow.json` in the current directory describes a project:
+A `willow.json` file in the current directory describes a project:
 
 ```json
 {
@@ -913,24 +1002,32 @@ A `willow.json` in the current directory describes a project:
 }
 ```
 
-It is a JSON object with only these keys, each optional: `entry`, a `.wlo` path
-under the source root whose components are identifiers (default `main.wlo`);
-`source`, the source root (default `.`); `dependencies`, a list of dependency
-roots (default none); and `tests`, the test directory (default `tests`). Paths
-other than `entry` are relative to the manifest's directory and may be absolute
-or use `..`; roots hold `.wlo` modules, not further manifests. A repeated key
-keeps its last value. Any other key, a wrong type, an empty path, or an invalid
-`entry` is an error naming `willow.json`.
+The file contains a JSON object. Each of these keys is optional, and no other
+keys are allowed:
 
-Without a source file, `willow check`, `willow run`, `willow compile -o <output>`,
-and `willow build -o <output>` use the project in the current directory, and
-`willow run -- <args>` passes `<args>` to the program; with no `willow.json`
-they report `no source file given and no willow.json in the current directory`.
-Given a source file, they use only that file's directory and the standard
-library, whether or not a `willow.json` exists. Programs keep the current
-directory for their own file operations. Compiled and built output contains
-every module, from every root.
+- `entry` is the path of the entry file under the source root. It must end in
+  `.wlo`, and each of its path components must be an identifier. The default is
+  `main.wlo`.
+- `source` is the source root. The default is `.`.
+- `dependencies` is a list of dependency roots. The default is an empty list.
+- `tests` is the test directory. The default is `tests`.
 
+The paths in `source`, `dependencies`, and `tests` are relative to the directory
+that contains `willow.json`. They may also be absolute or contain `..`. Roots
+contain `.wlo` modules; manifests in dependency roots are not loaded. If a key
+appears more than once, the last value is used. An unknown key, a value of the
+wrong type, an empty path, or an invalid `entry` is an error that names
+`willow.json`.
+
+When no source file is given, `willow check`, `willow run`,
+`willow compile -o <output>`, and `willow build -o <output>` use the project in
+the current directory, and `willow run -- <args>` passes `<args>` to the program.
+If there is no `willow.json`, these commands report
+`no source file given and no willow.json in the current directory`. When a
+source file is given, the commands search only that file's directory and the
+standard library, whether or not a `willow.json` exists. Programs run in the
+current directory, and their file operations are relative to it. Compiled and
+built output contains every module the program uses, from all roots.
 
 ### Tests
 
@@ -942,34 +1039,39 @@ def test_empty_cart_totals_zero() -> None:
     assert cart.total(cart.Cart([])) == 0
 ```
 
-`willow test [path]` takes a file or a directory, `.` by default. A directory
-contributes the files directly inside it named `test_*.wlo`; a file named
-explicitly may have any name. Each test file is an entry file whose imports
-resolve from its own directory. In a project, the default path is the test
-directory, directories are searched at every depth (without following directory
-symlinks), and imports resolve from the project's roots; the test directory is
-not itself a root, so test helpers belong under the source or a dependency
-root. It needs no `main`; its functions named `test_*`
-are its tests, and each must take no parameters and return `None`.
+`willow test [path]` takes a file or a directory, and defaults to `.`. For a
+directory, it uses the files directly inside it whose names match `test_*.wlo`. A
+file given explicitly may have any name. Each test file is an entry file, and its
+imports are resolved from its own directory.
 
-Every test file and its imports are checked before any test runs. Tests run in
-order of file path, then function name, each in a new process with no program
-arguments, empty stdin, and the current working directory. A test passes when it
-returns. An uncaught exception, a `sys.exit` call with any status, or any other
-abnormal end fails it, and later tests still run.
+In a project, the default path is the project's test directory, directories are
+searched recursively without following symlinks to directories, and imports are
+resolved from the project's roots. The test directory is not a root, so modules
+shared by tests must be placed under the source root or a dependency root.
 
-The report lists `PASS path name` or `FAIL path name` for each test. A failure is
-followed by the test's combined stdout and stderr, indented, and its exit status;
-the last line counts the passed and failed tests. The command exits with status 0
-only when at least one test ran and every test passed; usage errors, check errors,
-finding no tests, and failed tests exit with status 1. Tests share the filesystem
-and environment.
+A test file does not need a `main` function. Its functions whose names begin
+with `test_` are its tests. Each test function must take no parameters and
+return `None`.
 
-`willow test --check [path]` finds and checks the tests without running them, and
-exits with status 0 when they are valid and there is at least one.
+All test files and the modules they import are checked before any test runs.
+Tests run in order of file path and then function name. Each test runs in a new
+process with no program arguments, an empty stdin, and the current working
+directory. A test passes when it returns. It fails when an exception propagates
+out of it, when it calls `sys.exit` with any status, or when it ends abnormally
+in any other way. A failing test does not stop later tests from running.
 
-Programs run by `willow run` and `willow test` have the environment variable
-`WILLOW` set to the absolute path of the `willow` launcher, replacing any
+The report contains a line `PASS path name` or `FAIL path name` for each test.
+After a `FAIL` line, the report shows the test's combined stdout and stderr,
+indented, and its exit status. The last line gives the number of passed and
+failed tests. The command exits with status 0 only if at least one test ran and
+every test passed. Usage errors, check errors, finding no tests, and failed tests
+give exit status 1. Tests share the filesystem and the environment.
+
+`willow test --check [path]` finds and checks the tests without running them. It
+exits with status 0 if there is at least one test and all tests are valid.
+
+`willow run` and `willow test` set the environment variable `WILLOW` to the
+absolute path of the `willow` launcher in the programs they run, replacing any
 inherited value. Compiled and built programs do not set it.
 
 ## 13. Diagnostics
@@ -980,10 +1082,11 @@ Compile-time errors have this form:
 hello.wlo:8:5: error: expected int, received str
 ```
 
-Lines and columns are one-based, and columns count code points.
+Line and column numbers start at 1, and columns are counted in code points.
 
-An exception that leaves `main` reports its class and message at its recorded
-location, followed by its recorded frames:
+When an exception propagates out of `main`, the program reports the exception's
+class and message at its recorded location, followed by its recorded call
+frames:
 
 ```text
 main.wlo:7:9: error: ParseError: not a digit: x
@@ -991,12 +1094,12 @@ main.wlo:7:9: error: ParseError: not a digit: x
   called from main at main.wlo:13:15
 ```
 
-Each location names the file it belongs to. Diagnostics go to stderr.
+Each location includes the name of its file. Diagnostics are written to stderr.
 
 ## 14. Standard library
 
-The standard library is a set of modules that ship with Willow and are imported
-like a program's own (§12).
+The standard library consists of modules that are included with Willow. They are
+imported in the same way as a program's own modules (§12).
 
 ### `cli`
 
@@ -1025,64 +1128,75 @@ def main() -> None:
 | --- | --- |
 | `parser(prog: str, description: str = "") -> Parser` | A new parser for the program named `prog` |
 | `class Parser` | A native type that declares arguments and parses them |
-| `class Args` | A native type holding one parse's values |
-| `class UsageError(Exception)` | Arguments that do not fit the declarations |
-| `class HelpRequested(Exception)` | `-h` or `--help` among the options; the message is the help text |
+| `class Args` | A native type that holds the values from one parse |
+| `class UsageError(Exception)` | Arguments that do not match the declarations |
+| `class HelpRequested(Exception)` | `-h` or `--help` was given; the message is the help text |
 
 | `Parser` method | Meaning |
 | --- | --- |
-| `add_str(name: str, default: str, help: str = "", short: str \| None = None, required: bool = False) -> None` | A text option `--name VALUE` |
-| `add_int(name: str, default: int, help: str = "", short: str \| None = None, required: bool = False) -> None` | An integer option |
-| `add_float(name: str, default: float, help: str = "", short: str \| None = None, required: bool = False) -> None` | A number option |
-| `add_flag(name: str, help: str = "", short: str \| None = None) -> None` | An option without a value, false unless given |
-| `add_positional(name: str, help: str = "") -> None` | A required positional argument |
-| `add_rest(name: str, help: str = "") -> None` | Zero or more remaining positional arguments |
+| `add_str(name: str, default: str, help: str = "", short: str \| None = None, required: bool = False) -> None` | Declare a text option `--name VALUE` |
+| `add_int(name: str, default: int, help: str = "", short: str \| None = None, required: bool = False) -> None` | Declare an integer option |
+| `add_float(name: str, default: float, help: str = "", short: str \| None = None, required: bool = False) -> None` | Declare a number option |
+| `add_flag(name: str, help: str = "", short: str \| None = None) -> None` | Declare an option that takes no value and is false unless given |
+| `add_positional(name: str, help: str = "") -> None` | Declare a required positional argument |
+| `add_rest(name: str, help: str = "") -> None` | Declare zero or more remaining positional arguments |
 | `parse(args: list[str]) -> Args` | Parse `args` |
 | `help() -> str` | The help text |
 
 | `Args` method | Meaning |
 | --- | --- |
-| `get_str(name: str) -> str` | A text option or positional argument |
-| `get_int(name: str) -> int` | An integer option |
-| `get_float(name: str) -> float` | A number option |
-| `get_bool(name: str) -> bool` | A flag |
-| `get_list(name: str) -> list[str]` | A new list of the rest arguments |
+| `get_str(name: str) -> str` | The value of a text option or positional argument |
+| `get_int(name: str) -> int` | The value of an integer option |
+| `get_float(name: str) -> float` | The value of a number option |
+| `get_bool(name: str) -> bool` | The value of a flag |
+| `get_list(name: str) -> list[str]` | A new list of the remaining positional arguments |
 
-A name starts with an ASCII letter and continues with letters and digits, with
-single hyphens between them, and an option `name` is written `--name`. A short
-spelling is one ASCII letter, written `-x`. Names and short spellings are
-unique, and `help` and `h` are reserved. Positional arguments share the
-namespace and are declared in order; at most one rest argument is allowed, and
-it comes after the positional arguments.
+An argument name starts with an ASCII letter and continues with ASCII letters and
+digits, which may be separated by single hyphens. An option named `name` is
+written `--name` on the command line. A short name is a single ASCII letter,
+written `-x`. Names and short names must be unique, and `help` and `h` are
+reserved. Positional arguments share the same set of names as options and are
+matched in the order they are declared. A parser can have at most one rest
+argument, and it must be declared after the positional arguments.
 
-An option's value follows as `--name value`, `--name=value`, or `-x value`, and
-is taken even if it begins with `-`. A repeated option keeps its last value.
-Options may appear between positional arguments; after `--`, every argument is
-positional, and `-` alone is always positional. There are no abbreviations,
-bundled short options, or subcommands. Integer and number values convert as
-`int` and `float` convert text (§6). An option with `required` must appear even
-though it has a default. Every option without its own value takes its default.
+An option's value is written as `--name value`, `--name=value`, or `-x value`.
+The value is taken even if it begins with `-`. If an option is given more than
+once, the last value is used. Options may appear between positional arguments.
+Every argument after `--` is treated as positional, and `-` by itself is always
+positional. Abbreviated option names, combined short options, and subcommands are
+not supported. Integer and number values are converted the same way `int` and
+`float` convert text (§6). An option declared with `required` must be given even
+though it has a default. An option that is not given takes its default value.
 
-A `UsageError` message is the usage line, a newline, and `<prog>: error: `
-followed by one of `unknown option '<arg>'`, `option '--<name>' needs a value`,
-`option '--<name>' takes no value`, `option '--<name>' expects an integer,
-received '<value>'` (or `a number`), `option '--<name>' is required`,
-`missing argument '<name>'`, or `unexpected argument '<arg>'`. Neither
-exception prints anything or ends the program; applications usually exit with
-status 2 after a usage error and 0 after showing help.
+The message of a `UsageError` is the usage line, a newline, and
+`<prog>: error: ` followed by one of these:
 
-The help text starts with `usage: <prog> [options]` and the positional
-arguments, then the description, then `arguments:` and `options:` sections in
-declaration order with aligned help. Each value option shows an upper-case
-placeholder and either `(required)` or a nonempty `(default: <value>)`. Every
-line, including the last, ends with a newline.
+- `unknown option '<arg>'`
+- `option '--<name>' needs a value`
+- `option '--<name>' takes no value`
+- `option '--<name>' expects an integer, received '<value>'`, or
+  `option '--<name>' expects a number, received '<value>'`
+- `option '--<name>' is required`
+- `missing argument '<name>'`
+- `unexpected argument '<arg>'`
+
+Neither `UsageError` nor `HelpRequested` prints anything or ends the program. A
+program usually exits with status 2 after a usage error and with status 0 after
+printing the help text.
+
+The help text starts with `usage: <prog> [options]` followed by the positional
+arguments. Next comes the description, then an `arguments:` section and an
+`options:` section, each listing its entries in declaration order with their
+help text aligned. Each option that takes a value shows an upper-case
+placeholder, and either `(required)` or `(default: <value>)` when the default is
+not empty. Every line ends with a newline, including the last.
 
 An invalid declaration raises `ValueError` with a message such as
 `invalid name '<name>'`, `duplicate name '<name>'`, or
-`'help' and 'h' are reserved`. A getter given a name that was not declared, or
-the name of an argument of another kind, raises `ValueError`
-(`no argument named '<name>'`, `'<name>' is not an int argument`). Each parse
-returns an independent `Args`.
+`'help' and 'h' are reserved`. A getter raises `ValueError` if the name was not
+declared (`no argument named '<name>'`) or belongs to an argument of a different
+kind (`'<name>' is not an int argument`). Each call to `parse` returns a separate
+`Args` value.
 
 ### `fs`
 
@@ -1090,46 +1204,51 @@ returns an independent `Args`.
 | --- | --- |
 | `read_file(path: str) -> str` | The contents of the file |
 | `write_file(path: str, text: str) -> None` | Create the file, or replace its contents, with `text` |
-| `join(a: str, b: str) -> str` | `a` and `b` joined with `/`; an absolute `b` replaces `a` |
-| `basename(path: str) -> str` | The text after the last `/`; empty after a trailing `/` |
-| `dirname(path: str) -> str` | The text before the last `/`, or empty when there is none |
-| `listdir(path: str) -> list[str]` | The directory's entry names, without `.` and `..`, sorted by code point |
-| `stat(path: str, follow_symlinks: bool = True) -> Stat` | The file's metadata |
-| `exists(path: str) -> bool` | Whether the path, followed through symlinks, exists |
+| `join(a: str, b: str) -> str` | `a` and `b` joined with `/`; if `b` is absolute, the result is `b` |
+| `basename(path: str) -> str` | The text after the last `/`, or empty if the path ends with `/` |
+| `dirname(path: str) -> str` | The text before the last `/`, or empty if there is no `/` |
+| `listdir(path: str) -> list[str]` | The names of the entries in the directory, excluding `.` and `..`, sorted by code point |
+| `stat(path: str, follow_symlinks: bool = True) -> Stat` | Metadata for the file |
+| `exists(path: str) -> bool` | Whether the path exists, following symlinks |
 | `mkdir(path: str, parents: bool = False, exist_ok: bool = False) -> None` | Create a directory |
 | `remove(path: str) -> None` | Remove a file or symlink |
 | `rmdir(path: str) -> None` | Remove an empty directory |
-| `rename(source: str, destination: str) -> None` | Rename, replacing the destination where POSIX allows |
-| `class Stat` | Fields `kind: str`, `size: int`, and `modified: float` |
+| `rename(source: str, destination: str) -> None` | Rename a file or directory, replacing the destination where POSIX allows it |
+| `class Stat` | A record with the fields `kind: str`, `size: int`, and `modified: float` |
 
-Paths are strings, relative to the working directory unless absolute. `read_file`
-and `write_file` transfer text exactly, without line-ending translation, and
-`write_file` does not replace the file atomically.
+Paths are strings. A relative path is relative to the working directory.
+`read_file` and `write_file` read and write text exactly as it is, without
+translating line endings. `write_file` does not replace the file atomically.
 
-`join`, `basename`, and `dirname` work on the text alone, as Python's
-`posixpath` does: they do not touch the filesystem, follow symlinks, or collapse
-`..`. `join("a", "")` is `a/`, `join("", "b")` is `b`, and a head of only slashes
-stays whole, so `dirname("//a")` is `//`.
+`join`, `basename`, and `dirname` operate only on the text of the path, in the
+same way as Python's `posixpath`. They do not access the filesystem, follow
+symlinks, or resolve `..`. For example, `join("a", "")` is `a/`, `join("", "b")`
+is `b`, and a leading sequence of slashes is kept together, so `dirname("//a")`
+is `//`.
 
 `Stat` is an ordinary record. `kind` is `file`, `directory`, `symlink`, or
-`other`; `size` is the size in bytes; `modified` is the modification time in
-seconds since the Unix epoch. With `follow_symlinks`, it describes the symlink's
-target. A size above the `int` range raises `OverflowError` with the message
+`other`. `size` is the size in bytes. `modified` is the time of the last
+modification, in seconds since the Unix epoch. When `follow_symlinks` is true,
+`stat` describes the target of a symlink rather than the symlink itself. A size
+larger than the `int` range raises `OverflowError` with the message
 `file size out of range`.
 
-`exists` is false for a missing path, a dangling symlink, or a path through a
-non-directory; any other failure raises. `mkdir` with `parents` creates missing
-parent directories, and with `exist_ok` accepts an existing directory but not a
-file. New directories get the host's default permissions under its umask.
-`rename` does not move across filesystems.
+`exists` returns false for a missing path, a symlink whose target does not exist,
+or a path that passes through something that is not a directory. Any other
+failure raises an exception. `mkdir` with `parents` creates any missing parent
+directories. With `exist_ok`, `mkdir` succeeds if the directory already exists,
+but not if a file exists at the path. New directories receive the system's
+default permissions, as modified by the umask. `rename` cannot move a file to a
+different filesystem.
 
-A path containing NUL raises `ValueError` with the message
-`path contains a NUL character`. Text read by `read_file` and names from
+A path that contains a NUL character raises `ValueError` with the message
+`path contains a NUL character`. Text read by `read_file` and names returned by
 `listdir` must be valid UTF-8, or the call raises `ValueError` with the message
-`invalid UTF-8`. A failed host operation raises `OSError` with a message naming
-the operation and path and giving the host's reason, such as
-`cannot read <path>: <reason>`, `cannot write <path>: <reason>`,
-`cannot list <path>: <reason>`, or `cannot remove directory <path>: <reason>`.
+`invalid UTF-8`. When the operating system reports a failure, the function raises
+`OSError` with a message that names the operation and the path and gives the
+system's reason. Examples are `cannot read <path>: <reason>`,
+`cannot write <path>: <reason>`, `cannot list <path>: <reason>`, and
+`cannot remove directory <path>: <reason>`.
 
 ### `http`
 
@@ -1150,64 +1269,74 @@ def main() -> None:
 | Declaration | Meaning |
 | --- | --- |
 | `request(method: str, url: str, headers: list[Header] \| None = None, body: bytes \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Response` | Make a request and read the whole response |
-| `download(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Download` | `GET` a URL into the file at `path` |
-| `header(headers: list[Header], name: str) -> str \| None` | The value of the first header named `name`, ignoring case, or `None` |
-| `urlencode(values: dict[str, str]) -> str` | `values` as `key=value` pairs joined with `&`, in insertion order |
-| `class Header` | Fields `name: str` and `value: str` |
-| `class Response` | Fields `status: int`, `headers: list[Header]`, `body: bytes`, and `url: str` |
-| `class Download` | Fields `status: int`, `headers: list[Header]`, `url: str`, and `bytes_written: int` |
+| `download(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Download` | Send a `GET` request and save the response body to the file at `path` |
+| `header(headers: list[Header], name: str) -> str \| None` | The value of the first header named `name`, compared case-insensitively, or `None` |
+| `urlencode(values: dict[str, str]) -> str` | `values` encoded as `key=value` pairs joined with `&`, in insertion order |
+| `class Header` | A record with the fields `name: str` and `value: str` |
+| `class Response` | A record with the fields `status: int`, `headers: list[Header]`, `body: bytes`, and `url: str` |
+| `class Download` | A record with the fields `status: int`, `headers: list[Header]`, `url: str`, and `bytes_written: int` |
 
-The module uses the system libcurl, which macOS includes; on Linux, a program
-that makes requests needs the `libcurl4` and `ca-certificates` packages. When
-libcurl cannot be loaded, a request raises `OSError` with the message
-`cannot load libcurl: <reason>`. Programs that do not import `http` have no such
-dependency.
+The `http` module uses the system's libcurl. macOS includes libcurl. On Linux, a
+program that makes requests needs the `libcurl4` and `ca-certificates` packages.
+If libcurl cannot be loaded, a request raises `OSError` with the message
+`cannot load libcurl: <reason>`. Programs that do not import `http` do not need
+libcurl.
 
-A URL is absolute `http` or `https` with an ASCII host (internationalized names
-must already be in their ASCII form) and an optional port. Its fragment is not
-sent. Bytes outside the URL character set, including UTF-8 text, are
-percent-encoded, and existing `%XX` escapes are kept. Other schemes, relative
-URLs, and malformed hosts or ports raise `ValueError` with the message
-`invalid URL '<url>'`, and user information raises `ValueError` with the message
+A URL must be an absolute `http` or `https` URL with an ASCII host name and an
+optional port. Internationalized domain names must be given in their ASCII form.
+The URL's fragment is not sent. Bytes that are not allowed in URLs, including
+non-ASCII UTF-8 text, are percent-encoded, and existing `%XX` escapes are kept as
+they are. Other schemes, relative URLs, and malformed hosts or ports raise
+`ValueError` with the message `invalid URL '<url>'`. A URL that contains user
+information raises `ValueError` with the message
 `URL user information is not allowed`.
 
-The method is sent as given and must be an HTTP token. Header names must be
-tokens and values printable ASCII or tab; `Host`, `Content-Length`, and
-`Transfer-Encoding` are set by the transport and raise `ValueError` if given.
-Received headers keep their order and repetitions; bytes above 127 in them read
-as U+0080 through U+00FF. `urlencode` keeps ASCII letters, digits, `-`, `.`, `_`,
-and `~`, writes spaces as `+`, and percent-encodes the rest of the UTF-8 text; it
-adds no `?`.
+The method is sent exactly as given and must be a valid HTTP token. Header names
+must be valid tokens, and header values may contain only printable ASCII and
+tab. The `Host`, `Content-Length`, and `Transfer-Encoding` headers are set by
+the module, and giving any of them raises `ValueError`. Response headers are
+returned in the order received, including repeated headers. Bytes above 127 in
+response headers are read as the characters U+0080 through U+00FF.
 
-Every completed exchange returns its status, including 4xx and 5xx. The body is
-the received bytes without transport framing; nothing is decompressed or
-decoded. There are no cookies, retries, credentials, or proxies, whatever the
-environment says. Connection, protocol, and TLS failures raise `OSError` with
-the message `cannot fetch <url>: <reason>`.
+`urlencode` keeps ASCII letters, digits, `-`, `.`, `_`, and `~` as they are,
+writes spaces as `+`, and percent-encodes the UTF-8 encoding of every other
+character. It does not add a leading `?`.
 
-With `follow_redirects`, `GET` and `HEAD` requests follow 301, 302, 303, 307,
-and 308 responses with a `Location`, resolved against the current URL, for at
-most ten hops; another hop raises `OSError` with the message
-`too many redirects`, and a hop from `https` to `http` raises `OSError` with the
-message `refusing to follow a redirect from https to http`. Other methods get the
-redirect response itself. When a hop changes the scheme, host, or port, the
-caller's headers are not sent again. The result describes the final exchange.
+Every completed exchange returns its status, including 4xx and 5xx statuses. The
+body contains the bytes received, without transfer encoding. The module does not
+decompress or decode the body. It does not handle cookies, retry requests, send
+credentials, or use proxies, regardless of environment variables. Connection,
+protocol, and TLS failures raise `OSError` with the message
+`cannot fetch <url>: <reason>`.
 
-`timeout` limits inactivity: connecting and each wait for more data may each take
-at most that long, so a slow but steady transfer can last longer. On expiry the
-request raises `TimeoutError` with the message
-`request timed out after <timeout> seconds`. Host name lookup is not covered and
-may take longer. A timeout must be finite and positive.
+When `follow_redirects` is true, `GET` and `HEAD` requests follow 301, 302, 303,
+307, and 308 responses that have a `Location` header. The location is resolved
+relative to the current URL. At most ten redirects are followed, and an eleventh
+raises `OSError` with the message `too many redirects`. A redirect from `https`
+to `http` raises `OSError` with the message
+`refusing to follow a redirect from https to http`. For other methods, the
+redirect response itself is returned. If a redirect changes the scheme, host, or
+port, the caller's headers are not sent to the new location. The result
+describes the final request and response.
 
-HTTPS always verifies the server's certificate and host name, against the
-platform's trusted certificates or, with `ca_file`, against the PEM bundle at
-that path alone.
+`timeout` limits periods of inactivity. Connecting, and each wait for more data,
+may each take at most `timeout` seconds, so a slow transfer that keeps receiving
+data can take longer in total. When the time limit expires, the request raises
+`TimeoutError` with the message `request timed out after <timeout> seconds`. The
+timeout does not include looking up the host name, which may take longer. The
+timeout must be finite and positive.
 
-`download` writes a 2xx body into a temporary file next to `path` and replaces
-`path` with it only after the whole body is written and closed, so `path` is
-never left partly written. A final response that is not 2xx returns its status
-with `bytes_written` 0 and leaves `path` alone. Failures remove the temporary
-file. The body is written as it arrives rather than held in memory.
+HTTPS requests always verify the server's certificate and host name. By default,
+the certificate is checked against the platform's trusted certificates. When
+`ca_file` is given, it is checked only against the PEM bundle in that file.
+
+`download` writes a 2xx response body to a temporary file in the same directory
+as `path`. After the whole body has been written and the file closed, it replaces
+`path` with the temporary file, so `path` is never left partly written. If the
+final response is not 2xx, `download` returns its status with `bytes_written`
+set to 0 and does not change `path`. If the download fails, the temporary file is
+removed. The body is written to the file as it arrives instead of being held in
+memory.
 
 ### `io`
 
@@ -1232,7 +1361,7 @@ def main() -> None:
 
 | Declaration | Meaning |
 | --- | --- |
-| `open(path: str, mode: str = "r") -> File` | Open a file to read (`r`), to write after creating or truncating it (`w`), or to append after creating it if needed (`a`) |
+| `open(path: str, mode: str = "r") -> File` | Open a file for reading (`r`), for writing after creating or truncating it (`w`), or for appending after creating it if needed (`a`) |
 | `stdin() -> File` | A handle for standard input, open for reading |
 | `stdout() -> File` | A handle for standard output, open for writing |
 | `stderr() -> File` | A handle for standard error, open for writing |
@@ -1240,48 +1369,53 @@ def main() -> None:
 
 | `File` method | Meaning |
 | --- | --- |
-| `read(size: int) -> bytes` | Up to `size` octets; empty only at end of input |
-| `readline() -> str \| None` | The next line as `input` reads it, or `None` at end of input |
+| `read(size: int) -> bytes` | Read up to `size` octets; the result is empty only at end of input |
+| `readline() -> str \| None` | Read the next line the same way `input` does, or return `None` at end of input |
 | `write(data: bytes) -> None` | Write all of `data` |
 | `write_text(text: str) -> None` | Write the UTF-8 encoding of `text`, without adding a newline |
 | `flush() -> None` | Write any buffered data |
 | `close() -> None` | Flush and close the file |
 
-A native type is a library type with methods. Only its module's functions create
-its values, and it has no fields. It can be used in annotations, aliases, unions,
-and `isinstance`, and its values can be stored and passed; it does not support
-`==`, printing, or construction. Every reference to a handle shares it, so
-closing one closes them all.
+A native type is a library type that has methods. Its values can only be created
+by functions in its module, and it has no fields. A native type can be used in
+annotations, aliases, unions, and `isinstance`, and its values can be stored and
+passed as arguments. It does not support `==`, printing, or construction. All
+references to a handle refer to the same handle, so closing it through one
+reference closes it for all of them.
 
-Files carry octets with no newline translation; `readline` and `write_text` use
-UTF-8. `readline` removes the line's `\n` and a `\r` just before it, returns a
-final line that has no line ending, returns `""` for an empty line, and consumes
-a line that is not valid UTF-8 before raising `ValueError` with the message
-`invalid UTF-8`. Byte and line reads share the file position. Reads may return
-fewer octets than asked for.
+Files contain octets, and no newline translation is done. `readline` and
+`write_text` use UTF-8. `readline` removes the line's `\n` and a `\r`
+immediately before it. It returns a final line that has no line ending as it is,
+and returns `""` for an empty line. If a line is not valid UTF-8, `readline`
+consumes it and then raises `ValueError` with the message `invalid UTF-8`. Byte
+reads and line reads share the same file position. A read may return fewer octets
+than requested.
 
-The standard handles share their streams' buffers with `input`, `print`, and
-`sys.eprint`, so reads and writes through either keep their order. When `main`
-returns, when an uncaught exception ends the program, and in `sys.exit`, stdout
-and stderr are flushed. Data written to an owned file is guaranteed to reach it
-only after `flush` or `close`, so close owned files with `try/finally`.
+The standard handles share their buffers with `input`, `print`, and
+`sys.eprint`, so reads and writes through either keep their relative order.
+stdout and stderr are flushed when `main` returns, when an uncaught exception
+ends the program, and when `sys.exit` is called. Data written to a file opened
+with `open` is only guaranteed to reach the file after `flush` or `close`, so
+programs should close such files in a `try`/`finally` statement.
 
-`close` is idempotent and closes the handle even when it fails. These raise
-`ValueError`:
+Calling `close` more than once has no further effect, and `close` closes the
+handle even if flushing fails. These operations raise `ValueError`:
 
-- any other operation on a closed handle: `I/O operation on closed file`;
-- reading a handle open for writing or writing one open for reading:
-  `file is not open for reading` or `file is not open for writing`;
-- `read` with a size below 1: `read size must be positive`;
-- closing a standard handle: `cannot close a standard stream`;
-- `open` with any other mode: `invalid mode '<mode>'`;
-- `open` with a path containing NUL: `path contains a NUL character`.
+- any other operation on a closed handle: `I/O operation on closed file`
+- reading from a handle opened for writing, or writing to a handle opened for
+  reading: `file is not open for reading` or `file is not open for writing`
+- `read` with a size less than 1: `read size must be positive`
+- closing a standard handle: `cannot close a standard stream`
+- `open` with an unknown mode: `invalid mode '<mode>'`
+- `open` with a path that contains a NUL character:
+  `path contains a NUL character`
 
-Host failures raise `OSError` with the message `cannot open <path>: <reason>`,
-`cannot read <path>: <reason>`, `cannot write <path>: <reason>`, or
-`cannot close <path>: <reason>`, where the standard handles' paths are
-`<stdin>`, `<stdout>`, and `<stderr>`. Unlike `print`, a failed write through a
-handle, including to a closed pipe, can be caught.
+When the operating system reports a failure, the operation raises `OSError` with
+the message `cannot open <path>: <reason>`, `cannot read <path>: <reason>`,
+`cannot write <path>: <reason>`, or `cannot close <path>: <reason>`. The paths of
+the standard handles are `<stdin>`, `<stdout>`, and `<stderr>`. A failed write
+through a handle can be caught, including a write to a closed pipe. This differs
+from `print` (§10).
 
 ### `json`
 
@@ -1301,23 +1435,24 @@ def main() -> None:
 | Declaration | Meaning |
 | --- | --- |
 | `type Json = None \| bool \| int \| float \| str \| list[Json] \| dict[str, Json]` | A JSON value |
-| `class JsonError(Exception)` | Invalid JSON text, or a value `dump` cannot encode |
-| `parse(text: str) -> Json` | The value of the JSON text `text` |
-| `dump(value: Json) -> str` | The JSON text of `value` |
+| `class JsonError(Exception)` | Invalid JSON text, or a value that `dump` cannot encode |
+| `parse(text: str) -> Json` | The value represented by the JSON text `text` |
+| `dump(value: Json) -> str` | The JSON text for `value` |
 
-`parse` accepts JSON as RFC 8259 defines it. A number without a fraction or
-exponent and within the `int` range is an `int`; any other number is the nearest
-`float`. An object's repeated key keeps its first position and its last value.
-Text that is not JSON, including an escape of an unpaired surrogate, raises
-`JsonError` with a message that describes the problem and gives its line and
-column.
+`parse` accepts JSON as defined by RFC 8259. A number with no fraction or
+exponent that is within the `int` range becomes an `int`. Any other number
+becomes the nearest `float`. If an object contains the same key more than once,
+the entry keeps the position of the first occurrence and the value of the last.
+Text that is not valid JSON, including an escape for an unpaired surrogate,
+raises `JsonError` with a message that describes the problem and gives its line
+and column.
 
-`dump` writes no whitespace and keeps dictionary order. Floats are written as
-`str` writes them, so `2.0` reads back as a `float`. Strings escape `"`, `\`, and
-control characters, using `\b`, `\f`, `\n`, `\r`, and `\t` where they exist and
-`\u00XX` otherwise; other characters are written as they are. NaN and infinities
-raise `JsonError` with the message `cannot encode <value>`, as in
-`cannot encode inf`.
+`dump` writes no whitespace and keeps the order of dictionary entries. Floats are
+written the same way `str` writes them, so `2.0` is parsed back as a `float`.
+Strings escape `"`, `\`, and control characters. Control characters use `\b`,
+`\f`, `\n`, `\r`, and `\t` where those escapes exist and `\u00XX` otherwise. All
+other characters are written unchanged. NaN and infinities raise `JsonError` with
+the message `cannot encode <value>`, as in `cannot encode inf`.
 
 ### `net`
 
@@ -1344,40 +1479,43 @@ def main() -> None:
 
 | Method | Meaning |
 | --- | --- |
-| `Connection.recv(size: int, timeout: float \| None = None) -> bytes` | Up to `size` bytes as soon as some arrive; empty when the peer has closed its side |
+| `Connection.recv(size: int, timeout: float \| None = None) -> bytes` | Return up to `size` bytes as soon as any arrive, or empty bytes when the peer has closed its side |
 | `Connection.sendall(data: bytes, timeout: float \| None = None) -> None` | Send all of `data` |
 | `Connection.close() -> None` | Close the connection |
 | `Listener.accept(timeout: float \| None = None) -> Connection` | Wait for the next connection |
 | `Listener.local_port() -> int` | The port the listener is bound to |
 | `Listener.close() -> None` | Stop listening |
 
-Hosts are names, looked up with the host's resolver, or literal IPv4 or IPv6
-addresses, written in ASCII (internationalized names in their ASCII form).
-Ports are 1 through 65535; `listen` also accepts 0, which picks a free port.
-`listen` binds exactly the given address, so local services name a loopback
-address. `connect` tries each resolved address in order within one timeout;
-`listen` binds the first address that works. Name lookup comes before the
-timeout and may take longer.
+A host is a host name, which is looked up with the system resolver, or a literal
+IPv4 or IPv6 address. Hosts are written in ASCII, and internationalized domain
+names must be given in their ASCII form. Ports range from 1 through 65535.
+`listen` also accepts port 0, which selects a free port. `listen` binds exactly
+the given address, so a local service should use a loopback address. `connect`
+tries each resolved address in order, all within one timeout. `listen` binds the
+first resolved address that works. Host name lookup happens before the timeout
+starts and may take longer.
 
-Each `recv`, `sendall`, and `accept` call has its own timeout; a whole exchange
-of several calls needs its own deadline computed with `time.monotonic()`.
-Framing messages is up to the program: one `recv` may return part of a message
-or several messages. An expired `recv` or `accept` raises `TimeoutError` and
-leaves the handle usable. `sendall` sends everything or raises; its timeout
-covers the whole call. After a failed or timed-out send, the peer may have
-received any part of the data, so later operations on the connection raise
+Each call to `recv`, `sendall`, and `accept` has its own timeout. To limit an
+exchange that involves several calls, compute a deadline with
+`time.monotonic()`. The program is responsible for dividing data into messages,
+because one `recv` may return part of a message or several messages. When a
+`recv` or `accept` times out, it raises `TimeoutError` and the handle remains
+usable. `sendall` either sends all of the data or raises an exception, and its
+timeout covers the whole call. After a send fails or times out, the peer may have
+received any part of the data, so every later operation on the connection raises
 `ValueError` with the message `connection is unusable after a failed send`.
 
-`close` is idempotent, and other operations on a closed handle raise
-`ValueError` with the message `I/O operation on closed connection` (or
-`listener`). A host name or port that is not valid, a `size` or `backlog` below
-1, and a timeout that is not finite and positive raise `ValueError`. Failures to
-resolve, connect, listen, send, or receive raise `OSError` with messages such as
+Calling `close` more than once has no further effect. Other operations on a
+closed handle raise `ValueError` with the message
+`I/O operation on closed connection` or `I/O operation on closed listener`. An
+invalid host name or port, a `size` or `backlog` less than 1, and a timeout that
+is not finite and positive raise `ValueError`. Failures to resolve a host,
+connect, listen, send, or receive raise `OSError` with messages such as
 `cannot resolve <host>: <reason>`, `cannot connect to <host>:<port>: <reason>`,
-and `cannot send: <reason>`; writing to a closed peer is such a failure, not a
-signal. Timeouts raise `TimeoutError` with messages such as
-`recv timed out after <timeout> seconds`. Connections and listeners are not
-inherited by child processes.
+and `cannot send: <reason>`. Writing to a connection whose peer has closed it is
+such a failure and does not deliver a signal. Timeouts raise `TimeoutError` with
+messages such as `recv timed out after <timeout> seconds`. Child processes do not
+inherit connections or listeners.
 
 ### `subprocess`
 
@@ -1393,9 +1531,9 @@ def main() -> None:
 
 | Declaration | Meaning |
 | --- | --- |
-| `run(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Result` | Run a command to completion |
-| `spawn(args: list[str], cwd: str \| None = None, env: dict[str, str] \| None = None, stdin: io.File \| None = None, stdout: io.File \| None = None, stderr: io.File \| None = None) -> Process` | Start a command and return without waiting |
-| `class Result` | Fields `returncode: int`, `stdout: bytes \| None`, and `stderr: bytes \| None` |
+| `run(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Result` | Run a command and wait for it to finish |
+| `spawn(args: list[str], cwd: str \| None = None, env: dict[str, str] \| None = None, stdin: io.File \| None = None, stdout: io.File \| None = None, stderr: io.File \| None = None) -> Process` | Start a command and return without waiting for it |
+| `class Result` | A record with the fields `returncode: int`, `stdout: bytes \| None`, and `stderr: bytes \| None` |
 | `class Process` | A native type with the methods below |
 
 | `Process` method | Meaning |
@@ -1405,47 +1543,60 @@ def main() -> None:
 | `terminate() -> None` | Send `SIGTERM` to the child |
 | `kill() -> None` | Send `SIGKILL` to the child |
 
-`args` is the program and its arguments, passed as they are without a shell.
-A program name containing `/` is a path; any other name is searched for in the
-`PATH` of the child's environment, or in `/usr/bin:/bin` when it has none.
-`cwd` sets the child's working directory and `env` replaces its environment;
-`None` inherits them. A status is the exit code, or the negative number of the
-signal that ended the child. A nonzero status is an ordinary result.
+`args` contains the program followed by its arguments. They are passed to the
+program directly, without a shell. A program name that contains `/` is treated as
+a path. Any other program name is searched for in the `PATH` of the child's
+environment, or in `/usr/bin:/bin` if that environment has no `PATH`. `cwd` sets
+the child's working directory and `env` replaces its environment. When either is
+`None`, the child inherits the parent's. A process's status is its exit code, or
+the negative of the signal number if a signal ended it. A nonzero status is
+returned normally and does not raise an exception.
 
-`run` with `input` sends it to the child's stdin and then closes it; empty bytes
-give immediate end of input, and input the child leaves unread is dropped
-without error. Without `input`, the child inherits stdin. With
-`capture_output`, the child's stdout and stderr are collected as bytes while the
-input is written, so full pipes cannot deadlock; otherwise the child inherits
-them and both result fields are `None`. Captured output is held in memory. Once
-the child exits, `run` returns without waiting for processes it left behind.
+When `run` is given `input`, it writes the input to the child's stdin and then
+closes it. Empty input gives the child an immediate end of input. If the child
+does not read all of the input, the rest is discarded without an error. Without
+`input`, the child inherits stdin. With `capture_output`, `run` collects the
+child's stdout and stderr as bytes while it writes the input, so full pipes
+cannot deadlock. Without `capture_output`, the child inherits stdout and
+stderr, and both fields of the result are `None`. Captured output is held in
+memory. `run` returns as soon as the child exits, even if processes started by
+the child are still running.
 
-`timeout` limits `run` from the moment the child starts: on expiry the child is
-killed and collected, and `run` raises `TimeoutError` with the message
-`command timed out after <timeout> seconds`. It does not kill the child's own
-children.
+`timeout` limits how long `run` waits, starting when the child starts. When the
+time limit expires, `run` kills the child, waits for it to exit, and raises
+`TimeoutError` with the message `command timed out after <timeout> seconds`.
+Processes started by the child are not killed.
 
-`spawn` connects the child's streams to the given `io.File` handles, which must
-be open for reading (`stdin`) or writing (`stdout` and `stderr`); `None`
-inherits the stream. The parent keeps its handles. A `stdin` handle that may
-hold input already read into its buffer, because it was read before and either
-is not a seekable file or its buffer is not empty, raises `ValueError` with the
-message `stdin has buffered input`. A child that inherits stdin does not see
-what the parent has buffered.
+`spawn` connects the child's standard streams to the given `io.File` handles.
+The `stdin` handle must be open for reading, and the `stdout` and `stderr`
+handles must be open for writing. When a handle is `None`, the child inherits
+that stream. The parent's handles remain open. If the `stdin` handle may already
+have input read into its buffer, `spawn` raises `ValueError` with the message
+`stdin has buffered input`. This is the case when the handle has been read from
+and either is not a seekable file or has a non-empty buffer. A child that
+inherits stdin does not receive input that the parent has already buffered.
 
-A `Process` remembers its status once collected, so `poll` and `wait` agree, and
-`terminate` and `kill` then do nothing. `wait` with a `timeout` raises
-`TimeoutError` with the message `process did not exit within <timeout> seconds`
-and leaves the child running. A child is not stopped or collected automatically.
+Once a child's exit status has been collected, the `Process` remembers it, so
+`poll` and `wait` return the same status, and `terminate` and `kill` do nothing.
+`wait` with a `timeout` raises `TimeoutError` with the message
+`process did not exit within <timeout> seconds` and leaves the child running.
+Children are not stopped or waited for automatically.
 
-Before a child starts, stdout, stderr, and the `io.File` handles given to
-`spawn` for writing are flushed; a flush failure raises `OSError` and the child
-does not start. Children start with the default `SIGPIPE` action. These raise `ValueError`: empty `args` or an empty program name
-(`args must contain a nonempty executable name`), NUL in an argument, `cwd`, or
-an environment value, an invalid environment variable name, a timeout that is
-not finite and positive (`timeout must be finite and positive`), and a closed
-or wrongly opened handle (`stdout must be open for writing`, for example). A
-program that cannot be found or started raises `OSError` with the message
+Before a child starts, stdout, stderr, and any `io.File` handles passed to
+`spawn` for writing are flushed. If flushing fails, the call raises `OSError` and
+the child does not start. Children start with the default action for `SIGPIPE`.
+These cases raise `ValueError`:
+
+- empty `args` or an empty program name:
+  `args must contain a nonempty executable name`
+- a NUL character in an argument, in `cwd`, or in an environment value
+- an invalid environment variable name
+- a timeout that is not finite and positive:
+  `timeout must be finite and positive`
+- a closed handle, or a handle open in the wrong direction, such as
+  `stdout must be open for writing`
+
+A program that cannot be found or started raises `OSError` with the message
 `cannot run <program>: <reason>`.
 
 ### `sys`
@@ -1469,126 +1620,70 @@ def main() -> None:
 
 | Function | Meaning |
 | --- | --- |
-| `args() -> list[str]` | A new list of the program's arguments in order, without the program or source name |
+| `args() -> list[str]` | A new list of the program's arguments in order, not including the program or source file name |
 | `eprint(value) -> None` | Write a printable value and `\n` to stderr |
 | `exit(status: int) -> None` | End the program with exit status `status` |
-| `getenv(name: str) -> str \| None` | The value of environment variable `name`, or `None` when it is unset |
-| `environ() -> dict[str, str]` | A new dictionary of the environment, in name order |
+| `getenv(name: str) -> str \| None` | The value of the environment variable `name`, or `None` if it is not set |
+| `environ() -> dict[str, str]` | A new dictionary of the environment variables, ordered by name |
 | `getcwd() -> str` | The absolute path of the working directory |
 
-`args` raises `ValueError` with the message `invalid UTF-8` when an argument is not
+`args` raises `ValueError` with the message `invalid UTF-8` if an argument is not
 valid UTF-8.
 
-`exit` takes a status from 0 through 255 and otherwise raises `ValueError` with the
-message `exit status out of range`. It flushes stdout and stderr and ends the
-program at once; pending `finally` clauses do not run.
+`exit` takes a status from 0 through 255. Any other status raises `ValueError`
+with the message `exit status out of range`. `exit` flushes stdout and stderr and
+ends the program immediately, without running pending `finally` clauses.
 
-Changing the dictionary `environ` returns does not change the environment. An
-environment name that is empty or contains `=` or NUL raises `ValueError` with the
-message `invalid environment variable name`. Values, and the working directory,
-must be valid UTF-8, or the call raises `ValueError` with the message
-`invalid UTF-8`.
+Changing the dictionary returned by `environ` does not change the environment.
+An environment variable name that is empty or contains `=` or a NUL character
+raises `ValueError` with the message `invalid environment variable name`.
+Environment values and the working directory must be valid UTF-8, or the call
+raises `ValueError` with the message `invalid UTF-8`.
 
 ### `terminal`
 
 | Function | Meaning |
 | --- | --- |
 | `isatty(file: io.File) -> bool` | Whether `file` is a terminal |
-| `color_enabled(file: io.File) -> bool` | Whether `file` is a terminal, `TERM` is not `dumb`, and `NO_COLOR` is unset |
-| `style(text: str, color: str = "default", bold: bool = False, enabled: bool = True) -> str` | `text` wrapped in ANSI sequences for the color and boldness, or unchanged when not `enabled` |
-| `progress(message: str) -> None` | Replace the progress line on stderr |
-| `finish_progress(message: str = "") -> None` | Clear the progress line and write `message` and a newline to stderr when it is not empty |
+| `color_enabled(file: io.File) -> bool` | Whether `file` is a terminal, `TERM` is not `dumb`, and `NO_COLOR` is not set |
+| `style(text: str, color: str = "default", bold: bool = False, enabled: bool = True) -> str` | `text` wrapped in ANSI escape sequences for the color and bold setting, or `text` unchanged when `enabled` is false |
+| `progress(message: str) -> None` | Replace the progress line on stderr with `message` |
+| `finish_progress(message: str = "") -> None` | Clear the progress line, then write `message` and a newline to stderr if `message` is not empty |
 
 The colors are `default`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`,
-`cyan`, and `white`; any other raises `ValueError` with the message
-`unknown color '<color>'`. `style` does not look at any stream: callers pass
-`enabled=terminal.color_enabled(stream)` or their own choice. `progress` writes
-nothing unless stderr is a terminal and `TERM` is not `dumb`, and a message with
-CR or LF raises `ValueError` with the message
+`cyan`, and `white`. Any other color raises `ValueError` with the message
+`unknown color '<color>'`. `style` does not inspect any stream. Callers pass
+`enabled=terminal.color_enabled(stream)` or make their own choice.
+
+`progress` writes nothing unless stderr is a terminal and `TERM` is not `dumb`.
+A message that contains CR or LF raises `ValueError` with the message
 `progress message cannot contain a line break`. `finish_progress` clears the
-line only on such a terminal but writes its message everywhere. Both flush
-stderr, through the same buffer as `sys.eprint`, and leave stdout alone.
+progress line only on such a terminal, but it writes its message in every case.
+Both functions flush stderr, which they write through the same buffer as
+`sys.eprint`. Neither function writes to stdout.
 
 ### `time`
 
 | Function | Meaning |
 | --- | --- |
 | `time() -> float` | Seconds since the Unix epoch |
-| `monotonic() -> float` | Seconds on a clock that never goes back, from an unspecified start |
-| `sleep(seconds: float) -> None` | Wait at least `seconds` |
-| `utc(timestamp: float) -> str` | The UTC time `timestamp` as `YYYY-MM-DDTHH:MM:SSZ` |
+| `monotonic() -> float` | Seconds on a clock that never goes backward, measured from an unspecified starting point |
+| `sleep(seconds: float) -> None` | Wait for at least `seconds` seconds |
+| `utc(timestamp: float) -> str` | The UTC time `timestamp`, formatted as `YYYY-MM-DDTHH:MM:SSZ` |
 
 `sleep` raises `ValueError` with the message
-`sleep length must be finite and nonnegative` for a negative or non-finite
-duration. `utc` rounds down to whole seconds, covers years 0001 through 9999, and
-raises `ValueError` with the message `timestamp out of range` otherwise.
+`sleep length must be finite and nonnegative` if the duration is negative or not
+finite. `utc` rounds down to whole seconds and supports years 0001 through 9999.
+Timestamps outside that range raise `ValueError` with the message
+`timestamp out of range`.
 
-## Application development milestones
+## References
 
-Sections 15–24 are the milestones that grew Willow from its baseline into a
-language for small applications, in the order they were implemented. Their rules
-are now part of sections 1–14. Delivery examples are tracked in
-`agents/todo.md`.
-
-The milestones prefer Python's familiar spelling and behavior where they fit
-Willow's static types and small scope, and keep differences explicit. They retain
-strict boolean conditions, explicit numeric conversions, declaration-only
-modules, and functions that are not values, and they introduce neither general
-inheritance nor user-defined protocols, callbacks, async execution, or a package
-registry.
-
-## 15. Text and collection essentials
-
-This milestone is implemented. Its rules are part of §2, §5, §7, and §11.
-
-## 16. Readable function and record APIs
-
-This milestone is implemented. Its rules are part of §3 and §5.
-
-## 17. Application tests and editor basics
-
-This milestone is implemented. Its rules are part of §1, §8, §9, §10, and §12.
-Editor support is described in `README.md`.
-
-## 18. Filesystem, environment, and time
-
-This milestone is implemented. Its rules are part of §10 and §14. The native-type
-conventions it introduced take effect with §19.
-
-## 19. Bytes and streaming I/O
-
-This milestone is implemented. Its rules are part of §2, §4, §5, §7, §10, §11,
-and §14.
-
-## 20. Subprocess execution and control
-
-This milestone is implemented. Its rules are part of §14.
-
-## 21. Command-line and terminal tools
-
-This milestone is implemented. Its rules are part of §14.
-
-## 22. HTTP and HTTPS clients
-
-This milestone is implemented. Its rules are part of §14.
-
-## 23. TCP clients and simple services
-
-This milestone is implemented. Its rules are part of §14.
-
-## 24. Small projects and reusable modules
-
-This milestone is implemented. Its rules are part of §1 and §12.
-
-### Scope references
-
-The familiar conventions above were checked against Python's documentation for
-[sequence operations](https://docs.python.org/3/library/stdtypes.html),
-[calls](https://docs.python.org/3/reference/expressions.html#calls),
-[format specifications](https://docs.python.org/3/library/string.html#format-specification-mini-language),
-[subprocesses](https://docs.python.org/3/library/subprocess.html), and
-[sockets](https://docs.python.org/3/library/socket.html).
-Unicode case data is specified by
-[Unicode 17.0](https://www.unicode.org/versions/Unicode17.0.0/).
-These are design references, not blanket incorporation of those APIs or semantics;
-Willow's rules are the ones stated here.
+- Python documentation:
+  [sequence operations](https://docs.python.org/3/library/stdtypes.html),
+  [calls](https://docs.python.org/3/reference/expressions.html#calls),
+  [format specifications](https://docs.python.org/3/library/string.html#format-specification-mini-language),
+  [subprocesses](https://docs.python.org/3/library/subprocess.html), and
+  [sockets](https://docs.python.org/3/library/socket.html)
+- [Unicode 17.0](https://www.unicode.org/versions/Unicode17.0.0/), for case
+  mappings

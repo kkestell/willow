@@ -1,81 +1,96 @@
 # Willow
 
-Willow is a small, statically typed language with Python-like syntax that
-compiles to readable Lua and runs on LuaJIT. Source files use `.wlo`.
-[docs/spec.md](docs/spec.md) specifies the language.
+Willow is a small, statically typed language with Python-like syntax. The
+compiler translates Willow source files (`.wlo`) into readable Lua, which runs on
+LuaJIT. The language is specified in [docs/spec.md](docs/spec.md).
 
 ## Setup
 
-Willow builds on macOS and on Linux with glibc 2.33 or newer, or musl.
+Willow builds on macOS and on Linux with glibc 2.33 or newer or with musl. To
+build it, run:
 
 ```sh
-make        # fetches and builds the pinned LuaJIT and the executable stub
-make test   # runs the tests
+make
 ```
 
-`make test` passes on macOS 26 (arm64) and on Linux arm64 with glibc 2.36.
+This fetches and builds a pinned version of LuaJIT and the stub used for
+standalone executables. To run the test suite:
+
+```sh
+make test
+```
+
+The tests pass on macOS 26 (arm64) and on Linux arm64 with glibc 2.36.
+
+The `willow` command is the `willow` script at the root of the checkout. You can
+run it as `./willow`, or put a symlink to it in a directory on your `PATH`.
 
 ## Usage
 
-Run `./willow` from the checkout, or link it onto your `PATH`; the launcher
-follows symlinks to find its installation.
-
 ```sh
-willow check hello.wlo                 # check the program without running it
-willow run hello.wlo                   # check, then run on the bundled LuaJIT
-willow run number.wlo out.txt          # arguments after the source go to sys.args()
-willow compile hello.wlo -o hello.lua  # check, then write a standalone Lua file
-luajit hello.lua                       # a compiled file needs only LuaJIT 2.1
-willow build hello.wlo -o hello        # check, then write an executable
-./hello                                # an executable needs nothing else
-willow test examples/cart              # run the test_* functions of test_*.wlo files
-willow test --check examples/cart      # check the tests without running them
+willow check hello.wlo                # check without running
+willow run hello.wlo                  # check and run
+willow run number.wlo out.txt         # pass arguments to sys.args()
+willow compile hello.wlo -o hello.lua # compile to a single Lua file
+luajit hello.lua                      # run with LuaJIT 2.1
+willow build hello.wlo -o hello       # build a standalone executable
+./hello                              # run the executable
+willow test examples/cart             # run tests
+willow test --check examples/cart     # check tests without running
 ```
 
-Compiled Lua and built executables receive their own command-line arguments, as
-in `luajit number.lua out.txt` or `./number out.txt`.
+Compiled Lua files and executables take their own command-line arguments, for
+example `luajit number.lua out.txt` or `./number out.txt`.
+
+`willow test` accepts a test file or a directory of `test_*.wlo` files.
+
+Error messages are written to stderr and program output to stdout. The exit
+status is 0 on success and 1 for usage errors, source errors, output failures,
+and runtime errors. A program can set its own status with `sys.exit`.
 
 Programs that import `http` load the system libcurl when they make a request.
-macOS includes it; on Linux, install `libcurl4` and `ca-certificates`. Programs
-that do not import `http` have no extra dependencies.
-
-Diagnostics go to stderr and program output to stdout. The exit status is 0 on
-success and 1 for invalid usage, source errors, failed output, and runtime
-errors, unless the program chooses its own with `sys.exit`.
+macOS includes libcurl. On Linux, install the `libcurl4` and `ca-certificates`
+packages.
 
 ## Projects
 
-A directory with a `willow.json` is a project: its modules live under a source
-root, it can use local dependency roots, and its tests live in their own
-directory. `examples/portcheck` is one; from a clean checkout:
+A project is a directory containing a `willow.json` file. The file names the
+entry module, the source root, any local dependency roots, and the test
+directory. `examples/portcheck` is an example project. Its `willow.json` sets the
+entry to `portcheck/main.wlo` under the source root `src`, and lists `vendor` as
+a dependency root. The `textkit` modules in `vendor` are imported as
+`textkit.table`.
+
+In a project directory, the commands use `willow.json` when no source file is
+given:
 
 ```sh
-make                                   # build LuaJIT and the executable stub
+make
 cd examples/portcheck
-willow test                            # run every test_*.wlo under tests/
-willow run -- 127.0.0.1:22             # run the entry with arguments
-willow build -o portcheck              # bundle every module into one executable
-cp portcheck /usr/local/bin/           # the executable runs anywhere
-portcheck --help
+willow test
+willow run -- 127.0.0.1:22
+willow build -o portcheck
+./portcheck --help
 ```
 
-Its `willow.json` names the entry `src/portcheck/main.wlo`, the source root
-`src`, and the dependency root `vendor`, which holds the `textkit` modules it
-imports as `textkit.table`.
+`willow test` runs every `test_*.wlo` file under `tests/`. Arguments after `--`
+are passed to the program. `willow build` bundles all of the project's modules
+into one executable.
 
 ## Editor support
 
-`editors/vscode` is a VS Code extension for `.wlo` files with syntax
-highlighting, four-space indentation, and a `$willow` problem matcher. Install it
-by linking it into the extensions directory and restarting VS Code:
+`editors/vscode` contains a VS Code extension for `.wlo` files. It provides
+syntax highlighting, four-space indentation, and a `$willow` problem matcher. To
+install it, link it into the VS Code extensions directory and restart VS Code:
 
 ```sh
 ln -s "$PWD/editors/vscode" ~/.vscode/extensions/willow
 ```
 
-These tasks in `.vscode/tasks.json` check the program entry or test file open in
-the editor and list its errors in the Problems panel. Library modules are checked
-through an entry or test file that imports them.
+To show Willow errors in the Problems panel, add these tasks to
+`.vscode/tasks.json`. They check the entry file or test file that is open in the
+editor. To check a library module, run a task on an entry or test file that
+imports it.
 
 ```json
 {
