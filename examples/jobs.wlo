@@ -1,0 +1,74 @@
+# Runs shell commands in parallel, each with its output in its own log file,
+# and kills any that are still running when the time limit expires:
+#   willow run jobs.wlo [--limit SECONDS] <log-dir> <command>...
+# Each command sees its job number in JOB_NUMBER.
+
+import cli
+import fs
+import io
+import subprocess
+import sys
+import time
+
+class Job:
+    number: int
+    command: str
+    process: subprocess.Process
+    log: io.File
+
+def start(number: int, command: str, logs: str, stdin: io.File) -> Job:
+    log = io.open(fs.join(logs, f"{number}.log"), mode="w")
+    env = sys.environ()
+    env["JOB_NUMBER"] = str(number)
+    process = subprocess.spawn(["sh", "-c", command], env=env, stdin=stdin, stdout=log, stderr=log)
+    return Job(number, command, process, log)
+
+def outcome(status: int) -> str:
+    if status < 0:
+        return f"killed by signal {-status}"
+    return f"exit status {status}"
+
+def main() -> None:
+    parser = cli.parser("jobs", description="Run shell commands in parallel.")
+    parser.add_float("limit", 60.0, help="Seconds before running jobs are killed", short="l")
+    parser.add_positional("logs", help="Directory for the job logs")
+    parser.add_rest("command", help="Shell commands to run")
+    try:
+        args = parser.parse(sys.args())
+    except cli.HelpRequested as help:
+        io.stdout().write_text(help.message)
+        sys.exit(0)
+    except cli.UsageError as usage:
+        sys.eprint(usage.message)
+        sys.exit(2)
+    logs = args.get_str("logs")
+    fs.mkdir(logs, parents=True, exist_ok=True)
+
+    # Jobs get empty input instead of sharing this program's stdin.
+    nothing = io.open("/dev/null")
+    running: list[Job] = []
+    for command in args.get_list("command"):
+        running.append(start(len(running) + 1, command, logs, nothing))
+    nothing.close()
+
+    deadline = time.monotonic() + args.get_float("limit")
+    failed = 0
+    while len(running) > 0:
+        time.sleep(0.05)
+        expired = time.monotonic() > deadline
+        waiting: list[Job] = []
+        for job in running:
+            status = job.process.poll()
+            if status is None and expired:
+                job.process.kill()
+                status = job.process.wait()
+            if status is None:
+                waiting.append(job)
+                continue
+            job.log.close()
+            print(f"job {job.number}: {outcome(status)}: {job.command}")
+            if status != 0:
+                failed = failed + 1
+        running = waiting
+    if failed > 0:
+        sys.exit(1)

@@ -2,26 +2,26 @@ import cart
 
 def _sample() -> cart.Cart:
     order = cart.Cart([])
-    cart.add(order, "tea", 450, quantity=2)
-    cart.add(order, "scone", 325)
+    order.add("tea", 450, quantity=2)
+    order.add("scone", 325)
     return order
 
 def test_subtotal_counts_quantities() -> None:
-    assert cart.subtotal(_sample()) == 1225
+    assert _sample().subtotal() == 1225
 
 def test_empty_cart_totals_zero() -> None:
-    assert cart.total(cart.Cart([])) == 0
+    assert cart.Cart([]).total() == 0
 
 def test_discount_rounds_down() -> None:
     order = _sample()
-    cart.apply_discount(order, 10)
-    total = cart.total(order)
+    order.apply_discount(10)
+    total = order.total()
     assert total == 1103, f"expected 1103, received {total}"
 
 def test_discount_out_of_range() -> None:
     order = _sample()
     try:
-        cart.apply_discount(order, 101)
+        order.apply_discount(101)
     except ValueError as error:
         assert error.message == "discount must be from 0 to 100, received 101"
         assert order.discount == 0

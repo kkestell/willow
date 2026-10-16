@@ -1,0 +1,77 @@
+# Moves files into a .trash directory beside each one instead of deleting
+# them, and records each move in .trash.log:
+#   willow run trash.wlo <file>...
+#   willow run trash.wlo --empty <directory>...
+
+import cli
+import fs
+import io
+import sys
+import terminal
+import time
+
+class TrashError(Exception):
+    pass
+
+def move(path: str) -> None:
+    if fs.stat(path, follow_symlinks=False).kind == "directory":
+        raise TrashError(f"{path} is a directory")
+    parent = fs.dirname(path)
+    trash = fs.join(parent, ".trash")
+    target = fs.join(trash, fs.basename(path))
+    if fs.exists(target):
+        raise TrashError(f"{target} already exists")
+    created = not fs.exists(trash)
+    fs.mkdir(trash, exist_ok=True)
+    try:
+        fs.rename(path, target)
+    except OSError:
+        # Leave no empty trash directory behind when nothing was moved.
+        if created:
+            fs.rmdir(trash)
+        raise
+    log = io.open(fs.join(parent, ".trash.log"), mode="a")
+    try:
+        log.write_text(f"{time.utc(time.time())} {fs.basename(path)}\n")
+    finally:
+        log.close()
+
+# Deletes the trash in `directory` and returns the number of files deleted.
+def empty(directory: str) -> int:
+    trash = fs.join(directory, ".trash")
+    if not fs.exists(trash):
+        return 0
+    names = fs.listdir(trash)
+    for name in names:
+        fs.remove(fs.join(trash, name))
+    fs.rmdir(trash)
+    return len(names)
+
+def main() -> None:
+    parser = cli.parser("trash", description="Move files to a .trash directory beside them.")
+    parser.add_flag("empty", help="Delete the trash in each directory instead")
+    parser.add_rest("path", help="Files to trash, or directories with --empty")
+    try:
+        args = parser.parse(sys.args())
+    except cli.HelpRequested as help:
+        io.stdout().write_text(help.message)
+        sys.exit(0)
+    except cli.UsageError as usage:
+        sys.eprint(usage.message)
+        sys.exit(2)
+    paths = args.get_list("path")
+    if len(paths) == 0:
+        sys.eprint("trash: error: expected at least one path")
+        sys.exit(2)
+    color = terminal.color_enabled(io.stderr())
+    status = 0
+    for path in paths:
+        try:
+            if args.get_bool("empty"):
+                print(f"{path}: deleted {empty(path)} files")
+            else:
+                move(path)
+        except Exception as error:
+            sys.eprint(terminal.style(f"trash: {error.message}", color="red", enabled=color))
+            status = 1
+    sys.exit(status)

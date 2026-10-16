@@ -1,3 +1,5 @@
+# Prices are in cents.
+
 class Item:
     name: str
     price: int
@@ -7,21 +9,20 @@ class Cart:
     items: list[Item]
     discount: int = 0
 
-def add(cart: Cart, name: str, price: int, quantity: int = 1) -> None:
-    cart.items.append(Item(name, price, quantity))
+    def add(self, name: str, price: int, quantity: int = 1) -> None:
+        self.items.append(Item(name, price, quantity))
 
-# Prices are in cents.
-def subtotal(cart: Cart) -> int:
-    total = 0
-    for item in cart.items:
-        total = total + item.price * item.quantity
-    return total
+    def subtotal(self) -> int:
+        total = 0
+        for item in self.items:
+            total = total + item.price * item.quantity
+        return total
 
-def apply_discount(cart: Cart, percent: int) -> None:
-    if percent < 0 or percent > 100:
-        raise ValueError(f"discount must be from 0 to 100, received {percent}")
-    cart.discount = percent
+    def apply_discount(self, percent: int) -> None:
+        if percent < 0 or percent > 100:
+            raise ValueError(f"discount must be from 0 to 100, received {percent}")
+        self.discount = percent
 
-def total(cart: Cart) -> int:
-    amount = subtotal(cart)
-    return amount - amount * cart.discount // 100
+    def total(self) -> int:
+        amount = self.subtotal()
+        return amount - amount * self.discount // 100

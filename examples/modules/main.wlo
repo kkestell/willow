@@ -7,4 +7,4 @@ def main() -> None:
     points = [corner, geometry.Point(-1.0, 2.0), geometry.Point(6.0, 0.5)]
     closest = geometry.nearest(origin, points)
     if closest is not None:
-        print(geometry.describe(closest))               # (-1.0, 2.0)
+        print(closest.describe())                       # (-1.0, 2.0)

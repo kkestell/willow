@@ -1,21 +1,49 @@
+# Text processing: splitting, searching, case, padding, and code points.
+
 def initials(name: str) -> str:
-    result = ""
+    letters: list[str] = []
     for word in name.split(" "):
         if word != "":
-            for ch in word:
-                result = result + ch
-                break
-    return result
+            letters.append(word[0].upper())
+    return "".join(letters)
+
+# Rotates ASCII letters 13 places through the alphabet.
+def rot13(text: str) -> str:
+    result: list[str] = []
+    for ch in text:
+        if "a" <= ch and ch <= "z":
+            result.append(chr((ord(ch) - ord("a") + 13) % 26 + ord("a")))
+        elif "A" <= ch and ch <= "Z":
+            result.append(chr((ord(ch) - ord("A") + 13) % 26 + ord("A")))
+        else:
+            result.append(ch)
+    return "".join(result)
 
 def main() -> None:
-    lines = """  ada lovelace, 36
-  alan turing, 41
+    people = """
+    ada lovelace, 1815
+    alan turing, 1912
+    grace hopper, 1906
 """
-    for line in lines.split("\n"):
+    print(f"{'name':<16}{'initials':^10}{'born':>6}")
+    for line in people.split("\n"):
         entry = line.strip()
         if entry == "":
             continue
         fields = entry.split(", ")
-        name = fields[0]
-        print(f"{name.replace(' ', '_')}: {initials(name)} ({len(name)} letters, age {fields[1]})")
-    print(", ".join(["a", "b", "c"]))
+        print(f"{fields[0]:<16}{initials(fields[0]):^10}{fields[1]:>6}")
+
+    print(rot13("Hello, Willow"))                   # Uryyb, Jvyybj
+    print(rot13(rot13("Hello, Willow")))            # Hello, Willow
+
+    path = "notes/café.txt"
+    print(path)                                     # notes/café.txt
+    print(len(path))                                # 14
+    print(path.find("/"))                           # 5
+    print(path[path.find("/") + 1:])                # café.txt
+    print(path.endswith(".txt"))                    # True
+    print(path.upper())                             # NOTES/CAFÉ.TXT
+    print(path.replace("/", "\t"))                  # notes, a tab, café.txt
+    print("caf" in path)                            # True
+    print(str(42).rjust(5) + "|")                   #    42|
+    print(f"{{{'braces':^10}}}")                    # {  braces  }

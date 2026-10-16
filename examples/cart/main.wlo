@@ -10,10 +10,10 @@ def cents(amount: int) -> str:
 
 def main() -> None:
     order = cart.Cart([])
-    cart.add(order, "tea", 450, quantity=2)
-    cart.add(order, "scone", 325)
-    cart.apply_discount(order, percent=10)
+    order.add("tea", 450, quantity=2)
+    order.add("scone", 325)
+    order.apply_discount(percent=10)
     for item in order.items:
         print(f"{item.name:<10}{item.quantity:>3d}{cents(item.price * item.quantity):>9}")
     print(f"{'discount':<13}{str(order.discount) + '%':>9}")
-    print(f"{'total':<13}{cents(cart.total(order)):>9}")
+    print(f"{'total':<13}{cents(order.total()):>9}")

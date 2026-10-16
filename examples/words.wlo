@@ -32,5 +32,5 @@ def main() -> None:
     print(f"{'word':<12}{'count':>6}{'share':>9}")
     for count in sorted(keys(by_count), reverse=True):
         for word in sorted(by_count[count]):
-            share = float(count) / float(total) * 100.0
+            share = count / total * 100.0
             print(f"{word:<12}{count:>6d}{share:>8.1f}%")

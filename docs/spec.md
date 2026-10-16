@@ -1062,7 +1062,7 @@ built output contains every module the program uses, from all roots.
 import cart
 
 def test_empty_cart_totals_zero() -> None:
-    assert cart.total(cart.Cart([])) == 0
+    assert cart.Cart([]).total() == 0
 ```
 
 `willow test [path]` takes a file or a directory, and defaults to `.`. For a

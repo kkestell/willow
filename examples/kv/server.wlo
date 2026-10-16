@@ -39,27 +39,26 @@ def keys(store: dict[str, json.Json]) -> list[str]:
     return result
 
 # Serves one client; returns True when it asked the server to stop.
-def serve(connection: net.Connection, store: dict[str, json.Json]) -> bool:
-    lines = framing.reader(connection)
+def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:
     try:
         while True:
             try:
-                line = framing.read_line(lines)
+                line = channel.read_line()
                 if line is None:
                     return False
                 request = json.parse(line)
             except ValueError as invalid:
-                framing.send_json(connection, {"error": invalid.message})
+                channel.send({"error": invalid.message})
                 continue
             except json.JsonError as error:
-                framing.send_json(connection, {"error": error.message})
+                channel.send({"error": error.message})
                 continue
             if isinstance(request, dict) and _text(request.get("op")) == "shutdown":
-                framing.send_json(connection, {"ok": True})
+                channel.send({"ok": True})
                 return True
-            framing.send_json(connection, reply(store, request))
+            channel.send(reply(store, request))
     finally:
-        connection.close()
+        channel.close()
     return False
 
 def main() -> None:
@@ -75,7 +74,7 @@ def main() -> None:
     try:
         while True:
             try:
-                if serve(listener.accept(), store):
+                if serve(framing.channel(listener.accept()), store):
                     break
             except OSError as error:
                 sys.eprint(f"client failed: {error.message}")

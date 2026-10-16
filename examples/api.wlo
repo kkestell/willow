@@ -1,6 +1,7 @@
 # Calls a JSON API: willow run api.wlo <url> [json-body]
 # Without a body it sends GET; with one it sends POST with that JSON. Prints
-# the status and the fields of a JSON object response.
+# the status and the fields of a JSON object response, or the body of any
+# other response.
 
 import http
 import json
@@ -28,11 +29,11 @@ def main() -> None:
         sys.eprint(timeout.message)
         sys.exit(1)
     print(f"status {response.status}")
-    try:
-        doc = json.parse(response.body.decode())
-    except json.JsonError:
+    content_type = http.header(response.headers, "Content-Type")
+    if content_type is None or not content_type.startswith("application/json"):
         print(response.body.decode())
         sys.exit(1)
+    doc = json.parse(response.body.decode())
     if isinstance(doc, dict):
         for key in doc:
             print(f"{key}: {json.dump(doc[key])}")

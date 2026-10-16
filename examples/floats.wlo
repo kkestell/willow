@@ -3,21 +3,24 @@ def average(total: int, count: int) -> float:
 
 def compound(principal: float, rate: float, years: int) -> float:
     balance = principal
-    year = 0
-    while year < years:
+    for _ in range(years):
         balance = balance * (1.0 + rate)
-        year = year + 1
     return balance
 
 def main() -> None:
-    print(average(17, 4))
-    print(17 // 4)
-    print(17 % 4)
-    print(-17 // 4)
-    print(-17 % 4)
+    print(average(17, 4))           # 4.25
+    print(17 // 4)                  # 4
+    print(17 % 4)                   # 1
+    print(-17 // 4)                 # -5
+    print(-17 % 4)                  # 3
     balance = compound(1000.0, 0.05, 10)
-    print(balance)
-    print(int(balance))
-    print(float(int(balance * 100.0)) / 100.0)
-    print(1.0 / 3.0)
-    print(2.0e-7)
+    print(balance)                  # 1628.8946267774422
+    print(int(balance))             # 1628
+    print(f"{balance:.2f}")         # 1628.89
+    print(1.0 / 3.0)                # 0.3333333333333333
+    print(2.0e-7)                   # 2e-07
+    print(float("inf") > 1e308)     # True
+    try:
+        print(average(1, 0))
+    except ZeroDivisionError as error:
+        print(error.message)        # division by zero

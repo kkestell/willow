@@ -1,26 +1,19 @@
-# Prints the primes below 50. divides() checks divisibility by repeated
-# subtraction.
-
-def divides(divisor: int, n: int) -> bool:
-    while n > 0:
-        n = n - divisor
-    return n == 0
+# Prints the primes below 50 by trial division.
 
 def is_prime(n: int) -> bool:
     if n < 2:
         return False
-    divisor = 2
-    # `and` stops early, so divides() runs only while divisor * divisor <= n.
-    while divisor * divisor <= n and not divides(divisor, n):
-        divisor = divisor + 1
-    return divisor * divisor > n
+    if n % 2 == 0:
+        return n == 2
+    # Odd divisors up to the square root are enough.
+    for divisor in range(3, n, 2):
+        if divisor * divisor > n:
+            break
+        if n % divisor == 0:
+            return False
+    return True
 
 def main() -> None:
-    n = 0
-    while True:
-        n = n + 1
-        if n >= 50:
-            break
-        if not is_prime(n):
-            continue
-        print(n)
+    for n in range(50):
+        if is_prime(n):
+            print(n)

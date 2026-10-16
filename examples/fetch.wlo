@@ -1,16 +1,30 @@
-# Downloads a URL to a file without leaving partial output behind:
-# willow run fetch.wlo <url> <path>
+# Downloads a URL to a file without leaving partial output behind. Each
+# name=value argument is added to the URL's query string:
+# willow run fetch.wlo <url> <path> [name=value...]
 
 import http
 import sys
 
 def main() -> None:
     args = sys.args()
-    if len(args) != 2:
-        sys.eprint("usage: fetch <url> <path>")
+    if len(args) < 2:
+        sys.eprint("usage: fetch <url> <path> [name=value...]")
         sys.exit(2)
+    url = args[0]
+    query: dict[str, str] = {}
+    for pair in args[2:]:
+        split = pair.find("=")
+        if split < 1:
+            sys.eprint(f"fetch: expected name=value, received '{pair}'")
+            sys.exit(2)
+        query[pair[:split]] = pair[split + 1:]
+    if len(query) > 0:
+        separator = "?"
+        if "?" in url:
+            separator = "&"
+        url = url + separator + http.urlencode(query)
     try:
-        result = http.download(args[0], args[1], timeout=10.0)
+        result = http.download(url, args[1], timeout=10.0)
     except OSError as error:
         sys.eprint(error.message)
         sys.exit(1)

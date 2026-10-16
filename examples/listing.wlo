@@ -9,7 +9,7 @@ def main() -> None:
     start = time.monotonic()
     directory = sys.getenv("LISTING_DIR")
     if directory is None:
-        directory = "."
+        directory = sys.getcwd()
     counts: dict[str, int] = {}
     sizes: dict[str, int] = {}
     print(f"{'name':<16}{'kind':<10}{'size':>8}  modified")
