@@ -207,12 +207,12 @@ remove obsolete amendment wording, and update implementation status.
   - [x] Deliver a sorted, aligned log-summary or word-frequency report; measure
     sequential Unicode scanning before changing the JSON scanner
 
-- [ ] Readable function and record APIs (spec §16)
-  - [ ] Trailing immutable literal defaults and named arguments for functions,
+- [x] Readable function and record APIs (spec §16)
+  - [x] Trailing immutable literal defaults and named arguments for functions,
     records, and the specified library signatures
-  - [ ] Check default types and missing, duplicate, unknown, or misplaced
+  - [x] Check default types and missing, duplicate, unknown, or misplaced
     arguments; preserve written argument evaluation order
-  - [ ] Deliver a configurable application using a typed options record without
+  - [x] Deliver a configurable application using a typed options record without
     positional boilerplate
 
 - [ ] Application tests and editor basics (spec §17)

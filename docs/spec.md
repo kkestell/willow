@@ -4,7 +4,7 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-Sections 1–15 describe the implemented language. Sections 16–24 describe planned
+Sections 1–16 describe the implemented language. Sections 17–24 describe planned
 milestones, introduced under
 [planned application development milestones](#planned-application-development-milestones).
 
@@ -126,10 +126,14 @@ def function_name(parameter: Type, other: Type) -> Type:
     statements
 ```
 
-Parameter and return annotations are required. There are no default, named, or
-variadic parameters, nested functions, or lambdas. Trailing commas are allowed in
-parameter and argument lists. Functions may call functions declared later, and may
-recurse directly or mutually.
+Parameter and return annotations are required. A parameter may have a default
+after its annotation, as in `prefix: str = "Hello"`. A default is `None`, `True`,
+`False`, a string literal, or an integer or float literal optionally preceded by
+`+` or `-`, and must be assignable to the parameter's type. A parameter without a
+default cannot follow one with a default. There are no variadic parameters,
+nested functions, or lambdas. Trailing commas are allowed in parameter and
+argument lists. Functions may call functions declared later, and may recurse
+directly or mutually.
 
 ### Records
 
@@ -146,12 +150,24 @@ Field names are unique within a record. Field types may name any record, includi
 the record itself and records declared later. Records are nominal: two records with
 the same fields are different types.
 
-Calling a record by name constructs a value. The constructor takes one positional
-argument per field, in declaration order, with exact arity; each argument must be
-assignable to its field's type. `p.x` reads a field and `p.x = v` replaces it, where
-`v` must be assignable to the field's type. Naming an unknown field is an error.
+Calling a record by name constructs a value. The constructor takes one argument per
+field, bound like a function's arguments (§5) with the field names as parameter
+names; each argument must be assignable to its field's type. A field may have a
+default under the rules for parameter defaults, which an omitted argument takes:
 
-Exception classes (§10) are records declared with the base `Exception`.
+```python
+class Options:
+    output: str = "-"
+    verbose: bool = False
+
+options = Options(verbose=True)
+```
+
+`p.x` reads a field and `p.x = v` replaces it, where `v` must be assignable to the
+field's type. Naming an unknown field is an error.
+
+Exception classes (§10) are records declared with the base `Exception`. Their
+`message` field comes first and has no default.
 
 ### Type aliases
 
@@ -267,11 +283,26 @@ error. Comparison chains such as `0 <= x < 10` are errors.
 
 A call names a function, built-in, conversion, or record by bare name (`area(p)`),
 a module member (`geometry.area(p)`), or a method on a value (`items.append(x)`).
-Arguments are positional with exact arity, except the optional `reverse` argument
-of `sorted` and `list.sort` (§7), which may also be written `reverse=value` in its
-position. Functions and methods are not values,
-so `(f)(x)`, `items[0](x)`, and an uncalled `items.append` are errors. A call has
-exactly one value.
+Functions and methods are not values, so `(f)(x)`, `items[0](x)`, and an uncalled
+`items.append` are errors. A call has exactly one value.
+
+Arguments are positional arguments followed by keyword arguments,
+`name=expression`. Positional arguments fill parameters in declaration order and
+keyword arguments name the rest; omitted parameters take their defaults (§3).
+
+```python
+def greet(name: str, prefix: str = "Hello") -> str:
+    return prefix + ", " + name
+
+print(greet(prefix="Welcome", name="Ada"))
+```
+
+A positional argument after a keyword, an unknown name, a second value for one
+parameter, a missing argument for a parameter without a default, and too many
+arguments are compile-time errors. Functions, constructors, `fs.read_file`,
+`fs.write_file`, `sys.exit`, `sorted`, and `list.sort` accept keywords with the
+parameter names §7 and §14 give. Other built-ins and methods take only
+positional arguments.
 
 ### Operators
 
@@ -297,7 +328,8 @@ Operands, arguments, and display elements are evaluated left to right, each once
 and an operand that raises stops evaluation of the rest. Dict displays evaluate each
 key, then its value, entry by entry. Index and field assignments evaluate the
 right-hand side, then the object, then the index. A slice evaluates the object,
-then the start, then the stop.
+then the start, then the stop. Call arguments are evaluated in the order they are
+written, even when keywords name parameters out of order.
 
 ## 6. Numbers
 
@@ -497,12 +529,12 @@ has type `V`. `v in xs` requires an element type that supports `==`.
 Replacing a dictionary value keeps the entry's position; a key removed and inserted
 again moves to the end.
 
-`sorted(xs, reverse)` returns a new sorted list and `xs.sort(reverse)` sorts `xs`
-in place. `reverse` is a `bool`, `False` when omitted, and may be written
-`reverse=value`. The element type must be exactly `int`, `float`, or `str`.
-Sorting is stable in both directions, compares strings by code point, and keeps
-the usual comparisons for infinities and signed zeros. A list containing NaN
-raises `ValueError` with the message `cannot sort NaN` before anything changes.
+`sorted(items, reverse)` returns a new sorted list of `items`, and
+`xs.sort(reverse)` sorts `xs` in place. `reverse` is a `bool` and defaults to
+`False`. The element type must be exactly `int`, `float`, or `str`. Sorting is
+stable in both directions, compares strings by code point, and keeps the usual
+comparisons for infinities and signed zeros. A list containing NaN raises
+`ValueError` with the message `cannot sort NaN` before anything changes.
 
 ## 8. Statements
 
@@ -919,8 +951,8 @@ clauses do not run.
 
 ## Planned application development milestones
 
-Sections 16–24 define accepted targets, in implementation order. They are not yet
-implemented. Sections 1–15 describe the implemented baseline; each planned section
+Sections 17–24 define accepted targets, in implementation order. They are not yet
+implemented. Sections 1–16 describe the implemented baseline; each planned section
 identifies the rules it changes when its milestone lands. Completion and delivery
 examples are tracked in `agents/todo.md`. A planned API is not available merely
 because its signature appears here.
@@ -943,46 +975,7 @@ This milestone is implemented. Its rules are part of §2, §5, §7, and §11.
 
 ## 16. Readable function and record APIs
 
-This milestone replaces exact positional arity in §3 and §5 with named arguments
-and trailing defaults.
-
-```python
-class Options:
-    output: str = "-"
-    verbose: bool = False
-
-def greet(name: str, prefix: str = "Hello") -> str:
-    return prefix + ", " + name
-
-def main() -> None:
-    options = Options(verbose=True)
-    print(greet(prefix="Welcome", name="Ada"))
-```
-
-A parameter or record field may have a default after its annotation. Defaults are
-`None`, booleans, string literals, and integer or float literals optionally preceded
-by unary `+` or `-`. F-strings, names, calls, collections, and other expressions
-are not defaults. The default must be assignable to the declared type. A required
-parameter or field cannot follow a defaulted one. Exception records inherit the
-required `message` field before their own fields.
-
-Calls may pass positional arguments followed by `name=expression` arguments.
-Positional arguments fill parameters in declaration order; keywords name the
-remaining parameters. Duplicate values, unknown keywords, missing required values,
-and positional arguments after keywords are compile-time errors. Supplied argument
-expressions are evaluated once in their written order, even when keywords are
-out of declaration order. Omitted arguments use their literal defaults.
-
-Constructors follow the same rules using field names. Function identity and
-signature matching are unchanged: defaults do not create overloads, and functions
-remain non-values. There are no variadic parameters, argument unpacking,
-positional-only markers, or keyword-only markers.
-
-Fixed-signature library functions and methods accept keywords using the parameter
-names in this specification. Existing built-ins and methods whose parameters are
-not given typed names in §§6–11 remain positional-only; in particular the overloaded
-`range`, conversions, `len`, `isinstance`, `print`, and `input` are positional-only.
-No existing positional call becomes invalid.
+This milestone is implemented. Its rules are part of §3 and §5.
 
 ## 17. Application tests and editor basics
 

@@ -587,9 +587,9 @@ return {
     eq("3:16: cannot sort a value of type list[P]", check_errors(in_main("x = [P(1)]\ny = sorted(x)", "class P:\n    n: int\n")))
     eq("2:9: 'sorted' expects 1 to 2 arguments, received 3", check_errors(in_main("x = sorted([1], True, True)")))
     eq("3:7: 'sort' expects 0 to 1 arguments, received 2", check_errors(in_main("x = [1]\nx.sort(True, True)")))
-    eq("2:11: keyword arguments are not supported", check_errors(in_main("print(end='')")))
+    eq("2:11: 'print' does not accept keyword arguments", check_errors(in_main("print(end='')")))
     eq("2:21: 'sorted' has no parameter 'key'", check_errors(in_main("x = sorted([1], key=True)")))
-    eq("2:16: misplaced keyword argument 'reverse'", check_errors(in_main("x = sorted(reverse=True)")))
+    eq("2:9: 'sorted' is missing argument 'items'", check_errors(in_main("x = sorted(reverse=True)")))
     eq("3:16: expected int, received None", check_errors(in_main("x = [1]\ny: int = x.sort()")))
     eq("2:12: format type 'd' requires int, received str", check_errors(in_main("x = f'{\"a\":d}'")))
     eq("2:12: format type 'f' requires float, received int", check_errors(in_main("x = f'{1:f}'")))
@@ -597,5 +597,38 @@ return {
       check_errors("def f(v: int | str) -> str:\n    return f'{v:d}'\n" .. MAIN))
     check_source(in_main("sorted = 1\nprint(sorted)"))
     eq("1:5: cannot redefine built-in function 'sorted'", check_errors("def sorted() -> None:\n    pass\n" .. MAIN))
+  end,
+
+  named_arguments = function()
+    local F = "def f(a: int, b: str = 'x', c: float = 1.5) -> None:\n    pass\n"
+    local P = "class P:\n    x: int\n    y: int = 0\n"
+    local E = "class E(Exception):\n    code: int = 1\n"
+    check_source("import fs\n" .. in_main(table.concat({
+      "f(1)",
+      "f(1, c=2.5)",
+      "f(c=2.5, a=1, b='y')",
+      "p = P(y=2, x=1)",
+      "q = P(1)",
+      "e = E('m')",
+      "e = E(code=2, message='m')",
+      "fs.write_file(text='x', path='p')",
+      "t: str = fs.read_file(path='p')",
+      "xs = sorted(items=[2, 1], reverse=True)",
+    }, "\n"), F .. P .. E))
+    check_source("import sys\ndef g(x: int | None = None, y: float | int = 2.0) -> int:\n"
+      .. "    sys.exit(status=1)\n" .. MAIN)
+    eq("1:16: expected int, received str", check_errors("def g(x: int = 'a') -> None:\n    pass\n" .. MAIN))
+    eq("4:14: expected str, received None", check_errors(MAIN .. "class Q:\n    s: str = None\n"))
+    eq("2:10: 'f' has no parameter 'd'", check_errors(in_main("f(1, d=2)", F)))
+    eq("2:11: 'P' has no field 'z'", check_errors(in_main("x = P(z=1)", P)))
+    eq("2:10: 'f' received more than one value for 'a'", check_errors(in_main("f(1, a=2)", F)))
+    eq("2:14: 'f' received more than one value for 'b'", check_errors(in_main("f(b='y', b='z', a=1)", F)))
+    eq("2:5: 'f' is missing argument 'a'", check_errors(in_main("f(b='y', c=1.0)", F)))
+    eq("2:5: 'f' expects 1 to 3 arguments, received 4", check_errors(in_main("f(1, 'a', 1.0, 2)", F)))
+    eq("2:5: 'f' expects 1 to 3 arguments, received 0", check_errors(in_main("f()", F)))
+    eq("2:13: 'len' does not accept keyword arguments", check_errors(in_main("x = len(value='a')")))
+    eq("3:16: 'find' does not accept keyword arguments", check_errors(in_main("s = 'a'\nx = s.find(sub='a')")))
+    eq("2:20: 'range' does not accept keyword arguments", check_errors(in_main("for i in range(stop=3):\n    pass")))
+    eq("4:5: unreachable statement", check_errors("import sys\n" .. in_main("sys.exit(status=1)\nprint(1)")))
   end,
 }

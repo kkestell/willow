@@ -38,8 +38,9 @@ local function optional_of(type)
   return types.union({ type, types.None })
 end
 
--- Built-in signatures. An "any" parameter is checked separately by name. range
--- is checked only as a `for` iterable.
+-- Built-in signatures. An "any" parameter is checked separately by name. A
+-- built-in with `names` accepts keyword arguments; `defaults` holds the literal
+-- nodes of its optional parameters. range is checked only as a `for` iterable.
 local builtins = {
   print = { params = { "any" }, result = types.None },
   eprint = { params = { "any" }, result = types.None },
@@ -49,12 +50,16 @@ local builtins = {
   len = { params = { "any" }, result = types.int },
   input = { params = {}, result = optional_of(types.str) },
   args = { params = {}, result = types.list(types.str) },
-  read_file = { params = { types.str }, result = types.str },
-  write_file = { params = { types.str, types.str }, result = types.None },
-  exit = { params = { types.int }, result = types.None },
+  read_file = { params = { types.str }, names = { "path" }, result = types.str },
+  write_file = { params = { types.str, types.str }, names = { "path", "text" }, result = types.None },
+  exit = { params = { types.int }, names = { "status" }, result = types.None },
   ord = { params = { types.str }, result = types.int },
   chr = { params = { types.int }, result = types.str },
-  sorted = { params = { "any", types.bool }, required = 1 },
+  sorted = {
+    params = { "any", types.bool },
+    names = { "items", "reverse" },
+    defaults = { [2] = { kind = "Bool", value = false } },
+  },
 }
 
 -- The argument kinds `int` and `float` convert from.
@@ -107,8 +112,7 @@ local SORTABLE = { [types.int] = true, [types.float] = true, [types.str] = true 
 
 local FORMAT_TYPES = { s = types.str, d = types.int, f = types.float }
 
--- Parameter types, result type, and the number of required arguments when
--- some are optional, of method `name` on `type`, or nil.
+-- Parameter types and result type of method `name` on `type`, or nil.
 local function method_signature(type, name)
   if type == types.str then
     local method = STRING_METHODS[name]
@@ -123,7 +127,7 @@ local function method_signature(type, name)
   elseif element and name == "pop" then
     return {}, element
   elseif element and name == "sort" then
-    return { types.bool }, types.None, 0
+    return { types.bool }, types.None
   elseif type.kind == "dict" and name == "get" then
     return { type.key }, optional_of(types.expand(type.value))
   elseif type.kind == "dict" and name == "pop" then
@@ -273,21 +277,64 @@ local function check_arity(node, name, required, count)
   end
 end
 
--- Replaces a `reverse` keyword of sorted or sort at argument `reverse_index`
--- with its value. Other calls take only positional arguments.
-local function positional_args(node, name, reverse_index)
+-- The parameters of `builtin` as bind_args takes them.
+local function builtin_params(builtin)
+  local params = {}
+  for i = 1, #builtin.params do
+    params[i] = { name = builtin.names and builtin.names[i], default = builtin.defaults and builtin.defaults[i] }
+  end
+  return params
+end
+
+local SORT_PARAMS = { { name = "reverse", default = { kind = "Bool", value = false } } }
+
+-- Puts the arguments of call `node` in parameter order, filling omitted ones
+-- with copies of their defaults, and records in `node.order` the parameter
+-- index of each written argument. `params` holds `{ name, default }` entries;
+-- `noun` names them in messages and is nil for a positional-only callee.
+local function bind_args(node, name, params, noun)
+  local args, order = {}, {}
   for i, arg in ipairs(node.args) do
+    local index = i
     if arg.kind == "Keyword" then
-      if not reverse_index then
-        diag.error(arg.span, "keyword arguments are not supported")
-      elseif arg.name ~= "reverse" then
-        diag.error(arg.span, "'" .. name .. "' has no parameter '" .. arg.name .. "'")
-      elseif i ~= reverse_index then
-        diag.error(arg.span, "misplaced keyword argument 'reverse'")
+      if not noun then
+        diag.error(arg.span, "'" .. name .. "' does not accept keyword arguments")
       end
-      node.args[i] = arg.value
+      index = nil
+      for j, param in ipairs(params) do
+        if param.name == arg.name then
+          index = j
+        end
+      end
+      if not index then
+        diag.error(arg.span, "'" .. name .. "' has no " .. noun .. " '" .. arg.name .. "'")
+      elseif args[index] then
+        diag.error(arg.span, "'" .. name .. "' received more than one value for '" .. arg.name .. "'")
+      end
+      arg = arg.value
+    end
+    args[index] = arg
+    order[i] = index
+  end
+  -- Defaults are trailing, so the last parameter without one ends the
+  -- required ones.
+  local required = 0
+  for j, param in ipairs(params) do
+    if not param.default then
+      required = j
     end
   end
+  check_arity(node, name, required, #params)
+  for j, param in ipairs(params) do
+    if not args[j] then
+      local default = param.default
+      if not default then
+        diag.error(node.span, "'" .. name .. "' is missing argument '" .. param.name .. "'")
+      end
+      args[j] = { kind = default.kind, value = default.value, span = node.span }
+    end
+  end
+  node.args, node.order = args, order
 end
 
 -- Checks that a list of `type` can be sorted.
@@ -412,11 +459,13 @@ local function check_function(fn)
         diag.error(node.span, "'range' can only be used as a 'for' iterable")
       end
       local builtin = target.kind == "Builtin" and builtins[target.name]
-      positional_args(node, node.name, builtin == builtins.sorted and 2)
       -- A constructor takes one argument per field.
       local params = target.kind == "Record" and target.fields or target.params
-      local count = builtin and #builtin.params or #params
-      check_arity(node, node.name, builtin and builtin.required or count, count)
+      if builtin then
+        bind_args(node, node.name, builtin_params(builtin), builtin.names and "parameter")
+      else
+        bind_args(node, node.name, params, target.kind == "Record" and "field" or "parameter")
+      end
       for i, arg in ipairs(node.args) do
         local param
         if builtin then
@@ -510,15 +559,15 @@ local function check_function(fn)
       type = object
     elseif kind == "MethodCall" then
       local object = check_expression(node.object, state)
-      local params, result, required = method_signature(object, node.name)
+      local params, result = method_signature(object, node.name)
       if not params then
         diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
       end
-      local sort = object.kind == "list" and node.name == "sort"
-      positional_args(node, node.name, sort and 1)
-      check_arity(node, node.name, required or #params, #params)
-      if sort then
+      if object.kind == "list" and node.name == "sort" then
+        bind_args(node, node.name, SORT_PARAMS, "parameter")
         check_sortable(node, object)
+      else
+        bind_args(node, node.name, builtin_params({ params = params }))
       end
       for i, arg in ipairs(node.args) do
         check_against(arg, state, params[i])
@@ -748,7 +797,11 @@ local function check_function(fn)
       local iterable = statement.iterable
       local item
       if iterable.kind == "Call" and iterable.name == "range" then
-        positional_args(iterable, "range")
+        for _, arg in ipairs(iterable.args) do
+          if arg.kind == "Keyword" then
+            diag.error(arg.span, "'range' does not accept keyword arguments")
+          end
+        end
         local count = #iterable.args
         if count < 1 or count > 3 then
           diag.error(iterable.span, "'range' expects 1 to 3 arguments, received " .. count)

@@ -1,0 +1,62 @@
+import json
+
+class Options:
+    name: str
+    width: int = 10
+    ratio: float = 0.5
+    label: str | None = None
+
+class Problem(Exception):
+    code: int = 2
+
+def greet(name: str, prefix: str = "Hello", times: int = 1) -> str:
+    result = ""
+    for i in range(times):
+        result = result + prefix + ", " + name + "! "
+    return result.strip()
+
+def scale(x: float | int = 2.5) -> str:
+    return str(x)
+
+def show(label: str, value: int) -> int:
+    print(label)
+    return value
+
+def fail(message: str) -> int:
+    raise Problem(message, code=7)
+
+def triple(a: int, b: int = 0, c: int = 0) -> str:
+    return f"{a} {b} {c}"
+
+def main() -> None:
+    print(greet("Ada"))
+    print(greet("Ada", "Hi"))
+    print(greet(prefix="Welcome", name="Ada"))
+    print(greet("Ada", times=2))
+    print(scale() + " " + scale(3) + " " + scale(x=1.0))
+
+    options = Options("report")
+    print(f"{options.name} {options.width} {options.ratio} {options.label}")
+    options = Options(label="x", name="other", ratio=-0.0)
+    print(f"{options.name} {options.width} {options.ratio} {options.label}")
+
+    try:
+        raise Problem("plain")
+    except Problem as e:
+        print(f"{e.message} {e.code}")
+    try:
+        raise Problem(code=3, message="named")
+    except Problem as e:
+        print(f"{e.message} {e.code}")
+
+    # Arguments run in written order, whatever their parameter order.
+    print(triple(c=show("c", 3), a=show("a", 1), b=show("b", 2)))
+    try:
+        print(triple(b=show("b", 2), a=fail("stopped"), c=show("c", 3)))
+    except Problem as e:
+        print(f"{e.message} {e.code}")
+
+    print(json.dump(value=[3, 1]) + " " + str(len(sorted(items=[3, 1], reverse=True))))
+    xs = [2, 3, 1]
+    xs.sort(reverse=True)
+    print(f"{xs[0]} {xs[1]} {xs[2]}")

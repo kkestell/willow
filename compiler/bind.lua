@@ -442,6 +442,23 @@ local function declare(module, modules_by_name, entry)
   end
 end
 
+local literal_types = {
+  Int = types.int,
+  Float = types.float,
+  String = types.str,
+  Bool = types.bool,
+  None = types.None,
+}
+
+-- Checks that the default of `decl`, a parameter or field, fits its type.
+local function check_default(decl)
+  local default = decl.default
+  local type = literal_types[default.kind]
+  if not types.assignable(decl.type, type) then
+    diag.error(default.span, "expected " .. decl.type.name .. ", received " .. type.name)
+  end
+end
+
 -- Binds `modules`, the entry module first.
 function M.bind(modules)
   local entry = modules[1]
@@ -475,6 +492,22 @@ function M.bind(modules)
     end
   end
   force_pending()
+  for _, module in ipairs(modules) do
+    for _, record in ipairs(module.records) do
+      for _, field in ipairs(record.fields) do
+        if field.default then
+          check_default(field)
+        end
+      end
+    end
+    for _, fn in ipairs(module.functions) do
+      for _, param in ipairs(fn.params) do
+        if param.default then
+          check_default(param)
+        end
+      end
+    end
+  end
 
   local main = entry.declarations.main
   if not (main and main.kind == "Function") then

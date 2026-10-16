@@ -146,7 +146,13 @@ function M.parse(tokens)
   end
 
   local function parse_args()
-    return parse_list(")", parse_arg)
+    local args = parse_list(")", parse_arg)
+    for i = 2, #args do
+      if args[i].kind ~= "Keyword" and args[i - 1].kind == "Keyword" then
+        diag.error(args[i].span, "positional argument follows keyword argument")
+      end
+    end
+    return args
   end
 
   local function parse_entry()
@@ -513,6 +519,42 @@ function M.parse(tokens)
     return body
   end
 
+  -- A default is None, a boolean, a string, or a number with an optional sign.
+  local function parse_default()
+    local token = peek()
+    local sign = (token.kind == "-" or token.kind == "+") and advance().kind
+    local literal = peek()
+    local kind = literal.kind
+    if kind == "INT" or kind == "FLOAT" then
+      advance()
+      local value = literal.value
+      if sign == "-" then
+        value = kind == "INT" and 0 - value or -value
+      end
+      return ast.node(kind == "INT" and "Int" or "Float", token.span, { value = value })
+    elseif not sign and kind == "STRING" then
+      advance()
+      return ast.node("String", token.span, { value = literal.value })
+    elseif not sign and (kind == "True" or kind == "False") then
+      advance()
+      return ast.node("Bool", token.span, { value = kind == "True" })
+    elseif not sign and kind == "None" then
+      advance()
+      return ast.node("None", token.span, {})
+    end
+    diag.error(token.span, "a default must be a literal")
+  end
+
+  -- Parses `= default` after the type of `decl`, a parameter or field, which
+  -- must have one when `previous` does.
+  local function parse_optional_default(decl, previous, noun)
+    if accept("=") then
+      decl.default = parse_default()
+    elseif previous and previous.default then
+      diag.error(decl.span, noun .. " '" .. decl.name .. "' without a default follows one with a default")
+    end
+  end
+
   local function parse_function()
     advance()
     local name = expect("NAME", "a function name")
@@ -521,7 +563,9 @@ function M.parse(tokens)
     while not accept(")") do
       local param = expect("NAME", "a parameter name")
       expect(":")
-      params[#params + 1] = ast.node("Param", param.span, { name = param.value, type = parse_type() })
+      local node = ast.node("Param", param.span, { name = param.value, type = parse_type() })
+      parse_optional_default(node, params[#params], "parameter")
+      params[#params + 1] = node
       if not accept(",") then
         expect(")", "',' or ')'")
         break
@@ -568,7 +612,9 @@ function M.parse(tokens)
       end
       advance()
       advance()
-      fields[#fields + 1] = ast.node("FieldDecl", field.span, { name = field.value, type = parse_type() })
+      local node = ast.node("FieldDecl", field.span, { name = field.value, type = parse_type() })
+      parse_optional_default(node, fields[#fields], "field")
+      fields[#fields + 1] = node
       expect("NEWLINE", "end of line")
     until accept("DEDENT")
     return ast.node("Record", name.span, { name = name.value, fields = fields, exception = exception })

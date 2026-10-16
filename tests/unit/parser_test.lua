@@ -94,7 +94,7 @@ show = function(node)
   elseif kind == "Record" then
     local fields = {}
     for i, field in ipairs(node.fields) do
-      fields[i] = field.name .. ": " .. show(field.type)
+      fields[i] = field.name .. ": " .. show(field.type) .. (field.default and " = " .. show(field.default) or "")
     end
     return "class " .. node.name .. " { " .. table.concat(fields, "; ") .. " }"
   elseif kind == "IndexAssign" then
@@ -104,7 +104,7 @@ show = function(node)
   elseif kind == "Binary" then
     return "(" .. show(node.left) .. " " .. node.op .. " " .. show(node.right) .. ")"
   elseif kind == "Param" then
-    return node.name .. ": " .. show(node.type)
+    return node.name .. ": " .. show(node.type) .. (node.default and " = " .. show(node.default) or "")
   elseif kind == "Function" then
     return "def " .. node.name .. "(" .. show_list(node.params, ", ") .. ") -> "
       .. show(node.return_type) .. " " .. show_block(node.body)
@@ -416,6 +416,24 @@ return {
     eq("sorted(xs, reverse=True)", expr("sorted(xs, reverse=True)"))
     eq("2:14: slice steps are not supported", body_error("x = a[1:2:3]"))
     eq("2:12: cannot assign to this expression", body_error("a[1:2] = x"))
+  end,
+
+  defaults = function()
+    local program = parse("def f(a: int, b: int = -1, c: float = +2.5, d: float = -0.0, e: str = 'x',"
+      .. " g: int | None = None, h: bool = True) -> None:\n    pass\n"
+      .. "class P:\n    x: int\n    y: int = 0\n")
+    eq("def f(a: int, b: int = -1, c: float = 2.5, d: float = -0, e: str = \"x\", g: int | None = None, h: bool = True)"
+      .. " -> None { pass }", show(program.functions[1]))
+    eq("-inf", tostring(1 / program.functions[1].params[4].default.value))
+    eq("class P { x: int; y: int = 0 }", show(program.records[1]))
+    for _, text in ipairs({ "f()", "x", "[1]", "f'a'", "-'a'", "-True" }) do
+      eq("1:16: a default must be a literal", parse_error("def f(a: int = " .. text .. ") -> None:\n    pass\n"))
+    end
+    eq("1:19: parameter 'b' without a default follows one with a default",
+      parse_error("def f(a: int = 1, b: int) -> None:\n    pass\n"))
+    eq("3:5: field 'y' without a default follows one with a default",
+      parse_error("class P:\n    x: int = 1\n    y: int\n"))
+    eq("2:12: positional argument follows keyword argument", body_error("f(a=1, 2)"))
   end,
 
   unsupported_reserved_words = function()

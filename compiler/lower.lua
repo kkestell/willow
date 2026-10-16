@@ -176,6 +176,19 @@ local function lower_function(fn, sites, helpers)
     return pure("pad", args)
   end
 
+  -- The arguments of a checked call in parameter order, evaluated in written
+  -- order. The arguments left are defaults, which are literals.
+  local function lower_args(node)
+    local args = {}
+    for _, i in ipairs(node.order) do
+      args[i] = lower_operand(node.args[i])
+    end
+    for i, arg in ipairs(node.args) do
+      args[i] = args[i] or lower_operand(arg)
+    end
+    return args
+  end
+
   -- Moves a call or helper call into a temporary. It consumes its operands'
   -- temporaries above `mark`, so its result reuses them.
   local function spill(value, mark)
@@ -273,10 +286,7 @@ local function lower_function(fn, sites, helpers)
         -- A Willow integer is already the same Lua number as a float.
         return lower_value(node.args[1])
       end
-      local args = {}
-      for i, arg in ipairs(node.args) do
-        args[i] = lower_operand(arg)
-      end
+      local args = lower_args(node)
       if node.target.kind == "Record" then
         local names = {}
         for i, field in ipairs(node.target.fields) do
@@ -297,8 +307,6 @@ local function lower_function(fn, sites, helpers)
           name = name .. "_float"
         elseif (name == "int" or name == "float") and node.args[1].type == types.str then
           name = "parse_" .. name
-        elseif name == "sorted" then
-          args[2] = args[2] or { kind = "Literal", value = false }
         end
         return helper(name, args, node.span)
       end
@@ -327,13 +335,9 @@ local function lower_function(fn, sites, helpers)
       local stop = node.stop and lower_operand(node.stop) or { kind = "Literal" }
       return helper(prefix(node.object.type) .. "slice", { object, start, stop }, node.span)
     elseif kind == "MethodCall" then
-      local args = { lower_operand(node.object) }
-      for _, arg in ipairs(node.args) do
-        args[#args + 1] = lower_operand(arg)
-      end
-      if node.object.type.kind == "list" and node.name == "sort" then
-        args[2] = args[2] or { kind = "Literal", value = false }
-      end
+      local object = lower_operand(node.object)
+      local args = lower_args(node)
+      table.insert(args, 1, object)
       return helper(prefix(node.object.type) .. node.name, args, node.span)
     elseif kind == "ListDisplay" then
       local elements = {}

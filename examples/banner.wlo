@@ -1,0 +1,37 @@
+# Prints its arguments inside a border. Flags: --upper, --border=C, --width=N.
+
+import sys
+
+class Options:
+    width: int = 24
+    border: str = "*"
+    upper: bool = False
+
+def frame(text: str, width: int = 0, border: str = "*") -> str:
+    inner = max(width - 4, len(text))
+    edge = ""
+    for i in range(inner + 4):
+        edge = edge + border
+    return edge + "\n" + border + " " + text.ljust(inner) + " " + border + "\n" + edge
+
+def max(a: int, b: int) -> int:
+    if a > b:
+        return a
+    return b
+
+def main() -> None:
+    options = Options()
+    words: list[str] = []
+    for arg in sys.args():
+        if arg == "--upper":
+            options.upper = True
+        elif arg.startswith("--border="):
+            options.border = arg[9:10]
+        elif arg.startswith("--width="):
+            options.width = int(arg[8:])
+        else:
+            words.append(arg)
+    text = " ".join(words)
+    if options.upper:
+        text = text.upper()
+    print(frame(text, border=options.border, width=options.width))

@@ -392,6 +392,18 @@ return {
     end)
   end,
 
+  banner_example = function()
+    in_temp_dir(function(dir)
+      local example = quote(ROOT .. "/examples/banner.wlo")
+      local status, stdout = willow(dir, "run " .. example .. " hello world")
+      eq(0, status)
+      eq("************************\n* hello world          *\n************************\n", stdout)
+      status, stdout = willow(dir, "run " .. example .. " --upper --border=# --width=10 hello world")
+      eq(0, status)
+      eq("###############\n# HELLO WORLD #\n###############\n", stdout)
+    end)
+  end,
+
   standard_library_build_runs_elsewhere = function()
     in_temp_dir(function(dir, base)
       write(dir .. "/prog.wlo", JSON_PROGRAM)
