@@ -215,14 +215,14 @@ remove obsolete amendment wording, and update implementation status.
   - [x] Deliver a configurable application using a typed options record without
     positional boilerplate
 
-- [ ] Application tests and editor basics (spec §17)
-  - [ ] Assertions with lazy messages, useful locations, and successful-condition
+- [x] Application tests and editor basics (spec §17)
+  - [x] Assertions with lazy messages, useful locations, and successful-condition
     narrowing
-  - [ ] `willow test` discovery, checking before execution, process isolation,
+  - [x] `willow test` discovery, checking before execution, process isolation,
     deterministic reports, `--check`, and detection of explicit exits as failures
-  - [ ] Basic `.wlo` syntax highlighting, four-space indentation, and editor
+  - [x] Basic `.wlo` syntax highlighting, four-space indentation, and editor
     check tasks for program entries/projects and test files
-  - [ ] Deliver passing and deliberately failing tests for a multi-module app;
+  - [x] Deliver passing and deliberately failing tests for a multi-module app;
     keep standalone test files alongside imported modules until project roots land
 
 - [ ] Filesystem, environment, and time (spec §18)

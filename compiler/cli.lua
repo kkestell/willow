@@ -10,6 +10,7 @@ local bind = require("compiler.bind")
 local check = require("compiler.check")
 local lower = require("compiler.lower")
 local emit = require("compiler.emit")
+local runner = require("compiler.runner")
 
 -- Only the device and inode are read; the padding covers the rest of any
 -- platform's struct stat.
@@ -30,7 +31,8 @@ else
 end
 
 local USAGE = "usage: willow check <file>\n       willow run <file> [args...]\n"
-  .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>"
+  .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>\n"
+  .. "       willow test [--check] [path]"
 
 local function fail(message)
   io.stderr:write(message, "\n")
@@ -39,6 +41,27 @@ end
 
 local function usage_error(reason)
   fail("error: " .. reason .. "\n" .. USAGE)
+end
+
+-- `willow test [--check] [path]`, with the path defaulting to the current
+-- directory.
+local function parse_test_args(args)
+  local check_only, path = false, nil
+  for i = 2, #args do
+    local argument = args[i]
+    if argument == "--check" and not check_only then
+      check_only = true
+    elseif argument == "--check" then
+      usage_error("--check given more than once")
+    elseif argument:sub(1, 1) == "-" then
+      usage_error("unknown option '" .. argument .. "'")
+    elseif path then
+      usage_error("unexpected argument '" .. argument .. "'")
+    else
+      path = argument
+    end
+  end
+  return path or ".", check_only
 end
 
 local function parse_args(args)
@@ -125,10 +148,10 @@ local function write_output(output, text, mode)
 end
 
 -- Checks the whole program and returns its modules and, for every command but
--- check, the generated Lua and its loaded chunk.
-local function translate(command, path, source)
+-- check, the generated Lua and its loaded chunk. A test entry is a test file.
+local function translate(command, path, source, test)
   local modules = loader.load(path, source, root .. "/lib/")
-  bind.bind(modules)
+  bind.bind(modules, test)
   check.check(modules)
   if command ~= "check" then
     local text = emit.emit(lower.lower(modules))
@@ -167,6 +190,46 @@ local function report(err)
   return debug.traceback(message, 1)
 end
 
+-- Formats the error `translate` raised.
+local function format_error(err)
+  if not diag.is(err) then
+    return err
+  end
+  local lines = {}
+  for i, d in ipairs(err) do
+    lines[i] = diag.format(d)
+  end
+  return table.concat(lines, "\n")
+end
+
+-- The test chunk and test names of the test file at `path`, or false and the
+-- diagnostics.
+local function compile_test(path)
+  local file, err = io.open(path, "rb")
+  if not file then
+    return false, "error: " .. err
+  end
+  local source, read_err = file:read("*a")
+  file:close()
+  if not source then
+    return false, "error: " .. path .. ": " .. read_err
+  end
+  local ok, modules, text = xpcall(translate, report, "test", path, source, true)
+  if not ok then
+    return false, format_error(modules)
+  end
+  local names = {}
+  for i, fn in ipairs(modules[1].tests) do
+    names[i] = fn.name
+  end
+  return text, names
+end
+
+if arg[1] == "test" then
+  local test_path, check_only = parse_test_args(arg)
+  os.exit(runner.test(root .. "/vendor/luajit/src/luajit", test_path, check_only, compile_test))
+end
+
 local command, path, output, program_args = parse_args(arg)
 
 local file, err = io.open(path, "rb")
@@ -185,14 +248,7 @@ end
 
 local ok, modules, text, chunk = xpcall(translate, report, command, path, source)
 if not ok then
-  if not diag.is(modules) then
-    fail(modules)
-  end
-  local lines = {}
-  for i, d in ipairs(modules) do
-    lines[i] = diag.format(d)
-  end
-  fail(table.concat(lines, "\n"))
+  fail(format_error(modules))
 end
 if command == "run" then
   chunk(unpack(program_args))

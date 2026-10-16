@@ -1,0 +1,4 @@
+def price(name: str) -> int:
+    if name == "tea":
+        return 450
+    raise KeyError("no price for " + name)

@@ -761,6 +761,14 @@ local function check_function(fn)
         diag.error(statement.span, "'" .. kind:lower() .. "' cannot leave a 'finally' clause")
       end
       return true
+    elseif kind == "Assert" then
+      -- The message runs only when the condition is false; later statements
+      -- run only when it is true.
+      local true_facts, false_facts = check_condition(statement.condition, state)
+      if statement.message then
+        check_against(statement.message, narrow(state, false_facts), types.str)
+      end
+      replace(state, narrow(state, true_facts))
     elseif kind == "Raise" then
       if statement.value then
         local type = check_expression(statement.value, state)

@@ -28,6 +28,8 @@ willow compile hello.wlo -o hello.lua  # check, then write a standalone Lua file
 luajit hello.lua                       # a compiled file needs only LuaJIT 2.1
 willow build hello.wlo -o hello        # check, then write an executable
 ./hello                                # an executable needs nothing else
+willow test examples/cart              # run the test_* functions of test_*.wlo files
+willow test --check examples/cart      # check the tests without running them
 ```
 
 Compiled Lua and built executables receive their own command-line arguments, as
@@ -36,3 +38,37 @@ in `luajit number.lua out.txt` or `./number out.txt`.
 Diagnostics go to stderr and program output to stdout. The exit status is 0 on
 success and 1 for invalid usage, source errors, failed output, and runtime
 errors, unless the program chooses its own with `sys.exit`.
+
+## Editor support
+
+`editors/vscode` is a VS Code extension for `.wlo` files with syntax
+highlighting, four-space indentation, and a `$willow` problem matcher. Install it
+by linking it into the extensions directory and restarting VS Code:
+
+```sh
+ln -s "$PWD/editors/vscode" ~/.vscode/extensions/willow
+```
+
+These tasks in `.vscode/tasks.json` check the program entry or test file open in
+the editor and list its errors in the Problems panel. Library modules are checked
+through an entry or test file that imports them.
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "willow check",
+      "type": "shell",
+      "command": "willow check ${relativeFile}",
+      "problemMatcher": "$willow"
+    },
+    {
+      "label": "willow test --check",
+      "type": "shell",
+      "command": "willow test --check ${relativeFile}",
+      "problemMatcher": "$willow"
+    }
+  ]
+}
+```

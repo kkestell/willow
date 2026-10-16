@@ -41,7 +41,7 @@ M.modules = {
 -- The built-in exception classes, records with only a `message` field.
 local exceptions = {}
 M.exceptions = exceptions
-for name in ("Exception OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError"):gmatch("%S+") do
+for name in ("Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError"):gmatch("%S+") do
   exceptions[name] = {
     kind = "Record",
     name = name,
@@ -354,6 +354,11 @@ local function resolve_function(fn, scope, module)
         resolve_expression(statement.iterable)
         statement.symbol = scope[statement.name]
         resolve_block(statement.body, handling)
+      elseif kind == "Assert" then
+        resolve_expression(statement.condition)
+        if statement.message then
+          resolve_expression(statement.message)
+        end
       elseif kind == "Raise" then
         if statement.value then
           resolve_expression(statement.value)
@@ -459,8 +464,9 @@ local function check_default(decl)
   end
 end
 
--- Binds `modules`, the entry module first.
-function M.bind(modules)
+-- Binds `modules`, the entry module first. A test entry needs no `main`;
+-- instead `entry.tests` lists its `test_*` functions by name.
+function M.bind(modules, test)
   local entry = modules[1]
   local modules_by_name = {}
   for _, module in ipairs(modules) do
@@ -509,12 +515,27 @@ function M.bind(modules)
     end
   end
 
-  local main = entry.declarations.main
-  if not (main and main.kind == "Function") then
-    diag.error(entry.span, "program has no main function")
-  end
-  if #main.params > 0 or main.return_type ~= types.None then
-    diag.error(main.span, "main must take no parameters and return None")
+  if test then
+    entry.tests = {}
+    for _, fn in ipairs(entry.functions) do
+      if fn.name:sub(1, 5) == "test_" then
+        if #fn.params > 0 or fn.return_type ~= types.None then
+          diag.error(fn.span, "test function '" .. fn.name .. "' must take no parameters and return None")
+        end
+        entry.tests[#entry.tests + 1] = fn
+      end
+    end
+    table.sort(entry.tests, function(a, b)
+      return a.name < b.name
+    end)
+  else
+    local main = entry.declarations.main
+    if not (main and main.kind == "Function") then
+      diag.error(entry.span, "program has no main function")
+    end
+    if #main.params > 0 or main.return_type ~= types.None then
+      diag.error(main.span, "main must take no parameters and return None")
+    end
   end
 
   for _, module in ipairs(modules) do

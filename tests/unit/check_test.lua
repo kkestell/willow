@@ -631,4 +631,16 @@ return {
     eq("2:20: 'range' does not accept keyword arguments", check_errors(in_main("for i in range(stop=3):\n    pass")))
     eq("4:5: unreachable statement", check_errors("import sys\n" .. in_main("sys.exit(status=1)\nprint(1)")))
   end,
+
+  assertions = function()
+    check_source("def f(x: int | None, v: int | str) -> int:\n"
+      .. "    assert isinstance(v, int), v\n    assert x is not None\n    return x + v\n" .. MAIN)
+    check_source(in_main("assert False\nprint(1)"))
+    eq("2:12: expected bool, received int", check_errors(in_main("assert 1")))
+    eq("2:20: expected str, received int", check_errors(in_main("assert 1 == 1, 2")))
+    eq("1:5: function 'f' must return a value on every path",
+      check_errors("def f() -> int:\n    assert False\n" .. MAIN))
+    eq("6:11: variable 'y' may be used before assignment",
+      check_errors(in_main("c = True\nif c:\n    y = 1\nassert c\nprint(y)")))
+  end,
 }

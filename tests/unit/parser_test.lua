@@ -121,6 +121,8 @@ show = function(node)
       .. (node.else_body and " else " .. show_block(node.else_body) or "")
   elseif kind == "While" then
     return "while " .. show(node.condition) .. " " .. show_block(node.body)
+  elseif kind == "Assert" then
+    return "assert " .. show(node.condition) .. (node.message and ", " .. show(node.message) or "")
   elseif kind == "Raise" then
     return node.value and "raise " .. show(node.value) or "raise"
   elseif kind == "Try" then
@@ -434,6 +436,11 @@ return {
     eq("3:5: field 'y' without a default follows one with a default",
       parse_error("class P:\n    x: int = 1\n    y: int\n"))
     eq("2:12: positional argument follows keyword argument", body_error("f(a=1, 2)"))
+  end,
+
+  assertions = function()
+    eq("{ assert x; assert (x == 1), \"m\" }", body("assert x\nassert x == 1, 'm'"))
+    eq("2:11: expected an expression, found end of line", body_error("assert"))
   end,
 
   unsupported_reserved_words = function()

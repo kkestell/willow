@@ -487,6 +487,17 @@ local function lower_function(fn, sites, helpers)
       emit(node)
     elseif kind == "Break" or kind == "Continue" then
       departure(kind, nil, statement.span)
+    elseif kind == "Assert" then
+      -- The message is evaluated only when the condition is false.
+      local condition = lower_operand(statement.condition)
+      local outer = out
+      out = {}
+      local message = statement.message and lower_operand(statement.message)
+        or { kind = "Literal", value = "assertion failed" }
+      emit({ kind = "Eval", value = helper("assert_fail", { message }, statement.span), span = statement.span })
+      local body = out
+      out = outer
+      emit({ kind = "If", condition = { kind = "Not", operand = condition }, body = body, span = statement.span })
     elseif kind == "Raise" then
       local value
       if statement.value then

@@ -43,6 +43,10 @@ local function __wlo_fail(class, message, site)
   __wlo_raise({ __wlo_class = class, message = message }, site)
 end
 
+local function __wlo_assert_fail(message, site)
+  __wlo_fail("AssertionError", message, site)
+end
+
 local function __wlo_host_fail(message, site)
   error({ message = message, __wlo_location = __wlo_sites[site], __wlo_frames = __wlo_frames() }, 0)
 end

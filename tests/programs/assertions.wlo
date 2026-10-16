@@ -1,0 +1,18 @@
+def explode() -> str:
+    print("message evaluated")
+    return "explode"
+
+def check_positive(n: int) -> None:
+    assert n > 0, f"{n} is not positive"
+
+def main() -> None:
+    assert len("ab") == 2, explode()
+    try:
+        assert False
+    except AssertionError as e:
+        print(e.message)
+    try:
+        check_positive(-1)
+    except AssertionError as e:
+        print(e.message)
+    check_positive(0)

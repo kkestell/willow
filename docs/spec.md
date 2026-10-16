@@ -4,7 +4,7 @@ Willow is a small, statically typed language with Python-like syntax that compil
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension. Willow does not
 aim for Python source compatibility or access to Lua libraries.
 
-Sections 1–16 describe the implemented language. Sections 17–24 describe planned
+Sections 1–17 describe the implemented language. Sections 18–24 describe planned
 milestones, introduced under
 [planned application development milestones](#planned-application-development-milestones).
 
@@ -42,6 +42,9 @@ Nothing else appears at file scope.
 The entry file defines exactly one `main`, with the signature
 `def main() -> None:`. In other modules, `main` is an ordinary function name. The
 program's arguments come from `sys.args()` (§14).
+
+Test files (§12) are entry files without `main`; `willow test` runs their test
+functions.
 
 The whole program is checked before any of it runs; an error in any module
 prevents execution. The program then calls `main` once. A call to `main` from user
@@ -551,6 +554,8 @@ break
 continue
 raise expression
 raise
+assert condition
+assert condition, message
 
 if condition:
     statements
@@ -582,6 +587,11 @@ type error.
 
 `break` and `continue` apply to the nearest enclosing `while` or `for` and are
 errors outside one. Loops have no `else` clause.
+
+`assert` takes a `bool` condition and an optional `str` message and is always
+enabled. When the condition is false, the message is evaluated and the statement
+raises `AssertionError` with it, or with `assertion failed` when there is none; a
+true condition does not evaluate the message.
 
 ### `for`
 
@@ -654,9 +664,9 @@ and `if False:` and `while True:` are treated like any other condition.
 ### Control transfer
 
 `return`, `break`, `continue`, `raise`, and a statement that calls the standard
-library's `sys.exit` (§14) transfer control. An `if` whose branches all transfer,
-including an `else`, transfers. A statement after a transfer in the same block is
-an unreachable-code error.
+library's `sys.exit` (§14) transfer control; `assert`, even `assert False`, does
+not. An `if` whose branches all transfer, including an `else`, transfers. A
+statement after a transfer in the same block is an unreachable-code error.
 
 A function not annotated `-> None` must return a value on every path. A loop never
 establishes that a function returns, so a trailing `return` is required even after
@@ -689,6 +699,8 @@ flow through statements:
 - After an `if`, a local has the members it has at the end of any branch that
   falls through.
 - A `while` body starts with the true facts of its condition.
+- The statements after an `assert` have the true facts of its condition, and its
+  message is checked with the false facts.
 - Assigning a value whose type is one member other than `None` narrows a local to
   that member; assigning anything else ends its narrowing.
 - At the start of a loop body and after the loop, narrowing from before the loop
@@ -747,6 +759,7 @@ These built-in exception classes have only the `message` field:
 
 | Class | Raised for |
 | --- | --- |
+| `AssertionError` | A false `assert` condition |
 | `OverflowError` | Integer overflow |
 | `ZeroDivisionError` | Division by zero |
 | `ValueError` | Invalid values for conversions, `ord`, `chr`, `range`, `split`, `sys.exit`, and UTF-8 input |
@@ -838,6 +851,42 @@ def main() -> None:
   are not values. Names that begin with `_` are private to their module.
 - Imports may form cycles. Modules contain only declarations, so they have no
   initialization order. Each module loads once.
+
+### Tests
+
+```python
+# test_cart.wlo, next to cart.wlo
+import cart
+
+def test_empty_cart_totals_zero() -> None:
+    assert cart.total(cart.Cart([])) == 0
+```
+
+`willow test [path]` takes a file or a directory, `.` by default. A directory
+contributes the files directly inside it named `test_*.wlo`; a file named
+explicitly may have any name. Each test file is an entry file whose imports
+resolve from its own directory. It needs no `main`; its functions named `test_*`
+are its tests, and each must take no parameters and return `None`.
+
+Every test file and its imports are checked before any test runs. Tests run in
+order of file path, then function name, each in a new process with no program
+arguments, empty stdin, and the current working directory. A test passes when it
+returns. An uncaught exception, a `sys.exit` call with any status, or any other
+abnormal end fails it, and later tests still run.
+
+The report lists `PASS path name` or `FAIL path name` for each test. A failure is
+followed by the test's combined stdout and stderr, indented, and its exit status;
+the last line counts the passed and failed tests. The command exits with status 0
+only when at least one test ran and every test passed; usage errors, check errors,
+finding no tests, and failed tests exit with status 1. Tests share the filesystem
+and environment.
+
+`willow test --check [path]` finds and checks the tests without running them, and
+exits with status 0 when they are valid and there is at least one.
+
+Programs run by `willow run` and `willow test` have the environment variable
+`WILLOW` set to the absolute path of the `willow` launcher, replacing any
+inherited value. Compiled and built programs do not set it.
 
 ## 13. Diagnostics
 
@@ -951,8 +1000,8 @@ clauses do not run.
 
 ## Planned application development milestones
 
-Sections 17–24 define accepted targets, in implementation order. They are not yet
-implemented. Sections 1–16 describe the implemented baseline; each planned section
+Sections 18–24 define accepted targets, in implementation order. They are not yet
+implemented. Sections 1–17 describe the implemented baseline; each planned section
 identifies the rules it changes when its milestone lands. Completion and delivery
 examples are tracked in `agents/todo.md`. A planned API is not available merely
 because its signature appears here.
@@ -979,52 +1028,8 @@ This milestone is implemented. Its rules are part of §3 and §5.
 
 ## 17. Application tests and editor basics
 
-### Assertions
-
-`assert condition` and `assert condition, message` are statements. The condition
-must be `bool`; the optional message must be `str`. The condition is evaluated
-once; a false condition evaluates the message and raises the new built-in
-`AssertionError`, using `assertion failed` when no message is supplied. Assertions
-are always enabled. A true condition does not evaluate the message.
-
-After an assertion, narrowing follows the condition's true facts (§9). The checker
-checks the message under the condition's false facts. An assertion is not a
-structural control transfer, including `assert False`. Assertions do not establish definite assignment.
-
-### Test command
-
-`willow test [path]` accepts a file or directory, defaulting to `.`. In directory
-mode it discovers immediate files named `test_*.wlo`; an explicit file need not
-have that name. Each discovered file is a test entry module. Its public top-level
-functions named `test_*` must have no parameters and return `None`. Other functions
-are helpers. Tests do not require or invoke `main`.
-
-All discovered test modules and their imports are checked before any test runs.
-Discovery and execution order are by relative file path, then function name.
-Each test function runs in a fresh process with no program arguments, empty stdin,
-and the invoking working directory; imports use the test file's directory until
-project roots are introduced in §24. A normal return passes. An escaping exception
-or abnormal process termination fails. Explicit `sys.exit`, even with status zero,
-fails because the test did not return normally. Failures do not skip later tests.
-
-The runner captures each test's output, shows it for failures with Willow locations
-and frames, and prints a pass/fail summary. It returns zero only if at least one
-test ran and all passed; usage, checking, discovery, and test failures return one.
-Tests share the external filesystem and environment; process isolation does not
-provide fixtures or roll back external effects.
-
-`willow test --check [path]` performs the same discovery and static validation
-without running any tests. It returns zero for a valid, nonempty test suite and
-one for errors or no tests. `willow run` and `willow test` expose `WILLOW` in the
-program environment as the absolute installed launcher path, replacing any
-inherited value. Tests can use it to start Willow helpers without relying on
-`PATH`. Compiled and built applications do not inject this development variable.
-
-Basic syntax highlighting and four-space indentation are delivery requirements
-tracked in the milestone. The editor check task checks a program entry (or a
-project once §24 lands); test files use `willow test --check`. Arbitrary library
-modules are checked through an entry that imports them, not as standalone apps.
-These features do not require a language server.
+This milestone is implemented. Its rules are part of §1, §8, §9, §10, and §12.
+Editor support is described in `README.md`.
 
 ## 18. Filesystem, environment, and time
 

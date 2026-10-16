@@ -1,0 +1,22 @@
+import shop
+import sys
+
+def test_known_price() -> None:
+    assert shop.price("tea") == 450
+
+def test_wrong_price() -> None:
+    print("checking tea")
+    assert shop.price("tea") == 400, "tea should cost 400"
+
+def test_unknown_item() -> None:
+    shop.price("cake")
+
+def test_exit_is_a_failure() -> None:
+    sys.exit(0)
+
+def test_output_of_passing_tests_is_hidden() -> None:
+    print("hidden")
+
+def test_isolated_process() -> None:
+    assert input() is None
+    assert len(sys.args()) == 0

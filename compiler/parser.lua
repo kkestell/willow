@@ -15,7 +15,7 @@ end
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
-assert async await case del from global lambda match nonlocal with yield
+async await case del from global lambda match nonlocal with yield
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
@@ -488,6 +488,11 @@ function M.parse(tokens)
         value = parse_expression()
       end
       node = ast.node("Return", token.span, { value = value })
+    elseif kind == "assert" then
+      advance()
+      local condition = parse_expression()
+      local message = accept(",") and parse_expression() or nil
+      node = ast.node("Assert", token.span, { condition = condition, message = message })
     elseif kind == "raise" then
       advance()
       local value

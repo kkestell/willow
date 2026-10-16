@@ -328,7 +328,9 @@ function M.emit(lowered)
     end
   end
   line(0, "")
-  line(0, "local " .. table.concat(names, ", "))
+  if #names > 0 then
+    line(0, "local " .. table.concat(names, ", "))
+  end
   for _, module in ipairs(lowered.modules) do
     if module ~= entry or entry_imported then
       line(0, "local " .. module_table(module) .. " = {}")
@@ -386,8 +388,22 @@ function M.emit(lowered)
     quoted[i] = M.quote(path)
   end
   line(0, "__wlo_paths = { " .. table.concat(quoted, ", ") .. " }")
-  -- The program arguments arrive as the chunk's varargs.
-  line(0, "__wlo_run(" .. M.mangle("main") .. ", ...)")
+  local tests = entry.tests
+  if tests then
+    -- A test chunk takes the test's name and a path to create once the test
+    -- returns, which neither an exception nor sys.exit does.
+    line(0, "local __wlo_tests = {")
+    for _, fn in ipairs(tests) do
+      line(1, "[" .. M.quote(fn.name) .. "] = " .. M.mangle(fn.name) .. ",")
+    end
+    line(0, "}")
+    line(0, "local __wlo_name, __wlo_result = ...")
+    line(0, "__wlo_run(__wlo_tests[__wlo_name])")
+    line(0, 'assert(io.open(__wlo_result, "wb")):close()')
+  else
+    -- The program arguments arrive as the chunk's varargs.
+    line(0, "__wlo_run(" .. M.mangle("main") .. ", ...)")
+  end
   return table.concat(lines, "\n") .. "\n"
 end
 

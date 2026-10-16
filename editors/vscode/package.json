@@ -1,0 +1,47 @@
+{
+  "name": "willow",
+  "displayName": "Willow",
+  "description": "Syntax highlighting and indentation for the Willow language",
+  "version": "0.1.0",
+  "publisher": "willow",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "willow",
+        "aliases": ["Willow"],
+        "extensions": [".wlo"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "willow",
+        "scopeName": "source.willow",
+        "path": "./syntaxes/willow.tmLanguage.json"
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "willow",
+        "owner": "willow",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.+):(\\d+):(\\d+): error: (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "message": 4
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "[willow]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false
+      }
+    }
+  }
+}

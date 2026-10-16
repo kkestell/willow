@@ -1,0 +1,136 @@
+{
+  "name": "Willow",
+  "scopeName": "source.willow",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#declaration" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#keyword" },
+    { "include": "#builtin" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.willow",
+      "match": "#.*$"
+    },
+    "declaration": {
+      "patterns": [
+        {
+          "match": "\\b(def)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.function.willow" },
+            "2": { "name": "entity.name.function.willow" }
+          }
+        },
+        {
+          "match": "\\b(class)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.class.willow" },
+            "2": { "name": "entity.name.type.class.willow" }
+          }
+        },
+        {
+          "match": "^\\s*(type)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?==)",
+          "captures": {
+            "1": { "name": "storage.type.willow" },
+            "2": { "name": "entity.name.type.willow" }
+          }
+        }
+      ]
+    },
+    "string": {
+      "patterns": [
+        { "include": "#fstring" },
+        {
+          "name": "string.quoted.triple.willow",
+          "begin": "(\"\"\"|''')",
+          "end": "\\1",
+          "patterns": [{ "include": "#escape" }]
+        },
+        {
+          "name": "string.quoted.double.willow",
+          "begin": "\"",
+          "end": "\"|$",
+          "patterns": [{ "include": "#escape" }]
+        },
+        {
+          "name": "string.quoted.single.willow",
+          "begin": "'",
+          "end": "'|$",
+          "patterns": [{ "include": "#escape" }]
+        }
+      ]
+    },
+    "fstring": {
+      "patterns": [
+        {
+          "name": "string.interpolated.triple.willow",
+          "begin": "\\bf(\"\"\"|''')",
+          "end": "\\1",
+          "patterns": [{ "include": "#escape" }, { "include": "#field" }]
+        },
+        {
+          "name": "string.interpolated.willow",
+          "begin": "\\bf(\"|')",
+          "end": "\\1|$",
+          "patterns": [{ "include": "#escape" }, { "include": "#field" }]
+        }
+      ]
+    },
+    "field": {
+      "patterns": [
+        { "name": "constant.character.escape.willow", "match": "\\{\\{|\\}\\}" },
+        {
+          "name": "meta.embedded.willow",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.willow" } },
+          "endCaptures": { "0": { "name": "punctuation.section.embedded.end.willow" } },
+          "patterns": [
+            { "include": "#number" },
+            { "include": "#keyword" },
+            { "include": "#builtin" },
+            { "include": "#operator" }
+          ]
+        }
+      ]
+    },
+    "escape": {
+      "name": "constant.character.escape.willow",
+      "match": "\\\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|.)"
+    },
+    "number": {
+      "name": "constant.numeric.willow",
+      "match": "\\b([0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+|[0-9]+)\\b"
+    },
+    "keyword": {
+      "patterns": [
+        {
+          "name": "keyword.control.willow",
+          "match": "\\b(if|elif|else|while|for|in|return|break|continue|pass|try|except|finally|raise|assert|import|as)\\b"
+        },
+        { "name": "keyword.operator.logical.willow", "match": "\\b(and|or|not|is)\\b" },
+        { "name": "constant.language.willow", "match": "\\b(True|False|None)\\b" }
+      ]
+    },
+    "builtin": {
+      "patterns": [
+        { "name": "support.type.willow", "match": "\\b(int|float|bool|str|list|dict)\\b" },
+        {
+          "name": "support.function.builtin.willow",
+          "match": "\\b(print|input|len|range|ord|chr|isinstance|sorted)\\b"
+        },
+        {
+          "name": "support.type.exception.willow",
+          "match": "\\b(Exception|AssertionError|OverflowError|ZeroDivisionError|ValueError|IndexError|KeyError|RuntimeError|OSError)\\b"
+        }
+      ]
+    },
+    "operator": {
+      "name": "keyword.operator.willow",
+      "match": "->|==|!=|<=|>=|//|[-+*/%<>=|]"
+    }
+  }
+}

@@ -36,6 +36,7 @@ local WILLOW = ROOT .. "/willow"
 local LUAJIT = ROOT .. "/vendor/luajit/src/luajit"
 local USAGE = "usage: willow check <file>\n       willow run <file> [args...]\n"
   .. "       willow compile <file> -o <output>\n       willow build <file> -o <output>\n"
+  .. "       willow test [--check] [path]\n"
 
 local JSON_PROGRAM = "import json\ndef main() -> None:\n    print(json.dump(json.parse('[1, 2.5]')))\n"
 
@@ -401,6 +402,86 @@ return {
       status, stdout = willow(dir, "run " .. example .. " --upper --border=# --width=10 hello world")
       eq(0, status)
       eq("###############\n# HELLO WORLD #\n###############\n", stdout)
+    end)
+  end,
+
+  cart_example_tests_pass = function()
+    local status, stdout, stderr = willow(ROOT, "test examples/cart")
+    eq(0, status)
+    eq(table.concat({
+      "PASS examples/cart/test_cart.wlo test_discount_out_of_range",
+      "PASS examples/cart/test_cart.wlo test_discount_rounds_down",
+      "PASS examples/cart/test_cart.wlo test_empty_cart_totals_zero",
+      "PASS examples/cart/test_cart.wlo test_subtotal_counts_quantities",
+      "4 passed, 0 failed",
+      "",
+    }, "\n"), stdout)
+    eq("", stderr)
+    status, stdout = willow(ROOT, "run examples/cart/main.wlo")
+    eq(0, status)
+    eq("tea         2     9.00\nscone       1     3.25\ndiscount           10%\ntotal            11.03\n", stdout)
+  end,
+
+  failing_tests_report = function()
+    local status, stdout, stderr = willow(ROOT, "test tests/suites/failing")
+    eq(1, status)
+    eq(table.concat({
+      "FAIL tests/suites/failing/test_shop.wlo test_exit_is_a_failure",
+      "  test did not return (exit status 0)",
+      "PASS tests/suites/failing/test_shop.wlo test_isolated_process",
+      "PASS tests/suites/failing/test_shop.wlo test_known_price",
+      "PASS tests/suites/failing/test_shop.wlo test_output_of_passing_tests_is_hidden",
+      "FAIL tests/suites/failing/test_shop.wlo test_unknown_item",
+      "  tests/suites/failing/shop.wlo:4:5: error: KeyError: no price for cake",
+      "    in price at tests/suites/failing/shop.wlo:4:5",
+      "    called from test_unknown_item at tests/suites/failing/test_shop.wlo:12:10",
+      "  test did not return (exit status 1)",
+      "FAIL tests/suites/failing/test_shop.wlo test_wrong_price",
+      "  checking tea",
+      "  tests/suites/failing/test_shop.wlo:9:5: error: AssertionError: tea should cost 400",
+      "    in test_wrong_price at tests/suites/failing/test_shop.wlo:9:5",
+      "  test did not return (exit status 1)",
+      "3 passed, 3 failed",
+      "",
+    }, "\n"), stdout)
+    eq("", stderr)
+    status, stdout, stderr = willow(ROOT, "test --check tests/suites/failing")
+    eq(0, status)
+    eq("", stdout)
+    eq("", stderr)
+  end,
+
+  test_command_checks_before_running = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/test_a.wlo", "def test_a() -> None:\n    print('ran')\n    assert False\n")
+      write(dir .. "/test_b.wlo", "def test_b() -> None:\n    x: int = 'b'\n")
+      write(dir .. "/helper.wlo", "def test_helper() -> None:\n    pass\n")
+      local status, stdout, stderr = willow(dir, "test")
+      eq(1, status)
+      eq("", stdout)
+      eq("test_b.wlo:2:14: error: expected int, received str\n", stderr)
+      status, stdout, stderr = willow(dir, "test helper.wlo")
+      eq(0, status)
+      eq("PASS helper.wlo test_helper\n1 passed, 0 failed\n", stdout)
+      os.remove(dir .. "/test_b.wlo")
+      status, stdout = willow(dir, "test .")
+      eq(1, status)
+      eq("FAIL test_a.wlo test_a\n  ran\n  test_a.wlo:3:5: error: AssertionError: assertion failed\n"
+        .. "    in test_a at test_a.wlo:3:5\n  test did not return (exit status 1)\n0 passed, 1 failed\n", stdout)
+      write(dir .. "/test_c.wlo", "def test_c(x: int) -> None:\n    pass\n")
+      status, stdout, stderr = willow(dir, "test --check")
+      eq(1, status)
+      eq("test_c.wlo:1:5: error: test function 'test_c' must take no parameters and return None\n", stderr)
+      os.execute("mkdir " .. quote(dir .. "/empty"))
+      status, stdout, stderr = willow(dir, "test --check empty")
+      eq(1, status)
+      eq("error: no tests found in empty\n", stderr)
+      status, stdout, stderr = willow(dir, "test --verbose")
+      eq(1, status)
+      eq("error: unknown option '--verbose'\n" .. USAGE, stderr)
+      status, stdout, stderr = willow(dir, "test a b")
+      eq(1, status)
+      eq("error: unexpected argument 'b'\n" .. USAGE, stderr)
     end)
   end,
 
