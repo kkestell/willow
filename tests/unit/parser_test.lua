@@ -314,10 +314,44 @@ return {
   records = function()
     local program = parse("class Node:\n    value: int\n    next: Node | None\n    tags: list[Tag] | None\n")
     eq("class Node { value: int; next: Node | None; tags: list[Tag] | None }", show(program.records[1]))
-    local message = "record bodies hold only field declarations"
+    local message = "class bodies hold only field and method declarations"
     eq("2:5: " .. message, parse_error("class A:\n    pass\n"))
     eq("2:5: " .. message, parse_error("class A:\n    x = 1\n"))
-    eq("3:5: " .. message, parse_error("class A:\n    x: int\n    def f() -> None:\n        pass\n"))
+    eq("3:5: " .. message, parse_error("class A:\n    x: int\n    return\n"))
+  end,
+
+  methods = function()
+    local program = parse(table.concat({
+      "class C:",
+      "    n: int",
+      "    def get(self) -> int:",
+      "        return self.n",
+      "    def add(self, k: int = 1) -> None:",
+      "        self.n = self.n + k",
+      "class Only:",
+      "    def f(self,) -> None:",
+      "        pass",
+      "class E(Exception):",
+      "    def show(self) -> str:",
+      "        return self.message",
+      "",
+    }, "\n"))
+    local c = program.records[1]
+    eq("class C { n: int }", show(c))
+    eq("get add", c.methods[1].name .. " " .. c.methods[2].name)
+    eq("self k", c.methods[2].params[1].name .. " " .. c.methods[2].params[2].name)
+    eq(nil, c.methods[1].params[1].type)
+    eq(0, #program.records[2].fields)
+    eq(1, #program.records[2].methods[1].params)
+    eq("show", program.records[3].methods[1].name)
+    eq(0, #program.functions)
+    eq("2:11: method 'f' must take 'self' as its first parameter",
+      parse_error("class A:\n    def f(x: int) -> None:\n        pass\n"))
+    eq("2:11: method 'f' must take 'self' as its first parameter",
+      parse_error("class A:\n    def f() -> None:\n        pass\n"))
+    eq("2:15: 'self' cannot have an annotation", parse_error("class A:\n    def f(self: A) -> None:\n        pass\n"))
+    eq("4:5: fields must come before methods",
+      parse_error("class A:\n    def f(self) -> None:\n        pass\n    x: int\n"))
   end,
 
   exception_classes = function()
@@ -327,8 +361,8 @@ return {
     eq(true, program.records[2].exception)
     eq("1:9: the base of a class must be 'Exception'", parse_error("class E(Base):\n    pass\n"))
     eq("2:5: exception class cannot declare field 'message'", parse_error("class E(Exception):\n    message: str\n"))
-    eq("2:5: record bodies hold only field declarations", parse_error("class E:\n    pass\n"))
-    eq("3:5: record bodies hold only field declarations", parse_error("class E(Exception):\n    x: int\n    pass\n"))
+    eq("2:5: class bodies hold only field and method declarations", parse_error("class E:\n    pass\n"))
+    eq("3:5: class bodies hold only field and method declarations", parse_error("class E(Exception):\n    x: int\n    pass\n"))
   end,
 
   raise = function()

@@ -94,7 +94,7 @@ return {
     eq("args", body[1].value.target.name)
     eq("exit", body[2].call.target.name)
     eq("read_file", body[3].value.target.name)
-    eq("3:9: module 'sys' has no function, record, or alias 'missing'",
+    eq("3:9: module 'sys' has no function, class, or alias 'missing'",
       bind_error("import sys\ndef main() -> None:\n    sys.missing()\n"))
     eq("3:11: module 'sys' cannot be used as a value", bind_error("import sys\ndef main() -> None:\n    print(sys)\n"))
     bind_source("def exit(status: int) -> None:\n    pass\ndef eprint(x: int) -> None:\n    exit(x)\n" .. MAIN)
@@ -157,14 +157,28 @@ return {
   end,
 
   records = function()
-    eq("3:7: duplicate record 'A'", bind_error("class A:\n    x: int\nclass A:\n    y: int\n" .. MAIN))
-    eq("3:7: duplicate record 'A'", bind_error("def A() -> None:\n    pass\nclass A:\n    y: int\n" .. MAIN))
+    eq("3:7: duplicate class 'A'", bind_error("class A:\n    x: int\nclass A:\n    y: int\n" .. MAIN))
+    eq("3:7: duplicate class 'A'", bind_error("def A() -> None:\n    pass\nclass A:\n    y: int\n" .. MAIN))
     eq("3:5: duplicate function 'A'", bind_error("class A:\n    x: int\ndef A() -> None:\n    pass\n" .. MAIN))
     eq("1:7: cannot redefine built-in function 'len'", bind_error("class len:\n    x: int\n" .. MAIN))
     eq("3:5: duplicate field 'x'", bind_error("class A:\n    x: int\n    x: str\n" .. MAIN))
     local program = bind_source("class A:\n    b: B | None\nclass B:\n    a: A\n    self: B\n"
       .. "def main() -> None:\n    x = B(A(None), None)\n")
     eq(program.records[2], program.functions[1].body[1].value.target)
+  end,
+
+  methods = function()
+    local method = "    def f(self) -> None:\n        pass\n"
+    eq("4:9: duplicate method 'f'", bind_error("class A:\n" .. method .. method .. MAIN))
+    eq("3:9: method 'x' has the same name as a field",
+      bind_error("class A:\n    x: int\n    def x(self) -> int:\n        return 1\n" .. MAIN))
+    eq("2:9: method 'message' has the same name as a field",
+      bind_error("class E(Exception):\n    def message(self) -> str:\n        return ''\n" .. MAIN))
+    eq("2:17: duplicate parameter 'self'", bind_error("class A:\n    def f(self, self: int) -> None:\n        pass\n" .. MAIN))
+    local program = bind_source("class A:\n    def f(self, other: A) -> A:\n        return other\n" .. MAIN)
+    local f = program.records[1].methods[1]
+    eq(program.records[1], f.class)
+    eq("A A A", f.params[1].type.name .. " " .. f.params[2].type.name .. " " .. f.return_type.name)
   end,
 
   unknown_types = function()
@@ -178,7 +192,7 @@ return {
     local P = "class P:\n    x: int\n"
     eq("5:9: cannot call local variable 'P'", bind_error(P .. "def main() -> None:\n    P = 1\n    p = P(1)\n"))
     bind_source(P .. "def main() -> None:\n    P = 1\n    q: P | None = None\n")
-    eq("4:9: record 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
+    eq("4:9: class 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
   end,
 
   modules = function()
@@ -206,13 +220,13 @@ return {
     eq("geo.Point", body[1].annotation.name)
     eq("geo.Point", modules[2].functions[1].return_type.name)
     eq("main.wlo:2:5: duplicate function 'geo'", modules_error({ main("def geo() -> None:\n    pass\n" .. MAIN), geo }))
-    eq("main.wlo:2:7: duplicate record 'geo'", modules_error({ main("class geo:\n    x: int\n" .. MAIN), geo }))
+    eq("main.wlo:2:7: duplicate class 'geo'", modules_error({ main("class geo:\n    x: int\n" .. MAIN), geo }))
     eq("main.wlo:2:8: duplicate import 'geo'", modules_error({ main("import geo\n" .. MAIN), geo }))
     eq("main.wlo:1:8: cannot redefine built-in function 'len'",
       modules_error({ { "main", "import len\n" .. MAIN }, { "len", "def f() -> None:\n    pass\n" } }))
     eq("main.wlo:3:8: unknown module 'nope'", modules_error({ main("def main() -> None:\n    x: nope.Point = 1\n"), geo }))
     eq("main.wlo:3:8: unknown type 'geo.make'", modules_error({ main("def main() -> None:\n    x: geo.make = 1\n"), geo }))
-    eq("main.wlo:3:13: module 'geo' has no function, record, or alias 'nope'",
+    eq("main.wlo:3:13: module 'geo' has no function, class, or alias 'nope'",
       modules_error({ main("def main() -> None:\n    x = geo.nope()\n"), geo }))
     eq("main.wlo:3:13: '_hidden' is private to module 'geo'",
       modules_error({ main("def main() -> None:\n    x = geo._hidden()\n"), geo }))
@@ -257,7 +271,7 @@ return {
 
   exception_classes = function()
     eq("1:7: cannot redefine built-in class 'ValueError'", bind_error("class ValueError(Exception):\n    pass\n" .. MAIN))
-    eq("2:9: record 'KeyError' cannot be used as a value", bind_error("def main() -> None:\n    x = KeyError\n"))
+    eq("2:9: class 'KeyError' cannot be used as a value", bind_error("def main() -> None:\n    x = KeyError\n"))
     local program = bind_source("def main() -> None:\n    e: Exception | None = ValueError('x')\n")
     eq("Exception | None", program.functions[1].body[1].annotation.name)
     eq("3:21: cannot call local variable 'ValueError'",
@@ -367,7 +381,7 @@ return {
       modules_error({ entry("import app.util\ndef main() -> None:\n    print(app)\n"), util }))
     eq("main.wlo:3:15: unknown module 'app.missing'",
       modules_error({ entry("import app.util\ndef main() -> None:\n    print(app.missing.f())\n"), util }))
-    eq("main.wlo:3:20: module 'app.util' has no function, record, or alias 'nope'",
+    eq("main.wlo:3:20: module 'app.util' has no function, class, or alias 'nope'",
       modules_error({ entry("import app.util\ndef main() -> None:\n    print(app.util.nope())\n"), util }))
     -- A local shadows the namespace, so the call stays a method call on it.
     modules = bind_modules({ entry("import app.util\ndef main() -> None:\n    app = 1\n    print(app.util.f())\n"), util })

@@ -1,0 +1,3 @@
+method_traceback.wlo:5:27: error: ZeroDivisionError: division by zero
+  in Counter.per at method_traceback.wlo:5:27
+  called from main at method_traceback.wlo:9:22

@@ -560,12 +560,29 @@ function M.parse(tokens)
     end
   end
 
-  local function parse_function()
+  -- A method's first parameter is `self`, which has no annotation; bind gives
+  -- it the class's type.
+  local function parse_function(method)
     advance()
     local name = expect("NAME", "a function name")
     expect("(")
-    local params = {}
-    while not accept(")") do
+    local params, closed = {}, false
+    if method then
+      local self = peek()
+      if self.kind ~= "NAME" or self.value ~= "self" then
+        diag.error(self.span, "method '" .. name.value .. "' must take 'self' as its first parameter")
+      end
+      advance()
+      if peek().kind == ":" then
+        diag.error(peek().span, "'self' cannot have an annotation")
+      end
+      params[1] = ast.node("Param", self.span, { name = "self" })
+      closed = not accept(",")
+      if closed then
+        expect(")", "',' or ')'")
+      end
+    end
+    while not closed and not accept(")") do
       local param = expect("NAME", "a parameter name")
       expect(":")
       local node = ast.node("Param", param.span, { name = param.value, type = parse_type() })
@@ -586,7 +603,7 @@ function M.parse(tokens)
   -- body of `pass` alone.
   local function parse_record()
     advance()
-    local name = expect("NAME", "a record name")
+    local name = expect("NAME", "a class name")
     local exception = false
     local fields = {}
     if accept("(") then
@@ -605,24 +622,32 @@ function M.parse(tokens)
     if exception and accept("pass") then
       expect("NEWLINE", "end of line")
       expect("DEDENT", "the end of the class")
-      return ast.node("Record", name.span, { name = name.value, fields = fields, exception = true })
+      return ast.node("Record", name.span, { name = name.value, fields = fields, methods = {}, exception = true })
     end
+    local methods = {}
     repeat
       local field = peek()
-      if field.kind ~= "NAME" or tokens[pos + 1].kind ~= ":" then
-        diag.error(field.span, "record bodies hold only field declarations")
+      if field.kind == "def" then
+        methods[#methods + 1] = parse_function(true)
+      else
+        if field.kind ~= "NAME" or tokens[pos + 1].kind ~= ":" then
+          diag.error(field.span, "class bodies hold only field and method declarations")
+        elseif #methods > 0 then
+          diag.error(field.span, "fields must come before methods")
+        end
+        if exception and field.value == "message" then
+          diag.error(field.span, "exception class cannot declare field 'message'")
+        end
+        advance()
+        advance()
+        local node = ast.node("FieldDecl", field.span, { name = field.value, type = parse_type() })
+        parse_optional_default(node, fields[#fields], "field")
+        fields[#fields + 1] = node
+        expect("NEWLINE", "end of line")
       end
-      if exception and field.value == "message" then
-        diag.error(field.span, "exception class cannot declare field 'message'")
-      end
-      advance()
-      advance()
-      local node = ast.node("FieldDecl", field.span, { name = field.value, type = parse_type() })
-      parse_optional_default(node, fields[#fields], "field")
-      fields[#fields + 1] = node
-      expect("NEWLINE", "end of line")
     until accept("DEDENT")
-    return ast.node("Record", name.span, { name = name.value, fields = fields, exception = exception })
+    return ast.node("Record", name.span,
+      { name = name.value, fields = fields, methods = methods, exception = exception })
   end
 
   local imports = {}

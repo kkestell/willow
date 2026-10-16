@@ -283,3 +283,28 @@ remove obsolete amendment wording, and update implementation status.
     and preservation of explicit-file workflows
   - [x] Deliver a multi-module network/CLI application using a local dependency,
     with a documented clean-checkout-to-distributed-executable workflow
+
+## Classes with methods
+
+Implement methods on declared classes, including exception classes, as specified
+in `docs/spec.md` §3. Classes have no inheritance beyond `Exception`, so every
+method call resolves statically.
+
+- [x] Parsing
+  - [x] Method declarations after field declarations in class bodies; a first
+    parameter named `self` with no annotation; reject fields after methods, a
+    missing or annotated `self`, and an empty body
+- [x] Binding and checking
+  - [x] Per-class method tables alongside the existing native-type methods;
+    unique method names that differ from field names, and no `message` method in
+    exception classes
+  - [x] Type `self` as its class; check method bodies and returns like functions
+  - [x] Method calls with positional and keyword arguments and defaults, on
+    local and module-qualified classes; require narrowing on unions; reject
+    methods used as values
+  - [x] Say "class" instead of "record" in diagnostics
+- [x] Lowering and emission
+  - [x] Emit each method as a readable Lua function and each call as a direct
+    call, evaluating the receiver before the arguments
+- [x] Deliver an example that uses methods on an ordinary class and an exception
+  class, with focused tests and `make test`

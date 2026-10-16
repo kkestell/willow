@@ -1,0 +1,42 @@
+class Counter:
+    count: int = 0
+
+    def add(self, amount: int = 1) -> int:
+        self.count = self.count + amount
+        return self.count
+
+    def add_twice(self, amount: int) -> int:
+        self.add(amount)
+        return self.add(amount=amount)
+
+    def countdown(self, n: int) -> str:
+        if n == 0:
+            return "go"
+        return f"{n} " + self.countdown(n - 1)
+
+    def end(self) -> str:
+        return f"ended at {self.count}"
+
+class ParseError(Exception):
+    line: int
+
+    def describe(self) -> str:
+        return f"line {self.line}: {self.message}"
+
+def shadowed(counter: Counter) -> int:
+    Counter = 10
+    return counter.add(Counter)
+
+def main() -> None:
+    counter = Counter()
+    counter.add()
+    print(counter.add(5))           # 6
+    print(counter.add_twice(2))     # 10
+    print(counter.countdown(3))     # 3 2 1 go
+    print(counter.end())            # ended at 10
+    print(Counter(3).add())         # 4
+    print(shadowed(counter))        # 20
+    try:
+        raise ParseError("not a digit", 7)
+    except ParseError as error:
+        print(error.describe())     # line 7: not a digit

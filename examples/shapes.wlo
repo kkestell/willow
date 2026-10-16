@@ -1,0 +1,40 @@
+# Sums the areas of rectangles given as WIDTHxHEIGHT arguments:
+# willow run shapes.wlo 3x4 2x2.5
+import sys
+
+class Rect:
+    width: float
+    height: float
+
+    def area(self) -> float:
+        return self.width * self.height
+
+    def scaled(self, factor: float) -> Rect:
+        return Rect(self.width * factor, self.height * factor)
+
+class ShapeError(Exception):
+    text: str
+
+    def report(self) -> str:
+        return f"{self.text}: {self.message}"
+
+def parse_rect(text: str) -> Rect:
+    parts = text.split("x")
+    if len(parts) != 2:
+        raise ShapeError("expected WIDTHxHEIGHT", text)
+    try:
+        return Rect(float(parts[0]), float(parts[1]))
+    except ValueError:
+        raise ShapeError("not a number", text)
+
+def main() -> None:
+    total = 0.0
+    for text in sys.args():
+        try:
+            rect = parse_rect(text)
+        except ShapeError as error:
+            sys.eprint(error.report())
+            sys.exit(2)
+        print(f"{text}: {rect.area()} (doubled {rect.scaled(2.0).area()})")
+        total = total + rect.area()
+    print(f"total {total}")

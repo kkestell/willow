@@ -1,4 +1,5 @@
 -- Lowers the checked tree into explicit evaluation order and control flow.
+local bind = require("compiler.bind")
 local types = require("compiler.types")
 
 local M = {}
@@ -345,6 +346,9 @@ local function lower_function(fn, sites, helpers)
       local object = lower_operand(node.object)
       local args = lower_args(node)
       table.insert(args, 1, object)
+      if node.method then
+        return { kind = "Call", target = node.method, args = args, span = node.span }
+      end
       return helper(prefix(node.object.type) .. node.name, args, node.span)
     elseif kind == "ListDisplay" then
       local elements = {}
@@ -566,6 +570,7 @@ local function lower_function(fn, sites, helpers)
   return {
     name = fn.name,
     module = fn.module,
+    class = fn.class,
     span = fn.span,
     params = params,
     locals = fn.locals,
@@ -574,12 +579,12 @@ local function lower_function(fn, sites, helpers)
   }
 end
 
--- Lowers every function of `modules`, the entry module first.
+-- Lowers every function and method of `modules`, the entry module first.
 function M.lower(modules)
   local sites, helpers = {}, {}
   local functions = {}
   for _, module in ipairs(modules) do
-    for _, fn in ipairs(module.functions) do
+    for _, fn in ipairs(bind.functions(module)) do
       functions[#functions + 1] = lower_function(fn, sites, helpers)
     end
   end

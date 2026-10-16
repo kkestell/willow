@@ -143,10 +143,11 @@ Parameter lists and argument lists may end with a trailing comma. A function may
 call functions declared later in the file, and functions may be directly or
 mutually recursive.
 
-### Records
+### Classes
 
-A `class` declaration defines a record type. The body of the declaration contains
-one or more field declarations and nothing else:
+A `class` declaration defines a class. The body of the declaration contains
+field declarations followed by method declarations, and nothing else. It must
+contain at least one of either:
 
 ```python
 class Node:
@@ -154,11 +155,11 @@ class Node:
     next: Node | None
 ```
 
-Field names must be unique within a record. A field's type may name any record,
-including the record being declared and records declared later. Records are
-nominal, so two records with the same fields are different types.
+Field names must be unique within a class. A field's type may name any class,
+including the class being declared and classes declared later. Classes are
+nominal, so two classes with the same fields are different types.
 
-Calling a record by name constructs a new value. The constructor takes one
+Calling a class by name constructs a new value. The constructor takes one
 argument for each field. Arguments are bound the same way as function arguments
 (§5), with the field names as the parameter names, and each argument must be
 assignable to its field's type. A field may have a default value, following the
@@ -173,10 +174,34 @@ options = Options(verbose=True)
 ```
 
 `p.x` reads the field `x`, and `p.x = v` replaces its value. The new value `v`
-must be assignable to the field's type. Referring to a field that the record does
+must be assignable to the field's type. Referring to a field that the class does
 not have is an error.
 
-Exception classes (§10) are records declared with the base class `Exception`.
+A method is a function declared in a class body. Its first parameter is `self`,
+which has no annotation and has the class's type. The other parameters and the
+return type follow the rules for functions:
+
+```python
+class Counter:
+    count: int = 0
+
+    def add(self, amount: int = 1) -> int:
+        self.count = self.count + amount
+        return self.count
+
+def main() -> None:
+    counter = Counter()
+    counter.add()
+    print(counter.add(amount=5))    # 6
+```
+
+`v.m(arguments)` calls the method `m` of the class of `v`, binding `v` to `self`
+and the arguments to the remaining parameters as in a function call (§5). The
+value `v` is evaluated before the arguments. Method names must be unique within
+a class and cannot be the same as a field name. Like functions, methods may be
+recursive and may refer to classes declared later.
+
+Exception classes (§10) are classes declared with the base class `Exception`.
 Their first field is `message`, which has no default.
 
 ### Type aliases
@@ -186,7 +211,7 @@ type Json = None | bool | int | float | str | list[Json] | dict[str, Json]
 ```
 
 A `type` declaration gives a name to a type. The alias and the type it names are
-the same type, and annotations may use either one. An alias may refer to records
+the same type, and annotations may use either one. An alias may refer to classes
 and aliases declared later, and to itself. An alias cannot expand to itself
 except inside `list[...]` or `dict[...]`, so `type Loop = int | Loop` is an
 error. An alias cannot be called and cannot be used in `isinstance`.
@@ -198,7 +223,7 @@ The forms of type annotations are:
 ```text
 int  float  bool  str  None
 list[T]  dict[K, V]
-Record  module.Record
+Class  module.Class
 Alias  module.Alias
 A | B | ...
 ```
@@ -216,13 +241,13 @@ A | B | ...
 | `A \| B \| ...` | A value of any member type |
 | `list[T]` | Ordered, mutable sequences of `T` |
 | `dict[K, V]` | Mutable maps from `K` to `V` that keep insertion order |
-| Records | Values of a declared record or exception class |
+| Classes | Values of a declared class, including exception classes |
 | Native types | Library values such as `io.File` (§14) |
 
 The scalar types are `int`, `float`, `bool`, `str`, `bytes`, and `None`. A type
 is printable if it is a scalar type other than `bytes`, or a union of such types.
-Lists, dictionaries, and records are reference types. Assigning one or passing it
-as an argument shares the same value instead of copying it.
+Lists, dictionaries, and class values are reference types. Assigning one or
+passing it as an argument shares the same value instead of copying it.
 
 ### Assignability
 
@@ -257,8 +282,8 @@ compared, and printed, and it can be tested with `is None`, `is not None`, and
 access, or method calls, it must first be narrowed to a single member (§9).
 
 `isinstance(value, C)` is `True` when `value` holds a value of type `C`. `C` must
-be `int`, `float`, `bool`, `str`, `list`, `dict`, or the name of a record or
-exception class, optionally qualified with a module name. `C` must name the type
+be `int`, `float`, `bool`, `str`, `list`, `dict`, or the name of a class,
+optionally qualified with a module name. `C` must name the type
 of `value` or one of its members. `list` and `dict` refer to the union's list
 member and dict member.
 
@@ -304,11 +329,11 @@ must be expressions at level 5 or higher. As a result, `not a == b` means
 
 ### Calls
 
-A call can name a function, built-in function, conversion, or record by its bare
+A call can name a function, built-in function, conversion, or class by its bare
 name (`area(p)`), a member of a module (`geometry.area(p)`), or a method of a
-value (`items.append(x)`). Functions and methods are not values. Because of this,
-`(f)(x)`, `items[0](x)`, and `items.append` without a call are errors. Every call
-produces exactly one value.
+value (`items.append(x)`, `counter.add(1)`). Functions and methods are not
+values. Because of this, `(f)(x)`, `items[0](x)`, and `items.append` without a
+call are errors. Every call produces exactly one value.
 
 A call's arguments are zero or more positional arguments followed by zero or
 more keyword arguments of the form `name=expression`. Positional arguments are
@@ -326,9 +351,10 @@ print(greet(prefix="Welcome", name="Ada"))
 These are compile-time errors: a positional argument after a keyword argument, a
 keyword that names no parameter, two values for the same parameter, a missing
 argument for a parameter that has no default, and too many arguments. Functions,
-record constructors, `fs.read_file`, `fs.write_file`, `sys.exit`, `sorted`, and
-`list.sort` accept keyword arguments, using the parameter names given in §7 and
-§14. Other built-in functions and methods accept only positional arguments.
+methods, class constructors, `fs.read_file`, `fs.write_file`, `sys.exit`,
+`sorted`, and `list.sort` accept keyword arguments, using the parameter names
+given in §7 and §14. Other built-in functions and methods accept only positional
+arguments.
 
 ### Operators
 
@@ -339,8 +365,8 @@ record constructors, `fs.read_file`, `fs.write_file`, `sys.exit`, `sorted`, and
   other. For example, if `count` has type `int | None`, both `count == 3` and
   `count == None` are valid. Values of different types are never equal, so a
   union holding `1` is not equal to a union holding `1.0`. Bytes values are equal
-  when their contents are equal. Lists, dictionaries, records, and native values
-  cannot be compared with `==`.
+  when their contents are equal. Lists, dictionaries, class values, and native
+  values cannot be compared with `==`.
 - `<`, `<=`, `>`, and `>=` take two integers, two floats, or two strings.
 - `is` may only be used as `e is None` or `e is not None`, where `e` has an
   optional type.
@@ -539,7 +565,7 @@ scores: dict[str, int | None] = {"ada": None}
 ```
 
 A display can have an expected type, which comes from an annotation, an existing
-assignment target, a parameter, a return type, a record field, or an enclosing
+assignment target, a parameter, a return type, a class field, or an enclosing
 display. When a display has an expected type, each element is checked against
 it, and an empty display takes that type. If the expected type is a union, a list
 display uses the union's list member and a dict display uses its dict member.
@@ -711,13 +737,13 @@ loop variables, and names bound by `except ... as` are local to the whole
 function, wherever in the function they appear. Blocks do not create scopes, and
 there are no module-level variables or global variables.
 
-The file scope contains functions, records, aliases, and imports. These share a
+The file scope contains functions, classes, aliases, and imports. These share a
 single namespace with the built-in names (§11). It is an error to declare the
 same name twice, to give two parameters the same name, or to declare a file-level
 name that is also a built-in name. A local variable with the same name as a
-function, record, alias, import, or built-in hides it throughout the function.
+function, class, alias, import, or built-in hides it throughout the function.
 Calling a local variable is an error, even before the variable's first
-assignment. Type annotations in the function still refer to the hidden record or
+assignment. Type annotations in the function still refer to the hidden class or
 alias.
 
 ### Local types
@@ -852,10 +878,10 @@ def main() -> None:
 `Exception` is a built-in class with one field, `message: str`. A class declared
 with `Exception` as its base is an exception class. Its fields are `message`
 followed by the fields it declares, and its constructor takes them in that order.
-The body of an exception class may be `pass` instead of field declarations. None
-of its declared fields may be named `message`. The base class must be
-`Exception`. In all other respects, exception classes follow the rules for
-records.
+The body of an exception class may be `pass` instead of field and method
+declarations. None of its declared fields or methods may be named `message`. The
+base class must be `Exception`. In all other respects, exception classes follow
+the rules for classes.
 
 These built-in exception classes have only the `message` field:
 
@@ -961,11 +987,11 @@ def main() -> None:
   file named `app.wlo`.
 - An import binds its first component as a name in the importing file's
   namespace (§9). Several imports may share the same first component, but that
-  name cannot also be used for a function, record, or alias. A name cannot be
+  name cannot also be used for a function, class, or alias. A name cannot be
   both a module and a namespace, so importing both `app` and `app.util` is an
   error. A local variable with the same name hides the whole namespace.
 - `module.name`, written with the module's full name, as in `app.util.name`,
-  refers to a function, record, or alias declared in that module. It can be used
+  refers to a function, class, or alias declared in that module. It can be used
   in calls, constructors, annotations, `except` clauses, and `isinstance`.
   Modules and namespaces are not values. Names that begin with `_` are private to
   the module that declares them.
@@ -1214,7 +1240,7 @@ kind (`'<name>' is not an int argument`). Each call to `parse` returns a separat
 | `remove(path: str) -> None` | Remove a file or symlink |
 | `rmdir(path: str) -> None` | Remove an empty directory |
 | `rename(source: str, destination: str) -> None` | Rename a file or directory, replacing the destination where POSIX allows it |
-| `class Stat` | A record with the fields `kind: str`, `size: int`, and `modified: float` |
+| `class Stat` | A class with the fields `kind: str`, `size: int`, and `modified: float` |
 
 Paths are strings. A relative path is relative to the working directory.
 `read_file` and `write_file` read and write text exactly as it is, without
@@ -1226,7 +1252,7 @@ symlinks, or resolve `..`. For example, `join("a", "")` is `a/`, `join("", "b")`
 is `b`, and a leading sequence of slashes is kept together, so `dirname("//a")`
 is `//`.
 
-`Stat` is an ordinary record. `kind` is `file`, `directory`, `symlink`, or
+`Stat` is an ordinary class. `kind` is `file`, `directory`, `symlink`, or
 `other`. `size` is the size in bytes. `modified` is the time of the last
 modification, in seconds since the Unix epoch. When `follow_symlinks` is true,
 `stat` describes the target of a symlink rather than the symlink itself. A size
@@ -1272,9 +1298,9 @@ def main() -> None:
 | `download(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Download` | Send a `GET` request and save the response body to the file at `path` |
 | `header(headers: list[Header], name: str) -> str \| None` | The value of the first header named `name`, compared case-insensitively, or `None` |
 | `urlencode(values: dict[str, str]) -> str` | `values` encoded as `key=value` pairs joined with `&`, in insertion order |
-| `class Header` | A record with the fields `name: str` and `value: str` |
-| `class Response` | A record with the fields `status: int`, `headers: list[Header]`, `body: bytes`, and `url: str` |
-| `class Download` | A record with the fields `status: int`, `headers: list[Header]`, `url: str`, and `bytes_written: int` |
+| `class Header` | A class with the fields `name: str` and `value: str` |
+| `class Response` | A class with the fields `status: int`, `headers: list[Header]`, `body: bytes`, and `url: str` |
+| `class Download` | A class with the fields `status: int`, `headers: list[Header]`, `url: str`, and `bytes_written: int` |
 
 The `http` module uses the system's libcurl. macOS includes libcurl. On Linux, a
 program that makes requests needs the `libcurl4` and `ca-certificates` packages.
@@ -1376,8 +1402,8 @@ def main() -> None:
 | `flush() -> None` | Write any buffered data |
 | `close() -> None` | Flush and close the file |
 
-A native type is a library type that has methods. Its values can only be created
-by functions in its module, and it has no fields. A native type can be used in
+A native type is a library class that has methods and no fields. Its values can
+only be created by functions in its module. A native type can be used in
 annotations, aliases, unions, and `isinstance`, and its values can be stored and
 passed as arguments. It does not support `==`, printing, or construction. All
 references to a handle refer to the same handle, so closing it through one
@@ -1533,7 +1559,7 @@ def main() -> None:
 | --- | --- |
 | `run(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Result` | Run a command and wait for it to finish |
 | `spawn(args: list[str], cwd: str \| None = None, env: dict[str, str] \| None = None, stdin: io.File \| None = None, stdout: io.File \| None = None, stderr: io.File \| None = None) -> Process` | Start a command and return without waiting for it |
-| `class Result` | A record with the fields `returncode: int`, `stdout: bytes \| None`, and `stderr: bytes \| None` |
+| `class Result` | A class with the fields `returncode: int`, `stdout: bytes \| None`, and `stderr: bytes \| None` |
 | `class Process` | A native type with the methods below |
 
 | `Process` method | Meaning |

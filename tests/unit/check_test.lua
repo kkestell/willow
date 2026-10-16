@@ -250,8 +250,8 @@ return {
     eq("P", program.functions[1].body[1].symbol.type.name)
     eq("7:9: 'P' expects 2 arguments, received 1", check_errors(m("p = P(1)")))
     eq("7:14: expected int | None, received str", check_errors(m("p = P(1, 'a')")))
-    eq("8:7: record P has no field 'z'", check_errors(m("p = P(1, None)\np.z = 1")))
-    eq("8:11: record P has no field 'z'", check_errors(m("p = P(1, None)\nq = p.z")))
+    eq("8:7: class P has no field 'z'", check_errors(m("p = P(1, None)\np.z = 1")))
+    eq("8:11: class P has no field 'z'", check_errors(m("p = P(1, None)\nq = p.z")))
     eq("8:11: expected int, received str", check_errors(m("p = P(1, None)\np.x = 'a'")))
     eq("8:11: type int has no field 'z'", check_errors(m("x = 1\ny = x.z")))
     eq("8:12: type list[int] has no field 'append'", check_errors(m("xs = [1]\ny = xs.append")))
@@ -293,10 +293,41 @@ return {
       check_errors("def f(x: str | None) -> bool:\n    return x not in 'abc'\n" .. MAIN))
   end,
 
+  methods = function()
+    local C = table.concat({
+      "class C:",
+      "    n: int",
+      "    def add(self, k: int, times: int = 1) -> int:",
+      "        self.n = self.n + k * times",
+      "        return self.n",
+      "    def same(self, other: C) -> bool:",
+      "        return self.n == other.n",
+      "",
+    }, "\n")
+    local function m(statements)
+      return C .. "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n"
+    end
+    local program = check_source(m("c = C(1)\na = c.add(2)\nb = c.add(times=3, k=1)\nok = c.same(c)"))
+    local body = program.functions[1].body
+    eq("int int bool", body[2].value.type.name .. " " .. body[3].value.type.name .. " " .. body[4].value.type.name)
+    eq(program.records[1].methods[1], body[2].value.method)
+    eq("10:7: 'add' expects 1 to 2 arguments, received 0", check_errors(m("c = C(1)\nc.add()")))
+    eq("10:11: expected int, received str", check_errors(m("c = C(1)\nc.add('a')")))
+    eq("10:11: 'add' has no parameter 'self'", check_errors(m("c = C(1)\nc.add(self=c, k=1)")))
+    eq("10:7: type C has no method 'sub'", check_errors(m("c = C(1)\nc.sub(1)")))
+    eq("10:11: class C has no field 'add'", check_errors(m("c = C(1)\nf = c.add")))
+    eq("10:11: type C | None has no method 'add'", check_errors(m("cs: list[C | None] = [None]\ncs[0].add(1)")))
+    check_source(m("cs: list[C | None] = [None]\nc = cs[0]\nif c is not None:\n    c.add(1)"))
+    eq("3:9: method 'D.f' must return a value on every path",
+      check_errors("class D:\n    x: int\n    def f(self) -> int:\n        print(self.x)\n" .. MAIN))
+    eq("3:16: expected int, received D",
+      check_errors("class D:\n    def f(self) -> int:\n        return self\n" .. MAIN))
+  end,
+
   records_across_modules = function()
     local function check_modules(main_source)
       local modules = {}
-      for i, source in ipairs({ { "main", "import geo\n" .. main_source }, { "geo", "class Point:\n    x: int\n" } }) do
+      for i, source in ipairs({ { "main", "import geo\n" .. main_source }, { "geo", "class Point:\n    x: int\n    def moved(self, dx: int) -> Point:\n        return Point(self.x + dx)\n" } }) do
         local program = parser.parse(lexer.lex(source[2], source[1] .. ".wlo"))
         program.name, program.path = source[1], source[1] .. ".wlo"
         modules[i] = program
@@ -305,6 +336,7 @@ return {
       check.check(modules)
     end
     check_modules("def main() -> None:\n    p = geo.Point(1)\n    q: geo.Point = p\n    print(q.x + 1)\n")
+    check_modules("def main() -> None:\n    print(geo.Point(1).moved(dx=2).x)\n")
     local ok, err = pcall(check_modules, "class Point:\n    x: int\ndef main() -> None:\n    p: Point = geo.Point(1)\n")
     eq(false, ok)
     eq("5:20: expected Point, received geo.Point", err[1].span.line .. ":" .. err[1].span.col .. ": " .. err[1].message)
@@ -400,7 +432,7 @@ return {
     check_source(E .. "def f(e: ParseError | None) -> Exception | None:\n    return e\n" .. MAIN)
     eq("5:26: expected list[Exception], received list[ParseError]",
       check_errors(E .. in_main("x: list[ParseError] = []\ny: list[Exception] = x")))
-    eq("5:11: record Exception has no field 'line'",
+    eq("5:11: class Exception has no field 'line'",
       check_errors(E .. in_main("e: Exception = ParseError('bad', 2)\nx = e.line")))
     eq("4:11: cannot print a value of type Exception", check_errors(E .. in_main("print(Exception('x'))")))
   end,

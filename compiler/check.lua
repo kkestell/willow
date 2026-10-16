@@ -112,9 +112,20 @@ local function method_signature(type, name)
     return { type.key }, types.expand(type.value)
   elseif type == types.bytes and name == "decode" then
     return {}, types.str
-  elseif type.kind == "record" and type.record.methods and type.record.methods[name] then
-    local method = type.record.methods[name]
+  elseif type.kind == "record" and type.record.native and type.record.native_methods[name] then
+    local method = type.record.native_methods[name]
     return method.params, method.result, method.names, method.defaults
+  end
+end
+
+-- The method `name` of a declared class of `type`, or nil.
+local function class_method(type, name)
+  if type.kind == "record" and not type.record.native then
+    for _, method in ipairs(type.record.methods) do
+      if method.name == name then
+        return method
+      end
+    end
   end
 end
 
@@ -338,7 +349,7 @@ local function check_function(fn)
         return field.type
       end
     end
-    diag.error(node.span, "record " .. object.name .. " has no field '" .. node.name .. "'")
+    diag.error(node.span, "class " .. object.name .. " has no field '" .. node.name .. "'")
   end
 
   local return_type = fn.return_type
@@ -547,16 +558,29 @@ local function check_function(fn)
       type = object
     elseif kind == "MethodCall" then
       local object = check_expression(node.object, state)
-      local params, result, names, defaults = method_signature(object, node.name)
-      if not params then
-        diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
-      end
-      if object.kind == "list" and node.name == "sort" then
-        bind_args(node, node.name, SORT_PARAMS, "parameter")
-        check_sortable(node, object)
+      local method = class_method(object, node.name)
+      local params, result, names, defaults
+      if method then
+        -- A declared method binds its arguments to the parameters after `self`.
+        local rest = { unpack(method.params, 2) }
+        bind_args(node, node.name, rest, "parameter")
+        params, result = {}, method.return_type
+        for i, param in ipairs(rest) do
+          params[i] = param.type
+        end
+        node.method = method
       else
-        local method = { params = params, names = names, defaults = defaults }
-        bind_args(node, node.name, builtin_params(method), names and "parameter")
+        params, result, names, defaults = method_signature(object, node.name)
+        if not params then
+          diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
+        end
+        if object.kind == "list" and node.name == "sort" then
+          bind_args(node, node.name, SORT_PARAMS, "parameter")
+          check_sortable(node, object)
+        else
+          local signature = { params = params, names = names, defaults = defaults }
+          bind_args(node, node.name, builtin_params(signature), names and "parameter")
+        end
       end
       for i, arg in ipairs(node.args) do
         check_against(arg, state, params[i])
@@ -850,7 +874,8 @@ local function check_function(fn)
   -- Outside a loop only `return` transfers control at function level.
   local _, transfers = check_block(fn.body, state, false)
   if return_type ~= types.None and not transfers then
-    diag.error(fn.span, "function '" .. fn.name .. "' must return a value on every path")
+    local name = fn.class and "method '" .. fn.class.name .. "." or "function '"
+    diag.error(fn.span, name .. fn.name .. "' must return a value on every path")
   end
 end
 
@@ -867,7 +892,7 @@ end
 function M.check(modules)
   local errors = {}
   for _, module in ipairs(modules) do
-    for _, fn in ipairs(module.functions) do
+    for _, fn in ipairs(bind.functions(module)) do
       local ok, err = xpcall(check_function, capture, fn)
       if not ok then
         if not diag.is(err) then

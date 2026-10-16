@@ -4,6 +4,20 @@ local types = require("compiler.types")
 
 local M = {}
 
+-- The functions of `module` followed by the methods of its classes.
+function M.functions(module)
+  local result = {}
+  for _, fn in ipairs(module.functions) do
+    result[#result + 1] = fn
+  end
+  for _, record in ipairs(module.records) do
+    for _, method in ipairs(record.methods) do
+      result[#result + 1] = method
+    end
+  end
+  return result
+end
+
 local optional_str = types.union({ types.str, types.None })
 local optional_int = types.union({ types.int, types.None })
 local optional_float = types.union({ types.float, types.None })
@@ -49,6 +63,7 @@ local function exception(name, type_name)
     type_name = type_name,
     exception = true,
     fields = { { name = "message", type = types.str } },
+    methods = {},
   }
   record.type = types.record(record)
   return record
@@ -63,7 +78,7 @@ end
 
 -- An ordinary record of a provided module with `fields` as { name, type }.
 local function provided_record(module, name, fields)
-  local record = { kind = "Record", name = name, type_name = module .. "." .. name, fields = {} }
+  local record = { kind = "Record", name = name, type_name = module .. "." .. name, fields = {}, methods = {} }
   for i, field in ipairs(fields) do
     record.fields[i] = { name = field[1], type = field[2] }
   end
@@ -91,7 +106,7 @@ local file = {
   fields = {},
   native = true,
   prefix = "file",
-  methods = {
+  native_methods = {
     read = { params = { types.int }, names = { "size" }, result = types.bytes },
     readline = { params = {}, result = optional_str },
     write = { params = { types.bytes }, names = { "data" }, result = types.None },
@@ -190,7 +205,7 @@ local process = {
   fields = {},
   native = true,
   prefix = "process",
-  methods = {
+  native_methods = {
     poll = { params = {}, result = optional_int },
     wait = {
       params = { optional_float },
@@ -254,7 +269,7 @@ local args = {
   fields = {},
   native = true,
   prefix = "cli_args",
-  methods = {
+  native_methods = {
     get_str = getter(types.str),
     get_int = getter(types.int),
     get_float = getter(types.float),
@@ -277,7 +292,7 @@ local parser = {
   fields = {},
   native = true,
   prefix = "cli_parser",
-  methods = {
+  native_methods = {
     add_str = value_option(types.str),
     add_int = value_option(types.int),
     add_float = value_option(types.float),
@@ -382,7 +397,7 @@ local connection = {
   fields = {},
   native = true,
   prefix = "net_connection",
-  methods = {
+  native_methods = {
     recv = {
       params = { types.int, optional_float },
       names = { "size", "timeout" },
@@ -406,7 +421,7 @@ local listener = {
   fields = {},
   native = true,
   prefix = "net_listener",
-  methods = {
+  native_methods = {
     accept = {
       params = { optional_float },
       names = { "timeout" },
@@ -507,7 +522,7 @@ local SCALARS = {
 local function lookup(from, module, name, span)
   local declaration = module.declarations[name]
   if not declaration then
-    diag.error(span, "module '" .. module.name .. "' has no function, record, or alias '" .. name .. "'")
+    diag.error(span, "module '" .. module.name .. "' has no function, class, or alias '" .. name .. "'")
   end
   if name:sub(1, 1) == "_" and module ~= from then
     diag.error(span, "'" .. name .. "' is private to module '" .. module.name .. "'")
@@ -651,7 +666,7 @@ local function resolve_function(fn, scope, module)
         if roots[node.name] then
           diag.error(node.span, "module '" .. node.name .. "' cannot be used as a value")
         elseif declaration and declaration.kind == "Record" or exceptions[node.name] then
-          diag.error(node.span, "record '" .. node.name .. "' cannot be used as a value")
+          diag.error(node.span, "class '" .. node.name .. "' cannot be used as a value")
         elseif declaration and declaration.kind == "Alias" then
           diag.error(node.span, "alias '" .. node.name .. "' cannot be used as a value")
         elseif declaration or builtins[node.name] then
@@ -812,7 +827,7 @@ local function resolve_function(fn, scope, module)
 end
 
 -- Checks names that must be unique within a function's parameters or a
--- record's fields.
+-- class's fields.
 local function check_unique(items, what)
   local seen = {}
   for _, item in ipairs(items) do
@@ -870,7 +885,8 @@ local function declare(module, modules_by_name, entry)
         diag.error(declaration.span, "duplicate import '" .. full .. "'")
       end
     elseif taken[name] then
-      diag.error(declaration.span, "duplicate " .. declaration.kind:lower() .. " '" .. name .. "'")
+      local noun = declaration.kind == "Record" and "class" or declaration.kind:lower()
+      diag.error(declaration.span, "duplicate " .. noun .. " '" .. name .. "'")
     end
     taken[name] = true
     if import then
@@ -924,19 +940,33 @@ function M.bind(modules, test)
       resolve_alias(alias)
     end
   end
+  -- A method's `self` has the type of its class.
+  local function resolve_signature(fn, module)
+    check_unique(fn.params, "parameter")
+    for i, param in ipairs(fn.params) do
+      param.type = fn.class and i == 1 and fn.class.type or resolve_type(param.type, module)
+    end
+    fn.return_type = resolve_type(fn.return_type, module)
+  end
   for _, module in ipairs(modules) do
     for _, record in ipairs(module.records) do
       check_unique(record.fields, "field")
+      check_unique(record.methods, "method")
       for _, field in ipairs(record.fields) do
         field.type = resolve_type(field.type, module)
       end
+      for _, method in ipairs(record.methods) do
+        for _, field in ipairs(record.fields) do
+          if field.name == method.name then
+            diag.error(method.span, "method '" .. method.name .. "' has the same name as a field")
+          end
+        end
+        method.class, method.module = record, module
+        resolve_signature(method, module)
+      end
     end
     for _, fn in ipairs(module.functions) do
-      check_unique(fn.params, "parameter")
-      for _, param in ipairs(fn.params) do
-        param.type = resolve_type(param.type, module)
-      end
-      fn.return_type = resolve_type(fn.return_type, module)
+      resolve_signature(fn, module)
     end
   end
   force_pending()
@@ -948,7 +978,7 @@ function M.bind(modules, test)
         end
       end
     end
-    for _, fn in ipairs(module.functions) do
+    for _, fn in ipairs(M.functions(module)) do
       for _, param in ipairs(fn.params) do
         if param.default then
           check_default(param)
@@ -981,7 +1011,7 @@ function M.bind(modules, test)
   end
 
   for _, module in ipairs(modules) do
-    for _, fn in ipairs(module.functions) do
+    for _, fn in ipairs(M.functions(module)) do
       resolve_function(fn, collect_symbols(fn), module)
     end
   end

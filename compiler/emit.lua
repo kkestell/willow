@@ -92,8 +92,18 @@ function M.emit(lowered)
   -- functions in a table, and so does the entry module when imported (including
   -- by itself), so that a caller's local cannot shadow a qualified call.
   -- Escaping `_` as `__` and `.` as `_0` keeps distinct module names distinct.
+  local function escape(name)
+    return (name:gsub("_", "__"):gsub("%.", "_0"))
+  end
+
   local function module_table(module)
-    return "__wlo_module_" .. module.name:gsub("_", "__"):gsub("%.", "_0")
+    return "__wlo_module_" .. escape(module.name)
+  end
+
+  -- Each class with methods keeps them in its own table, which no Willow
+  -- local can shadow.
+  local function class_table(record)
+    return "__wlo_class_" .. escape(record.type_name)
   end
 
   local entry_imported = false
@@ -106,7 +116,9 @@ function M.emit(lowered)
   end
 
   local function function_name(fn, qualified)
-    if fn.module == entry and fn_module == entry and not qualified then
+    if fn.class then
+      return class_table(fn.class) .. "." .. M.mangle(fn.name)
+    elseif fn.module == entry and fn_module == entry and not qualified then
       return M.mangle(fn.name)
     end
     return module_table(fn.module) .. "." .. M.mangle(fn.name)
@@ -314,9 +326,14 @@ function M.emit(lowered)
     line(0, "local __wlo_test_open = io.open")
   end
 
-  local names = {}
+  local names, classes = {}, {}
   for _, fn in ipairs(lowered.functions) do
-    if fn.module == entry then
+    if fn.class then
+      if not classes[fn.class] then
+        classes[fn.class] = true
+        classes[#classes + 1] = fn.class
+      end
+    elseif fn.module == entry then
       names[#names + 1] = M.mangle(fn.name)
     end
   end
@@ -329,9 +346,12 @@ function M.emit(lowered)
       line(0, "local " .. module_table(module) .. " = {}")
     end
   end
+  for _, record in ipairs(classes) do
+    line(0, "local " .. class_table(record) .. " = {}")
+  end
 
   for _, fn in ipairs(lowered.functions) do
-    fn_name, fn_module = fn.name, fn.module
+    fn_name, fn_module = fn.class and fn.class.name .. "." .. fn.name or fn.name, fn.module
     local params = {}
     for i, symbol in ipairs(fn.params) do
       params[i] = M.mangle(symbol.name)
@@ -356,7 +376,7 @@ function M.emit(lowered)
   if entry_imported then
     line(0, "")
     for _, fn in ipairs(lowered.functions) do
-      if fn.module == entry then
+      if fn.module == entry and not fn.class then
         line(0, module_table(entry) .. "." .. M.mangle(fn.name) .. " = " .. M.mangle(fn.name))
       end
     end

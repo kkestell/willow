@@ -405,6 +405,17 @@ return {
     end)
   end,
 
+  shapes_example = function()
+    local example = "examples/shapes.wlo"
+    local status, stdout = willow(ROOT, "run " .. example .. " 3x4 2x2.5")
+    eq(0, status)
+    eq("3x4: 12.0 (doubled 48.0)\n2x2.5: 5.0 (doubled 20.0)\ntotal 17.0\n", stdout)
+    local stderr
+    status, stdout, stderr = willow(ROOT, "run " .. example .. " 2xab")
+    eq(2, status)
+    eq("2xab: not a number\n", stderr)
+  end,
+
   chars_example = function()
     in_temp_dir(function(dir)
       local example = quote(ROOT .. "/examples/chars.wlo")

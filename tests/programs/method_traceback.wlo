@@ -1,0 +1,9 @@
+class Counter:
+    count: int
+
+    def per(self, parts: int) -> int:
+        return self.count // parts
+
+def main() -> None:
+    print(Counter(6).per(2))
+    print(Counter(6).per(0))

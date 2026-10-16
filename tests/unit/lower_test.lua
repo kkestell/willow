@@ -222,6 +222,14 @@ return {
     eq("t1 = f(3); t2 = g(0); t2 = mk(t2); t2.x = t1", lower_records("mk(g(0)).x = f(3)"))
   end,
 
+  methods = function()
+    local source = "class P:\n    x: int\n    def m(self, a: int, b: int = 2) -> int:\n        return a\n"
+      .. "def main() -> None:\n    p = P(1)\n    y = p.m(f(1))\n    mk(0).m(b=f(2), a=3)\n" .. INT_HELPERS
+      .. "def mk(n: int) -> P:\n    return P(n)\n"
+    local lowered = lower_source(source)
+    eq("p = P{x = 1}; t1 = f(1); y = m(p, t1, 2); t1 = mk(0); t2 = f(2); m(t1, 3, t2)", show_body(lowered.functions[1]))
+  end,
+
   string_formatting = function()
     eq('t1 = f(1); t2 = f(2); x = ("n=" .. str(t1) .. ", " .. str(t2))', lower_main("x = f'n={f(1)}, {f(2)}'", INT_HELPERS))
     eq('s = "a"; x = s; y = str_float(1.5); z = str(None)', lower_main("s = 'a'\nx = f'{s}'\ny = str(1.5)\nz = str(None)"))
