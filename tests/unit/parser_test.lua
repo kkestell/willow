@@ -115,6 +115,8 @@ show = function(node)
   elseif kind == "Function" then
     return "def " .. node.name .. "(" .. show_list(node.params, ", ") .. ") -> "
       .. show(node.return_type) .. " " .. show_block(node.body)
+  elseif kind == "FunctionDef" then
+    return show(node.fn)
   elseif kind == "Assign" then
     return node.name .. (node.annotation and ": " .. show(node.annotation) or "") .. " = " .. show(node.value)
   elseif kind == "CallStmt" then
@@ -539,10 +541,13 @@ return {
     eq("2:11: expected an expression, found end of line", body_error("assert"))
   end,
 
+  nested_functions = function()
+    eq("{ def g(x: int) -> int { return x }; y = g(1) }", body("def g(x: int) -> int:\n    return x\ny = g(1)"))
+  end,
+
   unsupported_reserved_words = function()
     eq("2:5: 'with' is not supported", body_error("with:\n    pass"))
     eq("2:9: 'lambda' is not supported", body_error("x = lambda"))
-    eq("2:5: nested functions are not supported", body_error("def g() -> None:\n    pass"))
   end,
 
   enums = function()

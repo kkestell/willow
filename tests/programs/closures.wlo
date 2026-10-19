@@ -1,0 +1,47 @@
+import typing
+
+# The closure reads the binding, which the outer call rebinds after creating it.
+def make_counter(start: int) -> typing.Callable[[], int]:
+    count = start
+
+    def read() -> int:
+        return count
+
+    count = count + 10
+    return read
+
+# A nested function calls itself, with a default and a keyword argument.
+def fact(n: int) -> int:
+    def go(k: int, acc: int = 1) -> int:
+        if k < 2:
+            return acc
+        return go(k - 1, acc=acc * k)
+    return go(n)
+
+# Closures made in a loop share the loop variable's one binding.
+def loop() -> None:
+    fs: list[typing.Callable[[], int]] = []
+    for i in range(3):
+        def get() -> int:
+            return i
+        fs.append(get)
+    for f in fs:
+        print(f())
+
+class Box:
+    n: int
+
+    def doubler(self) -> typing.Callable[[int], int]:
+        def apply(x: int) -> int:
+            return x * self.n
+        return apply
+
+def main() -> None:
+    # Separate outer calls make separate bindings.
+    a = make_counter(1)
+    b = make_counter(5)
+    print(a())
+    print(b())
+    print(fact(5))
+    loop()
+    print(Box(3).doubler()(7))

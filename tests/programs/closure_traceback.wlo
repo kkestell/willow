@@ -1,0 +1,7 @@
+def outer() -> None:
+    def inner() -> None:
+        raise ValueError("boom")
+    inner()
+
+def main() -> None:
+    outer()

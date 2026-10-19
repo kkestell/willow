@@ -368,7 +368,7 @@ example changes it lists. New Rosetta Code examples go in
   - [x] Bound methods retaining a receiver evaluated once; built-in and
     library functions as values where an expected callable type fixes the
     signature
-  - [ ] Nested `def` statements and closures: names bound when the definition
+  - [x] Nested `def` statements and closures: names bound when the definition
     runs; shared captured bindings, separate per enclosing call and reused by
     loops; self-recursion; captures definitely assigned at creation; captured
     narrowing reset at closure entry and removed after every call; Lua

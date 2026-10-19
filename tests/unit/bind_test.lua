@@ -462,6 +462,24 @@ return {
       bind_error(T .. "def main() -> None:\n    b = isinstance(1, typing.Callable)\n"))
   end,
 
+  nested_functions = function()
+    local main = bind_source("def main() -> None:\n    x = 1\n    def g() -> int:\n        y = x\n"
+      .. "        def h() -> int:\n            return x\n        x = 2\n        return y\n    print(g())\n").functions[1]
+    local g = main.body[2].fn
+    local h = g.body[2].fn
+    -- `x = 2` in `g` makes `x` a local of `g`, so `y = x` and `h` read that local.
+    eq(g.locals[3], g.body[1].value.symbol)
+    eq(g.locals[3], h.body[1].value.symbol)
+    eq(true, g.locals[3].captured)
+    eq(nil, main.locals[1].captured)
+    eq(main.locals[2], main.body[2].symbol)
+    main = bind_source("def main() -> None:\n    x = 1\n    def g() -> None:\n        def h() -> int:\n"
+      .. "            return x\n        print(h())\n    g()\n").functions[1]
+    g = main.body[2].fn
+    eq(main.locals[1], g.captures[1].symbol)
+    eq(main.locals[1], g.body[1].fn.captures[1].symbol)
+  end,
+
   tuple_defaults = function()
     local E = "enum E:\n    A\n"
     local program = bind_source(E .. "def f(t: tuple[E, int] = (E.A, 1)) -> None:\n    pass\n" .. MAIN)

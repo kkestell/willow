@@ -563,7 +563,10 @@ local function lower_function(fn, sites, helpers)
   local function lower_statement(statement)
     depth = 0
     local kind = statement.kind
-    if kind == "Unpack" then
+    if kind == "FunctionDef" then
+      local closure = { kind = "Closure", fn = lower_function(statement.fn, sites, helpers) }
+      set({ kind = "Local", symbol = statement.symbol }, closure, statement.span)
+    elseif kind == "Unpack" then
       -- A target may be the source local itself, so the source is read from a temporary.
       unpack_pattern(statement.pattern, spill(lower_value(statement.value), 0), statement.value.type)
     elseif kind == "Assign" then

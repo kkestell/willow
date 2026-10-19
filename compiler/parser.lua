@@ -400,7 +400,7 @@ function M.parse(tokens)
   local parse_and = binary_level(set("and"), parse_not)
   parse_expression = binary_level(set("or"), parse_and)
 
-  local parse_block, parse_try
+  local parse_block, parse_try, parse_function
 
   -- Parses the rest of an `if` or `elif` whose keyword `token` was consumed.
   -- An `elif` becomes a nested `If` that is the whole `else_body`.
@@ -606,7 +606,8 @@ function M.parse(tokens)
       advance()
       return parse_try(token)
     elseif kind == "def" then
-      diag.error(token.span, "nested functions are not supported")
+      local fn = parse_function()
+      return ast.node("FunctionDef", fn.span, { fn = fn, name = fn.name })
     end
     local node
     if kind == "return" then
@@ -709,7 +710,7 @@ function M.parse(tokens)
 
   -- A method's first parameter is `self`, which has no annotation; bind gives
   -- it the class's type.
-  local function parse_function(method)
+  parse_function = function(method)
     advance()
     local name = expect("NAME", "a function name")
     expect("(")

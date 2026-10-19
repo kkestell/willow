@@ -1,0 +1,4 @@
+closure_traceback.wlo:3:9: error: ValueError: boom
+  in outer.inner at closure_traceback.wlo:3:9
+  called from outer at closure_traceback.wlo:4:5
+  called from main at closure_traceback.wlo:7:5

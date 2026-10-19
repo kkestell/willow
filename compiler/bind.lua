@@ -24,22 +24,23 @@ end
 
 -- Gives the function one symbol per parameter and per assigned or loop name,
 -- recording non-parameter symbols in `fn.locals` in order of first assignment.
-local function collect_symbols(fn)
+-- A nested function's scope falls back to `outer`, its enclosing scope.
+local function collect_symbols(fn, outer)
   local scope = {}
   for _, param in ipairs(fn.params) do
-    param.symbol = { name = param.name, span = param.span, param = true }
+    param.symbol = { name = param.name, span = param.span, param = true, owner = fn }
     scope[param.name] = param.symbol
   end
 
   fn.locals = {}
   ast.assignments(fn.body, function(node)
     if not scope[node.name] then
-      local symbol = { name = node.name, span = node.span }
+      local symbol = { name = node.name, span = node.span, owner = fn }
       scope[node.name] = symbol
       fn.locals[#fn.locals + 1] = symbol
     end
   end)
-  return scope
+  return setmetatable(scope, { __index = outer })
 end
 
 local SCALARS = {
@@ -244,6 +245,69 @@ local function resolve_member(node, enum)
   node.kind, node.enum, node.object = "EnumMember", enum, nil
 end
 
+-- Checks names that must be unique within a function's parameters or a
+-- class's fields.
+local function check_unique(items, what)
+  local seen = {}
+  for _, item in ipairs(items) do
+    if seen[item.name] then
+      diag.error(item.span, "duplicate " .. what .. " '" .. item.name .. "'")
+    end
+    seen[item.name] = true
+  end
+end
+
+local literal_types = {
+  Int = types.int,
+  Float = types.float,
+  String = types.str,
+  Bool = types.bool,
+  None = types.None,
+}
+
+-- The type of `default`, a default in `module`, which is also recorded as
+-- `default.type` for lowering; resolves its enum members.
+-- Parameters and locals cannot shadow an enum named in a default.
+local function default_type(default, module)
+  if default.kind == "Field" then
+    local enum = enum_named(default.object, module, {})
+    if not enum then
+      diag.error(default.object.span, "unknown enum '" .. qualified_name(default.object) .. "'")
+    end
+    resolve_member(default, enum)
+    default.type = enum.type
+  elseif default.kind == "TupleDisplay" then
+    local elements = {}
+    for i, element in ipairs(default.elements) do
+      elements[i] = default_type(element, module)
+    end
+    default.type = types.tuple(elements)
+  else
+    default.type = literal_types[default.kind]
+  end
+  return default.type
+end
+
+-- Checks that the default of `decl`, a parameter or field of `module`, fits
+-- its type.
+local function check_default(decl, module)
+  local default = decl.default
+  local type = default_type(default, module)
+  if not types.assignable(decl.type, type) then
+    diag.error(default.span, "expected " .. decl.type.name .. ", received " .. type.name)
+  end
+end
+
+-- Resolves the parameter and return types of `fn`. A method's `self` has the
+-- type of its class.
+local function resolve_signature(fn, module)
+  check_unique(fn.params, "parameter")
+  for i, param in ipairs(fn.params) do
+    param.type = fn.class and i == 1 and fn.class.type or resolve_type(param.type, module)
+  end
+  fn.return_type = resolve_type(fn.return_type, module)
+end
+
 local function resolve_function(fn, scope, module)
   local declarations, imports, roots = module.declarations, module.imported, module.roots
 
@@ -275,8 +339,32 @@ local function resolve_function(fn, scope, module)
     end
   end
 
+  -- Records that `symbol`, a variable of an enclosing function, is captured by
+  -- `fn` and by each function between `fn` and the symbol's owner.
+  local function capture(symbol, span)
+    symbol.captured = true
+    local f = fn
+    while f ~= symbol.owner do
+      f.captures = f.captures or {}
+      local found = false
+      for _, c in ipairs(f.captures) do
+        found = found or c.symbol == symbol
+      end
+      if not found then
+        f.captures[#f.captures + 1] = { symbol = symbol, span = span }
+      end
+      f = f.parent
+    end
+  end
+
+  -- Grows with each call resolved in this function, not in nested ones.
+  local calls = 0
+
   local function resolve_expression(node)
     local kind = node.kind
+    if kind == "Call" or kind == "CallValue" or kind == "MethodCall" then
+      calls = calls + 1
+    end
     if kind == "Name" and not scope[node.name] and (declarations[node.name] or builtins[node.name]) then
       declared_value(node, declarations[node.name] or builtins[node.name], node.name)
     elseif kind == "Name" then
@@ -288,6 +376,9 @@ local function resolve_function(fn, scope, module)
           diag.error(node.span, "class '" .. node.name .. "' cannot be used as a value")
         end
         diag.error(node.span, "unknown name '" .. node.name .. "'")
+      end
+      if node.symbol.owner ~= fn then
+        capture(node.symbol, node.span)
       end
     elseif kind == "Call" and scope[node.name] then
       -- A local hides a declaration of the same name, so this calls its value.
@@ -414,6 +505,20 @@ local function resolve_function(fn, scope, module)
         if statement.annotation then
           statement.annotation = resolve_type(statement.annotation, module)
         end
+      elseif kind == "FunctionDef" then
+        local nested = statement.fn
+        nested.parent, nested.module = fn, module
+        nested.type_name = (fn.type_name or fn.class.type_name .. "." .. fn.name) .. "." .. nested.name
+        resolve_signature(nested, module)
+        force_pending()
+        for _, param in ipairs(nested.params) do
+          if param.default then
+            check_default(param, module)
+          end
+        end
+        nested.value_type = types.func(nested)
+        statement.symbol = scope[statement.name]
+        resolve_function(nested, collect_symbols(nested, scope), module)
       elseif kind == "FieldAssign" then
         resolve_expression(statement.value)
         local enum = enum_named(statement.object, module, scope)
@@ -438,8 +543,11 @@ local function resolve_function(fn, scope, module)
           resolve_block(statement.else_body, handling)
         end
       elseif kind == "While" then
+        -- `calls` records whether a call can run before a later iteration.
+        local before = calls
         resolve_expression(statement.condition)
         resolve_block(statement.body, handling)
+        statement.calls = calls ~= before
       elseif kind == "For" then
         resolve_expression(statement.iterable)
         if statement.pattern then
@@ -447,7 +555,9 @@ local function resolve_function(fn, scope, module)
         else
           statement.symbol = scope[statement.name]
         end
+        local before = calls
         resolve_block(statement.body, handling)
+        statement.calls = calls ~= before
       elseif kind == "Assert" then
         resolve_expression(statement.condition)
         if statement.message then
@@ -478,18 +588,6 @@ local function resolve_function(fn, scope, module)
   end
 
   resolve_block(fn.body)
-end
-
--- Checks names that must be unique within a function's parameters or a
--- class's fields.
-local function check_unique(items, what)
-  local seen = {}
-  for _, item in ipairs(items) do
-    if seen[item.name] then
-      diag.error(item.span, "duplicate " .. what .. " '" .. item.name .. "'")
-    end
-    seen[item.name] = true
-  end
 end
 
 -- Collects one module's imports, functions, records, enums, and aliases, which share one
@@ -566,47 +664,6 @@ local function declare(module, modules_by_name, entry)
   end
 end
 
-local literal_types = {
-  Int = types.int,
-  Float = types.float,
-  String = types.str,
-  Bool = types.bool,
-  None = types.None,
-}
-
--- The type of `default`, a default in `module`, which is also recorded as
--- `default.type` for lowering; resolves its enum members.
--- Parameters and locals cannot shadow an enum named in a default.
-local function default_type(default, module)
-  if default.kind == "Field" then
-    local enum = enum_named(default.object, module, {})
-    if not enum then
-      diag.error(default.object.span, "unknown enum '" .. qualified_name(default.object) .. "'")
-    end
-    resolve_member(default, enum)
-    default.type = enum.type
-  elseif default.kind == "TupleDisplay" then
-    local elements = {}
-    for i, element in ipairs(default.elements) do
-      elements[i] = default_type(element, module)
-    end
-    default.type = types.tuple(elements)
-  else
-    default.type = literal_types[default.kind]
-  end
-  return default.type
-end
-
--- Checks that the default of `decl`, a parameter or field of `module`, fits
--- its type.
-local function check_default(decl, module)
-  local default = decl.default
-  local type = default_type(default, module)
-  if not types.assignable(decl.type, type) then
-    diag.error(default.span, "expected " .. decl.type.name .. ", received " .. type.name)
-  end
-end
-
 -- Binds `modules`, the entry module first. A test entry needs no `main`;
 -- instead `entry.tests` lists its `test_*` functions by name.
 function M.bind(modules, test)
@@ -630,14 +687,6 @@ function M.bind(modules, test)
     for _, alias in ipairs(module.aliases) do
       resolve_alias(alias)
     end
-  end
-  -- A method's `self` has the type of its class.
-  local function resolve_signature(fn, module)
-    check_unique(fn.params, "parameter")
-    for i, param in ipairs(fn.params) do
-      param.type = fn.class and i == 1 and fn.class.type or resolve_type(param.type, module)
-    end
-    fn.return_type = resolve_type(fn.return_type, module)
   end
   for _, module in ipairs(modules) do
     for _, record in ipairs(module.records) do

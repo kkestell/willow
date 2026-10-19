@@ -177,6 +177,26 @@ local function narrow(state, facts)
   return result
 end
 
+-- Any call may rebind a captured variable, so captured variables lose their
+-- narrowing after every call.
+local function forget_captured(state)
+  for symbol in pairs(state) do
+    if symbol.captured then
+      state[symbol] = symbol.type
+    end
+  end
+end
+
+local function without_captured(facts)
+  local result = {}
+  for symbol, type in pairs(facts) do
+    if not symbol.captured then
+      result[symbol] = type
+    end
+  end
+  return result
+end
+
 -- Symbols assigned in both states, with the members either state allows.
 local function join(a, b)
   local result = {}
@@ -348,6 +368,21 @@ local function bind_args(node, name, params, noun)
   node.args, node.order = args, order
 end
 
+-- The indexes of `node.args` after bind_args, in evaluation order: written
+-- arguments, then defaults.
+local function evaluation_order(node)
+  local result, written = {}, {}
+  for i, index in ipairs(node.order) do
+    result[i], written[index] = index, true
+  end
+  for i in ipairs(node.args) do
+    if not written[i] then
+      result[#result + 1] = i
+    end
+  end
+  return result
+end
+
 -- Checks that a list of `type` can be sorted.
 local function check_sortable(node, type)
   if not (type.kind == "list" and SORTABLE[list_element(type)]) then
@@ -355,7 +390,8 @@ local function check_sortable(node, type)
   end
 end
 
-local function check_function(fn)
+-- `entry` maps the variables `fn` captures to their types at its start.
+local function check_function(fn, entry)
   -- The type of field `node.name` on a value of `object` type.
   local function field_type(node, object)
     if object.kind ~= "record" or object.record.native then
@@ -375,6 +411,8 @@ local function check_function(fn)
   local finally_depth = 0
 
   local check_expression
+  -- The number of calls checked so far.
+  local calls = 0
 
   local function check_against(node, state, expected)
     expect_type(node, expected, check_expression(node, state, expected))
@@ -438,7 +476,13 @@ local function check_function(fn)
       elseif op == "or" then
         right_state = narrow(state, left_false)
       end
+      local calls_before = calls
       local right, right_true, right_false = check_expression(node.right, right_state)
+      if calls ~= calls_before then
+        -- A call in the right operand ends what the left proved about captured variables.
+        left_true, left_false = without_captured(left_true), without_captured(left_false)
+        forget_captured(state)
+      end
       if op == "==" or op == "!=" then
         if types.comparable(left) and types.comparable(right)
           and (types.assignable(left, right) or types.assignable(right, left)) then
@@ -482,7 +526,8 @@ local function check_function(fn)
       else
         bind_args(node, node.name, params, target.kind == "Record" and "field" or "parameter")
       end
-      for i, arg in ipairs(node.args) do
+      for _, i in ipairs(evaluation_order(node)) do
+        local arg = node.args[i]
         local param
         if builtin then
           param = builtin.params[i] ~= "any" and builtin.params[i] or nil
@@ -552,7 +597,10 @@ local function check_function(fn)
         args[i] = { kind = "Typed", type = param, index = i, span = node.span }
       end
       node.call = { kind = "Call", name = node.name, target = node.target, args = args, span = node.span }
-      expect_type(node.call, type.result, check_expression(node.call, state))
+      -- Taking the value calls nothing, so captured narrowing survives.
+      local before = calls
+      expect_type(node.call, type.result, check_expression(node.call, copy(state)))
+      calls = before
     elseif kind == "Typed" then
       type = node.type
     elseif kind == "CallValue" then
@@ -572,8 +620,8 @@ local function check_function(fn)
       else
         diag.error(node.span, "cannot call a value of type " .. callee.name)
       end
-      for i, arg in ipairs(node.args) do
-        check_against(arg, state, params[i].type)
+      for _, i in ipairs(evaluation_order(node)) do
+        check_against(node.args[i], state, params[i].type)
       end
     elseif kind == "Field" then
       -- Reading a method gives it bound to the object.
@@ -659,8 +707,8 @@ local function check_function(fn)
           bind_args(node, node.name, builtin_params(signature), names and "parameter")
         end
       end
-      for i, arg in ipairs(node.args) do
-        check_against(arg, state, params[i])
+      for _, i in ipairs(evaluation_order(node)) do
+        check_against(node.args[i], state, params[i])
       end
       type = result
     elseif kind == "ListDisplay" then
@@ -719,6 +767,10 @@ local function check_function(fn)
         check_against(entries[i].value, state, value)
       end
     end
+    if kind == "Call" or kind == "CallValue" or kind == "MethodCall" then
+      calls = calls + 1
+      forget_captured(state)
+    end
     node.type = type
     return type, true_facts, false_facts
   end
@@ -738,7 +790,13 @@ local function check_function(fn)
     local handler_entry = copy(state)
     forget_narrowing(handler_entry, statement.body)
     local finally_entry = copy(handler_entry)
+    local before = calls
     local body_state, transfers = check_block(statement.body, state, in_loop)
+    -- A clause may start after any call in the parts before it.
+    if calls ~= before then
+      forget_captured(handler_entry)
+      forget_captured(finally_entry)
+    end
     local exits = {}
     if not transfers then
       exits[1] = body_state
@@ -760,7 +818,11 @@ local function check_function(fn)
         end
         assign(handler_state, symbol, class)
       end
+      before = calls
       local exit, handler_transfers = check_block(handler.body, handler_state, in_loop)
+      if calls ~= before then
+        forget_captured(finally_entry)
+      end
       if not handler_transfers then
         exits[#exits + 1] = exit
       end
@@ -776,6 +838,7 @@ local function check_function(fn)
     end
     if statement.finally_body then
       finally_depth = finally_depth + 1
+      before = calls
       local finally_state, finally_transfers = check_block(statement.finally_body, finally_entry, in_loop)
       finally_depth = finally_depth - 1
       if finally_transfers then
@@ -783,6 +846,9 @@ local function check_function(fn)
       end
       -- The finally clause runs after whichever part fell through.
       if result then
+        if calls ~= before then
+          forget_captured(result)
+        end
         local assigned = assigned_symbols(statement.finally_body, {})
         -- A local the finally clause assigns on some paths only is missing
         -- from its exit state but may no longer hold the narrowed type.
@@ -831,6 +897,28 @@ local function check_function(fn)
       assign(state, symbol, value_type)
     elseif kind == "Unpack" then
       check_pattern(statement.pattern, check_expression(statement.value, state), state)
+    elseif kind == "FunctionDef" then
+      local nested, symbol = statement.fn, statement.symbol
+      -- Except for the function's own name, captures must be assigned now.
+      local captures = {}
+      for _, c in ipairs(nested.captures or {}) do
+        if c.symbol ~= symbol and not state[c.symbol] then
+          diag.error(c.span, "variable '" .. c.symbol.name .. "' may be used before assignment")
+        end
+        captures[#captures + 1] = c.symbol
+      end
+      if symbol.type then
+        expect_type(statement, symbol.type, nested.value_type)
+      else
+        symbol.type = nested.value_type
+      end
+      assign(state, symbol, nested.value_type)
+      -- A closure starts with the full types of what it captures.
+      local entry = {}
+      for _, s in ipairs(captures) do
+        entry[s] = s.type
+      end
+      check_function(nested, entry)
     elseif kind == "FieldAssign" then
       local field = field_type(statement, check_expression(statement.object, state))
       check_against(statement.value, state, field)
@@ -904,6 +992,9 @@ local function check_function(fn)
       end
     elseif kind == "While" then
       forget_narrowing(state, { statement })
+      if statement.calls then
+        forget_captured(state)
+      end
       local true_facts = check_condition(statement.condition, state)
       -- The body may run zero times, so its assignments are not definite after the loop.
       check_block(statement.body, narrow(state, true_facts), finally_depth)
@@ -939,6 +1030,9 @@ local function check_function(fn)
       end
       statement.type = item
       forget_narrowing(state, { statement })
+      if statement.calls then
+        forget_captured(state)
+      end
       local body_state = copy(state)
       if statement.pattern then
         check_pattern(statement.pattern, item, body_state)
@@ -969,7 +1063,7 @@ local function check_function(fn)
     return state, transfers
   end
 
-  local state = {}
+  local state = copy(entry or {})
   for _, param in ipairs(fn.params) do
     param.symbol.type = param.type
     state[param.symbol] = param.type

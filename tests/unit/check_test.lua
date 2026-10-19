@@ -832,6 +832,37 @@ return {
     eq("3:10: 'g' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("g = k\ng(1, 2)", K)))
   end,
 
+  closures = function()
+    local H = "def g() -> bool:\n    return True\ndef m() -> int | None:\n    return 1\n"
+    eq("3:16: variable 'x' may be used before assignment",
+      check_errors(in_main("def inner() -> int:\n    return x\nx = 1")))
+    -- A closure starts with the full type of what it captures.
+    eq("5:22: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main("x = m()\nif x is not None:\n    def inner() -> int:\n        return x + 1\n    print(inner())", H)))
+    -- Every call removes the narrowing of a captured variable.
+    local capture = "x = m()\ndef inner() -> None:\n    print(x)\n"
+    eq("7:17: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main(capture .. "if x is not None:\n    g()\n    print(x + 1)", H)))
+    eq("6:17: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main(capture .. "if x is not None and g():\n    print(x + 1)", H)))
+    check_source(in_main(capture .. "if x is not None:\n    print(x + 1)", H))
+    -- A call in a loop runs before later iterations; a try clause may start after a call.
+    eq("7:21: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main(capture .. "if x is not None:\n    while True:\n        print(x + 1)", H)))
+    check_source(in_main(capture .. "if x is not None:\n    while True:\n        y = x + 1", H))
+    eq("9:21: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main(capture .. "if x is not None:\n    try:\n        g()\n    except ValueError:\n"
+        .. "        print(x + 1)", H)))
+    -- Arguments are checked in the order they are written.
+    local K = H .. "def k(a: int, b: bool, c: int) -> None:\n    pass\n"
+    eq("6:22: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main(capture .. "if x is not None:\n    k(b=g(), a=x + 1, c=1)", K)))
+    check_source(in_main(capture .. "if x is not None:\n    k(c=x + 1, b=g(), a=1)", K))
+    -- Taking a built-in function as a value calls nothing.
+    check_source("import typing\n" .. in_main(capture .. "if x is not None:\n"
+      .. "    f: typing.Callable[[str], int] = len\n    print(x + 1)", H))
+  end,
+
   builtin_values = function()
     eq("2:9: function 'len' needs an expected callable type", check_errors(in_main("x = len")))
     eq("2:11: function 'print' needs an expected callable type", check_errors(in_main("print(print)")))

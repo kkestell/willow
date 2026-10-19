@@ -289,9 +289,40 @@ function M.emit(lowered)
     end
   end
 
+  local function param_list(fn)
+    local params = {}
+    for i, symbol in ipairs(fn.params) do
+      params[i] = M.mangle(symbol.name)
+    end
+    return table.concat(params, ", ")
+  end
+
+  -- Writes the locals and body of lowered function `fn` at `depth`.
+  local function function_body(fn, depth)
+    local locals = {}
+    for _, symbol in ipairs(fn.locals) do
+      locals[#locals + 1] = M.mangle(symbol.name)
+    end
+    for i = 1, fn.temps do
+      locals[#locals + 1] = "__wlo_t" .. i
+    end
+    if #locals > 0 then
+      line(depth, "local " .. table.concat(locals, ", "), fn.span)
+    end
+    block(fn.body, depth)
+  end
+
   local function statement(s, depth)
     local kind = s.kind
-    if kind == "Set" then
+    if kind == "Set" and s.value.kind == "Closure" then
+      -- A nested function's lines belong to the frame `outer.inner`.
+      local fn, frame = s.value.fn, fn_name
+      line(depth, expr(s.target) .. " = function(" .. param_list(fn) .. ")", s.span)
+      fn_name = frame .. "." .. fn.name
+      function_body(fn, depth + 1)
+      fn_name = frame
+      line(depth, "end")
+    elseif kind == "Set" then
       line(depth, expr(s.target) .. " = " .. expr(s.value), s.span)
     elseif kind == "Eval" then
       line(depth, expr(s.value), s.span)
@@ -422,23 +453,9 @@ function M.emit(lowered)
 
   for _, fn in ipairs(lowered.functions) do
     fn_name, fn_module = fn.class and fn.class.name .. "." .. fn.name or fn.name, fn.module
-    local params = {}
-    for i, symbol in ipairs(fn.params) do
-      params[i] = M.mangle(symbol.name)
-    end
     line(0, "")
-    line(0, "function " .. function_name(fn) .. "(" .. table.concat(params, ", ") .. ")", fn.span)
-    local locals = {}
-    for _, symbol in ipairs(fn.locals) do
-      locals[#locals + 1] = M.mangle(symbol.name)
-    end
-    for i = 1, fn.temps do
-      locals[#locals + 1] = "__wlo_t" .. i
-    end
-    if #locals > 0 then
-      line(1, "local " .. table.concat(locals, ", "), fn.span)
-    end
-    block(fn.body, 1)
+    line(0, "function " .. function_name(fn) .. "(" .. param_list(fn) .. ")", fn.span)
+    function_body(fn, 1)
     line(0, "end")
   end
 
