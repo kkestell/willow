@@ -655,7 +655,9 @@ return {
     eq("2:5: 'f' expects 1 to 3 arguments, received 4", check_errors(in_main("f(1, 'a', 1.0, 2)", F)))
     eq("2:5: 'f' expects 1 to 3 arguments, received 0", check_errors(in_main("f()", F)))
     eq("2:13: 'len' does not accept keyword arguments", check_errors(in_main("x = len(value='a')")))
-    eq("3:16: 'find' does not accept keyword arguments", check_errors(in_main("s = 'a'\nx = s.find(sub='a')")))
+    eq("3:16: 'find' has no parameter 'x'", check_errors(in_main("s = 'a'\nx = s.find(x='a')")))
+    eq("3:17: 'strip' does not accept keyword arguments", check_errors(in_main("s = 'a'\nx = s.strip(x=1)")))
+    eq("2:15: 'bytes' does not accept keyword arguments", check_errors(in_main("x = bytes(values=[1])")))
     eq("2:20: 'range' does not accept keyword arguments", check_errors(in_main("for i in range(stop=3):\n    pass")))
     eq("4:5: unreachable statement", check_errors("import sys\n" .. in_main("sys.exit(status=1)\nprint(1)")))
   end,

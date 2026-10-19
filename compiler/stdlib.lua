@@ -38,7 +38,7 @@ local builtins = builtins_of({
     names = { "items", "reverse" },
     defaults = { [2] = { kind = "Bool", value = false } },
   },
-  bytes = { params = { types.list(types.int) }, names = { "values" }, result = types.bytes },
+  bytes = { params = { types.list(types.int) }, result = types.bytes },
 })
 M.builtins = builtins
 
@@ -119,7 +119,7 @@ local io = provided("io", {
 
 local sys = provided("sys", {
   args = { params = {}, result = types.list(types.str) },
-  eprint = { params = { "any" }, result = types.None },
+  eprint = { params = { "any" }, names = { "value" }, result = types.None },
   exit = { params = { types.int }, names = { "status" }, result = types.None },
   getenv = { params = { types.str }, names = { "name" }, result = optional_str },
   environ = { params = {}, result = types.dict(types.str, types.str) },

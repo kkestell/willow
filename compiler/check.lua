@@ -66,20 +66,20 @@ local function item_type(type)
   return list_element(type)
 end
 
--- Parameter types and result types of the string methods.
+-- Parameter types, result types, and parameter names of the string methods.
 local STRING_METHODS = {
-  startswith = { { types.str }, types.bool },
-  endswith = { { types.str }, types.bool },
-  find = { { types.str }, types.int },
-  replace = { { types.str, types.str }, types.str },
+  startswith = { { types.str }, types.bool, { "prefix" } },
+  endswith = { { types.str }, types.bool, { "suffix" } },
+  find = { { types.str }, types.int, { "sub" } },
+  replace = { { types.str, types.str }, types.str, { "old", "new" } },
   strip = { {}, types.str },
-  split = { { types.str }, types.list(types.str) },
-  join = { { types.list(types.str) }, types.str },
+  split = { { types.str }, types.list(types.str), { "sep" } },
+  join = { { types.list(types.str) }, types.str, { "items" } },
   encode = { {}, types.bytes },
   lower = { {}, types.str },
   upper = { {}, types.str },
-  ljust = { { types.int }, types.str },
-  rjust = { { types.int }, types.str },
+  ljust = { { types.int }, types.str, { "width" } },
+  rjust = { { types.int }, types.str, { "width" } },
 }
 
 -- The element types sorted and sort accept.
@@ -93,21 +93,21 @@ local function method_signature(type, name)
   if type == types.str then
     local method = STRING_METHODS[name]
     if method then
-      return method[1], method[2]
+      return method[1], method[2], method[3]
     end
     return nil
   end
   local element = list_element(type)
   if element and name == "append" then
-    return { element }, types.None
+    return { element }, types.None, { "v" }
   elseif element and name == "pop" then
     return {}, element
   elseif element and name == "sort" then
     return { types.bool }, types.None
   elseif type.kind == "dict" and name == "get" then
-    return { type.key }, optional_of(types.expand(type.value))
+    return { type.key }, optional_of(types.expand(type.value)), { "k" }
   elseif type.kind == "dict" and name == "pop" then
-    return { type.key }, types.expand(type.value)
+    return { type.key }, types.expand(type.value), { "k" }
   elseif type == types.bytes and name == "decode" then
     return {}, types.str
   elseif type.kind == "record" and type.record.native and type.record.native_methods[name] then

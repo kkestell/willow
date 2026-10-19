@@ -7,7 +7,7 @@ class Options:
     border: str = "*"
     upper: bool = False
 
-def frame(text: str, width: int = 0, border: str = "*") -> str:
+def frame(text: str, *, width: int = 0, border: str = "*") -> str:
     inner = max(width - 4, len(text))
     edge = ""
     for i in range(inner + 4):

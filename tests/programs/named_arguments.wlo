@@ -81,3 +81,12 @@ def main() -> None:
     print(report(tag="t", verbose=False, path="b", limit=5))
     counter = Counter(3)
     print(f"{counter.scaled()} {counter.scaled(by=4)}")
+    # Library methods take keywords by their documented names.
+    text = "a-b"
+    print(text.startswith(prefix="a"))
+    print(text.replace(new="+", old="-"))
+    print("/".join(items=["x", "y"]) + " " + text.ljust(width=5) + "|")
+    ys = [1]
+    ys.append(v=2)
+    counts = {"k": 1}
+    print(f"{len(ys)} {counts.get(k='k')} {counts.pop(k='k')}")

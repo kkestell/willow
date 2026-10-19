@@ -5,4 +5,5 @@ def main() -> None:
     sys.eprint(2.5)
     sys.eprint("text")
     sys.eprint(None)
+    sys.eprint(value="named")
     raise ValueError("done")

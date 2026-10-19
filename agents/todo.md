@@ -344,11 +344,11 @@ example changes it lists. New Rosetta Code examples go in
     local-type, definite-assignment, and narrowing rules; tuple assignment
     for the step in `fibonacci_sequence.wlo`
 
-- [ ] Keyword-only parameters and general library keyword arguments (spec §3, §5)
+- [x] Keyword-only parameters and general library keyword arguments (spec §3, §5)
   - [x] Bare `*` in function and method parameter lists; keyword-only
     parameters required or defaulted in any order; positional arguments for
     them rejected; the default-ordering rule limited to positional parameters
-  - [ ] Keyword arguments by documented name for every standard-library
+  - [x] Keyword arguments by documented name for every standard-library
     function and every string, bytes, list, dict, and native method; the
     intrinsics stay positional-only; keyword-only `width` and `border` on
     `frame` in `banner.wlo`
