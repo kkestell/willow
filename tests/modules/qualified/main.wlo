@@ -31,6 +31,7 @@ def main() -> None:
     print(size_name())
     make = app.util.make
     print(app.models.describe(make("jam", count=3)))
+    print(app.deep.leaf.wrap[str]("wrapped")[0])
     shadowed()
 
 # A local named like a namespace root shadows the whole namespace.

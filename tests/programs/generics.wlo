@@ -1,0 +1,37 @@
+def first[T](items: list[T]) -> T:
+    return items[0]
+
+def repeat[T](x: T, n: int) -> list[T]:
+    result: list[T] = []
+    for i in range(n):
+        result.append(x)
+    return result
+
+def pick[T](x: T | None = None, fallback: T | None = None) -> T | None:
+    if x is not None:
+        return x
+    return fallback
+
+def pair[A, B](a: A, b: B) -> tuple[A, B]:
+    return (a, b)
+
+def main() -> None:
+    print(first[int]([3, 4]))
+    print(first[str](["a", "b"]))
+    print(len(repeat[str]("x", 3)))
+    print(pick[int](None, fallback=5))
+    print(pick[int]())
+    # A float in an int | float type argument passes through unconverted.
+    v = first[int | float]([2.5, 1])
+    print(isinstance(v, float))
+    print(v)
+    # T | None with T = int | None is int | None.
+    w: int | None = pick[int | None](None, 7)
+    print(w)
+    p = pair[int, str](1, "a")
+    print(p[1])
+
+    def wrap[U](u: U) -> list[U]:
+        return [u]
+
+    print(len(wrap[int](1)))

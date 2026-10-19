@@ -52,6 +52,10 @@ local function collect_symbols(fn, outer)
       scope[node.name] = symbol
       fn.locals[#fn.locals + 1] = symbol
     end
+    -- A nested `def` names the function a call of the local reaches.
+    if node.kind == "FunctionDef" then
+      scope[node.name].def = node.fn
+    end
   end)
   return setmetatable(scope, { __index = outer })
 end
@@ -103,6 +107,9 @@ end
 -- Lazy list elements and dict values waiting to be resolved.
 local pending = {}
 
+-- The type parameters in scope where types are being resolved, by name.
+local type_scope = {}
+
 -- The source text of type `node`, with declarations named by their type_name.
 local function type_text(node, module)
   if node.kind == "UnionType" then
@@ -121,7 +128,7 @@ local function type_text(node, module)
       names[i] = type_text(arg, module)
     end
     return "tuple[" .. (#names == 0 and "()" or table.concat(names, ", ")) .. "]"
-  elseif SCALARS[node.name] then
+  elseif SCALARS[node.name] or not node.module and type_scope[node.name] then
     return node.name
   end
   local declaration, args = resolve_named(node, module), node.args
@@ -137,17 +144,21 @@ end
 
 local resolve_type
 
+-- A lazy type keeps the type parameters in scope where it was written.
 local function lazy(node, module)
-  local t = { kind = "lazy", name = type_text(node, module), node = node, module = module }
+  local t = { kind = "lazy", name = type_text(node, module), node = node, module = module, scope = type_scope }
   pending[#pending + 1] = t
   return t
 end
 
 -- Resolves every lazy type; resolving one may queue more.
 local function force_pending()
+  local outer = type_scope
   while #pending > 0 do
     local t = table.remove(pending)
+    type_scope = t.scope
     t.type = resolve_type(t.node, t.module)
+    type_scope = outer
   end
 end
 
@@ -176,7 +187,13 @@ resolve_type = function(node, module, name)
         members[#members + 1] = m
       end
     end
-    return types.union(members, name)
+    local union = types.union(members, name)
+    for _, m in ipairs(members) do
+      if m.kind == "typevar" and not (#members == 2 and types.has(union, "None")) then
+        diag.error(node.span, "a type parameter can be in a union only with None")
+      end
+    end
+    return union
   elseif node.name == "list" then
     return types.list(lazy(node.args[1], module))
   elseif node.name == "dict" then
@@ -193,6 +210,11 @@ resolve_type = function(node, module, name)
     return types.tuple(elements)
   elseif SCALARS[node.name] then
     return SCALARS[node.name]
+  elseif not node.module and type_scope[node.name] then
+    if node.args then
+      diag.error(node.span, "type parameter '" .. node.name .. "' does not take type arguments")
+    end
+    return type_scope[node.name]
   end
   local declaration, args = resolve_named(node, module), node.args
   if declaration.kind == "Callable" then
@@ -311,14 +333,40 @@ local function check_default(decl, module)
   end
 end
 
+-- Puts the type parameters of `fn` in scope, making them on first use; returns
+-- the scope to restore afterward.
+local function enter_type_params(fn)
+  local outer = type_scope
+  if #(fn.type_params or {}) == 0 then
+    return outer
+  end
+  local scope = setmetatable({}, { __index = outer })
+  fn.typevars = fn.typevars or {}
+  for i, param in ipairs(fn.type_params) do
+    if scope[param.name] then
+      diag.error(param.span, "type parameter '" .. param.name .. "' hides another type parameter")
+    end
+    fn.typevars[i] = fn.typevars[i] or types.typevar(param.name)
+    scope[param.name] = fn.typevars[i]
+  end
+  type_scope = scope
+  return outer
+end
+
 -- Resolves the parameter and return types of `fn`. A method's `self` has the
 -- type of its class.
 local function resolve_signature(fn, module)
+  local outer = enter_type_params(fn)
   check_unique(fn.params, "parameter")
   for i, param in ipairs(fn.params) do
     param.type = fn.class and i == 1 and fn.class.type or resolve_type(param.type, module)
   end
   fn.return_type = resolve_type(fn.return_type, module)
+  type_scope = outer
+end
+
+local function is_generic(fn)
+  return fn and fn.kind == "Function" and #(fn.type_params or {}) > 0
 end
 
 local function resolve_function(fn, scope, module)
@@ -336,7 +384,9 @@ local function resolve_function(fn, scope, module)
   -- Makes `node` a function value of `declaration`, or reports why a
   -- declaration named `name` cannot be a value.
   local function declared_value(node, declaration, name)
-    if declaration.kind == "Function" then
+    if is_generic(declaration) then
+      diag.error(node.span, "generic function '" .. name .. "' cannot be used as a value")
+    elseif declaration.kind == "Function" then
       -- A qualified name reaches the function even where a local hides it.
       node.qualified = node.kind == "Field"
       node.kind, node.target, node.object = "FunctionValue", declaration, nil
@@ -396,6 +446,9 @@ local function resolve_function(fn, scope, module)
         end
         diag.error(node.span, "unknown name '" .. node.name .. "'")
       end
+      if is_generic(node.symbol.def) and not node.is_callee then
+        diag.error(node.span, "generic function '" .. node.name .. "' cannot be used as a value")
+      end
       if node.symbol.owner ~= fn then
         capture(node.symbol, node.span)
       end
@@ -403,6 +456,39 @@ local function resolve_function(fn, scope, module)
       -- A local hides a declaration of the same name, so this calls its value.
       node.kind, node.callee = "CallValue", ast.node("Name", node.span, { name = node.name })
       node.name = nil
+      resolve_expression(node)
+    elseif kind == "SpecializedCall" then
+      local callee, name, symbol, declaration = node.callee
+      if callee.kind == "Name" then
+        name, symbol = callee.name, scope[callee.name]
+        declaration = not symbol and (declarations[name] or builtins[name])
+      elseif module_path(callee.object) and imports[module_path(callee.object)] then
+        local path = module_path(callee.object)
+        name, declaration = path .. "." .. callee.name, lookup(module, imports[path], callee.name, callee.span)
+      end
+      if is_generic(declaration) or symbol and is_generic(symbol.def) then
+        for i, arg in ipairs(node.type_args) do
+          node.type_args[i] = resolve_type(arg, module)
+        end
+        if symbol then
+          node.kind = "CallValue"
+        else
+          node.kind, node.name, node.target, node.callee = "Call", name, declaration, nil
+        end
+      else
+        -- An index followed by a call, as in `handlers[i](x)`.
+        local arg = node.type_args[1]
+        if #node.type_args ~= 1 or arg.args or arg.kind ~= "Type" or declaration then
+          diag.error(callee.span, "'" .. (name or callee.name) .. "' is not generic")
+        end
+        local index
+        for part in ((arg.module and arg.module .. "." or "") .. arg.name):gmatch("[^.]+") do
+          index = index and ast.node("Field", arg.span, { object = index, name = part })
+            or ast.node("Name", arg.span, { name = part })
+        end
+        node.kind, node.type_args = "CallValue", nil
+        node.callee = ast.node("Index", arg.span, { object = callee, index = index })
+      end
       resolve_expression(node)
     elseif kind == "Lambda" then
       -- A lambda is a nested function whose body returns its expression.
@@ -414,12 +500,14 @@ local function resolve_function(fn, scope, module)
       }
       resolve_function(node.fn, collect_symbols(node.fn, scope), module)
     elseif kind == "CallValue" then
+      node.callee.is_callee = true
       resolve_expression(node.callee)
       for _, arg in ipairs(node.args) do
         resolve_expression(arg)
       end
     elseif kind == "Call" then
-      node.target = declarations[node.name] or builtins[node.name] or exceptions[node.name]
+      -- A specialized call of a qualified name already has its target.
+      node.target = node.target or declarations[node.name] or builtins[node.name] or exceptions[node.name]
       if not node.target then
         diag.error(node.span, "unknown function '" .. node.name .. "'")
       elseif node.target.kind == "Alias" or node.target.kind == "Enum" or node.target.kind == "Callable" then
@@ -456,6 +544,9 @@ local function resolve_function(fn, scope, module)
       end
       resolve_expression(node.operand)
       local class = node.class
+      if not class.module and type_scope[class.name] then
+        diag.error(class.span, "type parameter '" .. class.name .. "' cannot be used in isinstance")
+      end
       if class.module or not SCALARS[class.name] and class.name ~= "list" and class.name ~= "dict"
         and class.name ~= "tuple" then
         local declaration = resolve_named(class, module)
@@ -620,7 +711,9 @@ local function resolve_function(fn, scope, module)
     end
   end
 
+  local outer_types = enter_type_params(fn)
   resolve_block(fn.body)
+  type_scope = outer_types
 end
 
 -- Collects one module's imports, functions, records, enums, and aliases, which share one
@@ -705,6 +798,7 @@ function M.bind(modules, test)
   for _, module in ipairs(modules) do
     modules_by_name[module.name or ""] = module
   end
+  type_scope = {}
   for _, module in ipairs(modules) do
     declare(module, modules_by_name, entry)
   end
@@ -733,6 +827,9 @@ function M.bind(modules, test)
           if field.name == method.name then
             diag.error(method.span, "method '" .. method.name .. "' has the same name as a field")
           end
+        end
+        if #method.type_params > 0 then
+          diag.error(method.type_params[1].span, "generic methods are not supported")
         end
         method.class, method.module = record, module
         method.value_type = types.func(method, true)

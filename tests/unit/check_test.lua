@@ -832,6 +832,20 @@ return {
     eq("3:10: 'g' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("g = k\ng(1, 2)", K)))
   end,
 
+  generic_functions = function()
+    local F = "def first[T](items: list[T]) -> T:\n    return items[0]\n"
+    local function body_errors(body)
+      return check_errors("def f[T](x: T) -> T:\n" .. body:gsub("[^\n]+", "    %0") .. "\n" .. MAIN)
+    end
+    eq("2:14: operator '+' cannot be applied to T and T", body_errors("return x + x"))
+    eq("2:11: cannot print a value of type T", body_errors("print(x)\nreturn x"))
+    eq("2:11: operator '==' cannot be applied to T and T", body_errors("b = x == x\nreturn x"))
+    eq("2:14: type T has no field 'n'", body_errors("return x.n"))
+    eq("2:21: expected int, received str", check_errors(in_main("x = first[int](['a'])", F)))
+    eq("2:9: 'first' needs type arguments", check_errors(in_main("x = first([1])", F)))
+    eq("2:9: 'first' expects 1 type argument, received 2", check_errors(in_main("x = first[int, str]([1])", F)))
+  end,
+
   lambdas = function()
     local T = "import typing\n"
     eq("3:9: lambda parameters need an expected callable type", check_errors(T .. in_main("f = lambda x: x")))

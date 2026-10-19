@@ -380,7 +380,7 @@ example changes it lists. New Rosetta Code examples go in
     "Higher-order functions" and "Closures/Value capture"
 
 - [ ] Generic functions, methods, classes, aliases, and bounded type parameters (spec §3–4)
-  - [ ] Generic functions with explicit specialization: type parameter lists
+  - [x] Generic functions with explicit specialization: type parameter lists
     on file-level and nested functions, no hiding of a parameter in scope;
     type variables limited to storing, passing, and returning; bodies checked
     for every permitted type argument; type variables in unions only

@@ -284,12 +284,36 @@ function M.parse(tokens)
     return node
   end
 
+  -- Parses `[types](` after a name or field as a specialized call, or returns
+  -- nil with the position unchanged when the brackets are an index instead.
+  local function parse_specialized_call(callee)
+    local saved = pos
+    local ok, type_args = pcall(function()
+      advance()
+      local list = parse_list("]", parse_type)
+      if peek().kind ~= "(" then
+        error("not a call")
+      end
+      return list
+    end)
+    if not ok then
+      pos = saved
+      return nil
+    end
+    advance()
+    return ast.node("SpecializedCall", callee.span, { callee = callee, type_args = type_args, args = parse_args() })
+  end
+
   -- Indexing and method calls chain left to right after a primary.
   local function parse_postfix()
     local node = parse_primary()
     while true do
       local token = peek()
-      if token.kind == "[" then
+      local specialized = token.kind == "[" and (node.kind == "Name" or node.kind == "Field")
+        and parse_specialized_call(node)
+      if specialized then
+        node = specialized
+      elseif token.kind == "[" then
         advance()
         local start, stop
         if peek().kind ~= ":" then
@@ -585,7 +609,8 @@ function M.parse(tokens)
         { name = expression.name, annotation = annotation, value = parse_expression() })
       reject_chained_assignment()
       return node
-    elseif expression.kind ~= "Call" and expression.kind ~= "MethodCall" and expression.kind ~= "CallValue" then
+    elseif expression.kind ~= "Call" and expression.kind ~= "MethodCall" and expression.kind ~= "CallValue"
+      and expression.kind ~= "SpecializedCall" then
       diag.error(expression.span, "only calls can be used as statements")
     end
     return ast.node("CallStmt", expression.span, { call = expression })
@@ -739,6 +764,16 @@ function M.parse(tokens)
   parse_function = function(method)
     advance()
     local name = expect("NAME", "a function name")
+    local type_params = {}
+    if accept("[") then
+      type_params = parse_list("]", function()
+        local param = expect("NAME", "a type parameter name")
+        if peek().kind == ":" then
+          diag.error(peek().span, "type parameter bounds are not supported")
+        end
+        return { name = param.value, span = param.span }
+      end)
+    end
     expect("(")
     local params, closed = {}, false
     if method then
@@ -786,8 +821,9 @@ function M.parse(tokens)
     end
     expect("->")
     local return_type = parse_type()
-    return ast.node("Function", name.span,
-      { name = name.value, params = params, return_type = return_type, body = parse_block() })
+    return ast.node("Function", name.span, {
+      name = name.value, type_params = type_params, params = params, return_type = return_type, body = parse_block(),
+    })
   end
 
   -- An exception class has `message: str` as its first field and may have a

@@ -5,3 +5,6 @@ def label(name: str) -> str:
 
 def first(items: list[app.models.Item]) -> app.models.Item:
     return items[0]
+
+def wrap[T](value: T) -> list[T]:
+    return [value]

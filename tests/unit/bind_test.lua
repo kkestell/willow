@@ -462,6 +462,26 @@ return {
       bind_error(T .. "def main() -> None:\n    b = isinstance(1, typing.Callable)\n"))
   end,
 
+  generic_functions = function()
+    local program = bind_source("def f[T](xs: list[T], y: T | None) -> T:\n    return xs[0]\n" .. MAIN)
+    local params = program.functions[1].params
+    eq("typevar", params[1].type.element.type.kind)
+    eq(params[1].type.element.type, program.functions[1].return_type)
+    eq("T | None", params[2].type.name)
+    eq("1:13: a type parameter can be in a union only with None",
+      bind_error("def f[T](x: T | int) -> None:\n    pass\n" .. MAIN))
+    eq("2:11: type parameter 'T' hides another type parameter",
+      bind_error("def f[T](x: T) -> T:\n    def g[T](y: T) -> T:\n        return y\n    return x\n" .. MAIN))
+    eq("2:26: type parameter 'T' cannot be used in isinstance",
+      bind_error("def f[T](x: T) -> bool:\n    return isinstance(x, T)\n" .. MAIN))
+    eq("4:9: generic function 'f' cannot be used as a value",
+      bind_error("def f[T](x: T) -> T:\n    return x\ndef main() -> None:\n    g = f\n"))
+    eq("4:5: 'g' is not generic", bind_error("def g(x: int) -> None:\n    pass\ndef main() -> None:\n    g[int](1)\n"))
+    local main = bind_source("def main() -> None:\n    xs = [main]\n    i = 0\n    xs[i]()\n").functions[1]
+    eq("Index", main.body[3].call.callee.kind)
+    eq("3:5: 'len' is not generic", bind_error("def main() -> None:\n    xs = [1]\n    len[int](xs)\n"))
+  end,
+
   nonlocal_declarations = function()
     local main = bind_source("def main() -> None:\n    x = 1\n    def g() -> None:\n        nonlocal x\n        x = 2\n"
       .. "    g()\n").functions[1]

@@ -56,6 +56,12 @@ function M.params(t)
   return t.bound and { unpack(t.fn.params, 2) } or t.fn.params
 end
 
+-- A type parameter as its declaration's body sees it: compared by identity,
+-- with no operations beyond storing, passing, and returning.
+function M.typevar(name)
+  return { kind = "typevar", name = name }
+end
+
 function M.enum(decl)
   return { kind = "enum", enum = decl, name = decl.type_name }
 end
@@ -155,7 +161,7 @@ end
 -- Union members are matched by kind, or by declaration for records, enums,
 -- and functions.
 local function key(t)
-  return t.record or t.enum or t.fn or t.kind
+  return t.record or t.enum or t.fn or (t.kind == "typevar" and t) or t.kind
 end
 
 -- `assumed` holds pairs already being compared, so recursive types terminate.
@@ -164,7 +170,7 @@ local function same(a, b, assumed)
   if a == b then
     return true
   end
-  if a.kind ~= b.kind or a.kind == "record" or a.kind == "function" or SCALARS[a.kind] then
+  if a.kind ~= b.kind or a.kind == "record" or a.kind == "function" or a.kind == "typevar" or SCALARS[a.kind] then
     return false
   end
   assumed[a] = assumed[a] or {}
@@ -336,6 +342,69 @@ function M.items(t)
     end
   end
   return M.union(kept)
+end
+
+-- Whether `t` mentions a type parameter. `seen` stops at recursive aliases,
+-- which cannot.
+local function has_typevar(t, seen)
+  t = M.expand(t)
+  if seen[t] then
+    return false
+  end
+  seen[t] = true
+  if t.kind == "typevar" then
+    return true
+  end
+  for _, part in ipairs(t.members or t.elements or t.params or {}) do
+    if has_typevar(part, seen) then
+      return true
+    end
+  end
+  local inner = t.element or t.value or t.result
+  return inner ~= nil and has_typevar(inner, seen)
+end
+
+-- `t` with each type parameter that `map` names replaced by its type
+-- argument. Unions flatten and drop members they already hold.
+function M.substitute(t, map)
+  t = M.expand(t)
+  local kind = t.kind
+  if not has_typevar(t, {}) then
+    return t
+  elseif kind == "typevar" then
+    return map[t] or t
+  elseif kind == "list" then
+    return M.list(M.substitute(t.element, map))
+  elseif kind == "dict" then
+    return M.dict(t.key, M.substitute(t.value, map))
+  elseif kind == "tuple" then
+    local elements = {}
+    for i, element in ipairs(t.elements) do
+      elements[i] = M.substitute(element, map)
+    end
+    return M.tuple(elements)
+  elseif kind == "callable" then
+    local params = {}
+    for i, param in ipairs(t.params) do
+      params[i] = M.substitute(param, map)
+    end
+    return M.callable(params, M.substitute(t.result, map))
+  elseif kind == "union" then
+    local members = {}
+    for _, member in ipairs(t.members) do
+      for _, m in ipairs(M.members(M.substitute(member, map))) do
+        local held = false
+        for _, other in ipairs(members) do
+          held = held or M.same(other, m)
+        end
+        if not held then
+          members[#members + 1] = m
+        end
+      end
+    end
+    return M.union(members)
+  end
+  return t
 end
 
 return M

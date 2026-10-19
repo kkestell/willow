@@ -48,6 +48,8 @@ show = function(node)
     return "None"
   elseif kind == "Name" then
     return node.name
+  elseif kind == "SpecializedCall" then
+    return show(node.callee) .. "[" .. show_list(node.type_args, ", ") .. "](" .. show_list(node.args, ", ") .. ")"
   elseif kind == "CallValue" then
     return "(" .. show(node.callee) .. ")(" .. show_list(node.args, ", ") .. ")"
   elseif kind == "Call" then
@@ -551,6 +553,17 @@ return {
   assertions = function()
     eq("{ assert x; assert (x == 1), \"m\" }", body("assert x\nassert x == 1, 'm'"))
     eq("2:11: expected an expression, found end of line", body_error("assert"))
+  end,
+
+  generic_functions = function()
+    local fn = parse("def f[T, U](x: T) -> U:\n    pass\n").functions[1]
+    eq("T U", fn.type_params[1].name .. " " .. fn.type_params[2].name)
+    eq("first[int](xs)", expr("first[int](xs)"))
+    eq("first[list[int], str | None](xs)", expr("first[list[int], str | None](xs)"))
+    eq("util.first[int](xs)", expr("util.first[int](xs)"))
+    eq("(xs[0])(1)", expr("xs[0](1)"))
+    eq("xs[i]", expr("xs[i]"))
+    eq("1:8: type parameter bounds are not supported", parse_error("def f[T: int](x: T) -> T:\n    pass\n"))
   end,
 
   lambdas_and_nonlocal = function()

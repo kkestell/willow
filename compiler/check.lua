@@ -385,6 +385,30 @@ local function evaluation_order(node)
   return result
 end
 
+-- The substitution that call `node` of `fn`, named `name`, gives its type
+-- parameters, or nil when `fn` is not generic.
+local function specialize(node, name, fn)
+  if not fn.typevars then
+    return nil
+  elseif not node.type_args then
+    diag.error(node.span, "'" .. name .. "' needs type arguments")
+  elseif #node.type_args ~= #fn.typevars then
+    local count = #fn.typevars
+    diag.error(node.span, "'" .. name .. "' expects " .. count .. (count == 1 and " type argument" or " type arguments")
+      .. ", received " .. #node.type_args)
+  end
+  local map = {}
+  for i, typevar in ipairs(fn.typevars) do
+    map[typevar] = node.type_args[i]
+  end
+  return map
+end
+
+-- `type` with the substitution `map`, if any, applied.
+local function specialized(type, map)
+  return map and types.substitute(type, map) or type
+end
+
 -- Checks that a list of `type` can be sorted.
 local function check_sortable(node, type)
   if not (type.kind == "list" and SORTABLE[list_element(type)]) then
@@ -523,6 +547,7 @@ local function check_function(fn, entry)
       end
       -- A constructor takes one argument per field.
       local params = target.kind == "Record" and target.fields or target.params
+      local map = target.kind == "Function" and specialize(node, node.name, target)
       if builtin then
         bind_args(node, node.name, builtin_params(builtin), builtin.names and "parameter")
       else
@@ -534,7 +559,7 @@ local function check_function(fn, entry)
         if builtin then
           param = builtin.params[i] ~= "any" and builtin.params[i] or nil
         else
-          param = params[i].type
+          param = specialized(params[i].type, map)
         end
         local arg_type = check_expression(arg, state, param)
         if param then
@@ -561,7 +586,7 @@ local function check_function(fn, entry)
       elseif target.kind == "Record" then
         type = target.type
       else
-        type = target.return_type
+        type = specialized(target.return_type, map)
       end
     elseif kind == "IsInstance" then
       local operand = check_expression(node.operand, state)
@@ -639,9 +664,11 @@ local function check_function(fn, entry)
     elseif kind == "CallValue" then
       local callee = check_expression(node.callee, state)
       local name = node.callee.kind == "Name" and node.callee.name
-      local params
+      local params, map
       if callee.kind == "function" then
-        name, params, type = name or callee.fn.name, types.params(callee), callee.fn.return_type
+        name, params = name or callee.fn.name, types.params(callee)
+        map = specialize(node, name, callee.fn)
+        type = specialized(callee.fn.return_type, map)
         bind_args(node, name, params, "parameter")
       elseif callee.kind == "callable" then
         -- A callable takes exactly its listed positional arguments.
@@ -654,7 +681,7 @@ local function check_function(fn, entry)
         diag.error(node.span, "cannot call a value of type " .. callee.name)
       end
       for _, i in ipairs(evaluation_order(node)) do
-        check_against(node.args[i], state, params[i].type)
+        check_against(node.args[i], state, specialized(params[i].type, map))
       end
     elseif kind == "Field" then
       -- Reading a method gives it bound to the object.
