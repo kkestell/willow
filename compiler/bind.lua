@@ -101,6 +101,12 @@ local function type_text(node, module)
     return "list[" .. type_text(node.args[1], module) .. "]"
   elseif node.name == "dict" then
     return "dict[" .. type_text(node.args[1], module) .. ", " .. type_text(node.args[2], module) .. "]"
+  elseif node.name == "tuple" then
+    local names = {}
+    for i, arg in ipairs(node.args) do
+      names[i] = type_text(arg, module)
+    end
+    return "tuple[" .. (#names == 0 and "()" or table.concat(names, ", ")) .. "]"
   elseif SCALARS[node.name] then
     return node.name
   end
@@ -157,6 +163,12 @@ resolve_type = function(node, module, name)
       diag.error(node.args[1].span, "dictionary keys must be int, str, or an enum")
     end
     return types.dict(key, lazy(node.args[2], module))
+  elseif node.name == "tuple" then
+    local elements = {}
+    for i, arg in ipairs(node.args) do
+      elements[i] = resolve_type(arg, module)
+    end
+    return types.tuple(elements)
   elseif SCALARS[node.name] then
     return SCALARS[node.name]
   end
@@ -282,7 +294,8 @@ local function resolve_function(fn, scope, module)
       end
       resolve_expression(node.operand)
       local class = node.class
-      if class.module or not SCALARS[class.name] and class.name ~= "list" and class.name ~= "dict" then
+      if class.module or not SCALARS[class.name] and class.name ~= "list" and class.name ~= "dict"
+        and class.name ~= "tuple" then
         local declaration = resolve_named(class, module)
         if declaration.kind == "Alias" then
           diag.error(class.span, "alias '" .. class.name .. "' cannot be used in isinstance")
@@ -318,7 +331,7 @@ local function resolve_function(fn, scope, module)
       for _, arg in ipairs(node.args) do
         resolve_expression(arg)
       end
-    elseif kind == "ListDisplay" then
+    elseif kind == "ListDisplay" or kind == "TupleDisplay" then
       for _, element in ipairs(node.elements) do
         resolve_expression(element)
       end

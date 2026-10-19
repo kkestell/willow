@@ -18,7 +18,7 @@ local set = M.set
 local keywords = set([[
 False None True and as assert async await break case class continue def del
 elif else enum except finally for from global if import in is lambda match nonlocal
-not or pass raise return try type while with yield int float bool str bytes list dict
+not or pass raise return try type while with yield int float bool str bytes list dict tuple
 ]])
 
 local operators = set("-> == != <= >= < > = + - * / // % | ( ) [ ] { } , : .")

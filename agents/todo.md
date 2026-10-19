@@ -330,7 +330,7 @@ example changes it lists. New Rosetta Code examples go in
     options in `report.wlo`, and Rosetta Code "Enumerations"
 
 - [ ] Tuples, tuple defaults, comparisons, and unpacking (spec §3–8)
-  - [ ] Tuple types and values: reserve `tuple`; `tuple[A, B]` and
+  - [x] Tuple types and values: reserve `tuple`; `tuple[A, B]` and
     `tuple[()]` annotations; displays with `(x,)` and `()` alongside grouping;
     literal and negated-literal indexes with compile-time range errors; `len`;
     positional assignability, converting float boxing per position; one tuple

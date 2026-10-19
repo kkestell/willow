@@ -12,9 +12,10 @@ end
 local core = read_runtime("runtime.core")
 local optional_helpers = {}
 -- Runtime files that only programs using their helpers get: the case
--- conversion data is large, and the host helpers declare C structures. Helpers
--- stay local to each block and are exported through one table, so libraries'
--- locals do not accumulate toward the chunk's limit of 200.
+-- conversion data is large, and the host helpers declare C structures. Each
+-- file runs in a function of its own and exports its helpers through one
+-- table, so its locals count toward that function's limit of 200 rather than
+-- the chunk's, which also holds the core helpers.
 local function optional_runtime(text)
   local names, helpers, exports = {}, {}, {}
   for name in text:gmatch("\nfunction __wlo_([%w_]+)") do
@@ -24,7 +25,8 @@ local function optional_runtime(text)
     exports[#exports + 1] = "__wlo_runtime." .. name .. " = __wlo_" .. name .. "\n"
   end
   return {
-    text = "do\nlocal " .. table.concat(names, ", ") .. "\n" .. text .. table.concat(exports) .. "end\n",
+    text = "do\nlocal function __wlo_load()\nlocal " .. table.concat(names, ", ") .. "\n" .. text
+      .. table.concat(exports) .. "end\n__wlo_load()\nend\n",
     helpers = helpers,
   }
 end

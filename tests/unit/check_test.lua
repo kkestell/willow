@@ -789,6 +789,19 @@ return {
       check_errors("import net\n" .. in_main("c = net.connect('h', 1)\nc.recv('x')")))
   end,
 
+  tuples = function()
+    local PAIR = "def pair() -> tuple[int, str]:\n    return (1, 'a')\n"
+    eq("2:16: tuple index out of range", check_errors(in_main("x = pair()[2]", PAIR)))
+    eq("2:16: tuple index out of range", check_errors(in_main("x = pair()[-3]", PAIR)))
+    eq("3:16: tuple index must be an integer literal", check_errors(in_main("i = 0\nx = pair()[i]", PAIR)))
+    eq("3:6: cannot assign to an index of a value of type tuple[int, str]", check_errors(in_main("t = pair()\nt[0] = 1", PAIR)))
+    eq("2:15: cannot slice a value of type tuple[int, str]", check_errors(in_main("x = pair()[0:1]", PAIR)))
+    eq("2:7: expected tuple[int], received tuple[int, int]", check_errors(in_main("f((1, 2))", "def f(t: tuple[int]) -> None:\n    pass\n")))
+    eq("2:30: expected str, received int", check_errors(in_main("x: tuple[int, str] = (1, 2)")))
+    eq("2:25: type int | str has no member tuple", check_errors(in_main("x = isinstance(f(), tuple)", "def f() -> int | str:\n    return 1\n")))
+    eq("2:11: cannot print a value of type tuple[int]", check_errors(in_main("print((1,))")))
+  end,
+
   enums = function()
     local E = "enum E:\n    A\n    B\nenum F:\n    A\n"
     eq("2:13: operator '<' cannot be applied to E and E", check_errors(in_main("x = E.A < E.B", E)))

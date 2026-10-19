@@ -363,7 +363,28 @@ local function __wlo_equal(a, b)
   return a == b
 end
 
--- `kind` is a Lua type name, "box", "bytes", "list", or "dict".
+-- Converts `value` by `step`, which the compiler builds from the value's
+-- static type: `float` boxes or unboxes a number, and `[i]` converts tuple
+-- position `i`. A converted tuple is a copy.
+local function __wlo_convert(value, step)
+  if type(value) == "table" and value.__wlo_tuple then
+    local result = { __wlo_tuple = value.__wlo_tuple }
+    for i = 1, value.__wlo_tuple do
+      result[i] = value[i]
+      if step[i] then
+        result[i] = __wlo_convert(value[i], step[i])
+      end
+    end
+    return result
+  elseif step.float == "box" then
+    return __wlo_box(value)
+  elseif step.float == "unbox" then
+    return __wlo_unbox(value)
+  end
+  return value
+end
+
+-- `kind` is a Lua type name, "box", "bytes", "list", "dict", or "tuple".
 local function __wlo_isinstance(value, kind)
   if type(value) ~= "table" then
     return type(value) == kind
@@ -373,6 +394,8 @@ local function __wlo_isinstance(value, kind)
     return kind == "box"
   elseif value.__wlo_octets ~= nil then
     return kind == "bytes"
+  elseif value.__wlo_tuple then
+    return kind == "tuple"
   end
   return kind == (value.n and "list" or "dict")
 end

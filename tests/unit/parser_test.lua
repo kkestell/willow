@@ -66,6 +66,8 @@ show = function(node)
     return "type " .. node.name .. " = " .. show(node.value)
   elseif kind == "ListDisplay" then
     return "[" .. show_list(node.elements, ", ") .. "]"
+  elseif kind == "TupleDisplay" then
+    return "tuple(" .. show_list(node.elements, ", ") .. ")"
   elseif kind == "DictDisplay" then
     local parts = {}
     for i, entry in ipairs(node.entries) do
@@ -247,6 +249,19 @@ return {
     eq("2:6", program.aliases[1].span.line .. ":" .. program.aliases[1].span.col)
     eq("1:7: expected '=', found ':'", parse_error("type T: int\n"))
     eq("2:5: expected a statement, found 'type'", parse_error("def f() -> None:\n    type T = int\n"))
+  end,
+
+  tuples = function()
+    local fn = parse("def f(x: tuple[int, str | None], y: tuple[()]) -> tuple[int]:\n    pass\n").functions[1]
+    eq("def f(x: tuple[int, str | None], y: tuple[]) -> tuple[int] { pass }", show(fn))
+    eq(0, #fn.params[2].type.args)
+    eq("tuple()", expr("()"))
+    eq("tuple(1)", expr("(1,)"))
+    eq("tuple(1, (a + b))", expr("(1, a + b,)"))
+    eq("1", expr("(1)"))
+    eq("isinstance(x, tuple)", expr("isinstance(x, tuple)"))
+    eq("2:5: expected a statement, found 'tuple'", body_error("tuple = 1"))
+    eq("1:16: expected a type, found ']'", parse_error("def f(x: tuple[]) -> None:\n    pass\n"))
   end,
 
   isinstance = function()

@@ -139,7 +139,8 @@ local function expect_type(node, expected, actual)
   node.expected_type = expected
 end
 
--- The member of `expected` of `kind` ("list" or "dict") that a display takes.
+-- The member of `expected` of `kind` ("list", "dict", or "tuple") that a
+-- display takes.
 local function display_member(expected, kind)
   for _, m in ipairs(expected and types.members(expected) or {}) do
     if m.kind == kind then
@@ -463,7 +464,8 @@ local function check_function(fn)
         diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type.name .. " to str")
       elseif builtin and conversions[name] and arg_type and not conversions[name][arg_type.kind] then
         diag.error(node.args[1].span, "cannot convert a value of type " .. arg_type.name .. " to " .. name)
-      elseif name == "len" and builtin and arg_type ~= types.str and arg_type ~= types.bytes and not index_types(arg_type) then
+      elseif name == "len" and builtin and arg_type ~= types.str and arg_type ~= types.bytes and arg_type.kind ~= "tuple"
+        and not index_types(arg_type) then
         diag.error(node.span, "'len' cannot be applied to " .. arg_type.name)
       end
       if builtin and name == "sorted" then
@@ -513,8 +515,23 @@ local function check_function(fn)
         end
       end
       type = types.str
+    elseif kind == "Index" and check_expression(node.object, state).kind == "tuple" then
+      local elements, index = node.object.type.elements, node.index
+      local value = index.kind == "Int" and index.value
+        or index.kind == "Unary" and index.op == "-" and index.operand.kind == "Int" and -index.operand.value
+      if not value then
+        diag.error(index.span, "tuple index must be an integer literal")
+      end
+      if value < 0 then
+        value = value + #elements
+      end
+      if value < 0 or value >= #elements then
+        diag.error(index.span, "tuple index out of range")
+      end
+      node.position = value + 1
+      type = elements[node.position]
     elseif kind == "Index" then
-      local object = check_expression(node.object, state)
+      local object = node.object.type
       local index, item = index_types(object)
       if object == types.str then
         index, item = types.int, types.str
@@ -584,6 +601,21 @@ local function check_function(fn)
       for i = first, #elements do
         check_against(elements[i], state, element)
       end
+    elseif kind == "TupleDisplay" then
+      local target = display_member(expected, "tuple")
+      if target and #target.elements ~= #node.elements then
+        target = nil
+      end
+      local elements = {}
+      for i, element in ipairs(node.elements) do
+        if target then
+          check_against(element, state, target.elements[i])
+          elements[i] = target.elements[i]
+        else
+          elements[i] = check_expression(element, state)
+        end
+      end
+      type = target or types.tuple(elements)
     elseif kind == "DictDisplay" then
       type = display_member(expected, "dict")
       local key, value
@@ -725,7 +757,7 @@ local function check_function(fn)
     elseif kind == "IndexAssign" then
       local object = check_expression(statement.object, state)
       local index, item = index_types(object)
-      if object == types.str or object == types.bytes then
+      if object == types.str or object == types.bytes or object.kind == "tuple" then
         diag.error(statement.span, "cannot assign to an index of a value of type " .. object.name)
       elseif not index then
         diag.error(statement.span, "cannot index a value of type " .. object.name)

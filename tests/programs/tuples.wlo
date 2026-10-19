@@ -1,0 +1,52 @@
+def trace(label: str) -> int:
+    print(label)
+    return 1
+
+def pair() -> tuple[int, str]:
+    print("pair")
+    return (1, "Ada")
+
+# A tuple of floats passed where a position also holds ints is converted.
+def widen(t: tuple[int | float, float]) -> str:
+    first = t[0]
+    if isinstance(first, float):
+        return f"float {first} {t[1]}"
+    return "int"
+
+def maybe(t: tuple[float] | None) -> tuple[int | float] | None:
+    return t
+
+def kind(v: tuple[int, str] | list[int] | None) -> str:
+    if isinstance(v, tuple):
+        return "tuple " + v[1]
+    if isinstance(v, list):
+        return "list"
+    return "none"
+
+def main() -> None:
+    t = (1, "Ada")
+    print(t[0])
+    print(t[-1])
+    nested = ((1, 2), None, (3,))
+    print(nested[0][1])
+    print(nested[1])
+    print(nested[-1][0])
+    print(len(nested))
+    print(len(()))
+    print(len(pair()))
+    order = (trace("a"), trace("b"))
+    print(order[1])
+    floats = (1.5, 2.5)
+    print(widen(floats))
+    print(widen((2, 3.5)))
+    m = maybe((4.5,))
+    if m is not None:
+        x = m[0]
+        print(isinstance(x, float))
+        print(x)
+    print(maybe(None) is None)
+    print(kind(t))
+    print(kind([1]))
+    print(kind(None))
+    grouped = (5)
+    print(grouped)

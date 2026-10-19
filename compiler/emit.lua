@@ -146,6 +146,26 @@ function M.emit(lowered)
     return #list == 0 and "{}" or "{ " .. args(list) .. " }"
   end
 
+  -- A conversion step from lowering: `float` first, then the tuple positions
+  -- it converts, in order.
+  local function step_text(step)
+    local parts, last = {}, 0
+    if step.float then
+      parts[1] = "float = " .. M.quote(step.float)
+    end
+    for i in pairs(step) do
+      if type(i) == "number" and i > last then
+        last = i
+      end
+    end
+    for i = 1, last do
+      if step[i] then
+        parts[#parts + 1] = "[" .. i .. "] = " .. step_text(step[i])
+      end
+    end
+    return "{ " .. table.concat(parts, ", ") .. " }"
+  end
+
   -- Nested binary operations are parenthesized so Lua precedence never matters.
   expr = function(e, nested)
     local kind = e.kind
@@ -154,6 +174,8 @@ function M.emit(lowered)
         return number(e.value)
       elseif type(e.value) == "string" then
         return M.quote(e.value)
+      elseif type(e.value) == "table" then
+        return step_text(e.value)
       end
       return tostring(e.value)
     elseif kind == "Local" then
@@ -203,6 +225,11 @@ function M.emit(lowered)
       return "__wlo_list(" .. table_text(e.elements) .. ", " .. #e.elements .. ")"
     elseif kind == "Dict" then
       return "__wlo_dict(" .. table_text(e.entries) .. ", " .. #e.entries / 2 .. ")"
+    elseif kind == "Tuple" then
+      local elements = #e.elements > 0 and ", " .. args(e.elements) or ""
+      return "{ __wlo_tuple = " .. #e.elements .. elements .. " }"
+    elseif kind == "Position" then
+      return expr(e.object) .. "[" .. e.position .. "]"
     end
   end
 

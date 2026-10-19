@@ -17,6 +17,15 @@ function M.dict(key, value)
   return { kind = "dict", key = key, value = value, name = "dict[" .. key.name .. ", " .. value.name .. "]" }
 end
 
+function M.tuple(elements)
+  local names = {}
+  for i, element in ipairs(elements) do
+    names[i] = element.name
+  end
+  local name = #elements == 0 and "()" or table.concat(names, ", ")
+  return { kind = "tuple", elements = elements, name = "tuple[" .. name .. "]" }
+end
+
 function M.record(decl)
   return { kind = "record", record = decl, name = decl.type_name }
 end
@@ -119,6 +128,16 @@ local function same(a, b, assumed)
     return same(a.element, b.element, assumed)
   elseif a.kind == "dict" then
     return same(a.key, b.key, assumed) and same(a.value, b.value, assumed)
+  elseif a.kind == "tuple" then
+    if #a.elements ~= #b.elements then
+      return false
+    end
+    for i, element in ipairs(a.elements) do
+      if not same(element, b.elements[i], assumed) then
+        return false
+      end
+    end
+    return true
   end
   if #a.members ~= #b.members then
     return false
@@ -164,6 +183,14 @@ function M.assignable(target, source)
     end
     return false
   end
+  if target.kind == "tuple" and source.kind == "tuple" and #target.elements == #source.elements then
+    for i, element in ipairs(target.elements) do
+      if not M.assignable(element, source.elements[i]) then
+        return false
+      end
+    end
+    return true
+  end
   return M.same(target, source)
     or is_exception(target) and target.record.type_name == "Exception" and is_exception(source)
 end
@@ -183,11 +210,11 @@ function M.subset(t, keep)
   return M.union(kept)
 end
 
--- The message for adding member `m` to a union with `members`, or nil. Lists
--- and dicts are counted first, so element types are never compared.
+-- The message for adding member `m` to a union with `members`, or nil. Lists,
+-- dicts, and tuples are counted first, so element types are never compared.
 function M.conflict(members, m)
   for _, other in ipairs(members) do
-    if other.kind == m.kind and (m.kind == "list" or m.kind == "dict") then
+    if other.kind == m.kind and (m.kind == "list" or m.kind == "dict" or m.kind == "tuple") then
       return "a union can have only one " .. m.kind .. " member"
     end
     if M.assignable(other, m) or M.assignable(m, other) then

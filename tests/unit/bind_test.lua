@@ -425,6 +425,16 @@ return {
     eq(modules[2].enums[1], modules[1].functions[1].params[1].default.enum)
   end,
 
+  tuples = function()
+    local program = bind_source("type Pair = tuple[int, str]\ndef f(p: Pair, e: tuple[()]) -> None:\n    pass\n" .. MAIN)
+    eq("tuple[int, str]", program.functions[1].params[1].type.name)
+    eq("tuple[()]", program.functions[1].params[2].type.name)
+    eq("list[tuple[int, tuple[()]]]",
+      bind_source("def f(x: list[tuple[int, tuple[()]]]) -> None:\n    pass\n" .. MAIN).functions[1].params[1].type.name)
+    eq("1:23: a union can have only one tuple member",
+      bind_error("def f(x: tuple[int] | tuple[str]) -> None:\n    pass\n" .. MAIN))
+  end,
+
   enum_dictionary_keys = function()
     local E = "enum E:\n    A\nenum F:\n    A\n"
     eq("dict[E, int]", bind_source(E .. "def f(d: dict[E, int]) -> None:\n    pass\n" .. MAIN).functions[1].params[1].type.name)

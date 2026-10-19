@@ -40,17 +40,44 @@ local function pure(name, args)
   return { kind = "Pure", name = name, args = args, span = args[1].span }
 end
 
--- Converts `value` from the representation of type `from` to that of `to`,
--- boxing or unboxing floats where only one of them is boxed.
-local function convert(value, from, to)
-  if not to or types.boxed(to) == types.boxed(from) then
-    return value
-  elseif types.boxed(to) and types.has(from, "float") then
-    return pure("box", { value })
-  elseif types.boxed(from) and types.has(to, "float") then
-    return pure("unbox", { value })
+local function tuple_member(type)
+  for _, m in ipairs(types.members(type)) do
+    if m.kind == "tuple" then
+      return m
+    end
   end
-  return value
+end
+
+-- How a value of type `from` becomes a value of type `to`, or nil when their
+-- representations agree: `float` is "box" or "unbox" for a number, and `[i]`
+-- converts tuple position `i`.
+local function conversion(from, to)
+  local step = {}
+  if types.boxed(to) and not types.boxed(from) and types.has(from, "float") then
+    step.float = "box"
+  elseif types.boxed(from) and not types.boxed(to) and types.has(to, "float") then
+    step.float = "unbox"
+  end
+  local source, target = tuple_member(from), tuple_member(to)
+  if source and target then
+    for i, element in ipairs(source.elements) do
+      step[i] = conversion(element, target.elements[i])
+    end
+  end
+  return next(step) and step or nil
+end
+
+-- Converts `value` from the representation of type `from` to that of `to`,
+-- boxing or unboxing floats, including those in tuple positions, where only
+-- one of them is boxed.
+local function convert(value, from, to)
+  local step = to and conversion(from, to)
+  if not step then
+    return value
+  elseif tuple_member(from) then
+    return pure("convert", { value, { kind = "Literal", value = step } })
+  end
+  return pure(step.float, { value })
 end
 
 -- The kind string __wlo_isinstance tests for `member` of a value of `type`.
@@ -96,7 +123,7 @@ local function is_pure(node)
         return false
       end
     end
-  elseif kind == "ListDisplay" then
+  elseif kind == "ListDisplay" or kind == "TupleDisplay" then
     for _, element in ipairs(node.elements) do
       if not is_pure(element) then
         return false
@@ -322,6 +349,8 @@ local function lower_function(fn, sites, helpers)
           name = name .. "_float"
         elseif (name == "int" or name == "float") and node.args[1].type == types.str then
           name = "parse_" .. name
+        elseif name == "len" and node.args[1].type.kind == "tuple" then
+          return { kind = "Literal", value = #node.args[1].type.elements }
         end
         return helper(name, args, node.span)
       end
@@ -344,6 +373,8 @@ local function lower_function(fn, sites, helpers)
         return parts[1]
       end
       return { kind = "Concat", parts = parts }
+    elseif kind == "Index" and node.position then
+      return { kind = "Position", object = lower_object(node.object), position = node.position }
     elseif kind == "Index" then
       local object = lower_operand(node.object)
       local index = lower_operand(node.index)
@@ -368,6 +399,12 @@ local function lower_function(fn, sites, helpers)
         elements[i] = lower_operand(element)
       end
       return { kind = "List", elements = elements }
+    elseif kind == "TupleDisplay" then
+      local elements = {}
+      for i, element in ipairs(node.elements) do
+        elements[i] = lower_operand(element)
+      end
+      return { kind = "Tuple", elements = elements }
     elseif kind == "DictDisplay" then
       local entries = {}
       for _, entry in ipairs(node.entries) do
@@ -394,13 +431,13 @@ local function lower_function(fn, sites, helpers)
     return convert(value, node.type, node.expected_type)
   end
 
-  -- Returns a local or temporary for a field's object, so a field access never
-  -- begins with a parenthesized constructor, which Lua can read as a call
-  -- continuing the previous statement.
+  -- Returns a local or temporary for the object of a field or tuple position,
+  -- so a read never begins with a parenthesized constructor, which Lua can
+  -- read as a call continuing the previous statement.
   lower_object = function(node)
     local mark = depth
     local object = lower_operand(node)
-    if object.kind == "Construct" then
+    if object.kind == "Construct" or object.kind == "Tuple" then
       return spill(object, mark)
     end
     return object

@@ -14,7 +14,7 @@ async await case del from global lambda match nonlocal with yield
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
-local type_names = set("int float bool str bytes None list dict")
+local type_names = set("int float bool str bytes None list dict tuple")
 local expression_starts = set("NAME INT FLOAT STRING FSTRING True False None int float str bytes ( [ { - + not")
 local simple_statements = { pass = "Pass", ["break"] = "Break", continue = "Continue" }
 
@@ -108,6 +108,18 @@ function M.parse(tokens)
       local key = parse_type()
       expect(",")
       node.args = { key, parse_type() }
+      expect("]")
+    elseif token.kind == "tuple" then
+      -- `tuple[()]` is the empty tuple type.
+      expect("[")
+      node.args = {}
+      if accept("(") then
+        expect(")")
+      else
+        repeat
+          node.args[#node.args + 1] = parse_type()
+        until not accept(",")
+      end
       expect("]")
     end
     return node
@@ -228,9 +240,22 @@ function M.parse(tokens)
       advance()
       node = ast.node("Call", token.span, { name = kind, args = parse_args() })
     elseif kind == "(" then
+      -- `(x)` is grouping; a comma or empty parentheses make a tuple.
       advance()
-      node = parse_expression()
-      expect(")")
+      if accept(")") then
+        node = ast.node("TupleDisplay", token.span, { elements = {} })
+      else
+        node = parse_expression()
+        if accept(",") then
+          local elements = { node }
+          for _, element in ipairs(parse_list(")", parse_expression)) do
+            elements[#elements + 1] = element
+          end
+          node = ast.node("TupleDisplay", token.span, { elements = elements })
+        else
+          expect(")")
+        end
+      end
     elseif kind == "[" then
       advance()
       node = ast.node("ListDisplay", token.span, { elements = parse_list("]", parse_expression) })
