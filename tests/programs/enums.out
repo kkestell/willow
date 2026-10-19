@@ -15,3 +15,12 @@ False
 False
 True
 False
+False
+ColorMode.NEVER
+ColorMode.ALWAYS
+ColorMode.NEVER off
+ColorMode.AUTO auto
+ColorMode.ALWAYS on
+True
+None
+1

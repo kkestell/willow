@@ -175,7 +175,7 @@ return {
     eq("2:16: expected None, received int", check_errors(in_main("x = [None, 1]")))
     eq("2:9: cannot infer the element type of an empty list", check_errors(in_main("x = []")))
     eq("2:9: cannot infer the key and value types of an empty dict", check_errors(in_main("x = {}")))
-    eq("2:10: dictionary keys must be int or str", check_errors(in_main("x = {1.5: 2}")))
+    eq("2:10: dictionary keys must be int, str, or an enum", check_errors(in_main("x = {1.5: 2}")))
     eq("2:18: expected str, received int", check_errors(in_main("x = {'a': 1, 2: 2}")))
     eq("3:27: expected list[int | None], received list[int]",
       check_errors(in_main("x = [1]\ny: list[int | None] = x")))
@@ -722,7 +722,7 @@ return {
     eq("5:11: type io.File has no field 'path'", err("f = io.stdin()\nx = f.path"))
     eq("5:11: operator '==' cannot be applied to io.File and io.File", err("f = io.stdin()\nx = f == f"))
     eq("5:11: cannot print a value of type io.File", err("f = io.stdin()\nprint(f)"))
-    eq("1:15: dictionary keys must be int or str", check_errors("def f(d: dict[bytes, int]) -> None:\n    pass\n" .. MAIN))
+    eq("1:15: dictionary keys must be int, str, or an enum", check_errors("def f(d: dict[bytes, int]) -> None:\n    pass\n" .. MAIN))
     eq("2:5: expected an expression, found 'bytes'", check_errors(in_main("bytes = 1")))
   end,
 
@@ -799,5 +799,6 @@ return {
     eq("1:14: union members E and E overlap", check_errors("def f(x: E | E) -> None:\n    pass\n" .. E .. MAIN))
     eq("3:18: expected E, received F", check_errors("def f(x: E | F) -> E:\n    if isinstance(x, E):\n        return F.A\n"
       .. "    return E.A\n" .. E .. MAIN))
+    eq("2:20: expected E, received F", check_errors(in_main("x = {E.A: 1, F.A: 2}", E)))
   end,
 }

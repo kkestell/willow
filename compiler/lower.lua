@@ -189,7 +189,7 @@ local function lower_function(fn, sites, helpers)
   end
 
   -- The arguments of a checked call in parameter order, evaluated in written
-  -- order. The arguments left are defaults, which are literals.
+  -- order. The arguments left are defaults: literals or enum members.
   local function lower_args(node)
     local args = {}
     for _, i in ipairs(node.order) do

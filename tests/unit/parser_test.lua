@@ -465,8 +465,10 @@ return {
       .. " -> None { pass }", show(program.functions[1]))
     eq("-inf", tostring(1 / program.functions[1].params[4].default.value))
     eq("class P { x: int; y: int = 0 }", show(program.records[1]))
-    for _, text in ipairs({ "f()", "x", "[1]", "f'a'", "-'a'", "-True" }) do
-      eq("1:16: a default must be a literal", parse_error("def f(a: int = " .. text .. ") -> None:\n    pass\n"))
+    eq("def f(a: E = E.A, b: m.E = m.E.B) -> None { pass }",
+      show(parse("def f(a: E = E.A, b: m.E = m.E.B) -> None:\n    pass\n").functions[1]))
+    for _, text in ipairs({ "f()", "x", "[1]", "f'a'", "-'a'", "-True", "-E.A" }) do
+      eq("1:16: a default must be a literal or an enum member", parse_error("def f(a: int = " .. text .. ") -> None:\n    pass\n"))
     end
     eq("1:19: parameter 'b' without a default follows one with a default",
       parse_error("def f(a: int = 1, b: int) -> None:\n    pass\n"))

@@ -9,10 +9,19 @@ import io
 import sys
 import terminal
 
+enum Sort:
+    COUNT
+    NAME
+
+enum ColorMode:
+    AUTO
+    ALWAYS
+    NEVER
+
 class Options:
     path: str
     limit: int
-    sort: str
+    sort: Sort
     color: bool
     quiet: bool
 
@@ -32,17 +41,19 @@ def parse_options() -> Options:
         sys.eprint(error.message)
         sys.exit(2)
     files = args.get_list("file")
-    sort = args.get_str("sort")
-    color = args.get_str("color")
+    sorts = {"count": Sort.COUNT, "name": Sort.NAME}
+    sort = sorts.get(args.get_str("sort"))
+    modes = {"auto": ColorMode.AUTO, "always": ColorMode.ALWAYS, "never": ColorMode.NEVER}
+    color = modes.get(args.get_str("color"))
     limit = args.get_int("limit")
-    if len(files) > 1 or limit < 0 or (sort != "count" and sort != "name") or (color != "auto" and color != "always" and color != "never"):
+    if len(files) > 1 or limit < 0 or sort is None or color is None:
         sys.eprint(parser.help().split("\n")[0])
         sys.eprint("report: error: expected at most one file, --limit of at least 0, --sort count|name, and --color auto|always|never")
         sys.exit(2)
     path = "-"
     if len(files) == 1:
         path = files[0]
-    enabled = color == "always" or (color == "auto" and terminal.color_enabled(io.stdout()))
+    enabled = color == ColorMode.ALWAYS or (color == ColorMode.AUTO and terminal.color_enabled(io.stdout()))
     return Options(path, limit, sort, enabled, args.get_bool("quiet"))
 
 def keys(items: dict[str, int]) -> list[str]:
@@ -95,7 +106,7 @@ def main() -> None:
     terminal.finish_progress()
 
     levels = sorted(keys(counts))
-    if options.sort == "count":
+    if options.sort == Sort.COUNT:
         by_count: dict[int, list[str]] = {}
         for level in levels:
             n = counts[level]

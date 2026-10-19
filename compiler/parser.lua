@@ -524,7 +524,8 @@ function M.parse(tokens)
     return body
   end
 
-  -- A default is None, a boolean, a string, or a number with an optional sign.
+  -- A default is None, a boolean, a string, a number with an optional sign, or
+  -- a dotted name for an enum member.
   local function parse_default()
     local token = peek()
     local sign = (token.kind == "-" or token.kind == "+") and advance().kind
@@ -546,8 +547,15 @@ function M.parse(tokens)
     elseif not sign and kind == "None" then
       advance()
       return ast.node("None", token.span, {})
+    elseif not sign and kind == "NAME" and tokens[pos + 1].kind == "." then
+      local node = ast.node("Name", token.span, { name = advance().value })
+      while accept(".") do
+        local name = expect("NAME", "a member name")
+        node = ast.node("Field", name.span, { object = node, name = name.value })
+      end
+      return node
     end
-    diag.error(token.span, "a default must be a literal")
+    diag.error(token.span, "a default must be a literal or an enum member")
   end
 
   -- Parses `= default` after the type of `decl`, a parameter or field, which

@@ -305,7 +305,7 @@ local function bind_args(node, name, params, noun)
       if not default then
         diag.error(node.span, "'" .. name .. "' is missing argument '" .. param.name .. "'")
       end
-      args[j] = { kind = default.kind, value = default.value, span = node.span }
+      args[j] = { kind = default.kind, value = default.value, enum = default.enum, name = default.name, span = node.span }
     end
   end
   node.args, node.order = args, order
@@ -597,8 +597,8 @@ local function check_function(fn)
           diag.error(node.span, "cannot infer the key and value types of an empty dict")
         end
         key = check_expression(entries[1].key, state)
-        if key ~= types.int and key ~= types.str then
-          diag.error(entries[1].key.span, "dictionary keys must be int or str")
+        if not types.is_key(key) then
+          diag.error(entries[1].key.span, "dictionary keys must be int, str, or an enum")
         end
         value = check_expression(entries[1].value, state)
         first = 2

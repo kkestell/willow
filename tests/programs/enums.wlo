@@ -8,7 +8,11 @@ enum Keyword:
     end
     AUTO
 
-def use_color(mode: ColorMode) -> bool:
+class Settings:
+    name: str
+    mode: ColorMode = ColorMode.NEVER
+
+def use_color(mode: ColorMode = ColorMode.AUTO) -> bool:
     return mode == ColorMode.ALWAYS
 
 def describe(value: ColorMode | Keyword | str | None) -> str:
@@ -46,3 +50,14 @@ def main() -> None:
     modes = [ColorMode.AUTO, ColorMode.NEVER]
     print(ColorMode.NEVER in modes)
     print(ColorMode.ALWAYS in modes)
+    print(use_color())
+    print(Settings("plain").mode)
+    print(Settings("bright", ColorMode.ALWAYS).mode)
+    labels: dict[ColorMode, str] = {ColorMode.NEVER: "off", ColorMode.AUTO: "auto"}
+    labels[ColorMode.ALWAYS] = "on"
+    for key in labels:
+        print(f"{key} {labels[key]}")
+    print(ColorMode.AUTO in labels)
+    counts = {Keyword.AUTO: 1}
+    print(counts.get(Keyword.end))
+    print(counts[Keyword.AUTO])

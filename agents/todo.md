@@ -317,14 +317,14 @@ focused tests and `make test`. The last task of each milestone also makes the
 example changes it lists. New Rosetta Code examples go in
 `examples/rosettacode/` with their expected output.
 
-- [ ] Enums, enum defaults, and enum dictionary keys (spec §3–7)
+- [x] Enums, enum defaults, and enum dictionary keys (spec §3–7)
   - [x] Enum declarations and values: reserve `enum`; file-level `enum` blocks
     with unique members; `E.MEMBER` and `module.E.MEMBER` as values; enums in
     annotations, unions, `==`, `isinstance`, and narrowing; `str`, `print`, and
     f-string text `E.MEMBER`; reject calls, ordering, and numeric conversion;
     a runtime representation that keeps members distinct from strings and from
     other enums in unions
-  - [ ] Enum members, including qualified ones, as parameter and field
+  - [x] Enum members, including qualified ones, as parameter and field
     defaults; enum dictionary keys in annotations and displays, one enum type
     per key type; an `Operator` enum in `calc.wlo`, enum sort and color
     options in `report.wlo`, and Rosetta Code "Enumerations"

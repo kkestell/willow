@@ -350,7 +350,7 @@ return {
       bind_error("class E(Exception):\n    pass\ntype T = Exception | E\n" .. MAIN))
     eq("1:22: a union can have only one list member", bind_error("type T = list[int] | list[str]\n" .. MAIN))
     eq("2:14: union members None and None overlap", bind_error("type N = int | None\ntype T = N | None\n" .. MAIN))
-    eq("1:15: dictionary keys must be int or str", bind_error("def f(x: dict[float, int]) -> None:\n    pass\n" .. MAIN))
+    eq("1:15: dictionary keys must be int, str, or an enum", bind_error("def f(x: dict[float, int]) -> None:\n    pass\n" .. MAIN))
     bind_source("type Key = str\ndef f(x: dict[Key, int]) -> None:\n    pass\n" .. MAIN)
   end,
 
@@ -410,5 +410,25 @@ return {
       modules_error({ { "main", "import geo\ndef main() -> None:\n    x = geo.E.C\n" }, geo }))
     eq("main.wlo:3:13: enum 'geo.E' cannot be called",
       modules_error({ { "main", "import geo\ndef main() -> None:\n    x = geo.E()\n" }, geo }))
+  end,
+
+  enum_defaults = function()
+    local E = "enum E:\n    A\n    B\nenum F:\n    A\n"
+    local program = bind_source(E .. "class C:\n    e: E = E.B\ndef f(e: E = E.A) -> None:\n    pass\n" .. MAIN)
+    eq("EnumMember", program.records[1].fields[1].default.kind)
+    eq(program.enums[1], program.functions[1].params[1].default.enum)
+    eq("6:16: enum 'E' has no member 'C'", bind_error(E .. "def f(e: E = E.C) -> None:\n    pass\n" .. MAIN))
+    eq("6:16: expected F, received E", bind_error(E .. "def f(e: F = E.A) -> None:\n    pass\n" .. MAIN))
+    eq("6:16: unknown enum 'q'", bind_error(E .. "def f(e: int = q.A) -> None:\n    pass\n" .. MAIN))
+    local geo = { "geo", E }
+    local modules = bind_modules({ { "main", "import geo\ndef f(e: geo.E = geo.E.B) -> None:\n    pass\n" .. MAIN }, geo })
+    eq(modules[2].enums[1], modules[1].functions[1].params[1].default.enum)
+  end,
+
+  enum_dictionary_keys = function()
+    local E = "enum E:\n    A\nenum F:\n    A\n"
+    eq("dict[E, int]", bind_source(E .. "def f(d: dict[E, int]) -> None:\n    pass\n" .. MAIN).functions[1].params[1].type.name)
+    eq("5:15: dictionary keys must be int, str, or an enum",
+      bind_error(E .. "def f(d: dict[E | F, int]) -> None:\n    pass\n" .. MAIN))
   end,
 }

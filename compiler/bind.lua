@@ -153,8 +153,8 @@ resolve_type = function(node, module, name)
     return types.list(lazy(node.args[1], module))
   elseif node.name == "dict" then
     local key = resolve_type(node.args[1], module)
-    if key ~= types.int and key ~= types.str then
-      diag.error(node.args[1].span, "dictionary keys must be int or str")
+    if not types.is_key(key) then
+      diag.error(node.args[1].span, "dictionary keys must be int, str, or an enum")
     end
     return types.dict(key, lazy(node.args[2], module))
   elseif SCALARS[node.name] then
@@ -180,6 +180,38 @@ local function qualified_name(node)
   end
 end
 
+-- The enum that `node` names as `E` or `module.E` in `module` when no name in
+-- `scope` shadows it, or nil.
+local function enum_named(node, module, scope)
+  local path, root = qualified_name(node)
+  if not path or scope[root] then
+    return nil
+  end
+  local declaration
+  if path == root then
+    declaration = module.declarations[path]
+  elseif module.roots[root] then
+    local prefix, name = path:match("^(.*)%.([^.]*)$")
+    local imported = module.imported[prefix]
+    declaration = imported and lookup(module, imported, name, node.span)
+  end
+  if declaration and declaration.kind == "Enum" then
+    return declaration
+  end
+end
+
+-- Rewrites `node`, a `Field` on enum `enum`, into an `EnumMember`.
+local function resolve_member(node, enum)
+  local found = false
+  for _, member in ipairs(enum.members) do
+    found = found or member.name == node.name
+  end
+  if not found then
+    diag.error(node.span, "enum '" .. enum.type_name .. "' has no member '" .. node.name .. "'")
+  end
+  node.kind, node.enum, node.object = "EnumMember", enum, nil
+end
+
 local function resolve_function(fn, scope, module)
   local declarations, imports, roots = module.declarations, module.imported, module.roots
 
@@ -189,25 +221,6 @@ local function resolve_function(fn, scope, module)
     local path, root = qualified_name(object)
     if path and not scope[root] and roots[root] then
       return path
-    end
-  end
-
-  -- The enum that `node` names as `E` or `module.E` when no local shadows it,
-  -- or nil.
-  local function enum_named(node)
-    local path, root = qualified_name(node)
-    if not path or scope[root] then
-      return nil
-    end
-    local declaration
-    if path == root then
-      declaration = declarations[path]
-    elseif roots[root] then
-      local prefix, name = path:match("^(.*)%.([^.]*)$")
-      declaration = imports[prefix] and lookup(module, imports[prefix], name, node.span)
-    end
-    if declaration and declaration.kind == "Enum" then
-      return declaration
     end
   end
 
@@ -241,8 +254,9 @@ local function resolve_function(fn, scope, module)
       for _, arg in ipairs(node.args) do
         resolve_expression(arg)
       end
-    elseif kind == "MethodCall" and enum_named(node.object) then
-      diag.error(node.span, "enum '" .. enum_named(node.object).type_name .. "' has no method '" .. node.name .. "'")
+    elseif kind == "MethodCall" and enum_named(node.object, module, scope) then
+      local enum = enum_named(node.object, module, scope)
+      diag.error(node.span, "enum '" .. enum.type_name .. "' has no method '" .. node.name .. "'")
     elseif kind == "MethodCall" and module_path(node.object) then
       -- `module.name(...)` calls a function or constructs a record of that module.
       local path = module_path(node.object)
@@ -291,16 +305,8 @@ local function resolve_function(fn, scope, module)
       end
     elseif kind == "Keyword" then
       resolve_expression(node.value)
-    elseif kind == "Field" and enum_named(node.object) then
-      local enum = enum_named(node.object)
-      local found = false
-      for _, member in ipairs(enum.members) do
-        found = found or member.name == node.name
-      end
-      if not found then
-        diag.error(node.span, "enum '" .. enum.type_name .. "' has no member '" .. node.name .. "'")
-      end
-      node.kind, node.enum, node.object = "EnumMember", enum, nil
+    elseif kind == "Field" and enum_named(node.object, module, scope) then
+      resolve_member(node, enum_named(node.object, module, scope))
     elseif kind == "Field" then
       resolve_expression(node.object)
     elseif kind == "FString" then
@@ -336,7 +342,7 @@ local function resolve_function(fn, scope, module)
         end
       elseif kind == "FieldAssign" then
         resolve_expression(statement.value)
-        local enum = enum_named(statement.object)
+        local enum = enum_named(statement.object, module, scope)
         if enum then
           diag.error(statement.span, "cannot assign to a member of enum '" .. enum.type_name .. "'")
         end
@@ -488,10 +494,19 @@ local literal_types = {
   None = types.None,
 }
 
--- Checks that the default of `decl`, a parameter or field, fits its type.
-local function check_default(decl)
+-- Checks that the default of `decl`, a parameter or field of `module`, fits
+-- its type. Parameters and locals cannot shadow an enum named in a default.
+local function check_default(decl, module)
   local default = decl.default
   local type = literal_types[default.kind]
+  if default.kind == "Field" then
+    local enum = enum_named(default.object, module, {})
+    if not enum then
+      diag.error(default.object.span, "unknown enum '" .. qualified_name(default.object) .. "'")
+    end
+    resolve_member(default, enum)
+    type = enum.type
+  end
   if not types.assignable(decl.type, type) then
     diag.error(default.span, "expected " .. decl.type.name .. ", received " .. type.name)
   end
@@ -555,14 +570,14 @@ function M.bind(modules, test)
     for _, record in ipairs(module.records) do
       for _, field in ipairs(record.fields) do
         if field.default then
-          check_default(field)
+          check_default(field, module)
         end
       end
     end
     for _, fn in ipairs(M.functions(module)) do
       for _, param in ipairs(fn.params) do
         if param.default then
-          check_default(param)
+          check_default(param, module)
         end
       end
     end

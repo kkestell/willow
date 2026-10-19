@@ -25,6 +25,11 @@ function M.enum(decl)
   return { kind = "enum", enum = decl, name = decl.type_name }
 end
 
+-- Dictionary keys are ints, strs, or members of one enum.
+function M.is_key(t)
+  return t == M.int or t == M.str or t.kind == "enum"
+end
+
 -- Bind makes list elements and dict values lazy, filling in `type` once every
 -- alias is resolved, so that aliases may refer to themselves inside them.
 function M.expand(t)

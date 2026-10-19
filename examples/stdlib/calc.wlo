@@ -11,8 +11,14 @@ class Number:
 class Negate:
     operand: Expr
 
+enum Operator:
+    ADD
+    SUBTRACT
+    MULTIPLY
+    DIVIDE
+
 class Binary:
-    operator: str
+    operator: Operator
     left: Expr
     right: Expr
 
@@ -45,6 +51,15 @@ def tokenize(line: str) -> list[Token]:
     tokens.append(Token("", column))
     return tokens
 
+def operator(text: str) -> Operator:
+    if text == "+":
+        return Operator.ADD
+    elif text == "-":
+        return Operator.SUBTRACT
+    elif text == "*":
+        return Operator.MULTIPLY
+    return Operator.DIVIDE
+
 # A recursive-descent parser. Each method parses one level of precedence.
 class Parser:
     tokens: list[Token]
@@ -62,13 +77,13 @@ class Parser:
     def sum(self) -> Expr:
         left = self.product()
         while self.peek() == "+" or self.peek() == "-":
-            left = Binary(self.take().text, left, self.product())
+            left = Binary(operator(self.take().text), left, self.product())
         return left
 
     def product(self) -> Expr:
         left = self.unary()
         while self.peek() == "*" or self.peek() == "/":
-            left = Binary(self.take().text, left, self.unary())
+            left = Binary(operator(self.take().text), left, self.unary())
         return left
 
     def unary(self) -> Expr:
@@ -100,11 +115,11 @@ def evaluate(expr: Expr) -> float:
         return -evaluate(expr.operand)
     left = evaluate(expr.left)
     right = evaluate(expr.right)
-    if expr.operator == "+":
+    if expr.operator == Operator.ADD:
         return left + right
-    elif expr.operator == "-":
+    elif expr.operator == Operator.SUBTRACT:
         return left - right
-    elif expr.operator == "*":
+    elif expr.operator == Operator.MULTIPLY:
         return left * right
     return left / right
 

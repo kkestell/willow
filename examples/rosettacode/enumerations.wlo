@@ -1,0 +1,14 @@
+# https://rosettacode.org/wiki/Enumerations
+
+enum Fruit:
+    APPLE
+    BANANA
+    CHERRY
+
+def main() -> None:
+    for fruit in [Fruit.APPLE, Fruit.BANANA, Fruit.CHERRY]:
+        print(fruit)
+    # Members carry no values of their own; a dictionary gives them some.
+    values = {Fruit.APPLE: 10, Fruit.BANANA: 20, Fruit.CHERRY: 30}
+    for fruit in values:
+        print(f"{fruit} = {values[fruit]}")
