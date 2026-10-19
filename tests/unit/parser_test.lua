@@ -106,7 +106,8 @@ show = function(node)
   elseif kind == "Binary" then
     return "(" .. show(node.left) .. " " .. node.op .. " " .. show(node.right) .. ")"
   elseif kind == "Param" then
-    return node.name .. ": " .. show(node.type) .. (node.default and " = " .. show(node.default) or "")
+    return (node.keyword_only and "*" or "") .. node.name .. ": " .. show(node.type)
+      .. (node.default and " = " .. show(node.default) or "")
   elseif kind == "Function" then
     return "def " .. node.name .. "(" .. show_list(node.params, ", ") .. ") -> "
       .. show(node.return_type) .. " " .. show_block(node.body)
@@ -223,6 +224,19 @@ return {
     eq("2:9: unsupported operator ':='", body_error("f(a := 1)"))
     eq("2:11: annotated assignment needs an initializer", body_error("x: int"))
     eq("2:9: cannot assign to this expression", body_error("f() = 1"))
+  end,
+
+  keyword_only_parameters = function()
+    eq("def f(a: int, *b: int = 1, *c: str) -> None { pass }",
+      show(parse("def f(a: int, *, b: int = 1, c: str) -> None:\n    pass\n").functions[1]))
+    local record = parse("class C:\n    n: int\n\n    def m(self, *, x: int) -> None:\n        pass\n").records[1]
+    eq(true, record.methods[1].params[2].keyword_only)
+    eq("1:18: only one '*' is allowed in a parameter list", parse_error("def f(*, a: int, *, b: int) -> None:\n    pass\n"))
+    eq("1:8: variadic parameters are not supported", parse_error("def f(*args: int) -> None:\n    pass\n"))
+    eq("1:15: '*' must be followed by a keyword-only parameter", parse_error("def f(a: int, *) -> None:\n    pass\n"))
+    eq("1:7: '*' must be followed by a keyword-only parameter", parse_error("def f(*) -> None:\n    pass\n"))
+    eq("1:19: parameter 'b' without a default follows one with a default",
+      parse_error("def f(a: int = 1, b: int, *, c: int) -> None:\n    pass\n"))
   end,
 
   unpacking = function()

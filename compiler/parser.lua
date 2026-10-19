@@ -709,16 +709,33 @@ function M.parse(tokens)
         expect(")", "',' or ')'")
       end
     end
+    -- Parameters after a bare `*` are keyword-only, and their defaults may come
+    -- in any order.
+    local star
     while not closed and not accept(")") do
-      local param = expect("NAME", "a parameter name")
-      expect(":")
-      local node = ast.node("Param", param.span, { name = param.value, type = parse_type() })
-      parse_optional_default(node, params[#params], "parameter")
-      params[#params + 1] = node
+      if peek().kind == "*" then
+        if star then
+          diag.error(peek().span, "only one '*' is allowed in a parameter list")
+        end
+        star = advance()
+        if peek().kind == "NAME" then
+          diag.error(peek().span, "variadic parameters are not supported")
+        end
+      else
+        local param = expect("NAME", "a parameter name")
+        expect(":")
+        local node = ast.node("Param", param.span,
+          { name = param.value, type = parse_type(), keyword_only = star and true })
+        parse_optional_default(node, not star and params[#params] or nil, "parameter")
+        params[#params + 1] = node
+      end
       if not accept(",") then
         expect(")", "',' or ')'")
         break
       end
+    end
+    if star and not (params[#params] and params[#params].keyword_only) then
+      diag.error(star.span, "'*' must be followed by a keyword-only parameter")
     end
     expect("->")
     local return_type = parse_type()

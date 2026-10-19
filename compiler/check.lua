@@ -319,15 +319,19 @@ local function bind_args(node, name, params, noun)
         diag.error(arg.span, "'" .. name .. "' received more than one value for '" .. arg.name .. "'")
       end
       arg = arg.value
+    elseif params[i] and params[i].keyword_only then
+      diag.error(arg.span, "'" .. name .. "' received a positional argument for keyword-only parameter '"
+        .. params[i].name .. "'")
     end
     args[index] = arg
     order[i] = index
   end
-  -- Defaults are trailing, so the last parameter without one ends the
-  -- required ones.
+  -- Defaults are trailing among positional parameters, so the last positional
+  -- parameter without one ends the required ones. Missing keyword-only
+  -- arguments are reported below.
   local required = 0
   for j, param in ipairs(params) do
-    if not param.default then
+    if not param.default and not param.keyword_only then
       required = j
     end
   end

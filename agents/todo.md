@@ -345,7 +345,7 @@ example changes it lists. New Rosetta Code examples go in
     for the step in `fibonacci_sequence.wlo`
 
 - [ ] Keyword-only parameters and general library keyword arguments (spec §3, §5)
-  - [ ] Bare `*` in function and method parameter lists; keyword-only
+  - [x] Bare `*` in function and method parameter lists; keyword-only
     parameters required or defaulted in any order; positional arguments for
     them rejected; the default-ordering rule limited to positional parameters
   - [ ] Keyword arguments by documented name for every standard-library

@@ -32,6 +32,16 @@ def fail(message: str) -> int:
 def triple(a: int, b: int = 0, c: int = 0) -> str:
     return f"{a} {b} {c}"
 
+# Keyword-only parameters may be required or defaulted in any order.
+def report(path: str, *, limit: int = 100, verbose: bool, tag: str = "x") -> str:
+    return f"{path} {limit} {verbose} {tag}"
+
+class Counter:
+    n: int
+
+    def scaled(self, *, by: int = 2) -> int:
+        return self.n * by
+
 def main() -> None:
     assert str(zero()) == "-0.0"
     assert str(Options("report").zero) == "-0.0"
@@ -66,3 +76,8 @@ def main() -> None:
     xs = [2, 3, 1]
     xs.sort(reverse=True)
     print(f"{xs[0]} {xs[1]} {xs[2]}")
+
+    print(report("a", verbose=True))
+    print(report(tag="t", verbose=False, path="b", limit=5))
+    counter = Counter(3)
+    print(f"{counter.scaled()} {counter.scaled(by=4)}")

@@ -816,6 +816,16 @@ return {
     eq("2:11: operator 'in' cannot be applied to int and tuple[int, int]", check_errors(in_main("x = 1 in (1, 2)")))
   end,
 
+  keyword_only_parameters = function()
+    local F = "def f(a: int, *, c: int) -> None:\n    pass\n"
+    eq("2:10: 'f' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("f(1, 2)", F)))
+    eq("2:5: 'f' is missing argument 'c'", check_errors(in_main("f(1)", F)))
+    eq("2:5: 'f' is missing argument 'a'", check_errors(in_main("f(c=2)", F)))
+    local C = "class C:\n    n: int\n\n    def m(self, *, by: int = 2) -> int:\n        return by\n"
+    eq("3:9: 'm' received a positional argument for keyword-only parameter 'by'",
+      check_errors(in_main("c = C(1)\nc.m(3)", C)))
+  end,
+
   unpacking = function()
     eq("2:5: cannot unpack a value of type int", check_errors(in_main("a, b = 1")))
     eq("2:5: cannot unpack a value of type list[int]", check_errors(in_main("a, b = [1, 2]")))
