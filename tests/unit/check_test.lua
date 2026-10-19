@@ -842,7 +842,14 @@ return {
     eq("2:11: operator '==' cannot be applied to T and T", body_errors("b = x == x\nreturn x"))
     eq("2:14: type T has no field 'n'", body_errors("return x.n"))
     eq("2:21: expected int, received str", check_errors(in_main("x = first[int](['a'])", F)))
-    eq("2:9: 'first' needs type arguments", check_errors(in_main("x = first([1])", F)))
+    local G = F .. "def pair_same[T](a: T, b: T) -> list[T]:\n    return [a, b]\ndef empty[T]() -> list[T]:\n    return []\n"
+      .. "def apply[T](f: typing.Callable[[T], T]) -> int:\n    return 1\n"
+    eq("3:9: cannot infer type parameter 'T' of 'pair_same' from int and str",
+      check_errors("import typing\n" .. in_main("x = pair_same(1, 'a')", G)))
+    eq("3:9: cannot infer type parameter 'T' of 'empty'", check_errors("import typing\n" .. in_main("x = empty()", G)))
+    eq("3:21: expected list[str], received list[int]", check_errors("import typing\n" .. in_main("xs: list[str] = first([[1]])", G)))
+    eq("3:15: cannot infer the parameter types of this lambda",
+      check_errors("import typing\n" .. in_main("x = apply(lambda v: v)", G)))
     eq("2:9: 'first' expects 1 type argument, received 2", check_errors(in_main("x = first[int, str]([1])", F)))
   end,
 

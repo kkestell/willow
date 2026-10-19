@@ -386,7 +386,7 @@ example changes it lists. New Rosetta Code examples go in
     for every permitted type argument; type variables in unions only
     alongside `None`, flattened on substitution; explicit `f[int](...)`;
     bodies compiled once, with no float conversion of type-variable values
-  - [ ] Generic call inference from arguments and the expected result: a
+  - [x] Generic call inference from arguments and the expected result: a
     unique substitution, no invented unions, and undetermined-parameter
     errors
   - [ ] Generic classes and methods: `class Box[T]`, full type arguments in

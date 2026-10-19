@@ -344,24 +344,29 @@ function M.items(t)
   return M.union(kept)
 end
 
--- Whether `t` mentions a type parameter. `seen` stops at recursive aliases,
--- which cannot.
-local function has_typevar(t, seen)
+-- Whether `t` mentions a type parameter, or one in the set `only` when given.
+-- `seen` stops at recursive aliases, which mention none.
+local function has_typevar(t, seen, only)
   t = M.expand(t)
   if seen[t] then
     return false
   end
   seen[t] = true
   if t.kind == "typevar" then
-    return true
+    return not only or only[t] ~= nil
   end
   for _, part in ipairs(t.members or t.elements or t.params or {}) do
-    if has_typevar(part, seen) then
+    if has_typevar(part, seen, only) then
       return true
     end
   end
   local inner = t.element or t.value or t.result
-  return inner ~= nil and has_typevar(inner, seen)
+  return inner ~= nil and has_typevar(inner, seen, only)
+end
+
+-- Whether `t` mentions a type parameter that is a key of `set`.
+function M.mentions(t, set)
+  return has_typevar(t, {}, set)
 end
 
 -- `t` with each type parameter that `map` names replaced by its type
