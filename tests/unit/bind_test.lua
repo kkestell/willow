@@ -139,11 +139,13 @@ return {
     eq(2, #main.locals)
   end,
 
-  cannot_call_local_variable = function()
-    eq("2:5: cannot call local variable 'print'", bind_error("def main() -> None:\n    print(1)\n    print = 2\n"))
-    eq("2:5: cannot call local variable 'g'", bind_error("def f(g: int) -> None:\n    g()\n" .. MAIN))
-    eq("4:11: cannot call local variable 'g'",
-      bind_error("def g() -> int:\n    return 1\ndef main() -> None:\n    while g() > 0:\n        g = 1\n"))
+  calls_on_locals = function()
+    -- A local hides a declaration or built-in of the same name, so calls use its value.
+    local main = bind_source("def main() -> None:\n    print(1)\n    print = 2\n").functions[1]
+    eq("CallValue", main.body[1].call.kind)
+    eq(main.body[2].symbol, main.body[1].call.callee.symbol)
+    local f = bind_source("def f(g: int) -> None:\n    g()\n" .. MAIN).functions[1]
+    eq(f.params[1].symbol, f.body[1].call.callee.symbol)
   end,
 
   unknown_names_rejected = function()
@@ -151,9 +153,18 @@ return {
     eq("2:5: unknown function 'f'", bind_error("def main() -> None:\n    f()\n"))
   end,
 
-  functions_are_not_values = function()
-    eq("2:9: function 'main' cannot be used as a value", bind_error("def main() -> None:\n    x = main\n"))
+  function_values = function()
+    local program = bind_source("def main() -> None:\n    x = main\n")
+    eq(program.functions[1], program.functions[1].body[1].value.target)
+    eq("FunctionValue", program.functions[1].body[1].value.kind)
     eq("2:11: function 'print' cannot be used as a value", bind_error("def main() -> None:\n    print(print)\n"))
+    local geo = { "geo", "class Point:\n    x: int\ndef area(p: Point) -> int:\n    return p.x\n" }
+    local modules = bind_modules({ { "main", "import geo\ndef main() -> None:\n    f = geo.area\n" }, geo })
+    eq(modules[2].functions[1], modules[1].functions[1].body[1].value.target)
+    eq("main.wlo:3:13: class 'geo.Point' cannot be used as a value",
+      modules_error({ { "main", "import geo\ndef main() -> None:\n    f = geo.Point\n" }, geo }))
+    eq("main.wlo:3:14: function 'time.time' cannot be used as a value",
+      modules_error({ { "main", "import time\ndef main() -> None:\n    f = time.time\n" } }))
   end,
 
   records = function()
@@ -190,7 +201,7 @@ return {
 
   locals_shadow_constructors = function()
     local P = "class P:\n    x: int\n"
-    eq("5:9: cannot call local variable 'P'", bind_error(P .. "def main() -> None:\n    P = 1\n    p = P(1)\n"))
+    eq("CallValue", bind_source(P .. "def main() -> None:\n    P = 1\n    p = P(1)\n").functions[1].body[2].value.kind)
     bind_source(P .. "def main() -> None:\n    P = 1\n    q: P | None = None\n")
     eq("4:9: class 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
   end,
@@ -242,8 +253,8 @@ return {
   collection_builtins = function()
     eq("1:5: cannot redefine built-in function 'len'", bind_error("def len(x: int) -> int:\n    return x\n" .. MAIN))
     eq("1:5: cannot redefine built-in function 'range'", bind_error("def range() -> None:\n    pass\n" .. MAIN))
-    eq("3:14: cannot call local variable 'range'",
-      bind_error("def main() -> None:\n    range = 3\n    for i in range(3):\n        pass\n"))
+    local main = bind_source("def main() -> None:\n    range = 3\n    for i in range(3):\n        pass\n").functions[1]
+    eq("CallValue", main.body[2].iterable.kind)
   end,
 
   for_names_are_locals = function()
@@ -274,8 +285,8 @@ return {
     eq("2:9: class 'KeyError' cannot be used as a value", bind_error("def main() -> None:\n    x = KeyError\n"))
     local program = bind_source("def main() -> None:\n    e: Exception | None = ValueError('x')\n")
     eq("Exception | None", program.functions[1].body[1].annotation.name)
-    eq("3:21: cannot call local variable 'ValueError'",
-      bind_error("def main() -> None:\n    ValueError = 1\n    e: ValueError = ValueError('x')\n"))
+    local main = bind_source("def main() -> None:\n    ValueError = 1\n    e: ValueError = ValueError('x')\n").functions[1]
+    eq("CallValue", main.body[2].value.kind)
   end,
 
   except_classes = function()

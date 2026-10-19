@@ -300,7 +300,8 @@ function M.parse(tokens)
           node = ast.node("Field", name.span, { object = node, name = name.value })
         end
       elseif token.kind == "(" then
-        diag.error(token.span, "call target must be a function name")
+        advance()
+        node = ast.node("CallValue", token.span, { callee = node, args = parse_args() })
       else
         return node
       end
@@ -547,7 +548,7 @@ function M.parse(tokens)
         { name = expression.name, annotation = annotation, value = parse_expression() })
       reject_chained_assignment()
       return node
-    elseif expression.kind ~= "Call" and expression.kind ~= "MethodCall" then
+    elseif expression.kind ~= "Call" and expression.kind ~= "MethodCall" and expression.kind ~= "CallValue" then
       diag.error(expression.span, "only calls can be used as statements")
     end
     return ast.node("CallStmt", expression.span, { call = expression })

@@ -48,6 +48,8 @@ show = function(node)
     return "None"
   elseif kind == "Name" then
     return node.name
+  elseif kind == "CallValue" then
+    return "(" .. show(node.callee) .. ")(" .. show_list(node.args, ", ") .. ")"
   elseif kind == "Call" then
     return node.name .. "(" .. show_list(node.args, ", ") .. ")"
   elseif kind == "Unary" then
@@ -331,8 +333,8 @@ return {
     eq("(- xs[0])", expr("-xs[0]"))
     eq("text.strip().split(\",\")", expr("text.strip().split(',')"))
     eq("{ xs[i] = (v + 1); xs.append(2) }", body("xs[i] = v + 1\nxs.append(2)"))
-    eq("2:17: call target must be a function name", body_error("x = items[0](1)"))
-    eq("2:16: call target must be a function name", body_error("x = xs.f(1)(2)"))
+    eq("(items[0])(1)", expr("items[0](1)"))
+    eq("(xs.f(1))(2)", expr("xs.f(1)(2)"))
     eq("2:10: only a name can have an annotation", body_error("xs[0]: int = 1"))
     eq("2:7: only calls can be used as statements", body_error("xs[0]"))
   end,
@@ -477,9 +479,8 @@ return {
     eq("2:16: comparison chains are not supported", body_error("x = a == b == c"))
   end,
 
-  call_targets_are_names = function()
-    eq("2:8: call target must be a function name", body_error("(f)(x)"))
-    eq("2:9: call target must be a function name", body_error("f(x)(y)"))
+  calls_on_values = function()
+    eq("{ (f)(x); (f(x))(y) }", body("(f)(x)\nf(x)(y)"))
     eq('{ f(1, g(2), "s") }', body("f(1, g(2), 's',)"))
   end,
 

@@ -108,7 +108,8 @@ local function is_pure(node)
         return false
       end
     end
-  elseif kind == "Call" or kind == "Index" or kind == "Slice" or kind == "MethodCall" or kind == "Field" then
+  elseif kind == "Call" or kind == "CallValue" or kind == "Index" or kind == "Slice" or kind == "MethodCall"
+    or kind == "Field" then
     return false
   elseif kind == "Unary" then
     return not (node.op == "-" and node.type == types.int) and is_pure(node.operand)
@@ -370,6 +371,12 @@ local function lower_function(fn, sites, helpers)
       }
     elseif kind == "EnumMember" then
       return { kind = "EnumMember", enum = node.enum, name = node.name }
+    elseif kind == "FunctionValue" then
+      return { kind = "FunctionValue", target = node.target, qualified = node.qualified }
+    elseif kind == "CallValue" then
+      -- The callee is evaluated before the arguments.
+      local callee = lower_operand(node.callee)
+      return { kind = "Call", callee = callee, args = lower_args(node), span = node.span }
     elseif kind == "Field" then
       return { kind = "Field", object = lower_object(node.object), name = node.name }
     elseif kind == "FString" then

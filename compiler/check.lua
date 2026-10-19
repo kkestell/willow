@@ -538,6 +538,20 @@ local function check_function(fn)
       end
     elseif kind == "EnumMember" then
       type = node.enum.type
+    elseif kind == "FunctionValue" then
+      type = node.target.value_type
+    elseif kind == "CallValue" then
+      local callee = check_expression(node.callee, state)
+      if callee.kind ~= "function" then
+        diag.error(node.span, "cannot call a value of type " .. callee.name)
+      end
+      local fn = callee.fn
+      local name = node.callee.kind == "Name" and node.callee.name or fn.name
+      bind_args(node, name, fn.params, "parameter")
+      for i, arg in ipairs(node.args) do
+        check_against(arg, state, fn.params[i].type)
+      end
+      type = fn.return_type
     elseif kind == "Field" then
       type = field_type(node, check_expression(node.object, state))
     elseif kind == "FString" then

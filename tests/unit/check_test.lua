@@ -818,6 +818,19 @@ return {
     eq("2:11: operator 'in' cannot be applied to int and tuple[int, int]", check_errors(in_main("x = 1 in (1, 2)")))
   end,
 
+  function_values = function()
+    local D = "def double(x: int) -> int:\n    return x\n"
+    eq("3:5: cannot call a value of type int", check_errors(in_main("x = 1\nx(2)")))
+    eq("3:11: cannot print a value of type function double", check_errors(in_main("f = double\nprint(f)", D)))
+    eq("3:12: cannot format a value of type function double", check_errors(in_main("f = double\ns = f'{f}'", D)))
+    eq("3:11: operator '==' cannot be applied to function double and function double",
+      check_errors(in_main("f = double\nb = f == f", D)))
+    eq("3:23: type function double has no member int", check_errors(in_main("f = double\nb = isinstance(f, int)", D)))
+    eq("3:5: 'f' expects 1 argument, received 0", check_errors(in_main("f = double\nf()", D)))
+    local K = "def k(a: int, *, c: int = 0) -> None:\n    pass\n"
+    eq("3:10: 'g' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("g = k\ng(1, 2)", K)))
+  end,
+
   keyword_only_parameters = function()
     local F = "def f(a: int, *, c: int) -> None:\n    pass\n"
     eq("2:10: 'f' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("f(1, 2)", F)))

@@ -193,7 +193,10 @@ function M.emit(lowered)
       local text = expr(e.left, true) .. " " .. binary_ops[e.op] .. " " .. expr(e.right, true)
       return nested and "(" .. text .. ")" or text
     elseif kind == "Call" then
-      return function_name(e.target, e.qualified) .. "(" .. args(e.args) .. ")"
+      local callee = e.callee and expr(e.callee) or function_name(e.target, e.qualified)
+      return callee .. "(" .. args(e.args) .. ")"
+    elseif kind == "FunctionValue" then
+      return function_name(e.target, e.qualified)
     elseif kind == "Helper" then
       return runtime.reference(e.name) .. "(" .. args(e.args, e.site) .. ")"
     elseif kind == "Pure" then

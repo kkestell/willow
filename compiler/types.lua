@@ -30,6 +30,12 @@ function M.record(decl)
   return { kind = "record", record = decl, name = decl.type_name }
 end
 
+-- The type of a declared function as a value. It is compared by identity, so
+-- calls through it use the declaration's own parameters.
+function M.func(decl)
+  return { kind = "function", fn = decl, name = "function " .. decl.type_name }
+end
+
 function M.enum(decl)
   return { kind = "enum", enum = decl, name = decl.type_name }
 end
@@ -126,9 +132,10 @@ function M.boxed(t)
   return M.has(t, "int") and M.has(t, "float")
 end
 
--- Union members are matched by kind, or by declaration for records and enums.
+-- Union members are matched by kind, or by declaration for records, enums,
+-- and functions.
 local function key(t)
-  return t.record or t.enum or t.kind
+  return t.record or t.enum or t.fn or t.kind
 end
 
 -- `assumed` holds pairs already being compared, so recursive types terminate.
@@ -137,7 +144,7 @@ local function same(a, b, assumed)
   if a == b then
     return true
   end
-  if a.kind ~= b.kind or a.kind == "record" or SCALARS[a.kind] then
+  if a.kind ~= b.kind or a.kind == "record" or a.kind == "function" or SCALARS[a.kind] then
     return false
   end
   assumed[a] = assumed[a] or {}

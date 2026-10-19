@@ -354,7 +354,7 @@ example changes it lists. New Rosetta Code examples go in
     `frame` in `banner.wlo`
 
 - [ ] Function values, bound methods, lambdas, closures, and `nonlocal` (spec §5, §9)
-  - [ ] Declared functions as values: file-level and qualified functions as
+  - [x] Declared functions as values: file-level and qualified functions as
     values whose inferred aliases keep parameter names, defaults, and
     keyword-only requirements; calls on any callable expression, including
     callable locals that hide declarations; no equality, printing, or

@@ -236,27 +236,50 @@ local function resolve_function(fn, scope, module)
     end
   end
 
+  -- Makes `node` a function value of `declaration`, or reports why a
+  -- declaration named `name` cannot be a value.
+  local function declared_value(node, declaration, name)
+    if declaration.kind == "Function" then
+      -- A qualified name reaches the function even where a local hides it.
+      node.qualified = node.kind == "Field"
+      node.kind, node.target, node.object = "FunctionValue", declaration, nil
+    elseif declaration.kind == "Record" then
+      diag.error(node.span, "class '" .. name .. "' cannot be used as a value")
+    elseif declaration.kind == "Builtin" then
+      diag.error(node.span, "function '" .. name .. "' cannot be used as a value")
+    else
+      diag.error(node.span, declaration.kind:lower() .. " '" .. name .. "' cannot be used as a value")
+    end
+  end
+
   local function resolve_expression(node)
     local kind = node.kind
-    if kind == "Name" then
+    if kind == "Name" and not scope[node.name] and declarations[node.name] then
+      declared_value(node, declarations[node.name], node.name)
+    elseif kind == "Name" then
       node.symbol = scope[node.name]
       if not node.symbol then
         local declaration = declarations[node.name]
         if roots[node.name] then
           diag.error(node.span, "module '" .. node.name .. "' cannot be used as a value")
-        elseif declaration and declaration.kind == "Record" or exceptions[node.name] then
+        elseif exceptions[node.name] then
           diag.error(node.span, "class '" .. node.name .. "' cannot be used as a value")
-        elseif declaration and (declaration.kind == "Alias" or declaration.kind == "Enum") then
-          diag.error(node.span, declaration.kind:lower() .. " '" .. node.name .. "' cannot be used as a value")
-        elseif declaration or builtins[node.name] then
+        elseif builtins[node.name] then
           diag.error(node.span, "function '" .. node.name .. "' cannot be used as a value")
         end
         diag.error(node.span, "unknown name '" .. node.name .. "'")
       end
-    elseif kind == "Call" then
-      if scope[node.name] then
-        diag.error(node.span, "cannot call local variable '" .. node.name .. "'")
+    elseif kind == "Call" and scope[node.name] then
+      -- A local hides a declaration of the same name, so this calls its value.
+      node.kind, node.callee = "CallValue", ast.node("Name", node.span, { name = node.name })
+      node.name = nil
+      resolve_expression(node)
+    elseif kind == "CallValue" then
+      resolve_expression(node.callee)
+      for _, arg in ipairs(node.args) do
+        resolve_expression(arg)
       end
+    elseif kind == "Call" then
       node.target = declarations[node.name] or builtins[node.name] or exceptions[node.name]
       if not node.target then
         diag.error(node.span, "unknown function '" .. node.name .. "'")
@@ -320,6 +343,9 @@ local function resolve_function(fn, scope, module)
       resolve_expression(node.value)
     elseif kind == "Field" and enum_named(node.object, module, scope) then
       resolve_member(node, enum_named(node.object, module, scope))
+    elseif kind == "Field" and module_path(node.object) and imports[module_path(node.object)] then
+      local path = module_path(node.object)
+      declared_value(node, lookup(module, imports[path], node.name, node.span), path .. "." .. node.name)
     elseif kind == "Field" then
       resolve_expression(node.object)
     elseif kind == "FString" then
@@ -505,13 +531,15 @@ local function declare(module, modules_by_name, entry)
       declaration.module = module
       module.declarations[name] = declaration
     end
-    if declaration.kind == "Record" or declaration.kind == "Enum" or declaration.kind == "Alias" then
+    if not import then
       declaration.type_name = module == entry and name or module.name .. "." .. name
     end
     if declaration.kind == "Record" then
       declaration.type = types.record(declaration)
     elseif declaration.kind == "Enum" then
       declaration.type = types.enum(declaration)
+    elseif declaration.kind == "Function" then
+      declaration.value_type = types.func(declaration)
     end
   end
 end
