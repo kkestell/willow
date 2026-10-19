@@ -1,0 +1,4 @@
+# https://rosettacode.org/wiki/Hello_world/Text
+
+def main() -> None:
+    print("Hello world!")

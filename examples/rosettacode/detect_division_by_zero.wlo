@@ -1,0 +1,16 @@
+# https://rosettacode.org/wiki/Detect_division_by_zero
+
+def divides(a: int, b: int) -> bool:
+    try:
+        quotient = a // b
+    except ZeroDivisionError:
+        return False
+    return True
+
+def main() -> None:
+    print(divides(10, 2))
+    print(divides(10, 0))
+    try:
+        print(1.0 / 0.0)
+    except ZeroDivisionError as error:
+        print(f"caught: {error.message}")

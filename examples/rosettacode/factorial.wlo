@@ -1,0 +1,19 @@
+# https://rosettacode.org/wiki/Factorial
+
+def factorial_recursive(n: int) -> int:
+    if n < 2:
+        return 1
+    return n * factorial_recursive(n - 1)
+
+def factorial_iterative(n: int) -> int:
+    result = 1
+    for k in range(2, n + 1):
+        result = result * k
+    return result
+
+def main() -> None:
+    for n in range(11):
+        print(f"{n}! = {factorial_iterative(n)}")
+    # 20! is the largest factorial in Willow's integer range.
+    print(factorial_recursive(20) == factorial_iterative(20))
+    print(factorial_recursive(20))

@@ -35,8 +35,8 @@ willow compile hello.wlo -o hello.lua # compile to a single Lua file
 luajit hello.lua                      # run with LuaJIT 2.1
 willow build hello.wlo -o hello       # build a standalone executable
 ./hello                              # run the executable
-willow test examples/cart             # run tests
-willow test --check examples/cart     # check tests without running
+willow test examples/projects/cart             # run tests
+willow test --check examples/projects/cart     # check tests without running
 ```
 
 Compiled Lua files and executables take their own command-line arguments, for
@@ -56,7 +56,7 @@ packages.
 
 A project is a directory containing a `willow.json` file. The file names the
 entry module, the source root, any local dependency roots, and the test
-directory. `examples/portcheck` is an example project. Its `willow.json` sets the
+directory. `examples/projects/portcheck` is an example project. Its `willow.json` sets the
 entry to `portcheck/main.wlo` under the source root `src`, and lists `vendor` as
 a dependency root. The `textkit` modules in `vendor` are imported as
 `textkit.table`.
@@ -66,7 +66,7 @@ given:
 
 ```sh
 make
-cd examples/portcheck
+cd examples/projects/portcheck
 willow test
 willow run -- 127.0.0.1:22
 willow build -o portcheck

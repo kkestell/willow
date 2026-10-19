@@ -1,0 +1,35 @@
+# https://rosettacode.org/wiki/Sorting_algorithms/Merge_sort
+
+def merge(left: list[int], right: list[int]) -> list[int]:
+    result: list[int] = []
+    i = 0
+    j = 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            result.append(left[i])
+            i = i + 1
+        else:
+            result.append(right[j])
+            j = j + 1
+    for item in left[i:]:
+        result.append(item)
+    for item in right[j:]:
+        result.append(item)
+    return result
+
+def merge_sort(items: list[int]) -> list[int]:
+    if len(items) <= 1:
+        return items
+    middle = len(items) // 2
+    return merge(merge_sort(items[:middle]), merge_sort(items[middle:]))
+
+def show(items: list[int]) -> str:
+    words: list[str] = []
+    for item in items:
+        words.append(str(item))
+    return " ".join(words)
+
+def main() -> None:
+    items = [4, 65, 2, -31, 0, 99, 2, 83, 782, 1]
+    print(show(items))
+    print(show(merge_sort(items)))

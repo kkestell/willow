@@ -1,0 +1,24 @@
+# https://rosettacode.org/wiki/Classes
+
+class Account:
+    owner: str
+    balance: int = 0
+
+    def deposit(self, amount: int) -> None:
+        self.balance = self.balance + amount
+
+    def withdraw(self, amount: int) -> bool:
+        if amount > self.balance:
+            return False
+        self.balance = self.balance - amount
+        return True
+
+    def describe(self) -> str:
+        return f"{self.owner} has {self.balance}"
+
+def main() -> None:
+    account = Account("Ada")
+    account.deposit(100)
+    print(account.withdraw(30))
+    print(account.withdraw(500))
+    print(account.describe())

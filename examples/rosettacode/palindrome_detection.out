@@ -1,0 +1,4 @@
+racecar                         exact: True  inexact: True
+rotor                           exact: True  inexact: True
+willow                          exact: False inexact: False
+A man, a plan, a canal: Panama! exact: False inexact: True

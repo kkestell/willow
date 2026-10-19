@@ -1,0 +1,15 @@
+# https://rosettacode.org/wiki/Associative_array/Iteration
+
+def main() -> None:
+    ages = {"Ada": 36, "Alan": 41, "Grace": 85}
+    for name in ages:
+        print(f"{name}: {ages[name]}")
+    print("")
+    names: list[str] = []
+    for name in ages:
+        names.append(name)
+    for name in sorted(names, reverse=True):
+        print(name)
+    print("")
+    for name in ages:
+        print(ages[name])

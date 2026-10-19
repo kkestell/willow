@@ -1,0 +1,24 @@
+# https://rosettacode.org/wiki/Fibonacci_sequence
+
+def fib_recursive(n: int) -> int:
+    if n < 2:
+        return n
+    return fib_recursive(n - 1) + fib_recursive(n - 2)
+
+def fib_iterative(n: int) -> int:
+    if n == 0:
+        return 0
+    previous = 0
+    current = 1
+    for _ in range(1, n):
+        following = previous + current
+        previous = current
+        current = following
+    return current
+
+def main() -> None:
+    for n in range(16):
+        print(f"fib({n}) = {fib_iterative(n)}")
+    print(fib_recursive(25) == fib_iterative(25))
+    # fib(92) is the largest Fibonacci number in Willow's integer range.
+    print(fib_iterative(92))

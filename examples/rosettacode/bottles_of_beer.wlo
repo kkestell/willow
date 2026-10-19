@@ -1,0 +1,16 @@
+# https://rosettacode.org/wiki/99_bottles_of_beer
+
+def bottles(n: int) -> str:
+    if n == 0:
+        return "No more bottles"
+    if n == 1:
+        return "1 bottle"
+    return f"{n} bottles"
+
+def main() -> None:
+    for n in range(99, 0, -1):
+        print(f"{bottles(n)} of beer on the wall")
+        print(f"{bottles(n)} of beer")
+        print("Take one down, pass it around")
+        print(f"{bottles(n - 1)} of beer on the wall")
+        print("")

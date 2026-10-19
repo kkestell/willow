@@ -1,0 +1,33 @@
+# https://rosettacode.org/wiki/Sorting_algorithms/Quicksort
+
+def quicksort(items: list[int]) -> list[int]:
+    if len(items) <= 1:
+        return items
+    pivot = items[len(items) // 2]
+    less: list[int] = []
+    equal: list[int] = []
+    greater: list[int] = []
+    for item in items:
+        if item < pivot:
+            less.append(item)
+        elif item > pivot:
+            greater.append(item)
+        else:
+            equal.append(item)
+    result = quicksort(less)
+    for item in equal:
+        result.append(item)
+    for item in quicksort(greater):
+        result.append(item)
+    return result
+
+def show(items: list[int]) -> str:
+    words: list[str] = []
+    for item in items:
+        words.append(str(item))
+    return " ".join(words)
+
+def main() -> None:
+    items = [4, 65, 2, -31, 0, 99, 2, 83, 782, 1]
+    print(show(items))
+    print(show(quicksort(items)))

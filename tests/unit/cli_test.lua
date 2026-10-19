@@ -393,7 +393,7 @@ return {
 
   number_example = function()
     in_temp_dir(function(dir)
-      local example = quote(ROOT .. "/examples/number.wlo")
+      local example = quote(ROOT .. "/examples/stdlib/number.wlo")
       local status, stdout = sh(dir, "printf 'apple\\nbanana\\n' | " .. quote(WILLOW) .. " run " .. example .. " out.txt")
       eq(0, status)
       eq("wrote 2 lines\n", stdout)
@@ -406,7 +406,7 @@ return {
   end,
 
   shapes_example = function()
-    local example = "examples/shapes.wlo"
+    local example = "examples/stdlib/shapes.wlo"
     local status, stdout = willow(ROOT, "run " .. example .. " 3x4 2x2.5")
     eq(0, status)
     eq("3x4: 12.0 (doubled 48.0)\n2x2.5: 5.0 (doubled 20.0)\ntotal 17.0\n", stdout)
@@ -418,7 +418,7 @@ return {
 
   chars_example = function()
     in_temp_dir(function(dir)
-      local example = quote(ROOT .. "/examples/chars.wlo")
+      local example = quote(ROOT .. "/examples/stdlib/chars.wlo")
       local status, stdout, stderr = willow(dir, "run " .. example)
       eq(2, status)
       eq("", stdout)
@@ -434,9 +434,9 @@ return {
     end)
   end,
 
-  words_example = function()
+  word_frequency_regression = function()
     in_temp_dir(function(dir)
-      local example = quote(ROOT .. "/examples/words.wlo")
+      local example = quote(ROOT .. "/tests/fixtures/words.wlo")
       local status, stdout = sh(dir, "printf 'The cat and the dog\\nthe Stra\\303\\237e and STRASSE\\n\\n  cat\\n' | "
         .. quote(WILLOW) .. " run " .. example)
       eq(0, status)
@@ -455,7 +455,7 @@ return {
 
   banner_example = function()
     in_temp_dir(function(dir)
-      local example = quote(ROOT .. "/examples/banner.wlo")
+      local example = quote(ROOT .. "/examples/stdlib/banner.wlo")
       local status, stdout = willow(dir, "run " .. example .. " hello world")
       eq(0, status)
       eq("************************\n* hello world          *\n************************\n", stdout)
@@ -466,18 +466,18 @@ return {
   end,
 
   cart_example_tests_pass = function()
-    local status, stdout, stderr = willow(ROOT, "test examples/cart")
+    local status, stdout, stderr = willow(ROOT, "test examples/projects/cart")
     eq(0, status)
     eq(table.concat({
-      "PASS examples/cart/test_cart.wlo test_discount_out_of_range",
-      "PASS examples/cart/test_cart.wlo test_discount_rounds_down",
-      "PASS examples/cart/test_cart.wlo test_empty_cart_totals_zero",
-      "PASS examples/cart/test_cart.wlo test_subtotal_counts_quantities",
+      "PASS examples/projects/cart/test_cart.wlo test_discount_out_of_range",
+      "PASS examples/projects/cart/test_cart.wlo test_discount_rounds_down",
+      "PASS examples/projects/cart/test_cart.wlo test_empty_cart_totals_zero",
+      "PASS examples/projects/cart/test_cart.wlo test_subtotal_counts_quantities",
       "4 passed, 0 failed",
       "",
     }, "\n"), stdout)
     eq("", stderr)
-    status, stdout = willow(ROOT, "run examples/cart/main.wlo")
+    status, stdout = willow(ROOT, "run examples/projects/cart/main.wlo")
     eq(0, status)
     eq("tea         2     9.00\nscone       1     3.25\ndiscount           10%\ntotal            11.03\n", stdout)
   end,
@@ -550,7 +550,7 @@ return {
       os.execute("cd " .. quote(dir) .. " && mkdir notes && printf hello > a.txt && ln -s a.txt link"
         .. " && TZ=UTC touch -t 202401020304.05 a.txt notes && TZ=UTC touch -h -t 202401020304.05 link")
       local status, stdout, stderr = sh(dir, "LISTING_DIR=. " .. quote(WILLOW) .. " run "
-        .. quote(ROOT .. "/examples/listing.wlo"))
+        .. quote(ROOT .. "/examples/stdlib/listing.wlo"))
       eq(0, status)
       eq("", stderr)
       local lines = {}
@@ -610,7 +610,7 @@ return {
         all[#all + 1] = string.char(i)
       end
       write(dir .. "/source.bin", table.concat(all):rep(300))
-      local example = quote(ROOT .. "/examples/copy.wlo")
+      local example = quote(ROOT .. "/examples/stdlib/copy.wlo")
       local status, stdout = willow(dir, "run " .. example .. " source.bin target.bin")
       eq(0, status)
       eq("copied 76800 bytes\n", stdout)
@@ -625,7 +625,7 @@ return {
   jsonl_example = function()
     in_temp_dir(function(dir)
       write(dir .. "/log.jsonl", '{"level": "info", "n": 1}\n{"level": "error", "n": 2}\n[1]\n{"level": "error", "n": 3}\n')
-      local example = quote(ROOT .. "/examples/jsonl.wlo")
+      local example = quote(ROOT .. "/examples/stdlib/jsonl.wlo")
       local status, stdout, stderr = willow(dir, "run " .. example .. " level error <log.jsonl")
       eq(0, status)
       eq('{"level": "error", "n": 2}\n{"level": "error", "n": 3}\n', stdout)
@@ -642,7 +642,7 @@ return {
 
   wrap_example = function()
     in_temp_dir(function(dir)
-      local example = quote(ROOT .. "/examples/wrap.wlo")
+      local example = quote(ROOT .. "/examples/stdlib/wrap.wlo")
       local function wrap(args)
         return willow(dir, "run " .. example .. " " .. args)
       end
@@ -667,7 +667,7 @@ return {
   calc_example = function()
     in_temp_dir(function(dir)
       local status, stdout = sh(dir, "printf '2 * (3 + 4)\\n-(1 - 3) / 4\\n\\n1 / 0\\n(1 + 2\\n3 $ 4\\n' | "
-        .. quote(WILLOW) .. " run " .. quote(ROOT .. "/examples/calc.wlo"))
+        .. quote(WILLOW) .. " run " .. quote(ROOT .. "/examples/stdlib/calc.wlo"))
       eq(0, status)
       eq("14.0\n0.5\ndivision by zero\ncolumn 7: expected ')'\ncolumn 3: unexpected '$'\n", stdout)
     end)
@@ -676,7 +676,7 @@ return {
   trash_example = function()
     in_temp_dir(function(dir)
       os.execute("cd " .. quote(dir) .. " && mkdir sub && printf a > a.txt && printf b > sub/b.txt")
-      local example = quote(ROOT .. "/examples/trash.wlo")
+      local example = quote(ROOT .. "/examples/stdlib/trash.wlo")
       local status, stdout, stderr = willow(dir, "run " .. example .. " a.txt sub/b.txt sub missing")
       eq(1, status)
       eq("trash: sub is a directory\ntrash: cannot stat missing: No such file or directory\n", stderr)
@@ -692,7 +692,7 @@ return {
 
   jobs_example = function()
     in_temp_dir(function(dir)
-      local status, stdout = willow(dir, "run " .. quote(ROOT .. "/examples/jobs.wlo")
+      local status, stdout = willow(dir, "run " .. quote(ROOT .. "/examples/stdlib/jobs.wlo")
         .. [[ --limit 1 logs 'echo job $JOB_NUMBER; cat' 'sleep 0.3; echo oops >&2; exit 3' 'exec sleep 5']])
       eq(1, status)
       eq("job 1: exit status 0: echo job $JOB_NUMBER; cat\njob 2: exit status 3: sleep 0.3; echo oops >&2; exit 3\n"
@@ -709,7 +709,7 @@ return {
         lines[i] = i % 5 == 0 and "ERROR failed" or (i % 2 == 0 and "INFO ok" or "WARN slow")
       end
       write(dir .. "/app.log", table.concat(lines, "\n") .. "\n")
-      local example = quote(ROOT .. "/examples/report.wlo")
+      local example = quote(ROOT .. "/examples/stdlib/report.wlo")
       local status, stdout, stderr = willow(dir, "run " .. example .. " --help")
       eq(0, status)
       eq("usage: report [options] [file ...]\n", stdout:match("^[^\n]*\n"))
@@ -761,7 +761,7 @@ return {
   api_and_fetch_examples = function()
     with_http_server(function(base)
       in_temp_dir(function(dir)
-        local api, fetch = quote(ROOT .. "/examples/api.wlo"), quote(ROOT .. "/examples/fetch.wlo")
+        local api, fetch = quote(ROOT .. "/examples/stdlib/api.wlo"), quote(ROOT .. "/examples/stdlib/fetch.wlo")
         local status, stdout = willow(dir, "run " .. api .. " " .. base .. "/json")
         eq(0, status)
         eq('status 200\nname: "Willow"\nports: [80,443]\n', stdout)
@@ -834,14 +834,14 @@ return {
   end,
 
   kv_example = function()
-    local status, stdout, stderr = willow(ROOT, "test examples/kv")
+    local status, stdout, stderr = willow(ROOT, "test examples/stdlib/kv")
     eq("", stderr)
     eq(0, status)
-    eq("PASS examples/kv/test_kv.wlo test_clients_are_served_in_turn\n"
-      .. "PASS examples/kv/test_kv.wlo test_set_get_and_keys\n"
-      .. "PASS examples/kv/test_kv.wlo test_split_code_point_is_reassembled\n3 passed, 0 failed\n", stdout)
+    eq("PASS examples/stdlib/kv/test_kv.wlo test_clients_are_served_in_turn\n"
+      .. "PASS examples/stdlib/kv/test_kv.wlo test_set_get_and_keys\n"
+      .. "PASS examples/stdlib/kv/test_kv.wlo test_split_code_point_is_reassembled\n3 passed, 0 failed\n", stdout)
     in_temp_dir(function(dir)
-      local pid = start_server(quote(WILLOW) .. " run " .. quote(ROOT .. "/examples/kv/server.wlo") .. " "
+      local pid = start_server(quote(WILLOW) .. " run " .. quote(ROOT .. "/examples/stdlib/kv/server.wlo") .. " "
         .. quote(dir .. "/port"), dir .. "/server.log")
       local port
       for _ = 1, 100 do
@@ -852,7 +852,7 @@ return {
         os.execute("sleep 0.05")
       end
       local ok, err = pcall(function()
-        local client = quote(ROOT .. "/examples/kv/client.wlo")
+        local client = quote(ROOT .. "/examples/stdlib/kv/client.wlo")
         local code, out = willow(dir, "run " .. client .. " " .. assert(port, "server did not start")
           .. [[ '{"op": "set", "key": "a", "value": 1}' '{"op": "get", "key": "a"}' '{"op": "shutdown"}']])
         eq(0, code)
@@ -955,7 +955,7 @@ return {
   end,
 
   portcheck_example = function()
-    local project = ROOT .. "/examples/portcheck"
+    local project = ROOT .. "/examples/projects/portcheck"
     local status, stdout, stderr = willow(project, "test")
     eq("", stderr)
     eq(0, status)

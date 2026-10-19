@@ -1,5 +1,5 @@
 # Starts the server in its own process and talks to it over TCP.
-# Run with `willow test examples/kv` from the repository root, or
+# Run with `willow test examples/stdlib/kv` from the repository root, or
 # `willow test` from this directory.
 
 import framing
@@ -16,7 +16,7 @@ class Server:
     port: int
 
 def _server_path() -> str:
-    for path in ["server.wlo", "examples/kv/server.wlo"]:
+    for path in ["server.wlo", "examples/stdlib/kv/server.wlo"]:
         if fs.exists(path):
             return path
     raise RuntimeError("cannot find server.wlo")

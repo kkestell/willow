@@ -1,0 +1,25 @@
+# https://rosettacode.org/wiki/Hailstone_sequence
+
+def hailstone(n: int) -> list[int]:
+    sequence = [n]
+    while n != 1:
+        if n % 2 == 0:
+            n = n // 2
+        else:
+            n = 3 * n + 1
+        sequence.append(n)
+    return sequence
+
+def main() -> None:
+    sequence = hailstone(27)
+    print(f"hailstone(27) has {len(sequence)} elements")
+    print(f"it starts {sequence[0]}, {sequence[1]}, {sequence[2]}, {sequence[3]}")
+    print(f"and ends {sequence[-4]}, {sequence[-3]}, {sequence[-2]}, {sequence[-1]}")
+    longest = 1
+    longest_length = 1
+    for n in range(1, 100000):
+        length = len(hailstone(n))
+        if length > longest_length:
+            longest = n
+            longest_length = length
+    print(f"{longest} has the longest sequence below 100000, with {longest_length} elements")

@@ -1,0 +1,12 @@
+# https://rosettacode.org/wiki/Reverse_a_string
+
+def reverse(text: str) -> str:
+    result = ""
+    for c in text:
+        result = c + result
+    return result
+
+def main() -> None:
+    print(reverse("asdf"))
+    # Reversal is by code point.
+    print(reverse("café"))
