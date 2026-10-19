@@ -233,13 +233,13 @@ type Pair[K, V] = tuple[K, V]
 Each parameter names one type, and is in scope throughout its declaration,
 including nested function bodies and class methods. Parameter names must be
 unique and cannot hide another type parameter in scope. A type parameter may
-have one upper bound, as in `T: ByteReader`, where the bound is a concrete type
-or protocol. Type parameters can be used in annotations and type arguments, but
-are not runtime values and cannot be used in `isinstance`. A value of `T`
-supports only operations guaranteed by its bound; without a bound it may be
-stored, passed, and returned, but does not acquire numeric, ordering, or member
-operations from particular callers. Generic bodies
-must type-check under these rules for every permitted type argument.
+have one upper bound, as in `T: ByteReader`, where the bound is a class, native
+type, or protocol. Type parameters can be used in annotations and type
+arguments, but are not runtime values and cannot be used in `isinstance`. A
+value of `T` supports only operations guaranteed by its bound; without a bound
+it may be stored, passed, and returned, but does not acquire numeric, ordering,
+or member operations from particular callers. Generic bodies must type-check
+under these rules for every permitted type argument.
 
 Generic class and alias annotations supply all type arguments, as in `Box[int]`.
 Generic calls infer type arguments from their arguments and the expected result,
@@ -393,9 +393,12 @@ members are the same type. When a member is itself a union, such as an alias for
 a union, its members become members of the enclosing union. No member may be
 assignable to another member, and a union may have at most one `list` member and
 at most one `dict`, tuple, and callable member. A union cannot contain different
-specializations of the same generic class. So `int | int`,
-`Exception | ParseError`, and `list[int] | list[str]` are errors. A union that
-has `None` as a member, such as `str | None`, is called an optional type.
+specializations of the same generic class. A type parameter may be a union
+member only alongside `None`, as in `T | None`; substituting a type argument
+flattens the union, so `T | None` with `T = int | None` is `int | None`. So
+`int | int`, `Exception | ParseError`, `list[int] | list[str]`, and `T | int`
+are errors. A union that has `None` as a member, such as `str | None`, is called
+an optional type.
 
 A value of a union type can be assigned, passed as an argument, returned,
 compared, and printed, and it can be tested with `is None`, `is not None`, and
@@ -997,10 +1000,11 @@ exhaustion from another iterator cannot silently end the generator.
 
 `Generator[T]` also provides `close() -> None`. Closing a suspended generator
 discards the rest of its ordinary execution and runs pending `finally` clauses
-and `with` cleanup, from inner to outer. It does not enter `except` handlers.
-Closing a generator whose body has not started does not start it. Closing an
-exhausted or closed generator has no effect. Cleanup errors propagate and leave
-the generator closed. Resuming or closing a generator already executing raises
+and `with` cleanup, from inner to outer. It does not enter `except` handlers,
+and each pending `exit` receives `None`, as for a control transfer. Closing a
+generator whose body has not started does not start it. Closing an exhausted or
+closed generator has no effect. Cleanup errors propagate and leave the
+generator closed. Resuming or closing a generator already executing raises
 `RuntimeError` with the message `generator already running`.
 
 Generators satisfy the context-manager protocol: `enter` returns the generator

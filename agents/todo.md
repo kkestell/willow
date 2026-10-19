@@ -312,14 +312,165 @@ method call resolves statically.
 
 ## Language expansion milestones
 
+Implement these milestones in order. Each task is one plan and one commit with
+focused tests and `make test`. The last task of each milestone also makes the
+example changes it lists. New Rosetta Code examples go in
+`examples/rosettacode/` with their expected output.
+
 - [ ] Enums, enum defaults, and enum dictionary keys (spec §3–7)
+  - [ ] Enum declarations and values: reserve `enum`; file-level `enum` blocks
+    with unique members; `E.MEMBER` and `module.E.MEMBER` as values; enums in
+    annotations, unions, `==`, `isinstance`, and narrowing; `str`, `print`, and
+    f-string text `E.MEMBER`; reject calls, ordering, and numeric conversion;
+    a runtime representation that keeps members distinct from strings and from
+    other enums in unions
+  - [ ] Enum members, including qualified ones, as parameter and field
+    defaults; enum dictionary keys in annotations and displays, one enum type
+    per key type; an `Operator` enum in `calc.wlo`, enum sort and color
+    options in `report.wlo`, and Rosetta Code "Enumerations"
+
 - [ ] Tuples, tuple defaults, comparisons, and unpacking (spec §3–8)
+  - [ ] Tuple types and values: reserve `tuple`; `tuple[A, B]` and
+    `tuple[()]` annotations; displays with `(x,)` and `()` alongside grouping;
+    literal and negated-literal indexes with compile-time range errors; `len`;
+    positional assignability, converting float boxing per position; one tuple
+    member per union; `isinstance(v, tuple)`
+  - [ ] Tuple equality and ordering, left to right and stopping at the first
+    unequal position; iteration with the element union, rejecting invalid
+    unions; tuple defaults
+  - [ ] Unpacking: name and nested tuple patterns as assignment and `for`
+    targets; static shape checks; repeated and starred targets rejected; one
+    evaluation of the source, then left-to-right assignment under the
+    local-type, definite-assignment, and narrowing rules; tuple assignment
+    for the step in `fibonacci_sequence.wlo`
+
 - [ ] Keyword-only parameters and general library keyword arguments (spec §3, §5)
+  - [ ] Bare `*` in function and method parameter lists; keyword-only
+    parameters required or defaulted in any order; positional arguments for
+    them rejected; the default-ordering rule limited to positional parameters
+  - [ ] Keyword arguments by documented name for every standard-library
+    function and every string, bytes, list, dict, and native method; the
+    intrinsics stay positional-only; keyword-only `width` and `border` on
+    `frame` in `banner.wlo`
+
 - [ ] Function values, bound methods, lambdas, closures, and `nonlocal` (spec §5, §9)
+  - [ ] Declared functions as values: file-level and qualified functions as
+    values whose inferred aliases keep parameter names, defaults, and
+    keyword-only requirements; calls on any callable expression, including
+    callable locals that hide declarations; no equality, printing, or
+    `isinstance`
+  - [ ] Callable types: a provided `typing` module with
+    `Callable[[A, ...], R]`; compatibility with broader parameters, narrower
+    returns, and extra defaulted parameters, adapting arguments, results, and
+    omitted defaults at conversion; an explicit `Callable` exposes only the
+    positional contract; functions with required keyword-only parameters do
+    not convert; one callable member per union
+  - [ ] Bound methods retaining a receiver evaluated once; built-in and
+    library functions as values where an expected callable type fixes the
+    signature
+  - [ ] Nested `def` statements and closures: names bound when the definition
+    runs; shared captured bindings, separate per enclosing call and reused by
+    loops; self-recursion; captures definitely assigned at creation; captured
+    narrowing reset at closure entry and removed after every call; Lua
+    closures with traceback frame names
+  - [ ] `nonlocal` declarations and their rules; lambdas at lowest
+    precedence, with parameter types
+    from the expected callable type and inferred returns, including
+    parameterless lambdas without an expected type; Rosetta Code
+    "Higher-order functions" and "Closures/Value capture"
+
 - [ ] Generic functions, methods, classes, aliases, and bounded type parameters (spec §3–4)
+  - [ ] Generic functions with explicit specialization: type parameter lists
+    on file-level and nested functions, no hiding of a parameter in scope;
+    type variables limited to storing, passing, and returning; bodies checked
+    for every permitted type argument; type variables in unions only
+    alongside `None`, flattened on substitution; explicit `f[int](...)`;
+    bodies compiled once, with no float conversion of type-variable values
+  - [ ] Generic call inference from arguments and the expected result: a
+    unique substitution, no invented unions, and undetermined-parameter
+    errors
+  - [ ] Generic classes and methods: `class Box[T]`, full type arguments in
+    annotations, constructor inference and `Box[str](...)`, substituted fields
+    and methods, method type parameters and class parameters in method
+    bodies, invariance, one specialization per union, `isinstance` by class
+    name, no generic exception classes, across modules
+  - [ ] Generic aliases, including recursion through `list` and `dict`; one
+    upper bound on a class or native type, with the operations the bound
+    allows;
+    generic functions as values specialized by explicit arguments or an
+    expected callable type; Rosetta Code "Parametric polymorphism"
+
 - [ ] Structural protocols and the `typing` module (spec §3, §14)
+  - [ ] Protocol declarations and satisfaction: `class P(typing.Protocol)`
+    with `pass`-bodied method signatures; generic and self-referential
+    protocols; compatibility for classes, native types, and other protocols
+    after substitution (broader arguments, narrower returns, matching keyword
+    names, no extra required arguments); protocol assignability; no
+    construction, fields, or `isinstance`
+  - [ ] Protocol values: a protocol value is the underlying value, and each
+    call dispatches on its run-time type through a generated converter per
+    type and protocol that supplies implementation defaults and extra
+    optional parameters and converts arguments and results; run-time tags
+    for the built-in and native values that need them; only declared methods
+    exposed
+  - [ ] `typing.Iterable`, `Iterator`, `ContextManager`, and `Generator` as
+    standard protocols; protocol bounds on type parameters; a `Shape`
+    protocol in `shapes.wlo`
+    over `Rect` and a new `Circle` class
+
 - [ ] Extensible iteration, `iter`, `next`, and reusable range values (spec §8, §11, §14)
+  - [ ] `iter` and `next` built-ins and `StopIteration`; `for` over any
+    `typing.Iterable[T]`, ended only by `StopIteration` from advancement and
+    leaving iterators resumable after an early exit; user-defined iterators
+    and iterables
+  - [ ] Built-in iterables: `iter` methods on lists, dicts, strings, bytes, and
+    tuples returning fresh iterators under the existing mutation rules and
+    satisfying the standard protocols; `range(...)` as a reusable
+    `Iterable[int]` value; `io.File.iter()`; `for` loops over files in
+    place of the `readline` loops in `report.wlo` and `jsonl.wlo`
+
 - [ ] Generators and deterministic generator cleanup (spec §8, §14)
+  - [ ] Generator functions: `yield` statements; the three return
+    annotations and yield type checks; bare `return` and no every-path rule; a
+    body started on the first `next`; exhaustion, body exceptions closing the
+    generator, `generator raised StopIteration`, and `generator already
+    running`; generators in `for`, `iter`, and `next`; captured narrowing
+    removed at suspension; each generator a coroutine, with a private cancel
+    value that `__wlo_try` reports as a `"cancel"` departure, so protected
+    blocks skip `except` handlers, run `finally`, and re-raise it for `close`
+    to catch at the coroutine boundary
+  - [ ] Generator cleanup: `close()` runs pending `finally` clauses inner to
+    outer without entering `except` handlers; closing unstarted, exhausted, and
+    closed generators; cleanup errors; `yield` rejected directly in `finally`;
+    `enter` and `exit`; `Iterator` and `Iterable` annotations hiding `close`;
+    Rosetta Code
+    "Generator/Exponential"
+
 - [ ] Context managers, `with`, and scoped library resources (spec §8, §14)
+  - [ ] `with` statements: managers satisfying `typing.ContextManager[T]`;
+    name and tuple-pattern targets; left-to-right entry and right-to-left exit,
+    including after a failed entry; `exit` once with the pending exception or
+    `None` on every departure; exit errors replacing the pending exception or
+    transfer; definite assignment, control transfer, and no new scope
+  - [ ] Scoped library resources: `enter` and `exit` on `io.File`,
+    `net.Connection`, and `net.Listener`, rejecting closed handles and
+    standard streams on entry; generators under `with`, closing their
+    suspended contexts; `with` in place of `try`/`finally` cleanup in
+    `copy.wlo`, `trash.wlo`, `jobs.wlo`, and the `kv` client, server, and
+    tests, with `enter` and `exit` on `framing.Channel`
+
 - [ ] Iterable sorting, tuple ordering, and `key` callbacks (spec §7)
+  - [ ] `sorted` over any `Iterable[T]`, consumed fully before sorting;
+    sorting comparable tuples, with NaN anywhere in a key raising
+    `cannot sort NaN`; `sorted` directly over dictionaries in place of the
+    `keys` helpers in `report.wlo`, `listing.wlo`, and `kv/server.wlo` and
+    the copy loop in `associative_array_iteration.wlo`
+  - [ ] Keyword-only `key` on `sorted` and `list.sort`: any element type, one
+    evaluation per element in input order, `list changed during sort`, and no
+    reordering after key or validation failures; a count-then-name `key` in
+    `report.wlo` in place of its `by_count` grouping, and Rosetta Code "Sort
+    using a custom comparator"
+
 - [ ] Strict JSON integer range handling (spec §14)
+  - [ ] `json.parse` raises `JsonError` `integer out of range` at the number's
+    first character for integer tokens outside the `int` range
