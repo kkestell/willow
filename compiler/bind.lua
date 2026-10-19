@@ -32,9 +32,22 @@ local function collect_symbols(fn, outer)
     scope[param.name] = param.symbol
   end
 
-  fn.locals = {}
+  -- `nonlocal` names rebind the enclosing function's variables, so assignments
+  -- after the declaration make no local of their own.
+  fn.locals, fn.nonlocal_pending = {}, {}
   ast.assignments(fn.body, function(node)
-    if not scope[node.name] then
+    if node.kind == "Nonlocal" then
+      for _, n in ipairs(node.names) do
+        local own, enclosing = scope[n.name], outer and outer[n.name]
+        if own and own.param or not own and not enclosing then
+          diag.error(n.span, "nonlocal '" .. n.name .. "' must name a variable of an enclosing function")
+        elseif own and own ~= enclosing then
+          diag.error(n.span, "'" .. n.name .. "' is used before its nonlocal declaration")
+        end
+        scope[n.name] = enclosing
+        fn.nonlocal_pending[n.name] = true
+      end
+    elseif not scope[node.name] then
       local symbol = { name = node.name, span = node.span, owner = fn }
       scope[node.name] = symbol
       fn.locals[#fn.locals + 1] = symbol
@@ -360,6 +373,9 @@ local function resolve_function(fn, scope, module)
   -- Grows with each call resolved in this function, not in nested ones.
   local calls = 0
 
+  -- The prefix of the names of functions nested in `fn`.
+  local enclosing_name = fn.type_name or fn.class.type_name .. "." .. fn.name
+
   local function resolve_expression(node)
     local kind = node.kind
     if kind == "Call" or kind == "CallValue" or kind == "MethodCall" then
@@ -368,6 +384,9 @@ local function resolve_function(fn, scope, module)
     if kind == "Name" and not scope[node.name] and (declarations[node.name] or builtins[node.name]) then
       declared_value(node, declarations[node.name] or builtins[node.name], node.name)
     elseif kind == "Name" then
+      if fn.nonlocal_pending[node.name] then
+        diag.error(node.span, "'" .. node.name .. "' is used before its nonlocal declaration")
+      end
       node.symbol = scope[node.name]
       if not node.symbol then
         if roots[node.name] then
@@ -385,6 +404,15 @@ local function resolve_function(fn, scope, module)
       node.kind, node.callee = "CallValue", ast.node("Name", node.span, { name = node.name })
       node.name = nil
       resolve_expression(node)
+    elseif kind == "Lambda" then
+      -- A lambda is a nested function whose body returns its expression.
+      check_unique(node.params, "parameter")
+      node.fn = {
+        kind = "Function", name = "<lambda>", params = node.params, span = node.span,
+        body = { ast.node("Return", node.span, { value = node.body }) },
+        parent = fn, module = module, type_name = enclosing_name .. ".<lambda>",
+      }
+      resolve_function(node.fn, collect_symbols(node.fn, scope), module)
     elseif kind == "CallValue" then
       resolve_expression(node.callee)
       for _, arg in ipairs(node.args) do
@@ -505,10 +533,15 @@ local function resolve_function(fn, scope, module)
         if statement.annotation then
           statement.annotation = resolve_type(statement.annotation, module)
         end
+      elseif kind == "Nonlocal" then
+        for _, n in ipairs(statement.names) do
+          fn.nonlocal_pending[n.name] = nil
+          capture(scope[n.name], n.span)
+        end
       elseif kind == "FunctionDef" then
         local nested = statement.fn
         nested.parent, nested.module = fn, module
-        nested.type_name = (fn.type_name or fn.class.type_name .. "." .. fn.name) .. "." .. nested.name
+        nested.type_name = enclosing_name .. "." .. nested.name
         resolve_signature(nested, module)
         force_pending()
         for _, param in ipairs(nested.params) do

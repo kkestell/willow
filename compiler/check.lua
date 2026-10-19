@@ -226,7 +226,9 @@ end
 -- including nested blocks.
 local function assigned_symbols(body, result)
   ast.assignments(body, function(node)
-    result[node.symbol] = true
+    if node.kind ~= "Nonlocal" then
+      result[node.symbol] = true
+    end
   end)
   return result
 end
@@ -583,6 +585,37 @@ local function check_function(fn, entry)
       end
     elseif kind == "EnumMember" then
       type = node.enum.type
+    elseif kind == "Lambda" then
+      -- An expected callable gives the parameter types; the body gives the result.
+      local lambda, target = node.fn, display_member(expected, "callable")
+      local count = #lambda.params
+      if count > 0 and not target then
+        diag.error(node.span, "lambda parameters need an expected callable type")
+      elseif target and #target.params ~= count then
+        diag.error(node.span, "expected " .. target.name .. ", received a lambda with " .. count
+          .. (count == 1 and " parameter" or " parameters"))
+      end
+      local entry = {}
+      for _, c in ipairs(lambda.captures or {}) do
+        if not state[c.symbol] then
+          diag.error(c.span, "variable '" .. c.symbol.name .. "' may be used before assignment")
+        end
+        entry[c.symbol] = c.symbol.type
+      end
+      for i, param in ipairs(lambda.params) do
+        param.symbol.type = target.params[i]
+        entry[param.symbol] = target.params[i]
+      end
+      -- Creating the lambda calls nothing, so calls in its body leave captured
+      -- narrowing in place.
+      local body, before = lambda.body[1].value, calls
+      if target then
+        check_against(body, entry, target.result)
+        type = target
+      else
+        type = types.callable({}, check_expression(body, entry))
+      end
+      calls = before
     elseif kind == "FunctionValue" then
       type = node.target.value_type
     elseif kind == "BuiltinValue" then
@@ -897,6 +930,8 @@ local function check_function(fn, entry)
       assign(state, symbol, value_type)
     elseif kind == "Unpack" then
       check_pattern(statement.pattern, check_expression(statement.value, state), state)
+    elseif kind == "Nonlocal" then
+      -- Bind has already made later assignments rebind the outer variables.
     elseif kind == "FunctionDef" then
       local nested, symbol = statement.fn, statement.symbol
       -- Except for the function's own name, captures must be assigned now.

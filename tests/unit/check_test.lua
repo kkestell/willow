@@ -832,6 +832,17 @@ return {
     eq("3:10: 'g' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("g = k\ng(1, 2)", K)))
   end,
 
+  lambdas = function()
+    local T = "import typing\n"
+    eq("3:9: lambda parameters need an expected callable type", check_errors(T .. in_main("f = lambda x: x")))
+    eq("3:38: expected typing.Callable[[int], int], received a lambda with 2 parameters",
+      check_errors(T .. in_main("f: typing.Callable[[int], int] = lambda x, y: x")))
+    eq("3:48: expected str, received int", check_errors(T .. in_main("f: typing.Callable[[int], str] = lambda x: x")))
+    eq("3:17: variable 'y' may be used before assignment", check_errors(T .. in_main("g = lambda: y\ny = 1")))
+    eq("5:13: expected int, received str",
+      check_errors(in_main("x = 1\ndef inner() -> None:\n    nonlocal x\n    x = 's'\ninner()")))
+  end,
+
   closures = function()
     local H = "def g() -> bool:\n    return True\ndef m() -> int | None:\n    return 1\n"
     eq("3:16: variable 'x' may be used before assignment",
@@ -861,6 +872,9 @@ return {
     -- Taking a built-in function as a value calls nothing.
     check_source("import typing\n" .. in_main(capture .. "if x is not None:\n"
       .. "    f: typing.Callable[[str], int] = len\n    print(x + 1)", H))
+    -- Calls in a lambda's body do not run when the lambda is created.
+    check_source(in_main(capture .. "if x is not None:\n    try:\n        h = lambda: g()\n"
+      .. "    except ValueError:\n        print(x + 1)", H))
   end,
 
   builtin_values = function()

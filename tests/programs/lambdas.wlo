@@ -1,0 +1,59 @@
+import typing
+
+# Each counter rebinds its own `count`.
+def counter() -> typing.Callable[[], int]:
+    count = 0
+
+    def increment() -> int:
+        nonlocal count
+        count = count + 1
+        return count
+
+    return increment
+
+# The outer function reads what the nested function rebinds.
+def total() -> int:
+    sum = 0
+
+    def add(n: int) -> None:
+        nonlocal sum
+        sum = sum + n
+
+    add(3)
+    add(4)
+    return sum
+
+def apply(f: typing.Callable[[int], int], x: int) -> int:
+    return f(x)
+
+def threshold(minimum: int) -> typing.Callable[[int], bool]:
+    return lambda score: score >= minimum
+
+def main() -> None:
+    a = counter()
+    b = counter()
+    print(a())
+    print(a())
+    print(b())
+    print(total())
+    print(apply(lambda x: x * 10, 4))
+    ok = threshold(5)
+    print(ok(3))
+    print(ok(7))
+    fs: list[typing.Callable[[int], int]] = [lambda x: x + 1, lambda x: x * x]
+    for f in fs:
+        print(f(5))
+    # A parameterless lambda needs no expected type.
+    answer = lambda: 42
+    print(answer())
+    # The lambda's float result is boxed for the callable's result type.
+    half: typing.Callable[[], int | float] = lambda: 1.5
+    r = half()
+    print(isinstance(r, float))
+    # A lambda in a loop shares the loop variable's binding.
+    getters: list[typing.Callable[[], int]] = []
+    for i in range(3):
+        getters.append(lambda: i)
+    print(getters[0]())
+    add = lambda: lambda: 7
+    print(add()())

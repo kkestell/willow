@@ -17,16 +17,17 @@ local function visit_targets(pattern, visit)
   end
 end
 
--- Calls `visit(node)` for each Assign, For, FunctionDef, named except handler,
--- and target of an Unpack or For pattern in `body` and its nested blocks, outer
--- before inner and left to right; `node.name` is the name it assigns. Nested
+-- Calls `visit(node)` for each Assign, For, FunctionDef, Nonlocal, named except
+-- handler, and target of an Unpack or For pattern in `body` and its nested
+-- blocks, outer before inner and left to right; `node.name` is the name it
+-- assigns, and a Nonlocal names the outer variables later ones rebind. Nested
 -- function bodies are scopes of their own and are not visited.
 function M.assignments(body, visit)
   for _, statement in ipairs(body) do
     local kind = statement.kind
     if kind == "Unpack" or kind == "For" and statement.pattern then
       visit_targets(statement.pattern, visit)
-    elseif kind == "Assign" or kind == "For" or kind == "FunctionDef" then
+    elseif kind == "Assign" or kind == "For" or kind == "FunctionDef" or kind == "Nonlocal" then
       visit(statement)
     end
     if kind == "If" then

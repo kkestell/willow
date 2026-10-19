@@ -423,6 +423,9 @@ local function lower_function(fn, sites, helpers)
       }
     elseif kind == "EnumMember" then
       return { kind = "EnumMember", enum = node.enum, name = node.name }
+    elseif kind == "Lambda" then
+      -- Creating a closure has no effects, so it is set into a temporary first.
+      return spill({ kind = "Closure", fn = lower_function(node.fn, sites, helpers) }, depth)
     elseif kind == "FunctionValue" then
       return { kind = "FunctionValue", target = node.target, qualified = node.qualified }
     elseif kind == "BuiltinValue" then

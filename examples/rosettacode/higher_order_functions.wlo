@@ -1,0 +1,13 @@
+# https://rosettacode.org/wiki/Higher-order_functions
+
+import typing
+
+def first(f: typing.Callable[[int], int]) -> int:
+    return f(10)
+
+def second(n: int) -> int:
+    return n * n
+
+def main() -> None:
+    print(first(second))
+    print(first(lambda n: n + 1))

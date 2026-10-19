@@ -462,6 +462,23 @@ return {
       bind_error(T .. "def main() -> None:\n    b = isinstance(1, typing.Callable)\n"))
   end,
 
+  nonlocal_declarations = function()
+    local main = bind_source("def main() -> None:\n    x = 1\n    def g() -> None:\n        nonlocal x\n        x = 2\n"
+      .. "    g()\n").functions[1]
+    local g = main.body[2].fn
+    eq(main.locals[1], g.body[2].symbol)
+    eq(0, #g.locals)
+    eq(true, main.locals[1].captured)
+    local function nested(body)
+      return "def main() -> None:\n    x = 1\n    def g(p: int) -> None:\n" .. body:gsub("[^\n]+", "        %0") .. "\n    g(1)\n"
+    end
+    eq("4:18: nonlocal 'q' must name a variable of an enclosing function", bind_error(nested("nonlocal q")))
+    eq("4:18: nonlocal 'p' must name a variable of an enclosing function", bind_error(nested("nonlocal p")))
+    eq("4:15: 'x' is used before its nonlocal declaration", bind_error(nested("print(x)\nnonlocal x")))
+    eq("5:18: 'x' is used before its nonlocal declaration", bind_error(nested("x = 2\nnonlocal x")))
+    eq("2:14: nonlocal 'x' must name a variable of an enclosing function", bind_error("def main() -> None:\n    nonlocal x\n"))
+  end,
+
   nested_functions = function()
     local main = bind_source("def main() -> None:\n    x = 1\n    def g() -> int:\n        y = x\n"
       .. "        def h() -> int:\n            return x\n        x = 2\n        return y\n    print(g())\n").functions[1]

@@ -10,7 +10,7 @@ local set = lexer.set
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
-async await case del from global lambda match nonlocal with yield
+async await case del from global match with yield
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
@@ -398,7 +398,25 @@ function M.parse(tokens)
   end
 
   local parse_and = binary_level(set("and"), parse_not)
-  parse_expression = binary_level(set("or"), parse_and)
+  local parse_or = binary_level(set("or"), parse_and)
+
+  -- A lambda binds less tightly than every operator, so its body extends as
+  -- far as the enclosing expression allows.
+  parse_expression = function()
+    local token = peek()
+    if not accept("lambda") then
+      return parse_or()
+    end
+    local params = {}
+    if not accept(":") then
+      repeat
+        local name = expect("NAME", "a parameter name")
+        params[#params + 1] = ast.node("Param", name.span, { name = name.value })
+      until not accept(",") or peek().kind == ":"
+      expect(":", "',' or ':'")
+    end
+    return ast.node("Lambda", token.span, { params = params, body = parse_expression() })
+  end
 
   local parse_block, parse_try, parse_function
 
@@ -610,7 +628,15 @@ function M.parse(tokens)
       return ast.node("FunctionDef", fn.span, { fn = fn, name = fn.name })
     end
     local node
-    if kind == "return" then
+    if kind == "nonlocal" then
+      advance()
+      local names = {}
+      repeat
+        local name = expect("NAME", "a variable name")
+        names[#names + 1] = { name = name.value, span = name.span }
+      until not accept(",")
+      node = ast.node("Nonlocal", token.span, { names = names })
+    elseif kind == "return" then
       advance()
       local value
       if peek().kind ~= "NEWLINE" then

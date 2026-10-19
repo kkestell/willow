@@ -115,6 +115,18 @@ show = function(node)
   elseif kind == "Function" then
     return "def " .. node.name .. "(" .. show_list(node.params, ", ") .. ") -> "
       .. show(node.return_type) .. " " .. show_block(node.body)
+  elseif kind == "Lambda" then
+    local names = {}
+    for i, param in ipairs(node.params) do
+      names[i] = param.name
+    end
+    return "(lambda " .. table.concat(names, ", ") .. ": " .. show(node.body) .. ")"
+  elseif kind == "Nonlocal" then
+    local names = {}
+    for i, n in ipairs(node.names) do
+      names[i] = n.name
+    end
+    return "nonlocal " .. table.concat(names, ", ")
   elseif kind == "FunctionDef" then
     return show(node.fn)
   elseif kind == "Assign" then
@@ -541,13 +553,24 @@ return {
     eq("2:11: expected an expression, found end of line", body_error("assert"))
   end,
 
+  lambdas_and_nonlocal = function()
+    eq("(lambda x, y: (x + y))", expr("lambda x, y: x + y"))
+    eq("(lambda : 1)", expr("lambda: 1"))
+    eq("(lambda x: x)", expr("lambda x,: x"))
+    eq("(lambda x: (lambda : x))", expr("lambda x: lambda: x"))
+    eq("f((lambda x: x), 1)", expr("f(lambda x: x, 1)"))
+    eq("(lambda x: (x or y))", expr("lambda x: x or y"))
+    eq("{ nonlocal a, b }", body("nonlocal a, b"))
+    eq("2:17: expected ',' or ':', found '='", body_error("x = lambda a=1: a"))
+  end,
+
   nested_functions = function()
     eq("{ def g(x: int) -> int { return x }; y = g(1) }", body("def g(x: int) -> int:\n    return x\ny = g(1)"))
   end,
 
   unsupported_reserved_words = function()
     eq("2:5: 'with' is not supported", body_error("with:\n    pass"))
-    eq("2:9: 'lambda' is not supported", body_error("x = lambda"))
+    eq("2:5: 'yield' is not supported", body_error("yield"))
   end,
 
   enums = function()

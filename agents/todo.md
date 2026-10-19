@@ -353,7 +353,7 @@ example changes it lists. New Rosetta Code examples go in
     intrinsics stay positional-only; keyword-only `width` and `border` on
     `frame` in `banner.wlo`
 
-- [ ] Function values, bound methods, lambdas, closures, and `nonlocal` (spec §5, §9)
+- [x] Function values, bound methods, lambdas, closures, and `nonlocal` (spec §5, §9)
   - [x] Declared functions as values: file-level and qualified functions as
     values whose inferred aliases keep parameter names, defaults, and
     keyword-only requirements; calls on any callable expression, including
@@ -373,7 +373,7 @@ example changes it lists. New Rosetta Code examples go in
     loops; self-recursion; captures definitely assigned at creation; captured
     narrowing reset at closure entry and removed after every call; Lua
     closures with traceback frame names
-  - [ ] `nonlocal` declarations and their rules; lambdas at lowest
+  - [x] `nonlocal` declarations and their rules; lambdas at lowest
     precedence, with parameter types
     from the expected callable type and inferred returns, including
     parameterless lambdas without an expected type; Rosetta Code
