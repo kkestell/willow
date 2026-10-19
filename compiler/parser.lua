@@ -549,8 +549,8 @@ function M.parse(tokens)
     return body
   end
 
-  -- A default is None, a boolean, a string, a number with an optional sign, or
-  -- a dotted name for an enum member.
+  -- A default is None, a boolean, a string, a number with an optional sign, a
+  -- dotted name for an enum member, or a tuple of defaults.
   local function parse_default()
     local token = peek()
     local sign = (token.kind == "-" or token.kind == "+") and advance().kind
@@ -579,6 +579,17 @@ function M.parse(tokens)
         node = ast.node("Field", name.span, { object = node, name = name.value })
       end
       return node
+    elseif not sign and kind == "(" then
+      advance()
+      local elements = {}
+      if not accept(")") then
+        elements[1] = parse_default()
+        expect(",", "','")
+        for _, element in ipairs(parse_list(")", parse_default)) do
+          elements[#elements + 1] = element
+        end
+      end
+      return ast.node("TupleDisplay", token.span, { elements = elements })
     end
     diag.error(token.span, "a default must be a literal or an enum member")
   end

@@ -216,7 +216,8 @@ local function lower_function(fn, sites, helpers)
   end
 
   -- The arguments of a checked call in parameter order, evaluated in written
-  -- order. The arguments left are defaults: literals or enum members.
+  -- order. The arguments left are defaults: literals, enum members, or tuples of
+  -- them.
   local function lower_args(node)
     local args = {}
     for _, i in ipairs(node.order) do
@@ -297,25 +298,34 @@ local function lower_function(fn, sites, helpers)
       local left_type, right_type = node.left.type, node.right.type
       if node.op == "in" or node.op == "not in" then
         local name = prefix(right_type) .. "contains"
+        local args = { right, left }
         if right_type.kind == "list" then
+          -- A value wider than the elements compares with converted elements.
           local element = types.expand(right_type.element)
-          if types.boxed(left_type) and not types.boxed(element) and types.has(element, "float") then
-            name = "list_contains_boxed"
+          local step = types.assignable(left_type, element) and conversion(element, left_type)
+          if step then
+            name = "list_contains_converted"
+            args[3] = { kind = "Literal", value = step }
           else
-            left = convert(left, left_type, element)
+            args[2] = convert(left, left_type, element)
           end
         end
-        local contains = helper(name, { right, left }, node.span)
+        local contains = helper(name, args, node.span)
         if node.op == "in" then
           return contains
         end
         return { kind = "Not", operand = spill(contains, mark) }
       end
       if (node.op == "==" or node.op == "!=") and (types.boxed(left_type) or types.boxed(right_type)
-        or types.has(left_type, "bytes") or types.has(right_type, "bytes")) then
-        local wide = types.boxed(left_type) and left_type or right_type
+        or types.has(left_type, "bytes") or types.has(right_type, "bytes")
+        or types.has(left_type, "tuple") or types.has(right_type, "tuple")) then
+        -- The operand of the type the other is assignable to is the wider one.
+        local wide = types.assignable(left_type, right_type) and left_type or right_type
         local equal = pure("equal", { convert(left, left_type, wide), convert(right, right_type, wide) })
         return node.op == "==" and equal or { kind = "Not", operand = equal }
+      end
+      if left_type.kind == "tuple" then
+        return pure("tuple_order", { left, right, { kind = "Literal", value = node.op } })
       end
       local name = binary_helper(node)
       if name then
@@ -536,7 +546,16 @@ local function lower_function(fn, sites, helpers)
         node.iterator = helper("range", args, iterable.span)
       else
         local name = prefix(iterable.type) .. "items"
-        node.iterator = helper(name, { lower_operand(iterable) }, statement.span)
+        local value = lower_operand(iterable)
+        if iterable.type.kind == "tuple" then
+          -- Each position takes the representation of the item type.
+          local items = {}
+          for i = 1, #iterable.type.elements do
+            items[i] = statement.type
+          end
+          value = convert(value, iterable.type, types.tuple(items))
+        end
+        node.iterator = helper(name, { value }, statement.span)
       end
       local enclosing = loop
       loop = node

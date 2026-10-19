@@ -802,6 +802,20 @@ return {
     eq("2:11: cannot print a value of type tuple[int]", check_errors(in_main("print((1,))")))
   end,
 
+  tuple_comparisons_and_iteration = function()
+    eq("2:18: operator '==' cannot be applied to tuple[int, str] and tuple[int, int]",
+      check_errors(in_main("x = (1, 'a') == (1, 2)")))
+    eq("2:14: operator '==' cannot be applied to tuple[int] and tuple[int, int]", check_errors(in_main("x = (1,) == (1, 2)")))
+    eq("2:18: operator '==' cannot be applied to tuple[int, list[int]] and tuple[int, list[int]]",
+      check_errors(in_main("x = (1, [1]) == (1, [1])")))
+    eq("2:18: operator '<' cannot be applied to tuple[int, str] and tuple[int, None]",
+      check_errors(in_main("x = (1, 'a') < (1, None)")))
+    eq("2:14: operator '<' cannot be applied to tuple[int] and tuple[float]", check_errors(in_main("x = (1,) < (1.5,)")))
+    eq("2:14: cannot iterate over tuple[list[int], list[str]]: a union can have only one list member",
+      check_errors(in_main("for x in ([1], ['a']):\n    pass")))
+    eq("2:11: operator 'in' cannot be applied to int and tuple[int, int]", check_errors(in_main("x = 1 in (1, 2)")))
+  end,
+
   enums = function()
     local E = "enum E:\n    A\n    B\nenum F:\n    A\n"
     eq("2:13: operator '<' cannot be applied to E and E", check_errors(in_main("x = E.A < E.B", E)))

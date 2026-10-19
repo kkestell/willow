@@ -19,3 +19,30 @@ tuple Ada
 list
 none
 5
+True
+True
+True
+True
+True
+True
+False
+False
+True
+True
+False
+True
+False
+True
+False
+False
+False
+True
+True
+False
+1 False
+2.5 True
+None False
+Side.RIGHT 1.5 True
+Side.LEFT 3 False
+2
+3

@@ -482,6 +482,10 @@ return {
     eq("class P { x: int; y: int = 0 }", show(program.records[1]))
     eq("def f(a: E = E.A, b: m.E = m.E.B) -> None { pass }",
       show(parse("def f(a: E = E.A, b: m.E = m.E.B) -> None:\n    pass\n").functions[1]))
+    eq("def f(a: tuple[] = tuple(), b: tuple[int] = tuple(1), c: tuple[E, int] = tuple(E.A, -1)) -> None { pass }",
+      show(parse("def f(a: tuple[()] = (), b: tuple[int] = (1,), c: tuple[E, int] = (E.A, -1)) -> None:\n    pass\n")
+        .functions[1]))
+    eq("1:18: expected ',', found ')'", parse_error("def f(a: int = (1)) -> None:\n    pass\n"))
     for _, text in ipairs({ "f()", "x", "[1]", "f'a'", "-'a'", "-True", "-E.A" }) do
       eq("1:16: a default must be a literal or an enum member", parse_error("def f(a: int = " .. text .. ") -> None:\n    pass\n"))
     end

@@ -14,10 +14,10 @@ local unary_types = {
   ["not"] = { bool = types.bool },
 }
 
--- Result types keyed by "<left kind> <right kind>". Equality is handled
--- separately.
+-- Result types keyed by "<left kind> <right kind>". Equality and ordering are
+-- handled separately.
 local ARITHMETIC = { ["int int"] = types.int, ["float float"] = types.float }
-local ORDERING = { ["int int"] = types.bool, ["float float"] = types.bool, ["str str"] = types.bool }
+local ORDERING = { ["<"] = true, ["<="] = true, [">"] = true, [">="] = true }
 local binary_types = {
   ["+"] = { ["int int"] = types.int, ["float float"] = types.float, ["str str"] = types.str, ["bytes bytes"] = types.bytes },
   ["-"] = ARITHMETIC,
@@ -27,10 +27,6 @@ local binary_types = {
   ["%"] = ARITHMETIC,
   ["and"] = { ["bool bool"] = types.bool },
   ["or"] = { ["bool bool"] = types.bool },
-  ["<"] = ORDERING,
-  ["<="] = ORDERING,
-  [">"] = ORDERING,
-  [">="] = ORDERING,
 }
 
 local function optional_of(type)
@@ -263,6 +259,19 @@ end
 
 local SORT_PARAMS = { { name = "reverse", default = { kind = "Bool", value = false } } }
 
+-- A copy of default `node` for one call, spanning the call, so that each call
+-- checks nodes of its own.
+local function copy_default(node, span)
+  local copy = { kind = node.kind, value = node.value, enum = node.enum, name = node.name, span = span }
+  if node.elements then
+    copy.elements = {}
+    for i, element in ipairs(node.elements) do
+      copy.elements[i] = copy_default(element, span)
+    end
+  end
+  return copy
+end
+
 -- Puts the arguments of call `node` in parameter order, filling omitted ones
 -- with copies of their defaults, and records in `node.order` the parameter
 -- index of each written argument. `params` holds `{ name, default }` entries;
@@ -306,7 +315,7 @@ local function bind_args(node, name, params, noun)
       if not default then
         diag.error(node.span, "'" .. name .. "' is missing argument '" .. param.name .. "'")
       end
-      args[j] = { kind = default.kind, value = default.value, enum = default.enum, name = default.name, span = node.span }
+      args[j] = copy_default(default, node.span)
     end
   end
   node.args, node.order = args, order
@@ -417,6 +426,8 @@ local function check_function(fn)
           and (types.assignable(left, item) or types.assignable(item, left)) then
           type = types.bool
         end
+      elseif ORDERING[op] then
+        type = types.ordered(left, right) and types.bool or nil
       else
         type = binary_types[op][left.kind .. " " .. right.kind]
       end
@@ -847,9 +858,14 @@ local function check_function(fn)
         item = types.int
       else
         local iterable_type = check_expression(iterable, state)
-        item = iterable_type == types.bytes and types.int or item_type(iterable_type)
+        local message
+        if iterable_type.kind == "tuple" then
+          item, message = types.items(iterable_type)
+        else
+          item = iterable_type == types.bytes and types.int or item_type(iterable_type)
+        end
         if not item then
-          diag.error(iterable.span, "cannot iterate over " .. iterable_type.name)
+          diag.error(iterable.span, "cannot iterate over " .. iterable_type.name .. (message and ": " .. message or ""))
         end
       end
       statement.type = item

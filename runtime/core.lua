@@ -349,18 +349,48 @@ local function __wlo_unbox(value)
   return value
 end
 
--- Equality of printable values and bytes where floats may be boxed; the only
--- tables are boxes, bytes, and enum members, which are equal only to
--- themselves.
+-- Equality of printable values, bytes, and tuples where floats may be boxed;
+-- the only other tables are enum members, which are equal only to themselves.
+-- Two tuples have the same arity, which their static types guarantee.
 local function __wlo_equal(a, b)
   if type(a) == "table" and type(b) == "table" then
     if a.__wlo_octets ~= nil or b.__wlo_octets ~= nil then
       return a.__wlo_octets == b.__wlo_octets
     elseif a.__wlo_float ~= nil or b.__wlo_float ~= nil then
       return a.__wlo_float == b.__wlo_float
+    elseif a.__wlo_tuple and b.__wlo_tuple then
+      for i = 1, a.__wlo_tuple do
+        if not __wlo_equal(a[i], b[i]) then
+          return false
+        end
+      end
+      return true
     end
   end
   return a == b
+end
+
+-- `a op b` for tuples of ordered positions: the first unequal position
+-- decides, so a NaN there makes every comparison false.
+local function __wlo_tuple_order(a, b, op)
+  for i = 1, a.__wlo_tuple do
+    local x, y = a[i], b[i]
+    if type(x) == "table" then
+      if not __wlo_equal(x, y) then
+        return __wlo_tuple_order(x, y, op)
+      end
+    elseif x ~= y then
+      if op == "<" then
+        return x < y
+      elseif op == "<=" then
+        return x <= y
+      elseif op == ">" then
+        return x > y
+      end
+      return x >= y
+    end
+  end
+  return op == "<=" or op == ">="
 end
 
 -- Converts `value` by `step`, which the compiler builds from the value's
@@ -744,10 +774,11 @@ local function __wlo_list_contains(list, value, site)
   return false
 end
 
--- For a value with boxed floats in a list whose floats are not boxed.
-local function __wlo_list_contains_boxed(list, value, site)
+-- For a value whose type is wider than the list's elements, which are
+-- converted by `step` (see __wlo_convert) before comparing.
+local function __wlo_list_contains_converted(list, value, step, site)
   for i = 1, list.n do
-    if __wlo_equal(__wlo_box(list[i]), value) then
+    if __wlo_equal(__wlo_convert(list[i], step), value) then
       return true
     end
   end
@@ -794,6 +825,16 @@ local function __wlo_list_items(list, site)
     if i < list.n then
       i = i + 1
       return true, list[i]
+    end
+  end
+end
+
+local function __wlo_tuple_items(tuple, site)
+  local i = 0
+  return function()
+    if i < tuple.__wlo_tuple then
+      i = i + 1
+      return true, tuple[i]
     end
   end
 end

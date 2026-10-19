@@ -335,7 +335,7 @@ example changes it lists. New Rosetta Code examples go in
     literal and negated-literal indexes with compile-time range errors; `len`;
     positional assignability, converting float boxing per position; one tuple
     member per union; `isinstance(v, tuple)`
-  - [ ] Tuple equality and ordering, left to right and stopping at the first
+  - [x] Tuple equality and ordering, left to right and stopping at the first
     unequal position; iteration with the element union, rejecting invalid
     unions; tuple defaults
   - [ ] Unpacking: name and nested tuple patterns as assignment and `for`

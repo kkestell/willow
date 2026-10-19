@@ -89,14 +89,35 @@ function M.printable(t)
   return true
 end
 
--- Whether `==` applies: every member is printable or bytes.
+-- Whether `==` applies: every member is printable, bytes, or a tuple whose
+-- positions are comparable.
 function M.comparable(t)
   for _, m in ipairs(M.members(t)) do
-    if not SCALARS[m.kind] then
+    if m.kind == "tuple" then
+      for _, element in ipairs(m.elements) do
+        if not M.comparable(element) then
+          return false
+        end
+      end
+    elseif not SCALARS[m.kind] then
       return false
     end
   end
   return true
+end
+
+-- Whether `<` and the other orderings apply: both are the same ordered scalar
+-- type, or tuples of equal arity whose positions are ordered.
+function M.ordered(a, b)
+  if a.kind == "tuple" and b.kind == "tuple" and #a.elements == #b.elements then
+    for i, element in ipairs(a.elements) do
+      if not M.ordered(element, b.elements[i]) then
+        return false
+      end
+    end
+    return true
+  end
+  return a == b and (a == M.int or a == M.float or a == M.str)
 end
 
 -- In a type with both int and float members, floats are boxed at run time so
@@ -221,6 +242,41 @@ function M.conflict(members, m)
       return "union members " .. other.name .. " and " .. m.name .. " overlap"
     end
   end
+end
+
+-- The type `for` gives the items of tuple `t`: the union of its position types
+-- without duplicate or subsumed members, or None when it has no positions.
+-- Returns nil and the reason when that union is not a valid type.
+function M.items(t)
+  local kept = {}
+  for _, element in ipairs(t.elements) do
+    for _, m in ipairs(M.members(element)) do
+      local subsumed = false
+      for _, other in ipairs(kept) do
+        subsumed = subsumed or M.assignable(other, m)
+      end
+      if not subsumed then
+        local rest = {}
+        for _, other in ipairs(kept) do
+          if not M.assignable(m, other) then
+            rest[#rest + 1] = other
+          end
+        end
+        rest[#rest + 1] = m
+        kept = rest
+      end
+    end
+  end
+  if #kept == 0 then
+    return M.None
+  end
+  for i = 2, #kept do
+    local message = M.conflict({ unpack(kept, 1, i - 1) }, kept[i])
+    if message then
+      return nil, message
+    end
+  end
+  return M.union(kept)
 end
 
 return M

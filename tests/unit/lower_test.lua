@@ -32,6 +32,9 @@ show_expr = function(e)
       return string.format("%q", e.value)
     elseif type(e.value) == "number" then
       return string.format(e.value == math.floor(e.value) and "%d" or "%.17g", e.value)
+    elseif type(e.value) == "table" then
+      -- A conversion step; only its float entry is shown.
+      return "{" .. (e.value.float or "") .. "}"
     end
     return tostring(e.value)
   elseif kind == "Local" then
@@ -302,7 +305,7 @@ return {
       lower_f("b = isinstance(x, float)\nc = isinstance(y, float)\nd = isinstance(y, str)"))
     eq("if isinstance(x, \"box\") { z = float_mul(unbox(x), 2.5) }",
       lower_f("if isinstance(x, float):\n    z = x * 2.5"):gsub("#%d+", ""))
-    eq("xs = [1.5]; b = list_contains_boxed(xs, x)#1; ys = [x]; c = list_contains(ys, box(1.5))#2",
+    eq("xs = [1.5]; b = list_contains_converted(xs, x, {box})#1; ys = [x]; c = list_contains(ys, box(1.5))#2",
       lower_f("xs = [1.5]\nb = x in xs\nys = [x]\nc = 1.5 in ys"))
   end,
 }

@@ -435,6 +435,14 @@ return {
       bind_error("def f(x: tuple[int] | tuple[str]) -> None:\n    pass\n" .. MAIN))
   end,
 
+  tuple_defaults = function()
+    local E = "enum E:\n    A\n"
+    local program = bind_source(E .. "def f(t: tuple[E, int] = (E.A, 1)) -> None:\n    pass\n" .. MAIN)
+    eq(program.enums[1], program.functions[1].params[1].default.elements[1].enum)
+    eq("3:28: expected tuple[int, int], received tuple[int, str]",
+      bind_error(E .. "def f(t: tuple[int, int] = (1, 'a')) -> None:\n    pass\n" .. MAIN))
+  end,
+
   enum_dictionary_keys = function()
     local E = "enum E:\n    A\nenum F:\n    A\n"
     eq("dict[E, int]", bind_source(E .. "def f(d: dict[E, int]) -> None:\n    pass\n" .. MAIN).functions[1].params[1].type.name)

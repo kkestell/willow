@@ -507,19 +507,31 @@ local literal_types = {
   None = types.None,
 }
 
--- Checks that the default of `decl`, a parameter or field of `module`, fits
--- its type. Parameters and locals cannot shadow an enum named in a default.
-local function check_default(decl, module)
-  local default = decl.default
-  local type = literal_types[default.kind]
+-- The type of `default`, a default in `module`, resolving its enum members.
+-- Parameters and locals cannot shadow an enum named in a default.
+local function default_type(default, module)
   if default.kind == "Field" then
     local enum = enum_named(default.object, module, {})
     if not enum then
       diag.error(default.object.span, "unknown enum '" .. qualified_name(default.object) .. "'")
     end
     resolve_member(default, enum)
-    type = enum.type
+    return enum.type
+  elseif default.kind == "TupleDisplay" then
+    local elements = {}
+    for i, element in ipairs(default.elements) do
+      elements[i] = default_type(element, module)
+    end
+    return types.tuple(elements)
   end
+  return literal_types[default.kind]
+end
+
+-- Checks that the default of `decl`, a parameter or field of `module`, fits
+-- its type.
+local function check_default(decl, module)
+  local default = decl.default
+  local type = default_type(default, module)
   if not types.assignable(decl.type, type) then
     diag.error(default.span, "expected " .. decl.type.name .. ", received " .. type.name)
   end
