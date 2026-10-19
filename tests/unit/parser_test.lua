@@ -98,7 +98,11 @@ show = function(node)
   elseif kind == "IndexAssign" then
     return show(node.object) .. "[" .. show(node.index) .. "] = " .. show(node.value)
   elseif kind == "For" then
-    return "for " .. node.name .. " in " .. show(node.iterable) .. " " .. show_block(node.body)
+    return "for " .. (node.name or show(node.pattern)) .. " in " .. show(node.iterable) .. " " .. show_block(node.body)
+  elseif kind == "TuplePattern" then
+    return "<" .. show_list(node.elements, ", ") .. ">"
+  elseif kind == "Unpack" then
+    return show(node.pattern) .. " = " .. show(node.value)
   elseif kind == "Binary" then
     return "(" .. show(node.left) .. " " .. node.op .. " " .. show(node.right) .. ")"
   elseif kind == "Param" then
@@ -215,11 +219,22 @@ return {
 
   assignment_forms_rejected = function()
     eq("2:11: chained assignment is not supported", body_error("a = b = 1"))
-    eq("2:6: destructuring assignment is not supported", body_error("a, b = 1, 2"))
     eq("2:7: unsupported operator '+='", body_error("a += 1"))
     eq("2:9: unsupported operator ':='", body_error("f(a := 1)"))
     eq("2:11: annotated assignment needs an initializer", body_error("x: int"))
     eq("2:9: cannot assign to this expression", body_error("f() = 1"))
+  end,
+
+  unpacking = function()
+    eq("{ <a, b> = t; <a, <b, c>> = t; <e> = t }", body("a, b = t\n(a, (b, c)) = t\ne, = t"))
+    eq("{ for <k, <x, y>> in items { pass } }", body("for k, (x, y) in items:\n    pass"))
+    eq("{ for x in items { pass } }", body("for (x) in items:\n    pass"))
+    eq("2:8: duplicate target 'a'", body_error("a, a = t"))
+    eq("2:16: duplicate target 'k'", body_error("for k, (x, k) in items:\n    pass"))
+    eq("2:5: starred targets are not supported", body_error("*a, b = t"))
+    eq("2:8: starred targets are not supported", body_error("a, *b = t"))
+    eq("2:8: cannot assign to this expression", body_error("a, f() = t"))
+    eq("2:13: expected end of line, found ','", body_error("a, b = b, a"))
   end,
 
   precedence = function()
@@ -414,7 +429,7 @@ return {
   for_loops = function()
     eq("{ for x in range(1, 3) { print(x) }; for k in d { pass } }",
       body("for x in range(1, 3):\n    print(x)\nfor k in d:\n    pass"))
-    eq("2:10: expected 'in', found ','", body_error("for k, v in d:\n    pass"))
+    eq("2:11: expected 'in', found 'pass'", body_error("for k pass"))
   end,
 
   f_strings = function()

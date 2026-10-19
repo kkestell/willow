@@ -816,6 +816,16 @@ return {
     eq("2:11: operator 'in' cannot be applied to int and tuple[int, int]", check_errors(in_main("x = 1 in (1, 2)")))
   end,
 
+  unpacking = function()
+    eq("2:5: cannot unpack a value of type int", check_errors(in_main("a, b = 1")))
+    eq("2:5: cannot unpack a value of type list[int]", check_errors(in_main("a, b = [1, 2]")))
+    eq("2:5: cannot unpack a value of type tuple[int, str] | None",
+      check_errors(in_main("a, b = f()", "def f() -> tuple[int, str] | None:\n    return None\n")))
+    eq("2:5: cannot unpack tuple[int, int] into 3 targets", check_errors(in_main("a, b, c = (1, 2)")))
+    eq("3:8: expected str, received int", check_errors(in_main("s = 'x'\nn, s = (1, 2)")))
+    eq("2:9: cannot unpack a value of type int", check_errors(in_main("for a, b in [1]:\n    pass")))
+  end,
+
   enums = function()
     local E = "enum E:\n    A\n    B\nenum F:\n    A\n"
     eq("2:13: operator '<' cannot be applied to E and E", check_errors(in_main("x = E.A < E.B", E)))

@@ -7,13 +7,25 @@ function M.node(kind, span, fields)
   return fields
 end
 
--- Calls `visit(node)` for each Assign, For, and named except handler in
--- `body` and its nested blocks, outer before inner; `node.name` is the name
--- it assigns.
+local function visit_targets(pattern, visit)
+  if pattern.kind == "Name" then
+    visit(pattern)
+  else
+    for _, element in ipairs(pattern.elements) do
+      visit_targets(element, visit)
+    end
+  end
+end
+
+-- Calls `visit(node)` for each Assign, For, named except handler, and target
+-- of an Unpack or For pattern in `body` and its nested blocks, outer before
+-- inner and left to right; `node.name` is the name it assigns.
 function M.assignments(body, visit)
   for _, statement in ipairs(body) do
     local kind = statement.kind
-    if kind == "Assign" or kind == "For" then
+    if kind == "Unpack" or kind == "For" and statement.pattern then
+      visit_targets(statement.pattern, visit)
+    elseif kind == "Assign" or kind == "For" then
       visit(statement)
     end
     if kind == "If" then

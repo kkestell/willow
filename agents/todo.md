@@ -329,7 +329,7 @@ example changes it lists. New Rosetta Code examples go in
     per key type; an `Operator` enum in `calc.wlo`, enum sort and color
     options in `report.wlo`, and Rosetta Code "Enumerations"
 
-- [ ] Tuples, tuple defaults, comparisons, and unpacking (spec §3–8)
+- [x] Tuples, tuple defaults, comparisons, and unpacking (spec §3–8)
   - [x] Tuple types and values: reserve `tuple`; `tuple[A, B]` and
     `tuple[()]` annotations; displays with `(x,)` and `()` alongside grouping;
     literal and negated-literal indexes with compile-time range errors; `len`;
@@ -338,7 +338,7 @@ example changes it lists. New Rosetta Code examples go in
   - [x] Tuple equality and ordering, left to right and stopping at the first
     unequal position; iteration with the element union, rejecting invalid
     unions; tuple defaults
-  - [ ] Unpacking: name and nested tuple patterns as assignment and `for`
+  - [x] Unpacking: name and nested tuple patterns as assignment and `for`
     targets; static shape checks; repeated and starred targets rejected; one
     evaluation of the source, then left-to-right assignment under the
     local-type, definite-assignment, and narrowing rules; tuple assignment

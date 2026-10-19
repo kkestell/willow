@@ -341,7 +341,9 @@ function M.emit(lowered)
       line(depth, "end")
     elseif kind == "For" then
       line(depth, "for _, __wlo_item in " .. expr(s.iterator) .. " do", s.iterator.span)
-      line(depth + 1, expr(s.target) .. " = " .. expr(s.value), s.span)
+      if s.target then
+        line(depth + 1, expr(s.target) .. " = " .. expr(s.value), s.span)
+      end
       loop_body(s, depth + 1)
       line(depth, "end")
     end

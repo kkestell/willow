@@ -234,6 +234,29 @@ local function assign(state, symbol, value_type)
   end
 end
 
+-- Assigns the positions of a value of `type` to the targets of `pattern`, left
+-- to right, under the rules of a plain assignment.
+local function check_pattern(pattern, type, state)
+  if pattern.kind == "Name" then
+    local symbol = pattern.symbol
+    if symbol.type then
+      expect_type(pattern, symbol.type, type)
+    else
+      symbol.type = type
+    end
+    assign(state, symbol, type)
+    return
+  end
+  if type.kind ~= "tuple" then
+    diag.error(pattern.span, "cannot unpack a value of type " .. type.name)
+  elseif #type.elements ~= #pattern.elements then
+    diag.error(pattern.span, "cannot unpack " .. type.name .. " into " .. #pattern.elements .. " targets")
+  end
+  for i, element in ipairs(pattern.elements) do
+    check_pattern(element, type.elements[i], state)
+  end
+end
+
 local function arguments(count)
   return count .. (count == 1 and " argument" or " arguments")
 end
@@ -762,6 +785,8 @@ local function check_function(fn)
         symbol.type = value_type
       end
       assign(state, symbol, value_type)
+    elseif kind == "Unpack" then
+      check_pattern(statement.pattern, check_expression(statement.value, state), state)
     elseif kind == "FieldAssign" then
       local field = field_type(statement, check_expression(statement.object, state))
       check_against(statement.value, state, field)
@@ -869,15 +894,19 @@ local function check_function(fn)
         end
       end
       statement.type = item
-      local symbol = statement.symbol
-      if symbol.type then
-        expect_type(statement, symbol.type, item)
-      else
-        symbol.type = item
-      end
       forget_narrowing(state, { statement })
       local body_state = copy(state)
-      assign(body_state, symbol, item)
+      if statement.pattern then
+        check_pattern(statement.pattern, item, body_state)
+      else
+        local symbol = statement.symbol
+        if symbol.type then
+          expect_type(statement, symbol.type, item)
+        else
+          symbol.type = item
+        end
+        assign(body_state, symbol, item)
+      end
       -- As with `while`, the loop name and body assignments are not definite after the loop.
       check_block(statement.body, body_state, finally_depth)
     end

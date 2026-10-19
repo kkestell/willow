@@ -441,16 +441,88 @@ function M.parse(tokens)
     end
   end
 
+  local function reject_starred()
+    if peek().kind == "*" then
+      diag.error(peek().span, "starred targets are not supported")
+    end
+  end
+
+  -- Reports a target that appears twice in `pattern`, then returns it.
+  local function check_targets(pattern, seen)
+    if pattern.kind == "Name" then
+      if seen[pattern.name] then
+        diag.error(pattern.span, "duplicate target '" .. pattern.name .. "'")
+      end
+      seen[pattern.name] = true
+    else
+      for _, element in ipairs(pattern.elements) do
+        check_targets(element, seen)
+      end
+    end
+    return pattern
+  end
+
+  -- The pattern that `expression`, a parsed assignment target, spells.
+  local function pattern_of(expression)
+    if expression.kind == "Name" then
+      return expression
+    elseif expression.kind == "TupleDisplay" then
+      local elements = {}
+      for i, element in ipairs(expression.elements) do
+        elements[i] = pattern_of(element)
+      end
+      return ast.node("TuplePattern", expression.span, { elements = elements })
+    end
+    diag.error(expression.span, "cannot assign to this expression")
+  end
+
+  -- A `for` target: a name, or targets in parentheses, where `(a)` is `a`.
+  local function parse_target()
+    reject_starred()
+    local token = peek()
+    if accept("(") then
+      local first = parse_target()
+      if not accept(",") then
+        expect(")")
+        return first
+      end
+      local elements = { first }
+      for _, element in ipairs(parse_list(")", parse_target)) do
+        elements[#elements + 1] = element
+      end
+      return ast.node("TuplePattern", token.span, { elements = elements })
+    end
+    local name = expect("NAME", "a loop variable name")
+    return ast.node("Name", name.span, { name = name.value })
+  end
+
   local function parse_assignment_or_call()
+    reject_starred()
     if not expression_starts[peek().kind] then
       unexpected("a statement")
     end
     local expression = parse_expression()
     local token = peek()
+    if token.kind == "," then
+      -- `a, b = value` assigns to a pattern without parentheses.
+      local elements = { expression }
+      while accept(",") and peek().kind ~= "=" do
+        reject_starred()
+        elements[#elements + 1] = parse_expression()
+      end
+      expression = ast.node("TupleDisplay", expression.span, { elements = elements })
+      token = peek()
+      if token.kind ~= "=" then
+        unexpected("'='")
+      end
+    end
     if token.kind == "=" then
       advance()
       local node
-      if expression.kind == "Name" then
+      if expression.kind == "TupleDisplay" then
+        node = ast.node("Unpack", expression.span,
+          { pattern = check_targets(pattern_of(expression), {}), value = parse_expression() })
+      elseif expression.kind == "Name" then
         node = ast.node("Assign", expression.span, { name = expression.name, value = parse_expression() })
       elseif expression.kind == "Index" then
         node = ast.node("IndexAssign", expression.span,
@@ -475,8 +547,6 @@ function M.parse(tokens)
         { name = expression.name, annotation = annotation, value = parse_expression() })
       reject_chained_assignment()
       return node
-    elseif token.kind == "," and expression.kind == "Name" then
-      diag.error(token.span, "destructuring assignment is not supported")
     elseif expression.kind ~= "Call" and expression.kind ~= "MethodCall" then
       diag.error(expression.span, "only calls can be used as statements")
     end
@@ -495,10 +565,23 @@ function M.parse(tokens)
       return ast.node("While", token.span, { condition = condition, body = parse_block() })
     elseif kind == "for" then
       advance()
-      local name = expect("NAME", "a loop variable name")
+      local target = parse_target()
+      if peek().kind == "," then
+        local elements = { target }
+        while accept(",") and peek().kind ~= "in" do
+          elements[#elements + 1] = parse_target()
+        end
+        target = ast.node("TuplePattern", target.span, { elements = elements })
+      end
       expect("in")
-      local iterable = parse_expression()
-      return ast.node("For", token.span, { name = name.value, iterable = iterable, body = parse_block() })
+      local node = ast.node("For", token.span, { iterable = parse_expression() })
+      if target.kind == "Name" then
+        node.name = target.name
+      else
+        node.pattern = check_targets(target, {})
+      end
+      node.body = parse_block()
+      return node
     elseif kind == "try" then
       advance()
       return parse_try(token)

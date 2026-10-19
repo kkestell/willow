@@ -482,10 +482,25 @@ local function lower_function(fn, sites, helpers)
     return result
   end
 
+  -- Sets the targets of `pattern` from `value`, a temporary or the loop item
+  -- holding a value of `type`.
+  local function unpack_pattern(pattern, value, type)
+    if pattern.kind == "Name" then
+      set({ kind = "Local", symbol = pattern.symbol }, convert(value, type, pattern.expected_type), pattern.span)
+    else
+      for i, element in ipairs(pattern.elements) do
+        unpack_pattern(element, { kind = "Position", object = value, position = i }, type.elements[i])
+      end
+    end
+  end
+
   local function lower_statement(statement)
     depth = 0
     local kind = statement.kind
-    if kind == "Assign" then
+    if kind == "Unpack" then
+      -- A target may be the source local itself, so the source is read from a temporary.
+      unpack_pattern(statement.pattern, spill(lower_value(statement.value), 0), statement.value.type)
+    elseif kind == "Assign" then
       set({ kind = "Local", symbol = statement.symbol }, lower_value(statement.value), statement.span)
     elseif kind == "FieldAssign" then
       -- Python evaluates the value, then the object.
@@ -530,8 +545,10 @@ local function lower_function(fn, sites, helpers)
     elseif kind == "For" then
       labels = labels + 1
       local node = { kind = "For", label = labels, tries = #tries, span = statement.span }
-      node.target = { kind = "Local", symbol = statement.symbol }
-      node.value = convert({ kind = "Item" }, statement.type, statement.expected_type)
+      if not statement.pattern then
+        node.target = { kind = "Local", symbol = statement.symbol }
+        node.value = convert({ kind = "Item" }, statement.type, statement.expected_type)
+      end
       -- The iterator is created once, after its operands are evaluated here.
       local iterable = statement.iterable
       if iterable.kind == "Call" and iterable.name == "range" then
@@ -559,7 +576,14 @@ local function lower_function(fn, sites, helpers)
       end
       local enclosing = loop
       loop = node
+      -- The body starts by setting a pattern's targets from the item.
+      local targets = statement.pattern and capture(function()
+        unpack_pattern(statement.pattern, { kind = "Item" }, statement.type)
+      end) or {}
       node.body = lower_block(statement.body)
+      for i = #targets, 1, -1 do
+        table.insert(node.body, 1, targets[i])
+      end
       loop = enclosing
       emit(node)
     elseif kind == "Break" or kind == "Continue" then

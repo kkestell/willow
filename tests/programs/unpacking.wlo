@@ -1,0 +1,39 @@
+def source() -> tuple[int, tuple[str, float]]:
+    print("source")
+    return (1, ("a", 2.5))
+
+def main() -> None:
+    a = 1
+    b = 2
+    a, b = (b, a)
+    print(f"{a} {b}")
+    # The source is evaluated once.
+    n, (s, f) = source()
+    print(f"{n} {s} {f}")
+    # A target may be the source itself.
+    v: tuple[int, int] | int = (5, 6)
+    v, other = v
+    print(f"{v} {other}")
+    # An int position narrows an optional target.
+    x: int | None = None
+    x, y = (3, 4)
+    print(x + y)
+    # A float position stays a float in an int | float target.
+    w: int | float = 1
+    w, z = (2.5, 0)
+    print(isinstance(w, float))
+    print(w)
+    for name, count in [("a", 1), ("b", 2)]:
+        print(f"{name}={count}")
+    for i, (p, q) in [(1, (2, 3))]:
+        print(i + p + q)
+    (c, d) = (7, 8)
+    print(c * d)
+    e, = (9,)
+    print(e)
+    # Both targets are definitely assigned after either branch.
+    if a > b:
+        low, high = (b, a)
+    else:
+        low, high = (a, b)
+    print(f"{low} {high}")

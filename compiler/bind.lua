@@ -343,11 +343,24 @@ local function resolve_function(fn, scope, module)
     end
   end
 
+  local function resolve_targets(pattern)
+    if pattern.kind == "Name" then
+      pattern.symbol = scope[pattern.name]
+    else
+      for _, element in ipairs(pattern.elements) do
+        resolve_targets(element)
+      end
+    end
+  end
+
   -- `handling` is the innermost `try` with an `except` clause enclosing `body`.
   local function resolve_block(body, handling)
     for _, statement in ipairs(body) do
       local kind = statement.kind
-      if kind == "Assign" then
+      if kind == "Unpack" then
+        resolve_expression(statement.value)
+        resolve_targets(statement.pattern)
+      elseif kind == "Assign" then
         resolve_expression(statement.value)
         statement.symbol = scope[statement.name]
         if statement.annotation then
@@ -381,7 +394,11 @@ local function resolve_function(fn, scope, module)
         resolve_block(statement.body, handling)
       elseif kind == "For" then
         resolve_expression(statement.iterable)
-        statement.symbol = scope[statement.name]
+        if statement.pattern then
+          resolve_targets(statement.pattern)
+        else
+          statement.symbol = scope[statement.name]
+        end
         resolve_block(statement.body, handling)
       elseif kind == "Assert" then
         resolve_expression(statement.condition)
