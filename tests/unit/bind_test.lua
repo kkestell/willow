@@ -94,7 +94,7 @@ return {
     eq("args", body[1].value.target.name)
     eq("exit", body[2].call.target.name)
     eq("read_file", body[3].value.target.name)
-    eq("3:9: module 'sys' has no function, class, or alias 'missing'",
+    eq("3:9: module 'sys' has no function, class, enum, or alias 'missing'",
       bind_error("import sys\ndef main() -> None:\n    sys.missing()\n"))
     eq("3:11: module 'sys' cannot be used as a value", bind_error("import sys\ndef main() -> None:\n    print(sys)\n"))
     bind_source("def exit(status: int) -> None:\n    pass\ndef eprint(x: int) -> None:\n    exit(x)\n" .. MAIN)
@@ -226,7 +226,7 @@ return {
       modules_error({ { "main", "import len\n" .. MAIN }, { "len", "def f() -> None:\n    pass\n" } }))
     eq("main.wlo:3:8: unknown module 'nope'", modules_error({ main("def main() -> None:\n    x: nope.Point = 1\n"), geo }))
     eq("main.wlo:3:8: unknown type 'geo.make'", modules_error({ main("def main() -> None:\n    x: geo.make = 1\n"), geo }))
-    eq("main.wlo:3:13: module 'geo' has no function, class, or alias 'nope'",
+    eq("main.wlo:3:13: module 'geo' has no function, class, enum, or alias 'nope'",
       modules_error({ main("def main() -> None:\n    x = geo.nope()\n"), geo }))
     eq("main.wlo:3:13: '_hidden' is private to module 'geo'",
       modules_error({ main("def main() -> None:\n    x = geo._hidden()\n"), geo }))
@@ -381,10 +381,34 @@ return {
       modules_error({ entry("import app.util\ndef main() -> None:\n    print(app)\n"), util }))
     eq("main.wlo:3:15: unknown module 'app.missing'",
       modules_error({ entry("import app.util\ndef main() -> None:\n    print(app.missing.f())\n"), util }))
-    eq("main.wlo:3:20: module 'app.util' has no function, class, or alias 'nope'",
+    eq("main.wlo:3:20: module 'app.util' has no function, class, enum, or alias 'nope'",
       modules_error({ entry("import app.util\ndef main() -> None:\n    print(app.util.nope())\n"), util }))
     -- A local shadows the namespace, so the call stays a method call on it.
     modules = bind_modules({ entry("import app.util\ndef main() -> None:\n    app = 1\n    print(app.util.f())\n"), util })
     eq("MethodCall", modules[1].functions[1].body[2].call.args[1].kind)
+  end,
+
+  enums = function()
+    local E = "enum E:\n    A\n    B\n"
+    local program = bind_source(E .. "def main() -> None:\n    x = E.A\ndef f(E: int) -> None:\n    x = E.A\n")
+    eq("EnumMember", program.functions[1].body[1].value.kind)
+    eq(program.enums[1], program.functions[1].body[1].value.enum)
+    -- A local hides the enum, so this is a field access on it.
+    eq("Field", program.functions[2].body[1].value.kind)
+    eq("4:5: duplicate enum member 'A'", bind_error("enum E:\n    A\n    B\n    A\n" .. MAIN))
+    eq("4:6: duplicate enum 'E'", bind_error("class E:\n    x: int\n\nenum E:\n    A\n" .. MAIN))
+    eq("5:9: enum 'E' cannot be used as a value", bind_error(E .. "def main() -> None:\n    x = E\n"))
+    eq("5:9: enum 'E' cannot be called", bind_error(E .. "def main() -> None:\n    x = E()\n"))
+    eq("5:11: enum 'E' has no member 'C'", bind_error(E .. "def main() -> None:\n    x = E.C\n"))
+    eq("5:11: enum 'E' has no method 'A'", bind_error(E .. "def main() -> None:\n    x = E.A()\n"))
+    eq("5:7: cannot assign to a member of enum 'E'", bind_error(E .. "def main() -> None:\n    E.A = E.B\n"))
+    local geo = { "geo", E }
+    local modules = bind_modules({ { "main", "import geo\ndef main() -> None:\n    x: geo.E = geo.E.B\n" }, geo })
+    eq(modules[2].enums[1], modules[1].functions[1].body[1].value.enum)
+    eq("geo.E", modules[1].functions[1].body[1].annotation.name)
+    eq("main.wlo:3:15: enum 'geo.E' has no member 'C'",
+      modules_error({ { "main", "import geo\ndef main() -> None:\n    x = geo.E.C\n" }, geo }))
+    eq("main.wlo:3:13: enum 'geo.E' cannot be called",
+      modules_error({ { "main", "import geo\ndef main() -> None:\n    x = geo.E()\n" }, geo }))
   end,
 }

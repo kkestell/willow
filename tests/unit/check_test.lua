@@ -788,4 +788,16 @@ return {
     eq("4:12: expected int, received str",
       check_errors("import net\n" .. in_main("c = net.connect('h', 1)\nc.recv('x')")))
   end,
+
+  enums = function()
+    local E = "enum E:\n    A\n    B\nenum F:\n    A\n"
+    eq("2:13: operator '<' cannot be applied to E and E", check_errors(in_main("x = E.A < E.B", E)))
+    eq("2:13: operator '==' cannot be applied to E and F", check_errors(in_main("x = E.A == F.A", E)))
+    eq("2:13: operator '==' cannot be applied to E and str", check_errors(in_main("x = E.A == 'A'", E)))
+    eq("2:15: cannot convert a value of type E to int", check_errors(in_main("x = int(E.A)", E)))
+    eq("2:14: format type 's' requires str, received E", check_errors(in_main("x = f'{E.A:s}'", E)))
+    eq("1:14: union members E and E overlap", check_errors("def f(x: E | E) -> None:\n    pass\n" .. E .. MAIN))
+    eq("3:18: expected E, received F", check_errors("def f(x: E | F) -> E:\n    if isinstance(x, E):\n        return F.A\n"
+      .. "    return E.A\n" .. E .. MAIN))
+  end,
 }

@@ -96,7 +96,7 @@ return {
     end
     local text = emit_modules({ "main", "a.b", "a_0b" })
     assert(text:find("local __wlo_module_a_0b = {}", 1, true), "a.b table missing")
-    assert(text:find("local __wlo_module_a__0b = {}", 1, true), "a_0b table missing")
+    assert(text:find("local __wlo_module_a_10b = {}", 1, true), "a_0b table missing")
   end,
 
   one_call_per_line = function()

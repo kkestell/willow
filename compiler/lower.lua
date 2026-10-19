@@ -64,8 +64,6 @@ local function instance_kind(member, type)
     return "boolean"
   elseif kind == "str" then
     return "string"
-  elseif kind == "record" then
-    return member.record.type_name
   end
   return kind
 end
@@ -256,8 +254,12 @@ local function lower_function(fn, sites, helpers)
       local op = node.op == "is" and "==" or "!="
       return { kind = "Binary", op = op, left = lower_operand(node.operand), right = { kind = "Literal" } }
     elseif kind == "IsInstance" then
+      local operand, declared = lower_operand(node.operand), node.member.record or node.member.enum
+      if declared then
+        return pure("isinstance_type", { operand, { kind = "Literal", value = declared.type_name } })
+      end
       local kind_string = instance_kind(node.member, node.operand.type)
-      return pure("isinstance", { lower_operand(node.operand), { kind = "Literal", value = kind_string } })
+      return pure("isinstance", { operand, { kind = "Literal", value = kind_string } })
     elseif kind == "Binary" then
       if (node.op == "and" or node.op == "or") and not is_pure(node.right) then
         return lower_short_circuit(node)
@@ -327,6 +329,8 @@ local function lower_function(fn, sites, helpers)
         kind = "Call", target = node.target, args = args, span = node.span,
         qualified = node.name ~= node.target.name,
       }
+    elseif kind == "EnumMember" then
+      return { kind = "EnumMember", enum = node.enum, name = node.name }
     elseif kind == "Field" then
       return { kind = "Field", object = lower_object(node.object), name = node.name }
     elseif kind == "FString" then

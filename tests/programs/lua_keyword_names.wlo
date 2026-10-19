@@ -1,7 +1,29 @@
+# Declared names may match runtime type tags and generated table names.
+enum number:
+    A
+
+enum E_:
+    A
+
+class string:
+    x: int
+
+class C_:
+    x: int
+
+    def get(self) -> int:
+        return self.x
+
 def end(local: int) -> int:
     nil = local + 1
     then = nil * 2
     return then
+
+def is_number(value: number | int) -> bool:
+    return isinstance(value, number)
+
+def is_string(value: string | str) -> bool:
+    return isinstance(value, string)
 
 def main() -> None:
     repeat = end(4)
@@ -12,3 +34,11 @@ def main() -> None:
     print(end(1))
     __wlo_t1 = 7
     print(__wlo_t1 + end(0))
+    print(is_number(1))
+    print(is_number(number.A))
+    print(is_string("s"))
+    print(is_string(string(1)))
+    __wlo_enum_E_ = 1
+    __wlo_class_C_ = 1
+    print(E_.A)
+    print(C_(2).get())

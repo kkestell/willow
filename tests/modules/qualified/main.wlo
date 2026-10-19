@@ -7,6 +7,11 @@ def check(value: app.models.Item | int) -> str:
         return "item " + value.name
     return "number"
 
+def size(value: app.models.Size | str) -> str:
+    if isinstance(value, app.models.Size) and value == app.models.Size.LARGE:
+        return "large " + str(value)
+    return "other"
+
 def main() -> None:
     items = [app.util.make("tea", count=2), app.models.Item("scone", 1)]
     print(app.models.describe(app.deep.leaf.first(items)))
@@ -18,6 +23,8 @@ def main() -> None:
         app.util.make("cake", -1)
     except app.models.BadItem as error:
         print(error.message)
+    print(size(app.models.Size.LARGE))
+    print(size(app.models.Size.SMALL))
     shadowed()
 
 # A local named like a namespace root shadows the whole namespace.

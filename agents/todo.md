@@ -318,7 +318,7 @@ example changes it lists. New Rosetta Code examples go in
 `examples/rosettacode/` with their expected output.
 
 - [ ] Enums, enum defaults, and enum dictionary keys (spec §3–7)
-  - [ ] Enum declarations and values: reserve `enum`; file-level `enum` blocks
+  - [x] Enum declarations and values: reserve `enum`; file-level `enum` blocks
     with unique members; `E.MEMBER` and `module.E.MEMBER` as values; enums in
     annotations, unions, `==`, `isinstance`, and narrowing; `str`, `print`, and
     f-string text `E.MEMBER`; reject calls, ordering, and numeric conversion;

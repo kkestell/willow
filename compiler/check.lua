@@ -496,6 +496,8 @@ local function check_function(fn)
           return m ~= node.member
         end) }
       end
+    elseif kind == "EnumMember" then
+      type = node.enum.type
     elseif kind == "Field" then
       type = field_type(node, check_expression(node.object, state))
     elseif kind == "FString" then

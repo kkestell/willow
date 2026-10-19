@@ -169,9 +169,9 @@ return {
   end,
 
   file_scope_holds_only_declarations = function()
-    eq("1:1: only function, class, and type declarations are allowed at file scope", parse_error("x = 1\n"))
+    eq("1:1: only function, class, enum, and type declarations are allowed at file scope", parse_error("x = 1\n"))
     eq("1:1: 'from' is not supported", parse_error("from os import path\n"))
-    eq("1:5: only function, class, and type declarations are allowed at file scope",
+    eq("1:5: only function, class, enum, and type declarations are allowed at file scope",
       parse_error("    def f() -> None:\n        pass\n"))
   end,
 
@@ -484,5 +484,13 @@ return {
     eq("2:5: 'with' is not supported", body_error("with:\n    pass"))
     eq("2:9: 'lambda' is not supported", body_error("x = lambda"))
     eq("2:5: nested functions are not supported", body_error("def g() -> None:\n    pass"))
+  end,
+
+  enums = function()
+    local program = parse("enum Mode:\n    AUTO\n    NEVER\n")
+    eq("Mode", program.enums[1].name)
+    eq("AUTO NEVER", program.enums[1].members[1].name .. " " .. program.enums[1].members[2].name)
+    eq("2:5: enum bodies hold only member names", parse_error("enum Mode:\n    AUTO = 1\n"))
+    eq("1:7: expected a parameter name, found 'enum'", parse_error("def f(enum: int) -> None:\n    pass\n"))
   end,
 }

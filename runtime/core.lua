@@ -350,32 +350,41 @@ local function __wlo_unbox(value)
 end
 
 -- Equality of printable values and bytes where floats may be boxed; the only
--- tables are boxes and bytes.
+-- tables are boxes, bytes, and enum members, which are equal only to
+-- themselves.
 local function __wlo_equal(a, b)
   if type(a) == "table" and type(b) == "table" then
     if a.__wlo_octets ~= nil or b.__wlo_octets ~= nil then
       return a.__wlo_octets == b.__wlo_octets
+    elseif a.__wlo_float ~= nil or b.__wlo_float ~= nil then
+      return a.__wlo_float == b.__wlo_float
     end
-    return a.__wlo_float == b.__wlo_float
   end
   return a == b
 end
 
--- `kind` is a Lua type name, "box", "bytes", "list", "dict", "Exception", or
--- a record's class.
+-- `kind` is a Lua type name, "box", "bytes", "list", or "dict".
 local function __wlo_isinstance(value, kind)
   if type(value) ~= "table" then
     return type(value) == kind
-  end
-  local class = value.__wlo_class or value.__wlo_record
-  if class then
-    return class == kind or kind == "Exception" and value.__wlo_class ~= nil
+  elseif value.__wlo_class or value.__wlo_record or value.__wlo_enum then
+    return false
   elseif value.__wlo_float ~= nil then
     return kind == "box"
   elseif value.__wlo_octets ~= nil then
     return kind == "bytes"
   end
   return kind == (value.n and "list" or "dict")
+end
+
+-- `name` is a class, an enum, or "Exception". Declared names are tested apart
+-- from the kinds above, which a class or enum may share a name with.
+local function __wlo_isinstance_type(value, name)
+  if type(value) ~= "table" then
+    return false
+  end
+  local class = value.__wlo_class or value.__wlo_record or value.__wlo_enum
+  return class == name or name == "Exception" and value.__wlo_class ~= nil
 end
 
 -- The text print writes for a value whose numbers are not unboxed floats.
@@ -389,7 +398,7 @@ local function __wlo_str(value)
   elseif type(value) == "number" then
     return string.format("%d", value)
   elseif type(value) == "table" then
-    return __wlo_format_float(value.__wlo_float)
+    return value.__wlo_text or __wlo_format_float(value.__wlo_float)
   end
   return value
 end

@@ -9,6 +9,10 @@ class BadItem(Exception):
 
 type Count = int | None
 
+enum Size:
+    SMALL
+    LARGE
+
 def describe(item: Item) -> str:
     return app.deep.leaf.label(item.name) + " x" + str(item.count)
 

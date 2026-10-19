@@ -91,9 +91,10 @@ function M.emit(lowered)
   -- Functions of the entry module are locals. Every other module keeps its
   -- functions in a table, and so does the entry module when imported (including
   -- by itself), so that a caller's local cannot shadow a qualified call.
-  -- Escaping `_` as `__` and `.` as `_0` keeps distinct module names distinct.
+  -- Escaping `_` as `_1` and `.` as `_0` keeps distinct module names distinct,
+  -- and no escaped name ends in `_`, so no mangled local can match one.
   local function escape(name)
-    return (name:gsub("_", "__"):gsub("%.", "_0"))
+    return (name:gsub("_", "_1"):gsub("%.", "_0"))
   end
 
   local function module_table(module)
@@ -104,6 +105,12 @@ function M.emit(lowered)
   -- local can shadow.
   local function class_table(record)
     return "__wlo_class_" .. escape(record.type_name)
+  end
+
+  -- Each enum keeps its members in a table. A member is a table of its own,
+  -- so it differs from strings and from members of other enums.
+  local function enum_table(enum)
+    return "__wlo_enum_" .. escape(enum.type_name)
   end
 
   local entry_imported = false
@@ -180,6 +187,8 @@ function M.emit(lowered)
       end
       local text = table.concat(parts, " .. ")
       return nested and "(" .. text .. ")" or text
+    elseif kind == "EnumMember" then
+      return enum_table(e.enum) .. "." .. M.mangle(e.name)
     elseif kind == "Field" then
       return expr(e.object) .. "." .. M.mangle(e.name)
     elseif kind == "Construct" then
@@ -348,6 +357,16 @@ function M.emit(lowered)
   end
   for _, record in ipairs(classes) do
     line(0, "local " .. class_table(record) .. " = {}")
+  end
+  for _, module in ipairs(lowered.modules) do
+    for _, enum in ipairs(module.enums) do
+      line(0, "local " .. enum_table(enum) .. " = {")
+      for _, member in ipairs(enum.members) do
+        line(1, M.mangle(member.name) .. " = { __wlo_enum = " .. M.quote(enum.type_name)
+          .. ", __wlo_text = " .. M.quote(enum.name .. "." .. member.name) .. " },")
+      end
+      line(0, "}")
+    end
   end
 
   for _, fn in ipairs(lowered.functions) do

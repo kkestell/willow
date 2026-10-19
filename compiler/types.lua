@@ -1,13 +1,13 @@
--- Type objects. Every type has a `kind` and a display `name`. Scalars and
--- records are single objects compared by identity.
+-- Type objects. Every type has a `kind` and a display `name`. Scalars,
+-- records, and enums are single objects compared by identity.
 local M = {}
 
 for name in ("int float bool str None bytes"):gmatch("%S+") do
   M[name] = { kind = name, name = name }
 end
 
-local SCALARS = { int = true, float = true, bool = true, str = true, None = true, bytes = true }
-local PRINTABLE = { int = true, float = true, bool = true, str = true, None = true }
+local SCALARS = { int = true, float = true, bool = true, str = true, None = true, bytes = true, enum = true }
+local PRINTABLE = { int = true, float = true, bool = true, str = true, None = true, enum = true }
 
 function M.list(element)
   return { kind = "list", element = element, name = "list[" .. element.name .. "]" }
@@ -19,6 +19,10 @@ end
 
 function M.record(decl)
   return { kind = "record", record = decl, name = decl.type_name }
+end
+
+function M.enum(decl)
+  return { kind = "enum", enum = decl, name = decl.type_name }
 end
 
 -- Bind makes list elements and dict values lazy, filling in `type` once every
@@ -87,9 +91,9 @@ function M.boxed(t)
   return M.has(t, "int") and M.has(t, "float")
 end
 
--- Union members are matched by kind, or by record for records.
+-- Union members are matched by kind, or by declaration for records and enums.
 local function key(t)
-  return t.kind == "record" and t.record or t.kind
+  return t.record or t.enum or t.kind
 end
 
 -- `assumed` holds pairs already being compared, so recursive types terminate.

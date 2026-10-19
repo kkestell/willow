@@ -650,6 +650,25 @@ function M.parse(tokens)
       { name = name.value, fields = fields, methods = methods, exception = exception })
   end
 
+  local function parse_enum()
+    advance()
+    local name = expect("NAME", "an enum name")
+    expect(":")
+    expect("NEWLINE", "end of line")
+    expect("INDENT", "an indented block")
+    local members = {}
+    repeat
+      local member = peek()
+      if member.kind ~= "NAME" or tokens[pos + 1].kind ~= "NEWLINE" then
+        diag.error(member.span, "enum bodies hold only member names")
+      end
+      advance()
+      advance()
+      members[#members + 1] = { name = member.value, span = member.span }
+    until accept("DEDENT")
+    return ast.node("Enum", name.span, { name = name.value, members = members })
+  end
+
   local imports = {}
   while peek().kind == "import" do
     advance()
@@ -662,7 +681,7 @@ function M.parse(tokens)
     imports[#imports + 1] = { name = table.concat(names, "."), root = name.value, span = name.span }
   end
 
-  local functions, records, aliases = {}, {}, {}
+  local functions, records, enums, aliases = {}, {}, {}, {}
   while peek().kind ~= "EOF" do
     local token = peek()
     if token.kind == "import" then
@@ -671,6 +690,8 @@ function M.parse(tokens)
       functions[#functions + 1] = parse_function()
     elseif token.kind == "class" then
       records[#records + 1] = parse_record()
+    elseif token.kind == "enum" then
+      enums[#enums + 1] = parse_enum()
     elseif token.kind == "type" then
       advance()
       local name = expect("NAME", "an alias name")
@@ -679,12 +700,12 @@ function M.parse(tokens)
       expect("NEWLINE", "end of line")
     else
       reject_unsupported(token)
-      diag.error(token.span, "only function, class, and type declarations are allowed at file scope")
+      diag.error(token.span, "only function, class, enum, and type declarations are allowed at file scope")
     end
   end
   local path = peek().span.path
   return ast.node("Program", span.new(1, 1, 1, 0, path),
-    { imports = imports, functions = functions, records = records, aliases = aliases })
+    { imports = imports, functions = functions, records = records, enums = enums, aliases = aliases })
 end
 
 return M

@@ -1,0 +1,17 @@
+ColorMode.AUTO
+ColorMode.AUTO    ColorMode.NEVER|
+False
+True
+True
+mode ColorMode.NEVER
+keyword Keyword.end
+text AUTO
+nothing
+False
+False
+True
+True
+False
+False
+True
+False

@@ -1,0 +1,48 @@
+enum ColorMode:
+    AUTO
+    ALWAYS
+    NEVER
+
+# Members named like Lua keywords or like a string still stay distinct values.
+enum Keyword:
+    end
+    AUTO
+
+def use_color(mode: ColorMode) -> bool:
+    return mode == ColorMode.ALWAYS
+
+def describe(value: ColorMode | Keyword | str | None) -> str:
+    if value is None:
+        return "nothing"
+    if isinstance(value, ColorMode):
+        return "mode " + str(value)
+    if isinstance(value, Keyword):
+        return "keyword " + str(value)
+    return "text " + value
+
+def same(a: ColorMode | Keyword | str, b: ColorMode | Keyword | str) -> bool:
+    return a == b
+
+def same_number(a: int | float | ColorMode, b: int | float | ColorMode) -> bool:
+    return a == b
+
+def main() -> None:
+    mode = ColorMode.AUTO
+    print(mode)
+    print(f"{mode} {ColorMode.NEVER:>18}|")
+    print(use_color(mode))
+    print(use_color(ColorMode.ALWAYS))
+    print(mode != ColorMode.NEVER)
+    print(describe(ColorMode.NEVER))
+    print(describe(Keyword.end))
+    print(describe("AUTO"))
+    print(describe(None))
+    print(same(Keyword.AUTO, ColorMode.AUTO))
+    print(same(Keyword.AUTO, "Keyword.AUTO"))
+    print(same(Keyword.AUTO, Keyword.AUTO))
+    print(same_number(ColorMode.AUTO, ColorMode.AUTO))
+    print(same_number(ColorMode.AUTO, ColorMode.NEVER))
+    print(same_number(1.5, ColorMode.AUTO))
+    modes = [ColorMode.AUTO, ColorMode.NEVER]
+    print(ColorMode.NEVER in modes)
+    print(ColorMode.ALWAYS in modes)

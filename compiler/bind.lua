@@ -56,7 +56,7 @@ local SCALARS = {
 local function lookup(from, module, name, span)
   local declaration = module.declarations[name]
   if not declaration then
-    diag.error(span, "module '" .. module.name .. "' has no function, class, or alias '" .. name .. "'")
+    diag.error(span, "module '" .. module.name .. "' has no function, class, enum, or alias '" .. name .. "'")
   end
   if name:sub(1, 1) == "_" and module ~= from then
     diag.error(span, "'" .. name .. "' is private to module '" .. module.name .. "'")
@@ -64,7 +64,7 @@ local function lookup(from, module, name, span)
   return declaration
 end
 
--- Returns the record or alias that `ref`, a `{ name, module, span }` in a type,
+-- Returns the record, enum, or alias that `ref`, a `{ name, module, span }` in a type,
 -- an `except` clause, or `isinstance`, names. These are found through
 -- file-level declarations, imports, and built-in exception classes, which
 -- locals never shadow.
@@ -79,7 +79,8 @@ local function resolve_named(ref, module)
   else
     declaration = module.declarations[ref.name] or exceptions[ref.name]
   end
-  if not (declaration and (declaration.kind == "Record" or declaration.kind == "Alias")) then
+  local kind = declaration and declaration.kind
+  if not (kind == "Record" or kind == "Enum" or kind == "Alias") then
     diag.error(ref.span, "unknown type '" .. (ref.module and ref.module .. "." or "") .. ref.name .. "'")
   end
   return declaration
@@ -191,6 +192,25 @@ local function resolve_function(fn, scope, module)
     end
   end
 
+  -- The enum that `node` names as `E` or `module.E` when no local shadows it,
+  -- or nil.
+  local function enum_named(node)
+    local path, root = qualified_name(node)
+    if not path or scope[root] then
+      return nil
+    end
+    local declaration
+    if path == root then
+      declaration = declarations[path]
+    elseif roots[root] then
+      local prefix, name = path:match("^(.*)%.([^.]*)$")
+      declaration = imports[prefix] and lookup(module, imports[prefix], name, node.span)
+    end
+    if declaration and declaration.kind == "Enum" then
+      return declaration
+    end
+  end
+
   local function resolve_expression(node)
     local kind = node.kind
     if kind == "Name" then
@@ -201,8 +221,8 @@ local function resolve_function(fn, scope, module)
           diag.error(node.span, "module '" .. node.name .. "' cannot be used as a value")
         elseif declaration and declaration.kind == "Record" or exceptions[node.name] then
           diag.error(node.span, "class '" .. node.name .. "' cannot be used as a value")
-        elseif declaration and declaration.kind == "Alias" then
-          diag.error(node.span, "alias '" .. node.name .. "' cannot be used as a value")
+        elseif declaration and (declaration.kind == "Alias" or declaration.kind == "Enum") then
+          diag.error(node.span, declaration.kind:lower() .. " '" .. node.name .. "' cannot be used as a value")
         elseif declaration or builtins[node.name] then
           diag.error(node.span, "function '" .. node.name .. "' cannot be used as a value")
         end
@@ -215,12 +235,14 @@ local function resolve_function(fn, scope, module)
       node.target = declarations[node.name] or builtins[node.name] or exceptions[node.name]
       if not node.target then
         diag.error(node.span, "unknown function '" .. node.name .. "'")
-      elseif node.target.kind == "Alias" then
-        diag.error(node.span, "alias '" .. node.name .. "' cannot be called")
+      elseif node.target.kind == "Alias" or node.target.kind == "Enum" then
+        diag.error(node.span, node.target.kind:lower() .. " '" .. node.name .. "' cannot be called")
       end
       for _, arg in ipairs(node.args) do
         resolve_expression(arg)
       end
+    elseif kind == "MethodCall" and enum_named(node.object) then
+      diag.error(node.span, "enum '" .. enum_named(node.object).type_name .. "' has no method '" .. node.name .. "'")
     elseif kind == "MethodCall" and module_path(node.object) then
       -- `module.name(...)` calls a function or constructs a record of that module.
       local path = module_path(node.object)
@@ -231,8 +253,8 @@ local function resolve_function(fn, scope, module)
       node.kind = "Call"
       node.target = lookup(module, imported, node.name, node.span)
       node.name = path .. "." .. node.name
-      if node.target.kind == "Alias" then
-        diag.error(node.span, "alias '" .. node.name .. "' cannot be called")
+      if node.target.kind == "Alias" or node.target.kind == "Enum" then
+        diag.error(node.span, node.target.kind:lower() .. " '" .. node.name .. "' cannot be called")
       end
       node.object = nil
       for _, arg in ipairs(node.args) do
@@ -269,6 +291,16 @@ local function resolve_function(fn, scope, module)
       end
     elseif kind == "Keyword" then
       resolve_expression(node.value)
+    elseif kind == "Field" and enum_named(node.object) then
+      local enum = enum_named(node.object)
+      local found = false
+      for _, member in ipairs(enum.members) do
+        found = found or member.name == node.name
+      end
+      if not found then
+        diag.error(node.span, "enum '" .. enum.type_name .. "' has no member '" .. node.name .. "'")
+      end
+      node.kind, node.enum, node.object = "EnumMember", enum, nil
     elseif kind == "Field" then
       resolve_expression(node.object)
     elseif kind == "FString" then
@@ -304,6 +336,10 @@ local function resolve_function(fn, scope, module)
         end
       elseif kind == "FieldAssign" then
         resolve_expression(statement.value)
+        local enum = enum_named(statement.object)
+        if enum then
+          diag.error(statement.span, "cannot assign to a member of enum '" .. enum.type_name .. "'")
+        end
         resolve_expression(statement.object)
       elseif kind == "IndexAssign" then
         resolve_expression(statement.value)
@@ -372,7 +408,7 @@ local function check_unique(items, what)
   end
 end
 
--- Collects one module's imports, functions, records, and aliases, which share one
+-- Collects one module's imports, functions, records, enums, and aliases, which share one
 -- namespace; clashes are reported in source order.
 local function declare(module, modules_by_name, entry)
   local ordered = {}
@@ -385,6 +421,9 @@ local function declare(module, modules_by_name, entry)
   end
   for _, record in ipairs(module.records) do
     ordered[#ordered + 1] = record
+  end
+  for _, enum in ipairs(module.enums) do
+    ordered[#ordered + 1] = enum
   end
   for _, alias in ipairs(module.aliases) do
     ordered[#ordered + 1] = alias
@@ -430,11 +469,13 @@ local function declare(module, modules_by_name, entry)
       declaration.module = module
       module.declarations[name] = declaration
     end
-    if declaration.kind == "Record" or declaration.kind == "Alias" then
+    if declaration.kind == "Record" or declaration.kind == "Enum" or declaration.kind == "Alias" then
       declaration.type_name = module == entry and name or module.name .. "." .. name
     end
     if declaration.kind == "Record" then
       declaration.type = types.record(declaration)
+    elseif declaration.kind == "Enum" then
+      declaration.type = types.enum(declaration)
     end
   end
 end
@@ -466,6 +507,12 @@ function M.bind(modules, test)
   end
   for _, module in ipairs(modules) do
     declare(module, modules_by_name, entry)
+  end
+
+  for _, module in ipairs(modules) do
+    for _, enum in ipairs(module.enums) do
+      check_unique(enum.members, "enum member")
+    end
   end
 
   pending = {}
