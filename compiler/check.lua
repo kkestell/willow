@@ -398,6 +398,10 @@ local function specialize(node, name, fn)
   local map = {}
   for i, typevar in ipairs(fn.typevars) do
     map[typevar] = node.type_args[i]
+    local unsatisfied = types.unsatisfied(typevar, node.type_args[i])
+    if unsatisfied then
+      diag.error(node.span, unsatisfied)
+    end
   end
   return map
 end
@@ -457,6 +461,51 @@ local function collect(param, arg, candidates)
   end
 end
 
+-- The candidate every other candidate in `list` is assignable to, or nil.
+local function choose(list)
+  for _, c in ipairs(list) do
+    local all = true
+    for _, other in ipairs(list) do
+      all = all and types.assignable(c, other)
+    end
+    if all then
+      return c
+    end
+  end
+end
+
+-- Chooses a type argument for each of `typevars` from `candidates`, records
+-- them in `node.type_args`, and returns the substitution. `name` names the
+-- generic in errors.
+local function choose_type_args(node, name, typevars, candidates)
+  local map, type_args = {}, {}
+  for i, typevar in ipairs(typevars) do
+    local list = candidates[typevar]
+    if #list == 0 then
+      diag.error(node.span, "cannot infer type parameter '" .. typevar.name .. "' of '" .. name .. "'")
+    end
+    map[typevar] = choose(list)
+    if not map[typevar] then
+      local other = list[2]
+      for _, c in ipairs(list) do
+        if not types.assignable(list[1], c) then
+          other = c
+          break
+        end
+      end
+      diag.error(node.span, "cannot infer type parameter '" .. typevar.name .. "' of '" .. name .. "' from "
+        .. list[1].name .. " and " .. other.name)
+    end
+    local unsatisfied = types.unsatisfied(typevar, map[typevar])
+    if unsatisfied then
+      diag.error(node.span, unsatisfied)
+    end
+    type_args[i] = map[typevar]
+  end
+  node.type_args = type_args
+  return map
+end
+
 -- `type` with the substitution `map`, if any, applied.
 local function specialized(type, map)
   return map and types.substitute(type, map) or type
@@ -473,6 +522,7 @@ end
 local function check_function(fn, entry)
   -- The type of field `node.name` on a value of `object` type.
   local function field_type(node, object)
+    object = object.bound or object
     if object.kind ~= "record" or object.record.native then
       diag.error(node.span, "type " .. object.name .. " has no field '" .. node.name .. "'")
     end
@@ -507,17 +557,6 @@ local function check_function(fn, entry)
     for _, typevar in ipairs(fn.typevars) do
       candidates[typevar] = {}
     end
-    local function choose(list)
-      for _, c in ipairs(list) do
-        local all = true
-        for _, other in ipairs(list) do
-          all = all and types.assignable(c, other)
-        end
-        if all then
-          return c
-        end
-      end
-    end
     -- A lambda needs its parameter types, so it waits for the other arguments.
     local lambdas = {}
     for _, i in ipairs(evaluation_order(node)) do
@@ -543,33 +582,13 @@ local function check_function(fn, entry)
       node.args[i].infer_result = types.mentions(target.result, candidates)
       collect(params[i].type, check_expression(node.args[i], state, partial), candidates)
     end
-    local map, type_args = {}, {}
-    for i, typevar in ipairs(fn.typevars) do
-      local list = candidates[typevar]
-      if #list == 0 and expected then
+    for _, typevar in ipairs(fn.typevars) do
+      if #candidates[typevar] == 0 and expected then
         -- Only parameters the arguments leave open come from the expected result.
-        local from_result = { [typevar] = list }
-        collect(fn.return_type, expected, from_result)
+        collect(fn.return_type, expected, { [typevar] = candidates[typevar] })
       end
-      if #list == 0 then
-        diag.error(node.span, "cannot infer type parameter '" .. typevar.name .. "' of '" .. name .. "'")
-      end
-      map[typevar] = choose(list)
-      if not map[typevar] then
-        local other = list[2]
-        for _, c in ipairs(list) do
-          if not types.assignable(list[1], c) then
-            other = c
-            break
-          end
-        end
-        diag.error(node.span, "cannot infer type parameter '" .. typevar.name .. "' of '" .. name .. "' from "
-          .. list[1].name .. " and " .. other.name)
-      end
-      type_args[i] = map[typevar]
     end
-    node.type_args = type_args
-    return map
+    return choose_type_args(node, name, fn.typevars, candidates)
   end
 
   -- Returns the type of `node` in `state`, then the facts that hold when it is
@@ -781,6 +800,35 @@ local function check_function(fn, entry)
         type = types.callable({}, check_expression(body, entry))
       end
       calls = before
+    elseif kind == "FunctionValue" and node.target.typevars then
+      -- Explicit type arguments or an expected callable specialize a generic
+      -- function, whose value takes its positional contract.
+      local target, map = node.target, nil
+      local callable = not node.type_args and display_member(expected, "callable")
+      local positional = {}
+      for _, param in ipairs(target.params) do
+        if param.keyword_only and not param.default then
+          diag.error(node.span, "generic function '" .. target.name .. "' has required keyword-only parameters")
+        elseif not param.keyword_only and (not param.default or callable and #positional < #callable.params) then
+          positional[#positional + 1] = param.type
+        end
+      end
+      if node.type_args then
+        map = specialize(node, target.name, target)
+      elseif callable then
+        local candidates = {}
+        for _, typevar in ipairs(target.typevars) do
+          candidates[typevar] = {}
+        end
+        collect(types.callable(positional, target.return_type), callable, candidates)
+        map = choose_type_args(node, target.name, target.typevars, candidates)
+      else
+        diag.error(node.span, "generic function '" .. target.name .. "' needs type arguments or an expected callable type")
+      end
+      for i, param in ipairs(positional) do
+        positional[i] = types.substitute(param, map)
+      end
+      type = types.callable(positional, types.substitute(target.return_type, map))
     elseif kind == "FunctionValue" then
       type = node.target.value_type
     elseif kind == "BuiltinValue" then
@@ -893,6 +941,11 @@ local function check_function(fn, entry)
       type = object
     elseif kind == "MethodCall" then
       local object = check_expression(node.object, state)
+      if object.bound then
+        -- A bounded type parameter has its bound's methods.
+        object = object.bound
+        node.receiver = object
+      end
       local method = class_method(object, node.name)
       local params, result, names, defaults, inferred
       if method then

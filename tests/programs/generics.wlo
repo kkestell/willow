@@ -1,3 +1,4 @@
+import io
 import typing
 
 def first[T](items: list[T]) -> T:
@@ -67,6 +68,53 @@ def inferred() -> None:
 
     print(len(wrap("s")))
 
+type Pair[K, V] = tuple[K, V]
+# A generic alias may recurse through list.
+type Nested[T] = list[Nested[T]] | None
+
+def swap(p: Pair[int, str]) -> Pair[str, int]:
+    return (p[1], p[0])
+
+def depth(n: Nested[int]) -> int:
+    if n is None:
+        return 0
+    best = 0
+    for child in n:
+        d = depth(child)
+        if d > best:
+            best = d
+    return best + 1
+
+class Named:
+    name: str
+
+    def greet(self) -> str:
+        return "hi " + self.name
+
+# A bounded type parameter has its bound's fields and methods.
+def label[T: Named](x: T) -> str:
+    return x.name + "/" + x.greet()
+
+def send[F: io.File](f: F, text: str) -> F:
+    f.write_text(text)
+    return f
+
+def identity[T](x: T) -> T:
+    return x
+
+def apply(f: typing.Callable[[str], str], s: str) -> str:
+    return f(s)
+
+def aliases_bounds_values() -> None:
+    print(swap((1, "a"))[0])
+    print(depth([[None], [[None]]]))
+    print(label(Named("a")))
+    send(io.stdout(), "sent\n")
+    # Explicit type arguments or an expected callable make generic values.
+    f = first[int]
+    print(f([7]))
+    print(apply(identity, "same"))
+
 def main() -> None:
     print(first[int]([3, 4]))
     print(first[str](["a", "b"]))
@@ -88,3 +136,4 @@ def main() -> None:
 
     print(len(wrap[int](1)))
     inferred()
+    aliases_bounds_values()

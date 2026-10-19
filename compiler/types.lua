@@ -298,6 +298,8 @@ function M.assignable(target, source)
   end
   return M.same(target, source)
     or is_exception(target) and target.record.type_name == "Exception" and is_exception(source)
+    -- A bounded type parameter serves wherever its bound does.
+    or source.kind == "typevar" and source.bound ~= nil and M.assignable(target, source.bound)
 end
 
 -- The union of the members of `t` that `keep` accepts, or `t` itself when it
@@ -364,6 +366,15 @@ function M.items(t)
     end
   end
   return M.union(kept)
+end
+
+-- The error for type argument `arg` of type parameter `typevar` that does not
+-- satisfy its bound, or nil.
+function M.unsatisfied(typevar, arg)
+  if typevar.bound and not M.assignable(typevar.bound, arg) then
+    return "type argument " .. arg.name .. " does not satisfy the bound " .. typevar.bound.name
+      .. " of '" .. typevar.name .. "'"
+  end
 end
 
 -- Whether `t` mentions a type parameter, or one in the set `only` when given.

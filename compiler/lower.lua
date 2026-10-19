@@ -427,7 +427,9 @@ local function lower_function(fn, sites, helpers)
       -- Creating a closure has no effects, so it is set into a temporary first.
       return spill({ kind = "Closure", fn = lower_function(node.fn, sites, helpers) }, depth)
     elseif kind == "FunctionValue" then
-      return { kind = "FunctionValue", target = node.target, qualified = node.qualified }
+      local value = { kind = "FunctionValue", target = node.target, qualified = node.qualified }
+      -- A specialized generic function takes its callable's representation.
+      return node.target.typevars and convert(value, node.target.value_type, node.type) or value
     elseif kind == "BuiltinValue" then
       return { kind = "Function", arity = #node.type.params, body = lower_value(node.call) }
     elseif kind == "Typed" then
@@ -471,7 +473,7 @@ local function lower_function(fn, sites, helpers)
       if node.method then
         return { kind = "Call", target = node.method, args = args, span = node.span }
       end
-      return helper(prefix(node.object.type) .. node.name, args, node.span)
+      return helper(prefix(node.receiver or node.object.type) .. node.name, args, node.span)
     elseif kind == "ListDisplay" then
       local elements = {}
       for i, element in ipairs(node.elements) do

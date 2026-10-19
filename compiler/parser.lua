@@ -284,24 +284,56 @@ function M.parse(tokens)
     return node
   end
 
-  -- Parses `[types](` after a name or field as a specialized call, or returns
-  -- nil with the position unchanged when the brackets are an index instead.
-  local function parse_specialized_call(callee)
+  -- Parses `[...]` after `object` as an index or slice.
+  local function parse_index(object)
+    local token = advance()
+    local start, stop
+    if peek().kind ~= ":" then
+      start = parse_expression()
+    end
+    if accept(":") then
+      if peek().kind ~= "]" and peek().kind ~= ":" then
+        stop = parse_expression()
+      end
+      if peek().kind == ":" then
+        diag.error(peek().span, "slice steps are not supported")
+      end
+      expect("]")
+      return ast.node("Slice", token.span, { object = object, start = start, stop = stop })
+    end
+    expect("]")
+    return ast.node("Index", token.span, { object = object, index = start })
+  end
+
+  -- Parses `[types]` after a name or field as type arguments, as in
+  -- `first[int](xs)` or `first[int]`, or returns nil with the position
+  -- unchanged when the brackets can only be an index. Bind decides whether the
+  -- callee is generic, so the node keeps the brackets read as an index too, or
+  -- the error reading them as one raised.
+  local function parse_specialized(callee)
     local saved = pos
     local ok, type_args = pcall(function()
       advance()
-      local list = parse_list("]", parse_type)
-      if peek().kind ~= "(" then
-        error("not a call")
-      end
-      return list
+      return parse_list("]", parse_type)
     end)
     if not ok then
       pos = saved
       return nil
     end
-    advance()
-    return ast.node("SpecializedCall", callee.span, { callee = callee, type_args = type_args, args = parse_args() })
+    local after = pos
+    pos = saved
+    local indexed, index = pcall(parse_index, callee)
+    if not indexed and not diag.is(index) then
+      error(index, 0)
+    end
+    pos = after
+    local fields = { callee = callee, type_args = type_args, index = indexed and index or nil,
+      index_error = not indexed and index or nil }
+    if accept("(") then
+      fields.args = parse_args()
+      return ast.node("SpecializedCall", callee.span, fields)
+    end
+    return ast.node("Specialized", callee.span, fields)
   end
 
   -- Indexing and method calls chain left to right after a primary.
@@ -310,27 +342,11 @@ function M.parse(tokens)
     while true do
       local token = peek()
       local specialized = token.kind == "[" and (node.kind == "Name" or node.kind == "Field")
-        and parse_specialized_call(node)
+        and parse_specialized(node)
       if specialized then
         node = specialized
       elseif token.kind == "[" then
-        advance()
-        local start, stop
-        if peek().kind ~= ":" then
-          start = parse_expression()
-        end
-        if accept(":") then
-          if peek().kind ~= "]" and peek().kind ~= ":" then
-            stop = parse_expression()
-          end
-          if peek().kind == ":" then
-            diag.error(peek().span, "slice steps are not supported")
-          end
-          node = ast.node("Slice", token.span, { object = node, start = start, stop = stop })
-        else
-          node = ast.node("Index", token.span, { object = node, index = start })
-        end
-        expect("]")
+        node = parse_index(node)
       elseif token.kind == "." then
         advance()
         local name = expect("NAME", "a field or method name")
@@ -562,6 +578,13 @@ function M.parse(tokens)
     end
     local expression = parse_expression()
     local token = peek()
+    if expression.kind == "Specialized" and (token.kind == "=" or token.kind == ":") then
+      -- Only an index can be assigned to.
+      if not expression.index then
+        diag.raise(expression.index_error)
+      end
+      expression = expression.index
+    end
     if token.kind == "," then
       -- `a, b = value` assigns to a pattern without parentheses.
       local elements = { expression }
@@ -766,10 +789,7 @@ function M.parse(tokens)
     end
     return parse_list("]", function()
       local param = expect("NAME", "a type parameter name")
-      if peek().kind == ":" then
-        diag.error(peek().span, "type parameter bounds are not supported")
-      end
-      return { name = param.value, span = param.span }
+      return { name = param.value, span = param.span, bound = accept(":") and parse_type() }
     end)
   end
 
@@ -929,8 +949,10 @@ function M.parse(tokens)
     elseif token.kind == "type" then
       advance()
       local name = expect("NAME", "an alias name")
+      local type_params = parse_type_params()
       expect("=")
-      aliases[#aliases + 1] = ast.node("Alias", name.span, { name = name.value, value = parse_type() })
+      aliases[#aliases + 1] = ast.node("Alias", name.span,
+        { name = name.value, type_params = type_params, value = parse_type() })
       expect("NEWLINE", "end of line")
     else
       reject_unsupported(token)

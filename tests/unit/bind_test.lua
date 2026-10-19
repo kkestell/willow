@@ -474,8 +474,18 @@ return {
       bind_error("def f[T](x: T) -> T:\n    def g[T](y: T) -> T:\n        return y\n    return x\n" .. MAIN))
     eq("2:26: type parameter 'T' cannot be used in isinstance",
       bind_error("def f[T](x: T) -> bool:\n    return isinstance(x, T)\n" .. MAIN))
-    eq("4:9: generic function 'f' cannot be used as a value",
-      bind_error("def f[T](x: T) -> T:\n    return x\ndef main() -> None:\n    g = f\n"))
+    eq("FunctionValue", bind_source("def f[T](x: T) -> T:\n    return x\ndef main() -> None:\n    g = f[int]\n")
+      .functions[2].body[1].value.kind)
+    eq("Index", bind_source("def main() -> None:\n    xs = [1]\n    i = 0\n    y = xs[i]\n").functions[1].body[3].value.kind)
+    -- A subscript inside brackets is an index too.
+    local nested = bind_source("def main() -> None:\n    xs = [1]\n    ys = [0]\n    i = 0\n    y = xs[ys[i]]\n")
+      .functions[1].body[4].value
+    eq("Index Index", nested.kind .. " " .. nested.index.kind)
+    -- An index read from brackets keeps its own span and expression.
+    local value = bind_source("def main() -> None:\n    xs = [1]\n    i = 0\n    y = xs[i] + xs[None]\n")
+      .functions[1].body[3].value
+    eq("4:11 None", value.left.span.line .. ":" .. value.left.span.col .. " " .. value.right.index.kind)
+    eq("4:14: unsupported operator '|'", bind_error("def main() -> None:\n    xs = [1]\n    i = 0\n    y = xs[i | i]\n"))
     eq("4:5: 'g' is not generic", bind_error("def g(x: int) -> None:\n    pass\ndef main() -> None:\n    g[int](1)\n"))
     local main = bind_source("def main() -> None:\n    xs = [main]\n    i = 0\n    xs[i]()\n").functions[1]
     eq("Index", main.body[3].call.callee.kind)
@@ -494,6 +504,26 @@ return {
     local program = bind_source(B .. "def f(b: Box[int]) -> None:\n    pass\n" .. MAIN)
     eq("Box[int]", program.functions[1].params[1].type.name)
     eq("Box[T]", program.records[1].methods[1].params[1].type.name)
+  end,
+
+  generic_aliases_and_bounds = function()
+    local A = "type Pair[K, V] = tuple[K, V]\ntype Nested[T] = list[Nested[T]] | None\n"
+    local program = bind_source(A .. "def f(p: Pair[int, str], n: Nested[int]) -> None:\n    pass\n" .. MAIN)
+    eq("tuple[int, str]", program.functions[1].params[1].type.name)
+    eq("Nested[int]", program.functions[1].params[2].type.name)
+    eq("1:15: alias 'Bad' expands to itself", bind_error("type Bad[T] = Bad[T]\n" .. MAIN))
+    eq("1:21: alias 'Grow' expands without end", bind_error("type Grow[T] = list[Grow[list[T]]]\n" .. MAIN))
+    -- Each use of a generic alias is its own application, however many there are.
+    local uses = {}
+    for i = 1, 120 do
+      uses[i] = "def f" .. i .. "(p: Pair[list[int], str]) -> None:\n    pass\n"
+    end
+    bind_source(A .. table.concat(uses) .. MAIN)
+    eq("3:10: type 'Pair' needs type arguments", bind_error(A .. "def f(p: Pair) -> None:\n    pass\n" .. MAIN))
+    eq("1:10: a type parameter's bound must be a class or native type",
+      bind_error("def f[T: int](x: T) -> None:\n    pass\n" .. MAIN))
+    eq("5:14: type argument int does not satisfy the bound N of 'T'",
+      bind_error("class N:\n    n: int\nclass Box[T: N]:\n    v: T\ndef f(b: Box[int]) -> None:\n    pass\n" .. MAIN))
   end,
 
   nonlocal_declarations = function()

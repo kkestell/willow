@@ -48,6 +48,8 @@ show = function(node)
     return "None"
   elseif kind == "Name" then
     return node.name
+  elseif kind == "Specialized" then
+    return show(node.callee) .. "[" .. show_list(node.type_args, ", ") .. "]"
   elseif kind == "SpecializedCall" then
     return show(node.callee) .. "[" .. show_list(node.type_args, ", ") .. "](" .. show_list(node.args, ", ") .. ")"
   elseif kind == "CallValue" then
@@ -563,7 +565,12 @@ return {
     eq("util.first[int](xs)", expr("util.first[int](xs)"))
     eq("(xs[0])(1)", expr("xs[0](1)"))
     eq("xs[i]", expr("xs[i]"))
-    eq("1:8: type parameter bounds are not supported", parse_error("def f[T: int](x: T) -> T:\n    pass\n"))
+    eq("io.File", show(parse("def f[T: io.File](x: T) -> T:\n    pass\n").functions[1].type_params[1].bound))
+    eq("first[int]", expr("first[int]"))
+    eq("{ xs[i] = 1 }", body("xs[i] = 1"))
+    eq("2:10: unsupported operator '|'", body_error("xs[i | j] = 1"))
+    local alias = parse("type Pair[K, V] = tuple[K, V]\n").aliases[1]
+    eq("K V", alias.type_params[1].name .. " " .. alias.type_params[2].name)
   end,
 
   generic_classes = function()

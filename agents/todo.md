@@ -379,7 +379,7 @@ example changes it lists. New Rosetta Code examples go in
     parameterless lambdas without an expected type; Rosetta Code
     "Higher-order functions" and "Closures/Value capture"
 
-- [ ] Generic functions, methods, classes, aliases, and bounded type parameters (spec §3–4)
+- [x] Generic functions, methods, classes, aliases, and bounded type parameters (spec §3–4)
   - [x] Generic functions with explicit specialization: type parameter lists
     on file-level and nested functions, no hiding of a parameter in scope;
     type variables limited to storing, passing, and returning; bodies checked
@@ -394,7 +394,7 @@ example changes it lists. New Rosetta Code examples go in
     and methods, method type parameters and class parameters in method
     bodies, invariance, one specialization per union, `isinstance` by class
     name, no generic exception classes, across modules
-  - [ ] Generic aliases, including recursion through `list` and `dict`; one
+  - [x] Generic aliases, including recursion through `list` and `dict`; one
     upper bound on a class or native type, with the operations the bound
     allows;
     generic functions as values specialized by explicit arguments or an

@@ -853,6 +853,25 @@ return {
     eq("2:9: 'first' expects 1 type argument, received 2", check_errors(in_main("x = first[int, str]([1])", F)))
   end,
 
+  generic_alias_names = function()
+    local A = "type Box[T] = list[T]\ntype Pair[K, V] = tuple[K, V]\n"
+    eq("4:19: expected list[int], received str", check_errors(A .. "def main() -> None:\n    x: Box[int] = \"s\"\n"))
+    eq("4:31: expected list[Pair[int, str]], received str",
+      check_errors(A .. "def main() -> None:\n    y: list[Pair[int, str]] = \"s\"\n"))
+  end,
+
+  bounds_and_generic_values = function()
+    local N = "class N:\n    name: str\ndef label[T: N](x: T) -> str:\n    return x.name\n"
+      .. "def identity[T](x: T) -> T:\n    return x\n"
+    eq("2:9: type argument int does not satisfy the bound N of 'T'", check_errors(in_main("x = label(1)", N)))
+    eq("2:9: type argument int does not satisfy the bound N of 'T'", check_errors(in_main("x = label[int](1)", N)))
+    eq("4:14: class N has no field 'age'", check_errors("class N:\n    name: str\ndef f[T: N](x: T) -> int:\n    return x.age\n" .. MAIN))
+    eq("2:9: generic function 'identity' needs type arguments or an expected callable type",
+      check_errors(in_main("h = identity", N)))
+    eq("3:38: cannot infer type parameter 'T' of 'identity' from int and str",
+      check_errors("import typing\n" .. in_main("q: typing.Callable[[int], str] = identity", N)))
+  end,
+
   generic_classes = function()
     local B = "class Box[T]:\n    value: T\n\n    def get(self) -> T:\n        return self.value\n"
     eq("2:26: expected Box[int | None], received Box[int]", check_errors(in_main("b: Box[int | None] = Box[int](1)", B)))
