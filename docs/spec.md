@@ -31,8 +31,8 @@ Hello, Willow
 
 A program consists of an entry file and the modules it imports (§12). A program
 can also be organized as a project with a `willow.json` file (§12). A file
-contains `import` statements followed by `def`, `class`, and `type` declarations
-in any order. No other statements may appear at file scope.
+contains `import` statements followed by `def`, `class`, `enum`, and `type`
+declarations in any order. No other statements may appear at file scope.
 
 The entry file must define exactly one `main` function, with the signature
 `def main() -> None:`. In other modules, `main` is an ordinary function name. The
@@ -47,8 +47,8 @@ User code may also call `main`, and such a call behaves like any other function
 call. Programs cannot access Lua globals or `require`.
 
 The exit status is 0 when `main` returns and 1 when an exception propagates out
-of `main` or the program fails in another way. When the program calls `sys.exit`
-(§14), the exit status is the status passed to it.
+of `main` or the program reports another failure (§10). When the program calls
+`sys.exit` (§14), the exit status is the status passed to it.
 
 ## 2. Lexical structure
 
@@ -77,13 +77,13 @@ with a digit. They are case-sensitive. These words are reserved:
 
 ```text
 False None True and as assert async await break case class continue def del
-elif else except finally for from global if import in is lambda match nonlocal
+elif else enum except finally for from global if import in is lambda match nonlocal
 not or pass raise return try type while with yield
 ```
 
-The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, and `dict` are
-also reserved. Using a reserved word that does not begin one of the constructs in
-this specification is an error.
+The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, `dict`, and
+`tuple` are also reserved. Using a reserved word that does not begin one of the
+constructs in this specification is an error.
 
 ### Numeric literals
 
@@ -135,10 +135,22 @@ def function_name(parameter: Type, other: Type) -> Type:
 
 Every parameter and the return type must have a type annotation. A parameter may
 have a default value after its annotation, as in `prefix: str = "Hello"`. A
-default value must be `None`, `True`, `False`, a string literal, or an integer or
-float literal with an optional `+` or `-` sign, and it must be assignable to the
-parameter's type. A parameter without a default cannot follow a parameter that
-has one. Variadic parameters, nested functions, and lambdas are not supported.
+default value must be `None`, `True`, `False`, a string literal, an enum member,
+an integer or float literal with an optional `+` or `-` sign, or a tuple of such
+defaults, and it must be assignable to the parameter's type. Among positional
+parameters, a parameter without a default cannot follow one that has a default.
+A bare `*` introduces keyword-only parameters; these must be supplied by name
+and may be required or have defaults, in any order:
+
+```python
+def report(path: str, *, limit: int = 100, verbose: bool = False) -> None:
+    pass
+```
+
+Variadic parameters are not supported. Functions may contain nested `def`
+statements and lambda expressions (§5). Nested functions have annotated
+parameters and returns, just like file-level functions. Classes, enums, and
+aliases are declared only at file scope.
 Parameter lists and argument lists may end with a trailing comma. A function may
 call functions declared later in the file, and functions may be directly or
 mutually recursive.
@@ -204,6 +216,98 @@ recursive and may refer to classes declared later.
 Exception classes (§10) are classes declared with the base class `Exception`.
 Their first field is `message`, which has no default.
 
+### Type parameters
+
+Functions, methods, classes, protocols, and aliases may declare type parameters:
+
+```python
+def first[T](items: list[T]) -> T:
+    return items[0]
+
+class Box[T]:
+    value: T
+
+type Pair[K, V] = tuple[K, V]
+```
+
+Each parameter names one type, and is in scope throughout its declaration,
+including nested function bodies and class methods. Parameter names must be
+unique and cannot hide another type parameter in scope. A type parameter may
+have one upper bound, as in `T: ByteReader`, where the bound is a concrete type
+or protocol. Type parameters can be used in annotations and type arguments, but
+are not runtime values and cannot be used in `isinstance`. A value of `T`
+supports only operations guaranteed by its bound; without a bound it may be
+stored, passed, and returned, but does not acquire numeric, ordering, or member
+operations from particular callers. Generic bodies
+must type-check under these rules for every permitted type argument.
+
+Generic class and alias annotations supply all type arguments, as in `Box[int]`.
+Generic calls infer type arguments from their arguments and the expected result,
+or supply all arguments explicitly, as in `first[int](numbers)` and
+`Box[str]("hello")`. Inference must produce a unique substitution consistent
+with assignability and bounds; it does not invent a union to reconcile different
+argument types. A call that leaves a parameter undetermined is an error.
+
+A generic function can become a function value when explicit type arguments or
+an expected callable type determine its specialization. Values do not retain
+unspecialized type parameters. Generic class specializations are invariant and
+nominal: `Box[int]` is not assignable to `Box[int | None]`. Tuple and protocol
+assignability follow their own rules (§4). Exception classes cannot be generic.
+
+### Protocols
+
+A protocol names a structural interface. It is declared with
+`typing.Protocol` as its only base and contains method signatures with `pass`
+bodies:
+
+```python
+import typing
+
+class ByteReader(typing.Protocol):
+    def read(self, size: int) -> bytes:
+        pass
+
+def read_prefix(source: ByteReader) -> bytes:
+    return source.read(16)
+```
+
+A class or native type satisfies a protocol when it provides all the declared
+methods with compatible signatures. No inheritance or implementation declaration
+is required. Compatibility preserves every call the protocol permits: argument
+types may be broader, return types may be narrower, parameter names must match
+wherever the protocol permits keyword calls, and the implementation cannot
+require additional arguments. Defaults need not have the same values. Extra
+methods are allowed. Method matching uses the signatures after substituting type arguments, including
+when one protocol satisfies another.
+
+Protocols may have type parameters and may refer to themselves in signatures.
+They declare no fields, constructors, or default method bodies, and cannot be
+instantiated. A protocol value exposes only its declared methods. Protocol
+membership is checked statically; protocols cannot be used in `isinstance`.
+Ordinary classes still have no inheritance beyond exception classes.
+
+### Enums
+
+An enum is a nominal type with a nonempty, closed set of named values:
+
+```python
+enum ColorMode:
+    AUTO
+    ALWAYS
+    NEVER
+
+def use_color(mode: ColorMode = ColorMode.AUTO) -> bool:
+    return mode == ColorMode.ALWAYS
+```
+
+Members are unique identifiers with no assigned values or payloads. `E.MEMBER`
+is an immutable value of `E`; enum types cannot be called. Enum members support
+equality with the same enum type, dictionary keys, and the existing union rules
+for equality and narrowing. They have no numeric conversion or ordering.
+`str(ColorMode.AUTO)` and printing that value produce `ColorMode.AUTO`.
+Enums have no fields or methods. Events with different payloads use ordinary
+classes and unions.
+
 ### Type aliases
 
 ```python
@@ -222,11 +326,16 @@ The forms of type annotations are:
 
 ```text
 int  float  bool  str  None
-list[T]  dict[K, V]
-Class  module.Class
-Alias  module.Alias
+list[T]  dict[K, V]  tuple[A, B, ...]  tuple[()]
+Class  module.Class  Class[T, ...]
+Alias  module.Alias  Alias[T, ...]
+Enum  module.Enum  Protocol  module.Protocol  Protocol[T, ...]
+typing.Callable[[A, B, ...], R]
 A | B | ...
 ```
+
+Here `...` indicates additional type entries, not literal ellipsis syntax.
+Generic declarations and applications have fixed arity.
 
 ## 4. Types and values
 
@@ -241,11 +350,16 @@ A | B | ...
 | `A \| B \| ...` | A value of any member type |
 | `list[T]` | Ordered, mutable sequences of `T` |
 | `dict[K, V]` | Mutable maps from `K` to `V` that keep insertion order |
+| `tuple[A, B, ...]` | Immutable, fixed-length groups with a type for each position |
+| Enums | Named values of a declared enum |
+| `typing.Callable[[A, B, ...], R]` | Functions taking the listed positional arguments and returning `R` |
+| Protocols | Values satisfying the protocol's method signatures |
 | Classes | Values of a declared class, including exception classes |
 | Native types | Library values such as `io.File` (§14) |
 
-The scalar types are `int`, `float`, `bool`, `str`, `bytes`, and `None`. A type
-is printable if it is a scalar type other than `bytes`, or a union of such types.
+The scalar types are `int`, `float`, `bool`, `str`, `bytes`, enums, and `None`.
+A type is printable if it is a scalar type other than `bytes`, or a union of
+such types.
 Lists, dictionaries, and class values are reference types. Assigning one or
 passing it as an argument shares the same value instead of copying it.
 
@@ -259,10 +373,16 @@ In addition:
   members. A union is assignable to a type if each of its members is assignable
   to that type.
 - A value of any exception class is assignable to `Exception`.
+- A value satisfying a protocol is assignable to that protocol (§3).
+- A tuple is assignable to another tuple type of the same length when each
+  position is assignable to the corresponding position.
+- A function is assignable to a callable type when it accepts every positional
+  call described by that type and returns a value assignable to its return type
+  (§5).
 
 Assignability rules apply to variable initializers, assignments, function
-arguments, return values, elements of list and dict displays, and constructor
-arguments. Collection types are invariant. For example, `list[int]` is not
+arguments, return values, elements of collection displays, and constructor
+arguments. Lists and dictionaries are invariant. For example, `list[int]` is not
 assignable to `list[int | None]`, and `list[ParseError]` is not assignable to
 `list[Exception]`.
 
@@ -272,9 +392,10 @@ The members of a union may be written in any order, and two unions with the same
 members are the same type. When a member is itself a union, such as an alias for
 a union, its members become members of the enclosing union. No member may be
 assignable to another member, and a union may have at most one `list` member and
-at most one `dict` member. So `int | int`, `Exception | ParseError`, and
-`list[int] | list[str]` are errors. A union that has `None` as a member, such as
-`str | None`, is called an optional type.
+at most one `dict`, tuple, and callable member. A union cannot contain different
+specializations of the same generic class. So `int | int`,
+`Exception | ParseError`, and `list[int] | list[str]` are errors. A union that
+has `None` as a member, such as `str | None`, is called an optional type.
 
 A value of a union type can be assigned, passed as an argument, returned,
 compared, and printed, and it can be tested with `is None`, `is not None`, and
@@ -282,10 +403,12 @@ compared, and printed, and it can be tested with `is None`, `is not None`, and
 access, or method calls, it must first be narrowed to a single member (§9).
 
 `isinstance(value, C)` is `True` when `value` holds a value of type `C`. `C` must
-be `int`, `float`, `bool`, `str`, `list`, `dict`, or the name of a class,
-optionally qualified with a module name. `C` must name the type
+be `int`, `float`, `bool`, `str`, `list`, `dict`, `tuple`, or the name of a
+class or enum, optionally qualified with a module name. `C` must name the type
 of `value` or one of its members. `list` and `dict` refer to the union's list
-member and dict member.
+member and dict member; `tuple` refers to its tuple member. A generic class test
+names the class without type arguments and identifies its single specialization
+in the tested type. Callable signatures and protocols are not runtime tests.
 
 ```python
 def describe(value: int | str | None) -> str:
@@ -304,9 +427,10 @@ body.
 
 ## 5. Expressions
 
-The forms of expressions are literals, names, parenthesized expressions, list and
-dict displays, calls, indexing, slicing, field access, and unary and binary
-operations.
+The forms of expressions are literals, names, parenthesized expressions, list,
+dict, and tuple displays, calls, indexing, slicing, field access, lambdas, and
+unary and binary operations. Generic specialization uses the type argument syntax
+in §3.
 
 Operator precedence, from lowest to highest:
 
@@ -321,6 +445,9 @@ Operator precedence, from lowest to highest:
    method access `a.name`
 9. Literals, names, parenthesized expressions, and displays
 
+Lambda expressions bind less tightly than all these operations; the expression
+after their colon extends as far to the right as its enclosing expression allows.
+
 Binary operators are left-associative. Postfix operations are applied from left
 to right, as in `text.strip().split(",")`. The operands of a level 4 operator
 must be expressions at level 5 or higher. As a result, `not a == b` means
@@ -331,9 +458,9 @@ must be expressions at level 5 or higher. As a result, `not a == b` means
 
 A call can name a function, built-in function, conversion, or class by its bare
 name (`area(p)`), a member of a module (`geometry.area(p)`), or a method of a
-value (`items.append(x)`, `counter.add(1)`). Functions and methods are not
-values. Because of this, `(f)(x)`, `items[0](x)`, and `items.append` without a
-call are errors. Every call produces exactly one value.
+value (`items.append(x)`, `counter.add(1)`). It can also call an expression of
+callable type, as in `(f)(x)`, `handlers[0](x)`, or `make_handler()(x)`. The callee
+is evaluated before its arguments. Every call produces exactly one value.
 
 A call's arguments are zero or more positional arguments followed by zero or
 more keyword arguments of the form `name=expression`. Positional arguments are
@@ -350,11 +477,51 @@ print(greet(prefix="Welcome", name="Ada"))
 
 These are compile-time errors: a positional argument after a keyword argument, a
 keyword that names no parameter, two values for the same parameter, a missing
-argument for a parameter that has no default, and too many arguments. Functions,
-methods, class constructors, `fs.read_file`, `fs.write_file`, `sys.exit`,
-`sorted`, and `list.sort` accept keyword arguments, using the parameter names
-given in §7 and §14. Other built-in functions and methods accept only positional
-arguments.
+argument for a parameter that has no default, a positional argument for a
+keyword-only parameter, and too many arguments. Functions, methods, and class
+constructors, including standard-library functions and native and collection
+methods, accept keyword arguments using their declared or documented parameter
+names. The intrinsic functions `print`, `input`, `len`, `range`, `int`, `float`,
+`str`, `bytes`, `ord`, `chr`, `isinstance`, `iter`, and `next` accept only
+positional arguments.
+
+### Function values and lambdas
+
+File-level functions, nested functions, lambdas, and bound methods are values.
+`typing.Callable[[int, str], bool]` describes a function that takes exactly an
+`int` and a `str` positionally and returns `bool`. A callable parameter accepts
+any function that can accept those arguments, including one with additional
+defaulted parameters. Its return type must be assignable to the callable's
+return type. Parameter types are checked in the opposite direction: a function
+accepting `int | None` can serve a callable expecting `int`.
+
+Calls through `Callable` use exactly its listed positional arguments; parameter
+names and defaults are not part of that type. Direct calls and inferred aliases
+of declared functions and bound methods retain their complete call signatures,
+including names, defaults, and keyword-only requirements. An explicit `Callable`
+annotation exposes only its positional contract. A function with required
+keyword-only parameters cannot be converted to `Callable`, but can still be
+aliased and called with its inferred signature. Built-in functions can become
+values when an expected callable type determines a compatible signature.
+
+Evaluating a bound method such as `counter.add` evaluates and retains its receiver
+once. Later calls use that same object and see its current fields. Callable
+values can be stored in collections and class fields, passed, and returned.
+They do not support equality, printing, or `isinstance` tests.
+
+A lambda is a single-expression function, as in `lambda row: row.score`. Its
+parameter types come from an expected callable type; its expression determines
+the return type. Missing parameter type information is a compile-time error.
+A parameterless lambda can infer its return type without an expected type.
+Lambdas have no defaults or annotations; use a nested `def` when explicit
+annotations or multiple statements are needed. Captures follow §9.
+
+```python
+import typing
+
+def threshold(minimum: int) -> typing.Callable[[int], bool]:
+    return lambda score: score >= minimum
+```
 
 ### Operators
 
@@ -366,8 +533,10 @@ arguments.
   `count == None` are valid. Values of different types are never equal, so a
   union holding `1` is not equal to a union holding `1.0`. Bytes values are equal
   when their contents are equal. Lists, dictionaries, class values, and native
-  values cannot be compared with `==`.
-- `<`, `<=`, `>`, and `>=` take two integers, two floats, or two strings.
+  values cannot be compared with `==`. Tuples support equality when all their
+  corresponding positions support equality (§7).
+- `<`, `<=`, `>`, and `>=` take two integers, two floats, two strings, or
+  comparable tuples (§7).
 - `is` may only be used as `e is None` or `e is not None`, where `e` has an
   optional type.
 - `in` and `not in` test for an element in a list, a key in a dictionary, or a
@@ -609,10 +778,10 @@ index.
 
 ### Lists and dictionaries
 
-Dictionary keys must be `int` or `str`. List elements and dictionary values can
-have any type. A list or dictionary can store `None`. A stored `None` counts
-toward the collection's length, and a key whose value is `None` is different from
-a missing key.
+Dictionary keys must be `int`, `str`, or one enum type. List elements and
+dictionary values can have any type. A list or dictionary can store `None`.
+A stored `None` counts toward the collection's length, and a key whose value is
+`None` is different from a missing key.
 
 | Expression | Type | Meaning |
 | --- | --- | --- |
@@ -622,7 +791,7 @@ a missing key.
 | `xs[i:j]` | `list[T]` | A new list of the elements from index `i` up to `j` |
 | `xs.append(v)` | `None` | Add `v` to the end |
 | `xs.pop()` | `T` | Remove and return the last element |
-| `xs.sort(reverse)` | `None` | Sort the list in place |
+| `xs.sort(reverse=False, *, key=None)` | `None` | Sort the list in place |
 | `v in xs` | `bool` | Some element equals `v` |
 | `len(d)` | `int` | Number of entries |
 | `d[k]` | `V` | Value for key `k` |
@@ -642,13 +811,60 @@ type, `d.get(k)` has type `V`. `v in xs` requires an element type that supports
 Replacing the value of an existing key keeps the entry in its current position.
 A key that is removed and then inserted again moves to the end.
 
-`sorted(items, reverse)` returns a new sorted list containing the elements of
-`items`, and `xs.sort(reverse)` sorts `xs` in place. `reverse` is a `bool` and
-defaults to `False`. The element type must be exactly `int`, `float`, or `str`.
+`sorted(items, reverse=False, *, key=None)` returns a new sorted list from an
+`Iterable[T]` (§14), and `xs.sort(reverse=False, *, key=None)` sorts a list in
+place. `reverse` is a `bool`. Without `key`, the element type must be exactly
+`int`, `float`, `str`, or a comparable tuple. With `key`, its callable takes one
+`T` and returns one of those comparable types, and elements may have any type:
+
+```python
+ordered = sorted(records, key=lambda row: (row.name, row.score))
+```
+
+`sorted` fully consumes its iterable before evaluating keys. The key is evaluated
+exactly once for each element, in input order, before any reordering. A key
+function must not mutate the list being sorted in place;
+doing so raises `RuntimeError` with the message `list changed during sort`.
 Sorting is stable in both directions and compares strings by code point.
-Infinities and signed zeros are ordered by the usual comparisons. If the list
-contains NaN, sorting raises `ValueError` with the message `cannot sort NaN`
-before changing anything.
+Infinities and signed zeros follow the usual comparisons. NaN anywhere in a
+comparison key raises `ValueError` with the message `cannot sort NaN`. Key
+evaluation and validation failures do not reorder the input; other effects of
+callbacks are not undone.
+
+### Tuples and unpacking
+
+Tuples have fixed arity and a type for each position. `(1, "Ada")` has type
+`tuple[int, str]`; `(1,)` has type `tuple[int]`; `()` has type `tuple[()]`.
+Tuple expressions require parentheses. `(value)` is grouping, not a tuple.
+Elements are evaluated left to right. Tuple positions cannot be reassigned,
+but a contained mutable object is still shared.
+
+`len` returns the arity. Indexes must be integer literals, optionally negated;
+negative indexes count from the end, and an invalid index is a compile-time
+error. Indexing returns the corresponding position's type. Tuple slicing is
+not supported. Iteration produces the union of the position types, removing
+duplicate and subsumed members; the element type of an empty tuple is `None`.
+Iteration is an error when the resulting union is not a valid type.
+
+Tuples of equal arity support equality when corresponding types support the
+existing equality rules, and ordering when corresponding types are the same
+ordered scalar type or comparable tuple type. Comparison proceeds left to right
+and stops at the first unequal position. Empty tuples compare equal. Tuples do
+not become printable or valid dictionary keys merely by being tuples.
+
+Assignment and `for` targets may unpack fixed-length tuples:
+
+```python
+name, count = ("Ada", 3)
+for key, value in pairs:
+    process(key, value)
+```
+
+Targets are names or nested tuple patterns of names. The source type must have
+the same tuple shape, checked statically. The right-hand side is evaluated once,
+then its positions are assigned left to right under the ordinary local-type
+rules. Repeated target names and starred targets are errors. Unpacking lists or
+arbitrary iterables is not supported.
 
 ## 8. Statements
 
@@ -678,7 +894,7 @@ else:
 while condition:
     statements
 
-for name in iterable:
+for target in iterable:
     statements
 
 try:
@@ -687,12 +903,19 @@ except ParseError as error:
     statements
 finally:
     statements
+
+with expression as target:
+    statements
+
+yield expression
+nonlocal name
 ```
 
 A block must contain at least one statement. Use `pass` for an empty block. The
 only expressions that may be used as statements are calls. An assignment has
-exactly one target and one value. Chained assignment, destructuring assignment,
+one target, which may be a tuple pattern (§7), and one value. Chained assignment,
 augmented assignment such as `+=`, and assignment expressions are not supported.
+Nested `def` statements bind function values as described in §9.
 
 Conditions must have type `bool`. Other types cannot be used as conditions, so
 `if count:` is a type error.
@@ -711,12 +934,19 @@ evaluated.
 `for name in iterable:` runs its body once for each item of the iterable. The
 iterable can be a list, which produces its elements in index order; a
 dictionary, which produces its keys in insertion order; a string, which produces
-each code point as a one-code-point string; or a call to `range`.
+each code point as a one-code-point string; bytes; a tuple; or a value satisfying
+`typing.Iterable[T]` (§14). `range` produces an iterable of integers.
+
+The loop obtains one iterator by calling `iter(iterable)`, and calls `next` for
+each step. Only `StopIteration` raised by that advancement ends the loop;
+`StopIteration` from the loop body propagates normally. Other advancement errors
+also propagate. A loop does not close its iterator on early exit; the iterator
+can be resumed. Use `with` for an owned iterator that needs cleanup.
 
 - `range(stop)`, `range(start, stop)`, and `range(start, stop, step)` take
   integers and produce the same sequence as in Python. A step of zero raises
-  `ValueError` with the message `range step must not be zero`. `range` can only
-  be used as the iterable of a `for` loop.
+  `ValueError` with the message `range step must not be zero`. The range value
+  satisfies `typing.Iterable[int]`; each `iter` call starts a fresh traversal.
 - The iterable and the arguments to `range` are evaluated once, before the first
   iteration.
 - Assigning to the loop variable inside the body does not change the iteration.
@@ -728,23 +958,138 @@ each code point as a one-code-point string; or a call to `range`.
   `dictionary changed size during iteration`. Replacing the values of existing
   keys is allowed.
 
+### Generators
+
+A function containing `yield expression` in its own body is a generator
+function. Its return annotation is `typing.Generator[T]`, `typing.Iterator[T]`,
+or `typing.Iterable[T]`, and each yielded expression must be assignable to `T`.
+Calling it binds and checks arguments normally, but runs none of its body. The
+body starts on the first `next` and resumes after each `yield` on subsequent
+calls. Local variables, captured bindings, and active exception handlers remain
+in effect while suspended.
+
+```python
+import io
+import typing
+
+def lines(path: str) -> typing.Generator[str]:
+    with io.open(path) as source:
+        for line in source:
+            yield line
+
+def main() -> None:
+    with lines("input.txt") as rows:
+        for line in rows:
+            print(line)
+            break
+```
+
+Here the outer `with` closes the generator after the early loop exit, which
+runs the suspended file context's cleanup and closes the file.
+
+Bare `return` or reaching the end exhausts the generator and runs pending
+cleanup. Returning a value is an error, and a generator need not return on every
+path. Yielding `None` is permitted when `T` permits it. An exhausted or closed
+generator always raises `StopIteration` on `next`. A body exception closes the
+generator and propagates; a `StopIteration` escaping its body instead raises
+`RuntimeError` with the message `generator raised StopIteration`, so an accidental
+exhaustion from another iterator cannot silently end the generator.
+
+`Generator[T]` also provides `close() -> None`. Closing a suspended generator
+discards the rest of its ordinary execution and runs pending `finally` clauses
+and `with` cleanup, from inner to outer. It does not enter `except` handlers.
+Closing a generator whose body has not started does not start it. Closing an
+exhausted or closed generator has no effect. Cleanup errors propagate and leave
+the generator closed. Resuming or closing a generator already executing raises
+`RuntimeError` with the message `generator already running`.
+
+Generators satisfy the context-manager protocol: `enter` returns the generator
+and `exit` closes it. Cleanup is guaranteed by exhaustion or explicit closing,
+including `with`, rather than by discarding the last reference. `yield` is a
+statement, not an expression, and cannot occur directly in a `finally` clause.
+`yield from`, sending values into generators, and injecting exceptions into them
+are not supported; these generators provide pull iteration, not coroutines.
+
+### Scoped cleanup
+
+`with manager as target:` requires a value satisfying
+`typing.ContextManager[T]` (§14). The expression is evaluated once; its
+`enter() -> T` method runs, and the returned value is assigned to the optional
+`as` target. A target is a name or tuple pattern. After successful entry,
+`exit(error: Exception | None) -> None` runs exactly once when control leaves
+the body, including through `return`, `break`, `continue`, or an exception.
+`error` is the pending exception, or `None` for normal completion and control
+transfers. This lets a manager distinguish successful use from failure, such as
+when committing or discarding a temporary output. If entry fails, the body does
+not run and that manager's exit is not called.
+
+Exit has the same exception behavior as `finally`: it cannot suppress a body
+exception, and an exception it raises replaces the pending exception or control
+transfer. Return expressions are evaluated before exit. `sys.exit` and failures
+that bypass `finally` also bypass context cleanup. Suspending a generator at
+`yield` does not exit its contexts.
+
+Several managers may be listed with commas. They enter left to right and exit
+right to left, like nested `with` statements, including when a later entry fails.
+The `as` names remain local after the statement, following normal assignment
+rules, even if their resources have closed. The statement itself adds no fresh
+variable scope.
+
 ## 9. Names and static checking
 
 ### Scope
 
 Each function has a single local scope. Parameters, assignment targets, `for`
-loop variables, and names bound by `except ... as` are local to the whole
-function, wherever in the function they appear. Blocks do not create scopes, and
+loop variables, nested function names, unpacking targets, and names bound by
+`except ... as` or `with ... as` are local to the whole function, except those
+declared `nonlocal`. Blocks do not create scopes, and
 there are no module-level variables or global variables.
 
-The file scope contains functions, classes, aliases, and imports. These share a
-single namespace with the built-in names (§11). It is an error to declare the
-same name twice, to give two parameters the same name, or to declare a file-level
-name that is also a built-in name. A local variable with the same name as a
+The file scope contains functions, classes, protocols, enums, aliases, and
+imports. These share a single namespace with the built-in names (§11). It is an
+error to declare the same name twice, to give two parameters the same name, or to
+declare a file-level name that is also a built-in name. A local variable with the same name as a
 function, class, alias, import, or built-in hides it throughout the function.
-Calling a local variable is an error, even before the variable's first
-assignment. Type annotations in the function still refer to the hidden class or
-alias.
+A local variable can be called when its type is callable and it is definitely
+assigned. Type annotations still refer to hidden type declarations.
+
+### Captures and `nonlocal`
+
+A nested function or lambda captures the bindings of referenced variables in
+enclosing functions. Captures remain alive after an enclosing call returns.
+They are shared bindings: rebinding a captured variable changes what every
+closure over that binding subsequently reads. Separate calls to the enclosing
+function create separate bindings. A loop reuses its variable's binding, so
+closures created in the same loop observe its latest value.
+
+```python
+import typing
+
+def counter() -> typing.Callable[[], int]:
+    count = 0
+
+    def increment() -> int:
+        nonlocal count
+        count = count + 1
+        return count
+
+    return increment
+```
+
+Reading an outer variable does not require a declaration. Rebinding it requires
+`nonlocal name`, or a comma-separated list of names, before any use of those
+names in that function. Each name must identify a variable or parameter in an
+enclosing function; it cannot name a module declaration or a variable local to
+the current function. Resolution selects the nearest enclosing binding, and
+assignments must preserve that binding's declared or inferred type. Mutating a
+captured object's fields or contents does not rebind the variable.
+
+Nested definitions execute in statement order and bind their function name when
+the definition executes. A function may refer to its own name recursively. Other
+captured variables must be definitely assigned when the closure is created;
+reading an uninitialized outer binding is a compile-time error. Assignment
+without `nonlocal` creates a local throughout the nested function, following
+the usual whole-function scope rule.
 
 ### Local types
 
@@ -778,6 +1123,9 @@ path that reaches that point. This is determined from the structure of the code:
 - The body of a `while` or `for` loop may run zero times, so assignments in the
   body do not count as assignments after the loop.
 - A variable bound by `except ... as` is assigned inside its `except` clause.
+- A `with ... as` target is assigned after successful entry and before its body.
+  Assignments made on all normally completing paths through the body remain
+  definite after the statement.
 
 The checker does not evaluate conditions. Both branches of every `if` are
 checked, and `if False:` and `while True:` are treated the same as any other
@@ -791,9 +1139,13 @@ library function `sys.exit` (§14) transfer control. `assert` does not, even
 of its branches do. A statement that follows a control transfer in the same block
 is an unreachable-code error.
 
-A function whose return type is not `None` must return a value on every path. The
-checker never treats a loop as guaranteeing a return, so a final `return` is
-required even after `while True:`.
+A non-generator function whose return type is not `None` must return a value on
+every path. The checker never treats a loop as guaranteeing a return, so a final
+`return` is required even after `while True:`.
+
+`yield` suspends execution and is not a terminating control transfer; statements
+after it are reachable. Generator return rules are defined in §8.
+A `with` statement transfers control when its body transfers control.
 
 ### Narrowing
 
@@ -837,6 +1189,13 @@ def describe(name: str | None) -> str:
         return "anonymous"
     return "user " + name
 ```
+
+Captured variables are checked against their full binding types at the start of
+a closure body; narrowing at closure creation does not become a permanent fact.
+For any captured binding, every function call, including implicit protocol
+calls, and every generator suspension removes its narrowing. A fresh test or
+assignment can establish it again. Copying the value to a separate local permits
+narrowing that is independent of later rebinding.
 
 ### `try`
 
@@ -893,9 +1252,10 @@ These built-in exception classes have only the `message` field:
 | `ValueError` | Invalid values for conversions, `ord`, `chr`, `range`, `split`, `sys.exit`, and UTF-8 input |
 | `IndexError` | Invalid list indexes and `pop` from an empty list |
 | `KeyError` | Missing dictionary keys |
-| `RuntimeError` | Dictionary size changes during iteration |
+| `RuntimeError` | Mutation during iteration or sorting, and invalid generator state |
 | `OSError` | Failed filesystem and host operations |
 | `TimeoutError` | Expired time limits |
+| `StopIteration` | Iterator exhaustion |
 
 Programs can construct and raise these classes in the same way as their own
 exception classes.
@@ -935,11 +1295,14 @@ and `continue` cannot appear directly inside a `finally` clause.
 
 ### Failures that are not exceptions
 
-The following failures end the program with exit status 1 and cannot be caught:
-running out of stack space or memory, failing to write to stdout or stderr
-through `print`, `sys.eprint`, or the final flush (§14), and failing to read
-stdin through `input`. Writing to a closed pipe is one of these failures; it does
-not deliver a signal to the program.
+Running out of stack space or memory ends the program and cannot be caught. The
+program reports the failure and exits with status 1 when it can; otherwise the
+operating system ends it, with no diagnostic and a status of its own.
+
+These failures end the program with exit status 1 and cannot be caught: failing
+to write to stdout or stderr through `print`, `sys.eprint`, or the final flush
+(§14), and failing to read stdin through `input`. Writing to a closed pipe is
+one of these failures; it does not deliver a signal to the program.
 
 ## 11. Built-in functions
 
@@ -948,6 +1311,8 @@ not deliver a signal to the program.
 | `print(value) -> None` | Write a printable value and `\n` to stdout |
 | `input() -> str \| None` | The next line of stdin without its line ending, or `None` at end of input |
 | `len`, `range`, `int`, `float`, `str`, `bytes`, `ord`, `chr`, `isinstance`, `sorted` | See §4, §6, §7, and §8 |
+| `iter(value)` | Obtain the iterator of an iterable (§14) |
+| `next(iterator)` | Obtain its next value, or raise `StopIteration` (§14) |
 
 The built-in names are these functions and the built-in exception classes.
 
@@ -987,11 +1352,11 @@ def main() -> None:
   file named `app.wlo`.
 - An import binds its first component as a name in the importing file's
   namespace (§9). Several imports may share the same first component, but that
-  name cannot also be used for a function, class, or alias. A name cannot be
-  both a module and a namespace, so importing both `app` and `app.util` is an
-  error. A local variable with the same name hides the whole namespace.
+  name cannot also be used for a function, class, enum, protocol, or alias. A name
+  cannot be both a module and a namespace, so importing both `app` and `app.util`
+  is an error. A local variable with the same name hides the whole namespace.
 - `module.name`, written with the module's full name, as in `app.util.name`,
-  refers to a function, class, or alias declared in that module. It can be used
+  refers to a function or type declaration in that module. It can be used
   in calls, constructors, annotations, `except` clauses, and `isinstance`.
   Modules and namespaces are not values. Names that begin with `_` are private to
   the module that declares them.
@@ -1054,6 +1419,9 @@ source file is given, the commands search only that file's directory and the
 standard library, whether or not a `willow.json` exists. Programs run in the
 current directory, and their file operations are relative to it. Compiled and
 built output contains every module the program uses, from all roots.
+`willow compile -o <output>` writes the program as one Lua source file that
+runs on LuaJIT. `willow build -o <output>` bundles the program and LuaJIT into
+a standalone executable.
 
 ### Tests
 
@@ -1399,8 +1767,11 @@ def main() -> None:
 | `readline() -> str \| None` | Read the next line the same way `input` does, or return `None` at end of input |
 | `write(data: bytes) -> None` | Write all of `data` |
 | `write_text(text: str) -> None` | Write the UTF-8 encoding of `text`, without adding a newline |
+| `iter() -> typing.Iterator[str]` | Iterate over lines from the current file position |
 | `flush() -> None` | Write any buffered data |
 | `close() -> None` | Flush and close the file |
+| `enter() -> File` | Return this open file for scoped use |
+| `exit(error: Exception \| None) -> None` | Close the file |
 
 A native type is a library class that has methods and no fields. Its values can
 only be created by functions in its module. A native type can be used in
@@ -1422,7 +1793,16 @@ The standard handles share their buffers with `input`, `print`, and
 stdout and stderr are flushed when `main` returns, when an uncaught exception
 ends the program, and when `sys.exit` is called. Data written to a file opened
 with `open` is only guaranteed to reach the file after `flush` or `close`, so
-programs should close such files in a `try`/`finally` statement.
+programs should close such files with `with` or a `try`/`finally` statement.
+
+`enter` rejects a closed file and rejects a standard stream with
+`cannot close a standard stream` before the body can run. `exit` has the same
+behavior as `close`.
+
+Each `iter` call returns a fresh iterator that reads through `readline`. Iterators
+share the file's position with other reads, yield lines without their line
+endings, and do not close the file. A closed file raises the usual closed-file
+error when an iterator tries to read from it.
 
 Calling `close` more than once has no further effect, and `close` closes the
 handle even if flushing fails. These operations raise `ValueError`:
@@ -1465,13 +1845,15 @@ def main() -> None:
 | `parse(text: str) -> Json` | The value represented by the JSON text `text` |
 | `dump(value: Json) -> str` | The JSON text for `value` |
 
-`parse` accepts JSON as defined by RFC 8259. A number with no fraction or
-exponent that is within the `int` range becomes an `int`. Any other number
-becomes the nearest `float`. If an object contains the same key more than once,
-the entry keeps the position of the first occurrence and the value of the last.
-Text that is not valid JSON, including an escape for an unpaired surrogate,
-raises `JsonError` with a message that describes the problem and gives its line
-and column.
+`parse` accepts JSON as defined by RFC 8259, with integer tokens limited to the
+`int` range. A number with no fraction or exponent becomes an `int`; if it is
+outside the `int` range, parsing raises `JsonError` with the message
+`integer out of range` and the line and column of the number's first character.
+A number with a fraction or exponent becomes the nearest `float`. If an object
+contains the same key more than once, the entry keeps the position of the first
+occurrence and the value of the last. Text that is not valid JSON, including an
+escape for an unpaired surrogate, raises `JsonError` with a message that
+describes the problem and gives its line and column.
 
 `dump` writes no whitespace and keeps the order of dictionary entries. Floats are
 written the same way `str` writes them, so `2.0` is parsed back as a `float`.
@@ -1511,6 +1893,10 @@ def main() -> None:
 | `Listener.accept(timeout: float \| None = None) -> Connection` | Wait for the next connection |
 | `Listener.local_port() -> int` | The port the listener is bound to |
 | `Listener.close() -> None` | Stop listening |
+| `Connection.enter() -> Connection` | Return this open connection for scoped use |
+| `Connection.exit(error: Exception \| None) -> None` | Close the connection |
+| `Listener.enter() -> Listener` | Return this open listener for scoped use |
+| `Listener.exit(error: Exception \| None) -> None` | Close the listener |
 
 A host is a host name, which is looked up with the system resolver, or a literal
 IPv4 or IPv6 address. Hosts are written in ASCII, and internationalized domain
@@ -1542,6 +1928,9 @@ and `cannot send: <reason>`. Writing to a connection whose peer has closed it is
 such a failure and does not deliver a signal. Timeouts raise `TimeoutError` with
 messages such as `recv timed out after <timeout> seconds`. Child processes do not
 inherit connections or listeners.
+
+`enter` rejects a closed or unusable handle with the same error as its other
+operations. `exit` has the same behavior as `close`.
 
 ### `subprocess`
 
@@ -1646,7 +2035,7 @@ def main() -> None:
 
 | Function | Meaning |
 | --- | --- |
-| `args() -> list[str]` | A new list of the program's arguments in order, not including the program or source file name |
+| `args() -> list[str]` | A new list of the program's arguments in order, not including the program name |
 | `eprint(value) -> None` | Write a printable value and `\n` to stderr |
 | `exit(status: int) -> None` | End the program with exit status `status` |
 | `getenv(name: str) -> str \| None` | The value of the environment variable `name`, or `None` if it is not set |
@@ -1703,13 +2092,52 @@ finite. `utc` rounds down to whole seconds and supports years 0001 through 9999.
 Timestamps outside that range raise `ValueError` with the message
 `timestamp out of range`.
 
+### `typing`
+
+This module supplies callable annotations, the protocol declaration marker, and
+the standard structural protocols. Import it with `import typing`; type names
+are qualified in the same way as other module types. `Callable` is an annotation
+form and `Protocol` is a declaration marker, not a runtime constructor or a type
+for ordinary values.
+
+| Declaration | Contract |
+| --- | --- |
+| `Callable[[A, B, ...], R]` | A function with the positional signature in §5 |
+| `Protocol` | The base marker for structural protocol declarations (§3) |
+| `Iterable[T]` | Provides `iter() -> Iterator[T]` |
+| `Iterator[T]` | Provides `iter() -> Iterator[T]` and `next() -> T` |
+| `ContextManager[T]` | Provides `enter() -> T` and `exit(error: Exception \| None) -> None` |
+| `Generator[T]` | Provides the iterator methods, `close() -> None`, `enter() -> Generator[T]`, and `exit(error: Exception \| None) -> None` |
+
+`iter(value)` calls `value.iter()` and returns its iterator. An iterator's `iter`
+method returns itself, so an iterator is also iterable. `next(iterator)` calls
+its `next` method. Exhaustion raises `StopIteration` with an empty message;
+after exhaustion an iterator remains exhausted. Neither built-in accepts a
+default value or other arguments.
+
+Lists, dictionaries, strings, bytes, tuples, and range values provide `iter`
+methods and satisfy the corresponding iterable protocols. Each call returns a
+fresh iterator, with the element types and mutation rules given in §7 and §8.
+Dictionary iteration yields keys. `io.File` provides line iteration as specified
+in its module. User-defined iterators and managers participate through the same
+method matching, without registration or special inheritance.
+
+An iterable argument is borrowed: consuming it does not close either the
+iterable or its iterator. This also applies to `sorted`. Resource ownership is
+expressed separately by `with` or explicit closing. A generator annotated as
+`Iterator[T]` or `Iterable[T]` exposes only those protocols' methods; annotate it
+as `Generator[T]` when callers need scoped or explicit closing.
+
 ## References
 
 - Python documentation:
   [sequence operations](https://docs.python.org/3/library/stdtypes.html),
   [calls](https://docs.python.org/3/reference/expressions.html#calls),
   [format specifications](https://docs.python.org/3/library/string.html#format-specification-mini-language),
-  [subprocesses](https://docs.python.org/3/library/subprocess.html), and
+  [subprocesses](https://docs.python.org/3/library/subprocess.html),
   [sockets](https://docs.python.org/3/library/socket.html)
+  (library behavior); [callables](https://typing.python.org/en/latest/spec/callables.html)
+  and [protocols](https://typing.python.org/en/latest/spec/protocol.html)
+  (type-system precedents)
 - [Unicode 17.0](https://www.unicode.org/versions/Unicode17.0.0/), for case
   mappings

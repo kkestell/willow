@@ -308,3 +308,18 @@ method call resolves statically.
     call, evaluating the receiver before the arguments
 - [x] Deliver an example that uses methods on an ordinary class and an exception
   class, with focused tests and `make test`
+
+
+## Language expansion milestones
+
+- [ ] Enums, enum defaults, and enum dictionary keys (spec §3–7)
+- [ ] Tuples, tuple defaults, comparisons, and unpacking (spec §3–8)
+- [ ] Keyword-only parameters and general library keyword arguments (spec §3, §5)
+- [ ] Function values, bound methods, lambdas, closures, and `nonlocal` (spec §5, §9)
+- [ ] Generic functions, methods, classes, aliases, and bounded type parameters (spec §3–4)
+- [ ] Structural protocols and the `typing` module (spec §3, §14)
+- [ ] Extensible iteration, `iter`, `next`, and reusable range values (spec §8, §11, §14)
+- [ ] Generators and deterministic generator cleanup (spec §8, §14)
+- [ ] Context managers, `with`, and scoped library resources (spec §8, §14)
+- [ ] Iterable sorting, tuple ordering, and `key` callbacks (spec §7)
+- [ ] Strict JSON integer range handling (spec §14)
