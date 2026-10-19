@@ -359,7 +359,7 @@ example changes it lists. New Rosetta Code examples go in
     keyword-only requirements; calls on any callable expression, including
     callable locals that hide declarations; no equality, printing, or
     `isinstance`
-  - [ ] Callable types: a provided `typing` module with
+  - [x] Callable types: a provided `typing` module with
     `Callable[[A, ...], R]`; compatibility with broader parameters, narrower
     returns, and extra defaulted parameters, adapting arguments, results, and
     omitted defaults at conversion; an explicit `Callable` exposes only the

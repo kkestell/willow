@@ -146,12 +146,21 @@ function M.emit(lowered)
     return #list == 0 and "{}" or "{ " .. args(list) .. " }"
   end
 
-  -- A conversion step from lowering: `float` first, then the tuple positions
-  -- it converts, in order.
+  -- A conversion step from lowering: `float` first, then `adapt`, then the
+  -- tuple positions it converts, in order.
   local function step_text(step)
     local parts, last = {}, 0
     if step.float then
       parts[1] = "float = " .. M.quote(step.float)
+    end
+    if step.adapt then
+      -- The adapter takes the wrapped function and then the callable's arguments.
+      local params = { "__wlo_f" }
+      for i = 1, step.adapt.arity do
+        params[i + 1] = "__wlo_p" .. i
+      end
+      parts[#parts + 1] = "adapt = function(" .. table.concat(params, ", ") .. ") return "
+        .. expr(step.adapt.body) .. " end"
     end
     for i in pairs(step) do
       if type(i) == "number" and i > last then
@@ -203,6 +212,10 @@ function M.emit(lowered)
       return runtime.reference(e.name) .. "(" .. args(e.args) .. ")"
     elseif kind == "Item" then
       return "__wlo_item"
+    elseif kind == "AdapterCallee" then
+      return "__wlo_f"
+    elseif kind == "AdapterParam" then
+      return "__wlo_p" .. e.index
     elseif kind == "Str" then
       return (e.float and "__wlo_str_float(" or "__wlo_str(") .. expr(e.value) .. ")"
     elseif kind == "Concat" then

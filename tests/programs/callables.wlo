@@ -1,0 +1,68 @@
+import typing
+
+def add(a: int, b: int = 10) -> int:
+    return a + b
+
+def scaled(a: int, *, by: int = 3) -> int:
+    return a * by
+
+def maybe(x: int | None) -> int:
+    if x is None:
+        return 0
+    return x + 1
+
+def double(x: int) -> int:
+    return x * 2
+
+def describe(x: int | float) -> str:
+    return f"{x} {isinstance(x, float)}"
+
+def half(x: float) -> float:
+    return x / 2.0
+
+# Calls through a callable use exactly its positional arguments; conversion
+# supplies the function's omitted defaults.
+def apply(f: typing.Callable[[int], int], x: int) -> int:
+    return f(x)
+
+def twice(f: typing.Callable[[int], int]) -> typing.Callable[[int], int]:
+    return f
+
+def run(g: typing.Callable[[typing.Callable[[int], int]], int]) -> int:
+    return g(double)
+
+def use(f: typing.Callable[[int], int]) -> int:
+    return f(5)
+
+def call_optional(o: typing.Callable[[int], int] | None) -> int:
+    if o is not None:
+        return o(21)
+    return -1
+
+def main() -> None:
+    print(apply(add, 1))
+    print(apply(scaled, 2))
+    print(apply(maybe, 4))
+    # Floats are boxed or unboxed between the callable's types and the function's.
+    d: typing.Callable[[float], str] = describe
+    print(d(1.5))
+    h: typing.Callable[[float], int | float] = half
+    r = h(3.0)
+    print(isinstance(r, float))
+    print(r)
+    # One callable converts to another.
+    k: typing.Callable[[float], float] = half
+    w: typing.Callable[[float], int | float] = k
+    print(w(1.0))
+    fs: list[typing.Callable[[int], int]] = [double, add, maybe]
+    for f in fs:
+        print(f(1))
+    print(call_optional(double))
+    print(call_optional(None))
+    # A callable whose parameter is a callable.
+    print(run(use))
+    print(twice(add)(7))
+    # A tuple position adapts its function too.
+    pair = (add, 1)
+    adapted: tuple[typing.Callable[[int], int], int] = pair
+    print(adapted[0](adapted[1]))

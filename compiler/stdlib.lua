@@ -74,8 +74,9 @@ local function provided_record(module, name, fields)
 end
 
 -- A compiler-provided module. It has no source: its declarations are the
--- built-in targets for `functions`, keyed by name, and the records and aliases
--- in `records`. A program's own module of the same name shadows it.
+-- built-in targets for `functions`, keyed by name, and the records, aliases,
+-- and type forms in `records`. A program's own module of the same name shadows
+-- it.
 local function provided(name, functions, records)
   local declarations = records or {}
   for function_name, target in pairs(builtins_of(functions)) do
@@ -391,6 +392,10 @@ local net = provided("net", {
   },
 }, { Connection = connection, Listener = listener })
 
+local typing = provided("typing", {}, {
+  Callable = { kind = "Callable", name = "Callable", type_name = "typing.Callable" },
+})
+
 M.modules = {
   cli = cli,
   fs = fs,
@@ -402,6 +407,7 @@ M.modules = {
   sys = sys,
   terminal = terminal,
   time = time,
+  typing = typing,
 }
 
 return M

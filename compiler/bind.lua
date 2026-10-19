@@ -64,7 +64,7 @@ local function lookup(from, module, name, span)
   return declaration
 end
 
--- Returns the record, enum, or alias that `ref`, a `{ name, module, span }` in a type,
+-- Returns the record, enum, alias, or `typing.Callable` that `ref`, a `{ name, module, span }` in a type,
 -- an `except` clause, or `isinstance`, names. These are found through
 -- file-level declarations, imports, and built-in exception classes, which
 -- locals never shadow.
@@ -80,7 +80,7 @@ local function resolve_named(ref, module)
     declaration = module.declarations[ref.name] or exceptions[ref.name]
   end
   local kind = declaration and declaration.kind
-  if not (kind == "Record" or kind == "Enum" or kind == "Alias") then
+  if not (kind == "Record" or kind == "Enum" or kind == "Alias" or kind == "Callable") then
     diag.error(ref.span, "unknown type '" .. (ref.module and ref.module .. "." or "") .. ref.name .. "'")
   end
   return declaration
@@ -110,7 +110,15 @@ local function type_text(node, module)
   elseif SCALARS[node.name] then
     return node.name
   end
-  return resolve_named(node, module).type_name
+  local declaration, args = resolve_named(node, module), node.args
+  if declaration.kind == "Callable" and args and #args == 2 and args[1].kind == "TypeList" then
+    local names = {}
+    for i, element in ipairs(args[1].elements) do
+      names[i] = type_text(element, module)
+    end
+    return "typing.Callable[[" .. table.concat(names, ", ") .. "], " .. type_text(args[2], module) .. "]"
+  end
+  return declaration.type_name
 end
 
 local resolve_type
@@ -172,7 +180,19 @@ resolve_type = function(node, module, name)
   elseif SCALARS[node.name] then
     return SCALARS[node.name]
   end
-  local declaration = resolve_named(node, module)
+  local declaration, args = resolve_named(node, module), node.args
+  if declaration.kind == "Callable" then
+    if not (args and #args == 2 and args[1].kind == "TypeList" and args[2].kind ~= "TypeList") then
+      diag.error(node.span, "typing.Callable expects a list of parameter types and a return type")
+    end
+    local params = {}
+    for i, element in ipairs(args[1].elements) do
+      params[i] = resolve_type(element, module)
+    end
+    return types.callable(params, resolve_type(args[2], module))
+  elseif args then
+    diag.error(node.span, "type '" .. declaration.type_name .. "' does not take type arguments")
+  end
   if declaration.kind == "Alias" then
     if declaration.resolving then
       diag.error(node.span, "alias '" .. declaration.name .. "' expands to itself")
@@ -283,7 +303,7 @@ local function resolve_function(fn, scope, module)
       node.target = declarations[node.name] or builtins[node.name] or exceptions[node.name]
       if not node.target then
         diag.error(node.span, "unknown function '" .. node.name .. "'")
-      elseif node.target.kind == "Alias" or node.target.kind == "Enum" then
+      elseif node.target.kind == "Alias" or node.target.kind == "Enum" or node.target.kind == "Callable" then
         diag.error(node.span, node.target.kind:lower() .. " '" .. node.name .. "' cannot be called")
       end
       for _, arg in ipairs(node.args) do
@@ -302,7 +322,7 @@ local function resolve_function(fn, scope, module)
       node.kind = "Call"
       node.target = lookup(module, imported, node.name, node.span)
       node.name = path .. "." .. node.name
-      if node.target.kind == "Alias" or node.target.kind == "Enum" then
+      if node.target.kind == "Alias" or node.target.kind == "Enum" or node.target.kind == "Callable" then
         diag.error(node.span, node.target.kind:lower() .. " '" .. node.name .. "' cannot be called")
       end
       node.object = nil
@@ -322,6 +342,8 @@ local function resolve_function(fn, scope, module)
         local declaration = resolve_named(class, module)
         if declaration.kind == "Alias" then
           diag.error(class.span, "alias '" .. class.name .. "' cannot be used in isinstance")
+        elseif declaration.kind == "Callable" then
+          diag.error(class.span, "typing.Callable cannot be used in isinstance")
         end
         class.record = declaration
       end
@@ -552,7 +574,8 @@ local literal_types = {
   None = types.None,
 }
 
--- The type of `default`, a default in `module`, resolving its enum members.
+-- The type of `default`, a default in `module`, which is also recorded as
+-- `default.type` for lowering; resolves its enum members.
 -- Parameters and locals cannot shadow an enum named in a default.
 local function default_type(default, module)
   if default.kind == "Field" then
@@ -561,15 +584,17 @@ local function default_type(default, module)
       diag.error(default.object.span, "unknown enum '" .. qualified_name(default.object) .. "'")
     end
     resolve_member(default, enum)
-    return enum.type
+    default.type = enum.type
   elseif default.kind == "TupleDisplay" then
     local elements = {}
     for i, element in ipairs(default.elements) do
       elements[i] = default_type(element, module)
     end
-    return types.tuple(elements)
+    default.type = types.tuple(elements)
+  else
+    default.type = literal_types[default.kind]
   end
-  return literal_types[default.kind]
+  return default.type
 end
 
 -- Checks that the default of `decl`, a parameter or field of `module`, fits

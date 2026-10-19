@@ -72,8 +72,22 @@ function M.parse(tokens)
     return accept(kind) or unexpected(expected or "'" .. kind .. "'")
   end
 
+  -- Parses comma-separated items up to `close`, allowing a trailing comma.
+  local function parse_list(close, parse_item)
+    local items = {}
+    while not accept(close) do
+      items[#items + 1] = parse_item()
+      if not accept(",") then
+        expect(close, "',' or '" .. close .. "'")
+        break
+      end
+    end
+    return items
+  end
+
   -- A member is a `Type` node: a type keyword or a possibly module-qualified
-  -- name, with `args` holding a list's element or a dict's key and value.
+  -- name, with `args` holding a list's element, a dict's key and value, a
+  -- tuple's positions, or a named type's arguments.
   local parse_type
 
   -- Reads `. NAME` parts after `first`, a NAME already consumed, into `ref`:
@@ -99,6 +113,17 @@ function M.parse(tokens)
     local node = ast.node("Type", token.span, { name = token.kind })
     if token.kind == "NAME" then
       qualify(node, token.value, "a type name")
+      -- An argument is a type or, as in `typing.Callable[[int], str]`, a
+      -- bracketed list of types.
+      if accept("[") then
+        node.args = parse_list("]", function()
+          local open = accept("[")
+          if open then
+            return ast.node("TypeList", open.span, { elements = parse_list("]", parse_type) })
+          end
+          return parse_type()
+        end)
+      end
     elseif token.kind == "list" then
       expect("[")
       node.args = { parse_type() }
@@ -138,19 +163,6 @@ function M.parse(tokens)
   end
 
   local parse_expression
-
-  -- Parses comma-separated items up to `close`, allowing a trailing comma.
-  local function parse_list(close, parse_item)
-    local items = {}
-    while not accept(close) do
-      items[#items + 1] = parse_item()
-      if not accept(",") then
-        expect(close, "',' or '" .. close .. "'")
-        break
-      end
-    end
-    return items
-  end
 
   -- An argument is an expression or a `Keyword` node for `name=expression`.
   local function parse_arg()

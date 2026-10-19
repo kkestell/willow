@@ -831,6 +831,23 @@ return {
     eq("3:10: 'g' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("g = k\ng(1, 2)", K)))
   end,
 
+  callable_types = function()
+    local T = "import typing\n"
+    local F = "def f(a: int) -> int:\n    return a\ndef k(a: int, *, b: int) -> int:\n    return a\n"
+      .. "def s() -> str:\n    return ''\n"
+    local function body(text)
+      return T .. F .. "def main() -> None:\n" .. text:gsub("[^\n]+", "    %0") .. "\n"
+    end
+    eq("9:38: expected typing.Callable[[int], int], received function k", check_errors(body("g: typing.Callable[[int], int] = k")))
+    eq("9:45: expected typing.Callable[[int | None], int], received function f",
+      check_errors(body("g: typing.Callable[[int | None], int] = f")))
+    eq("9:35: expected typing.Callable[[], int], received function s", check_errors(body("g: typing.Callable[[], int] = s")))
+    eq("10:11: 'g' does not accept keyword arguments", check_errors(body("g: typing.Callable[[int], int] = f\nx = g(a=1)")))
+    eq("10:9: 'g' expects 1 argument, received 0", check_errors(body("g: typing.Callable[[int], int] = f\nx = g()")))
+    eq("10:11: cannot print a value of type typing.Callable[[int], int]",
+      check_errors(body("g: typing.Callable[[int], int] = f\nprint(g)")))
+  end,
+
   keyword_only_parameters = function()
     local F = "def f(a: int, *, c: int) -> None:\n    pass\n"
     eq("2:10: 'f' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("f(1, 2)", F)))

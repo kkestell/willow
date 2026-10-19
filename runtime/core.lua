@@ -394,10 +394,19 @@ local function __wlo_tuple_order(a, b, op)
 end
 
 -- Converts `value` by `step`, which the compiler builds from the value's
--- static type: `float` boxes or unboxes a number, and `[i]` converts tuple
--- position `i`. A converted tuple is a copy.
+-- static type: `float` boxes or unboxes a number, `[i]` converts tuple
+-- position `i`, and `adapt(f, ...)` calls a function `f` for a callable type.
+-- A converted tuple is a copy.
 local function __wlo_convert(value, step)
-  if type(value) == "table" and value.__wlo_tuple then
+  if type(value) == "function" then
+    local adapt = step.adapt
+    if adapt then
+      return function(...)
+        return adapt(value, ...)
+      end
+    end
+    return value
+  elseif type(value) == "table" and value.__wlo_tuple then
     local result = { __wlo_tuple = value.__wlo_tuple }
     for i = 1, value.__wlo_tuple do
       result[i] = value[i]

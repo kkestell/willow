@@ -446,6 +446,21 @@ return {
       bind_error("def f(x: tuple[int] | tuple[str]) -> None:\n    pass\n" .. MAIN))
   end,
 
+  callable_types = function()
+    local T = "import typing\nclass P:\n    n: int\n"
+    local program = bind_source(T .. "def f(g: typing.Callable[[int, str | None], bool]) -> None:\n    pass\n" .. MAIN)
+    eq("typing.Callable[[int, str | None], bool]", program.functions[1].params[1].type.name)
+    eq("4:10: typing.Callable expects a list of parameter types and a return type",
+      bind_error(T .. "def f(g: typing.Callable[int]) -> None:\n    pass\n" .. MAIN))
+    eq("4:10: typing.Callable expects a list of parameter types and a return type",
+      bind_error(T .. "def f(g: typing.Callable) -> None:\n    pass\n" .. MAIN))
+    eq("4:10: type 'P' does not take type arguments", bind_error(T .. "def f(g: P[int]) -> None:\n    pass\n" .. MAIN))
+    eq("4:40: a union can have only one callable member",
+      bind_error(T .. "def f(g: typing.Callable[[int], int] | typing.Callable[[str], int]) -> None:\n    pass\n" .. MAIN))
+    eq("5:23: typing.Callable cannot be used in isinstance",
+      bind_error(T .. "def main() -> None:\n    b = isinstance(1, typing.Callable)\n"))
+  end,
+
   tuple_defaults = function()
     local E = "enum E:\n    A\n"
     local program = bind_source(E .. "def f(t: tuple[E, int] = (E.A, 1)) -> None:\n    pass\n" .. MAIN)

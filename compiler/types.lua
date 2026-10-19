@@ -30,6 +30,19 @@ function M.record(decl)
   return { kind = "record", record = decl, name = decl.type_name }
 end
 
+-- `typing.Callable[[A, B], R]`: a function taking exactly those positional
+-- arguments. It is compared by structure.
+function M.callable(params, result)
+  local names = {}
+  for i, param in ipairs(params) do
+    names[i] = param.name
+  end
+  return {
+    kind = "callable", params = params, result = result,
+    name = "typing.Callable[[" .. table.concat(names, ", ") .. "], " .. result.name .. "]",
+  }
+end
+
 -- The type of a declared function as a value. It is compared by identity, so
 -- calls through it use the declaration's own parameters.
 function M.func(decl)
@@ -156,12 +169,13 @@ local function same(a, b, assumed)
     return same(a.element, b.element, assumed)
   elseif a.kind == "dict" then
     return same(a.key, b.key, assumed) and same(a.value, b.value, assumed)
-  elseif a.kind == "tuple" then
-    if #a.elements ~= #b.elements then
+  elseif a.kind == "tuple" or a.kind == "callable" then
+    local x, y = a.elements or a.params, b.elements or b.params
+    if #x ~= #y or a.kind == "callable" and not same(a.result, b.result, assumed) then
       return false
     end
-    for i, element in ipairs(a.elements) do
-      if not same(element, b.elements[i], assumed) then
+    for i, element in ipairs(x) do
+      if not same(element, y[i], assumed) then
         return false
       end
     end
@@ -189,6 +203,34 @@ function M.same(a, b)
   return same(a, b, {})
 end
 
+-- Whether a value of `source`, a function or callable, can serve callable
+-- `target`: it accepts the target's positional arguments, any parameters past
+-- them have defaults, and its result fits the target's.
+local function serves(target, source)
+  local params, result = source.params, source.result
+  if source.kind == "function" then
+    local fn = source.fn
+    params, result = {}, fn.return_type
+    for i, param in ipairs(fn.params) do
+      if i <= #target.params and param.keyword_only or i > #target.params and not param.default then
+        return false
+      end
+      params[i] = param.type
+    end
+  elseif source.kind ~= "callable" or #params ~= #target.params then
+    return false
+  end
+  if #params < #target.params then
+    return false
+  end
+  for i, param in ipairs(target.params) do
+    if not M.assignable(params[i], param) then
+      return false
+    end
+  end
+  return M.assignable(target.result, result)
+end
+
 local function is_exception(t)
   return t.kind == "record" and t.record.exception
 end
@@ -210,6 +252,9 @@ function M.assignable(target, source)
       end
     end
     return false
+  end
+  if target.kind == "callable" then
+    return M.same(target, source) or serves(target, source)
   end
   if target.kind == "tuple" and source.kind == "tuple" and #target.elements == #source.elements then
     for i, element in ipairs(target.elements) do
@@ -239,10 +284,11 @@ function M.subset(t, keep)
 end
 
 -- The message for adding member `m` to a union with `members`, or nil. Lists,
--- dicts, and tuples are counted first, so element types are never compared.
+-- dicts, tuples, and callables are counted first, so their component types are
+-- never compared.
 function M.conflict(members, m)
   for _, other in ipairs(members) do
-    if other.kind == m.kind and (m.kind == "list" or m.kind == "dict" or m.kind == "tuple") then
+    if other.kind == m.kind and (m.kind == "list" or m.kind == "dict" or m.kind == "tuple" or m.kind == "callable") then
       return "a union can have only one " .. m.kind .. " member"
     end
     if M.assignable(other, m) or M.assignable(m, other) then

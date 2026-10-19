@@ -62,6 +62,8 @@ show = function(node)
   elseif kind == "Type" then
     local name = (node.module and node.module .. "." or "") .. node.name
     return node.args and name .. "[" .. show_list(node.args, ", ") .. "]" or name
+  elseif kind == "TypeList" then
+    return "[" .. show_list(node.elements, ", ") .. "]"
   elseif kind == "UnionType" then
     return show_list(node.members, " | ")
   elseif kind == "Alias" then
@@ -226,6 +228,11 @@ return {
     eq("2:9: unsupported operator ':='", body_error("f(a := 1)"))
     eq("2:11: annotated assignment needs an initializer", body_error("x: int"))
     eq("2:9: cannot assign to this expression", body_error("f() = 1"))
+  end,
+
+  callable_annotations = function()
+    eq("def f(g: typing.Callable[[int, str], bool], h: typing.Callable[[], int]) -> None { pass }",
+      show(parse("def f(g: typing.Callable[[int, str], bool], h: typing.Callable[[], int]) -> None:\n    pass\n").functions[1]))
   end,
 
   keyword_only_parameters = function()

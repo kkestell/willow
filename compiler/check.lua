@@ -542,16 +542,24 @@ local function check_function(fn)
       type = node.target.value_type
     elseif kind == "CallValue" then
       local callee = check_expression(node.callee, state)
-      if callee.kind ~= "function" then
+      local name = node.callee.kind == "Name" and node.callee.name
+      local params
+      if callee.kind == "function" then
+        name, params, type = name or callee.fn.name, callee.fn.params, callee.fn.return_type
+        bind_args(node, name, params, "parameter")
+      elseif callee.kind == "callable" then
+        -- A callable takes exactly its listed positional arguments.
+        params, type = {}, callee.result
+        for i, param in ipairs(callee.params) do
+          params[i] = { type = param }
+        end
+        bind_args(node, name or "callable", params)
+      else
         diag.error(node.span, "cannot call a value of type " .. callee.name)
       end
-      local fn = callee.fn
-      local name = node.callee.kind == "Name" and node.callee.name or fn.name
-      bind_args(node, name, fn.params, "parameter")
       for i, arg in ipairs(node.args) do
-        check_against(arg, state, fn.params[i].type)
+        check_against(arg, state, params[i].type)
       end
-      type = fn.return_type
     elseif kind == "Field" then
       type = field_type(node, check_expression(node.object, state))
     elseif kind == "FString" then

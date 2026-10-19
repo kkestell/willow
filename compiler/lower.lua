@@ -40,17 +40,64 @@ local function pure(name, args)
   return { kind = "Pure", name = name, args = args, span = args[1].span }
 end
 
-local function tuple_member(type)
+-- The first member of `type` of `kind`, or nil.
+local function member(type, kind)
   for _, m in ipairs(types.members(type)) do
-    if m.kind == "tuple" then
+    if m.kind == kind then
       return m
     end
   end
 end
 
+local convert
+
+-- A parameter's default as a lowered value of the parameter's `type`.
+local function lower_default(node, type)
+  local value
+  if node.kind == "EnumMember" then
+    value = { kind = "EnumMember", enum = node.enum, name = node.name }
+  elseif node.kind == "TupleDisplay" then
+    local elements = {}
+    for i, element in ipairs(node.elements) do
+      elements[i] = lower_default(element, element.type)
+    end
+    value = { kind = "Tuple", elements = elements }
+  else
+    value = { kind = "Literal", value = node.value }
+  end
+  return convert(value, node.type, type)
+end
+
+-- The function that lets a value of `source`, a function or callable type,
+-- serve callable `target`, or nil when the value serves unchanged. It
+-- converts each argument and the result and supplies omitted defaults.
+local function adapter(source, target)
+  local params, result, defaults = source.params, source.result, {}
+  if source.kind == "function" then
+    params, result = {}, source.fn.return_type
+    for i, param in ipairs(source.fn.params) do
+      params[i], defaults[i] = param.type, param.default
+    end
+  end
+  local args, changed = {}, #params > #target.params
+  for i, param in ipairs(target.params) do
+    local placeholder = { kind = "AdapterParam", index = i }
+    args[i] = convert(placeholder, param, params[i])
+    changed = changed or args[i] ~= placeholder
+  end
+  for i = #target.params + 1, #params do
+    args[i] = lower_default(defaults[i], params[i])
+  end
+  local call = { kind = "Call", callee = { kind = "AdapterCallee" }, args = args }
+  local body = convert(call, result, target.result)
+  if changed or body ~= call then
+    return { kind = "Adapter", arity = #target.params, body = body }
+  end
+end
+
 -- How a value of type `from` becomes a value of type `to`, or nil when their
--- representations agree: `float` is "box" or "unbox" for a number, and `[i]`
--- converts tuple position `i`.
+-- representations agree: `float` is "box" or "unbox" for a number, `[i]`
+-- converts tuple position `i`, and `adapt` wraps a function.
 local function conversion(from, to)
   local step = {}
   if types.boxed(to) and not types.boxed(from) and types.has(from, "float") then
@@ -58,23 +105,28 @@ local function conversion(from, to)
   elseif types.boxed(from) and not types.boxed(to) and types.has(to, "float") then
     step.float = "unbox"
   end
-  local source, target = tuple_member(from), tuple_member(to)
+  local source, target = member(from, "tuple"), member(to, "tuple")
   if source and target then
     for i, element in ipairs(source.elements) do
       step[i] = conversion(element, target.elements[i])
     end
+  end
+  target = member(to, "callable")
+  source = target and (member(from, "function") or member(from, "callable"))
+  if source then
+    step.adapt = adapter(source, target)
   end
   return next(step) and step or nil
 end
 
 -- Converts `value` from the representation of type `from` to that of `to`,
 -- boxing or unboxing floats, including those in tuple positions, where only
--- one of them is boxed.
-local function convert(value, from, to)
+-- one of them is boxed, and adapting functions to callables.
+convert = function(value, from, to)
   local step = to and conversion(from, to)
   if not step then
     return value
-  elseif tuple_member(from) then
+  elseif member(from, "tuple") or step.adapt then
     return pure("convert", { value, { kind = "Literal", value = step } })
   end
   return pure(step.float, { value })
