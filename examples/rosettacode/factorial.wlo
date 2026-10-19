@@ -14,6 +14,6 @@ def factorial_iterative(n: int) -> int:
 def main() -> None:
     for n in range(11):
         print(f"{n}! = {factorial_iterative(n)}")
-    # 20! is the largest factorial in Willow's integer range.
-    print(factorial_recursive(20) == factorial_iterative(20))
-    print(factorial_recursive(20))
+    # 18! is the largest factorial in Willow's integer range.
+    print(factorial_recursive(18) == factorial_iterative(18))
+    print(factorial_recursive(18))
