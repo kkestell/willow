@@ -315,7 +315,8 @@ return {
     eq("10:11: expected int, received str", check_errors(m("c = C(1)\nc.add('a')")))
     eq("10:11: 'add' has no parameter 'self'", check_errors(m("c = C(1)\nc.add(self=c, k=1)")))
     eq("10:7: type C has no method 'sub'", check_errors(m("c = C(1)\nc.sub(1)")))
-    eq("10:11: class C has no field 'add'", check_errors(m("c = C(1)\nf = c.add")))
+    check_source(m("c = C(1)\nf = c.add\nx = f(1)"))
+    eq("10:11: class C has no field 'missing'", check_errors(m("c = C(1)\nf = c.missing")))
     eq("10:11: type C | None has no method 'add'", check_errors(m("cs: list[C | None] = [None]\ncs[0].add(1)")))
     check_source(m("cs: list[C | None] = [None]\nc = cs[0]\nif c is not None:\n    c.add(1)"))
     eq("3:9: method 'D.f' must return a value on every path",
@@ -725,7 +726,7 @@ return {
     eq("5:11: operator '==' cannot be applied to io.File and io.File", err("f = io.stdin()\nx = f == f"))
     eq("5:11: cannot print a value of type io.File", err("f = io.stdin()\nprint(f)"))
     eq("1:15: dictionary keys must be int, str, or an enum", check_errors("def f(d: dict[bytes, int]) -> None:\n    pass\n" .. MAIN))
-    eq("2:5: expected an expression, found 'bytes'", check_errors(in_main("bytes = 1")))
+    eq("2:5: cannot assign to 'bytes'", check_errors(in_main("bytes = 1")))
   end,
 
   subprocess_module = function()
@@ -829,6 +830,13 @@ return {
     eq("3:5: 'f' expects 1 argument, received 0", check_errors(in_main("f = double\nf()", D)))
     local K = "def k(a: int, *, c: int = 0) -> None:\n    pass\n"
     eq("3:10: 'g' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("g = k\ng(1, 2)", K)))
+  end,
+
+  builtin_values = function()
+    eq("2:9: function 'len' needs an expected callable type", check_errors(in_main("x = len")))
+    eq("2:11: function 'print' needs an expected callable type", check_errors(in_main("print(print)")))
+    eq("3:38: 'len' cannot be applied to int", check_errors("import typing\n" .. in_main("f: typing.Callable[[int], int] = len")))
+    eq("3:38: expected str, received int", check_errors("import typing\n" .. in_main("f: typing.Callable[[str], str] = len")))
   end,
 
   callable_types = function()

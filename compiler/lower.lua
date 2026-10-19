@@ -75,7 +75,7 @@ local function adapter(source, target)
   local params, result, defaults = source.params, source.result, {}
   if source.kind == "function" then
     params, result = {}, source.fn.return_type
-    for i, param in ipairs(source.fn.params) do
+    for i, param in ipairs(types.params(source)) do
       params[i], defaults[i] = param.type, param.default
     end
   end
@@ -425,6 +425,13 @@ local function lower_function(fn, sites, helpers)
       return { kind = "EnumMember", enum = node.enum, name = node.name }
     elseif kind == "FunctionValue" then
       return { kind = "FunctionValue", target = node.target, qualified = node.qualified }
+    elseif kind == "BuiltinValue" then
+      return { kind = "Function", arity = #node.type.params, body = lower_value(node.call) }
+    elseif kind == "Typed" then
+      return { kind = "AdapterParam", index = node.index }
+    elseif kind == "Field" and node.method then
+      -- The receiver is evaluated once, when the method is read.
+      return pure("bind", { lower_operand(node.object), { kind = "FunctionValue", target = node.method } })
     elseif kind == "CallValue" then
       -- The callee is evaluated before the arguments.
       local callee = lower_operand(node.callee)

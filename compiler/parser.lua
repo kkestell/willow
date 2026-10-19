@@ -247,10 +247,14 @@ function M.parse(tokens)
       else
         node = ast.node("Name", token.span, { name = token.value })
       end
-    elseif (kind == "int" or kind == "float" or kind == "str" or kind == "bytes") and tokens[pos + 1].kind == "(" then
+    elseif kind == "int" or kind == "float" or kind == "str" or kind == "bytes" then
+      -- Conversions are called, or named as values of a callable type.
       advance()
-      advance()
-      node = ast.node("Call", token.span, { name = kind, args = parse_args() })
+      if accept("(") then
+        node = ast.node("Call", token.span, { name = kind, args = parse_args() })
+      else
+        node = ast.node("Name", token.span, { name = kind, reserved = true })
+      end
     elseif kind == "(" then
       -- `(x)` is grouping; a comma or empty parentheses make a tuple.
       advance()
@@ -477,7 +481,7 @@ function M.parse(tokens)
 
   -- The pattern that `expression`, a parsed assignment target, spells.
   local function pattern_of(expression)
-    if expression.kind == "Name" then
+    if expression.kind == "Name" and not expression.reserved then
       return expression
     elseif expression.kind == "TupleDisplay" then
       local elements = {}
@@ -528,6 +532,9 @@ function M.parse(tokens)
       if token.kind ~= "=" then
         unexpected("'='")
       end
+    end
+    if expression.reserved and (token.kind == "=" or token.kind == ":") then
+      diag.error(expression.span, "cannot assign to '" .. expression.name .. "'")
     end
     if token.kind == "=" then
       advance()

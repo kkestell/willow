@@ -135,8 +135,8 @@ local function expect_type(node, expected, actual)
   node.expected_type = expected
 end
 
--- The member of `expected` of `kind` ("list", "dict", or "tuple") that a
--- display takes.
+-- The member of `expected` of `kind` ("list", "dict", "tuple", or
+-- "callable") that a display or built-in function value takes.
 local function display_member(expected, kind)
   for _, m in ipairs(expected and types.members(expected) or {}) do
     if m.kind == kind then
@@ -382,7 +382,7 @@ local function check_function(fn)
 
   -- Returns the type of `node` in `state`, then the facts that hold when it is
   -- true and when it is false. `expected`, when given, is the type a display
-  -- takes.
+  -- or built-in function value takes.
   check_expression = function(node, state, expected)
     local kind = node.kind
     local type
@@ -540,12 +540,27 @@ local function check_function(fn)
       type = node.enum.type
     elseif kind == "FunctionValue" then
       type = node.target.value_type
+    elseif kind == "BuiltinValue" then
+      -- The expected callable fixes the signature: the value is checked as a
+      -- call of the built-in with arguments of the callable's parameter types.
+      type = display_member(expected, "callable")
+      if not type then
+        diag.error(node.span, "function '" .. node.name .. "' needs an expected callable type")
+      end
+      local args = {}
+      for i, param in ipairs(type.params) do
+        args[i] = { kind = "Typed", type = param, index = i, span = node.span }
+      end
+      node.call = { kind = "Call", name = node.name, target = node.target, args = args, span = node.span }
+      expect_type(node.call, type.result, check_expression(node.call, state))
+    elseif kind == "Typed" then
+      type = node.type
     elseif kind == "CallValue" then
       local callee = check_expression(node.callee, state)
       local name = node.callee.kind == "Name" and node.callee.name
       local params
       if callee.kind == "function" then
-        name, params, type = name or callee.fn.name, callee.fn.params, callee.fn.return_type
+        name, params, type = name or callee.fn.name, types.params(callee), callee.fn.return_type
         bind_args(node, name, params, "parameter")
       elseif callee.kind == "callable" then
         -- A callable takes exactly its listed positional arguments.
@@ -561,7 +576,10 @@ local function check_function(fn)
         check_against(arg, state, params[i].type)
       end
     elseif kind == "Field" then
-      type = field_type(node, check_expression(node.object, state))
+      -- Reading a method gives it bound to the object.
+      local object = check_expression(node.object, state)
+      node.method = class_method(object, node.name)
+      type = node.method and node.method.value_type or field_type(node, object)
     elseif kind == "FString" then
       -- Literal text is a String part.
       for i, part in ipairs(node.parts) do

@@ -393,6 +393,13 @@ local function __wlo_tuple_order(a, b, op)
   return op == "<=" or op == ">="
 end
 
+-- A method bound to `receiver`, which was evaluated when the method was read.
+local function __wlo_bind(receiver, method)
+  return function(...)
+    return method(receiver, ...)
+  end
+end
+
 -- Converts `value` by `step`, which the compiler builds from the value's
 -- static type: `float` boxes or unboxes a number, `[i]` converts tuple
 -- position `i`, and `adapt(f, ...)` calls a function `f` for a callable type.

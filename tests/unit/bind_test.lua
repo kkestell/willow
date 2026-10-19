@@ -157,14 +157,15 @@ return {
     local program = bind_source("def main() -> None:\n    x = main\n")
     eq(program.functions[1], program.functions[1].body[1].value.target)
     eq("FunctionValue", program.functions[1].body[1].value.kind)
-    eq("2:11: function 'print' cannot be used as a value", bind_error("def main() -> None:\n    print(print)\n"))
+    eq("BuiltinValue", bind_source("def main() -> None:\n    print(print)\n").functions[1].body[1].call.args[1].kind)
+    eq("2:9: function 'range' cannot be used as a value", bind_error("def main() -> None:\n    x = range\n"))
+    local time = bind_modules({ { "main", "import time\ndef main() -> None:\n    f = time.time\n" } })
+    eq("BuiltinValue", time[1].functions[1].body[1].value.kind)
     local geo = { "geo", "class Point:\n    x: int\ndef area(p: Point) -> int:\n    return p.x\n" }
     local modules = bind_modules({ { "main", "import geo\ndef main() -> None:\n    f = geo.area\n" }, geo })
     eq(modules[2].functions[1], modules[1].functions[1].body[1].value.target)
     eq("main.wlo:3:13: class 'geo.Point' cannot be used as a value",
       modules_error({ { "main", "import geo\ndef main() -> None:\n    f = geo.Point\n" }, geo }))
-    eq("main.wlo:3:14: function 'time.time' cannot be used as a value",
-      modules_error({ { "main", "import time\ndef main() -> None:\n    f = time.time\n" } }))
   end,
 
   records = function()

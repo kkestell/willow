@@ -1,0 +1,47 @@
+import fs
+import time
+import typing
+
+class Counter:
+    n: int
+
+    def add(self, by: int = 1, *, times: int = 1) -> int:
+        self.n = self.n + by * times
+        return self.n
+
+def make() -> Counter:
+    print("make")
+    return Counter(0)
+
+def apply(f: typing.Callable[[int], int], x: int) -> int:
+    return f(x)
+
+def main() -> None:
+    # The receiver is evaluated once, when the method is read.
+    add = make().add
+    print(add())
+    print(add(5))
+    print(add(times=2, by=3))
+    # A bound method sees its receiver's current fields.
+    c = Counter(100)
+    g = c.add
+    c.n = 200
+    print(g())
+    print(apply(c.add, 10))
+    # Built-in and library functions become values of an expected callable type.
+    size: typing.Callable[[str], int] = len
+    print(size("hello"))
+    text: typing.Callable[[float], str] = str
+    print(text(2.5))
+    say: typing.Callable[[str], None] = print
+    say("hi")
+    now: typing.Callable[[], float] = time.time
+    print(now() > 0.0)
+    exists: typing.Callable[[str], bool] = fs.exists
+    print(exists("/no/such/path"))
+    parse: typing.Callable[[str], int] = int
+    print(parse("42"))
+    try:
+        parse("x")
+    except ValueError as e:
+        print(e.message)

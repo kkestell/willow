@@ -467,7 +467,8 @@ return {
     eq("int(x)", expr("int(x)"))
     eq("(float(1) / 0.5)", expr("float(1) / 0.5"))
     eq("{ x: float = 2.5; float(1) }", body("x: float = 2.5\nfloat(1)"))
-    eq("2:9: expected an expression, found 'int'", body_error("x = int"))
+    eq("{ x = int }", body("x = int"))
+    eq("2:5: cannot assign to 'int'", body_error("int = 1"))
   end,
 
   binary_span_is_the_operator = function()

@@ -216,6 +216,12 @@ function M.emit(lowered)
       return "__wlo_f"
     elseif kind == "AdapterParam" then
       return "__wlo_p" .. e.index
+    elseif kind == "Function" then
+      local params = {}
+      for i = 1, e.arity do
+        params[i] = "__wlo_p" .. i
+      end
+      return "function(" .. table.concat(params, ", ") .. ") return " .. expr(e.body) .. " end"
     elseif kind == "Str" then
       return (e.float and "__wlo_str_float(" or "__wlo_str(") .. expr(e.value) .. ")"
     elseif kind == "Concat" then

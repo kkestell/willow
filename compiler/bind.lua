@@ -265,6 +265,9 @@ local function resolve_function(fn, scope, module)
       node.kind, node.target, node.object = "FunctionValue", declaration, nil
     elseif declaration.kind == "Record" then
       diag.error(node.span, "class '" .. name .. "' cannot be used as a value")
+    elseif declaration.kind == "Builtin" and declaration.params then
+      -- Check gives it the signature of an expected callable type.
+      node.kind, node.target, node.name, node.object = "BuiltinValue", declaration, name, nil
     elseif declaration.kind == "Builtin" then
       diag.error(node.span, "function '" .. name .. "' cannot be used as a value")
     else
@@ -274,18 +277,15 @@ local function resolve_function(fn, scope, module)
 
   local function resolve_expression(node)
     local kind = node.kind
-    if kind == "Name" and not scope[node.name] and declarations[node.name] then
-      declared_value(node, declarations[node.name], node.name)
+    if kind == "Name" and not scope[node.name] and (declarations[node.name] or builtins[node.name]) then
+      declared_value(node, declarations[node.name] or builtins[node.name], node.name)
     elseif kind == "Name" then
       node.symbol = scope[node.name]
       if not node.symbol then
-        local declaration = declarations[node.name]
         if roots[node.name] then
           diag.error(node.span, "module '" .. node.name .. "' cannot be used as a value")
         elseif exceptions[node.name] then
           diag.error(node.span, "class '" .. node.name .. "' cannot be used as a value")
-        elseif builtins[node.name] then
-          diag.error(node.span, "function '" .. node.name .. "' cannot be used as a value")
         end
         diag.error(node.span, "unknown name '" .. node.name .. "'")
       end
@@ -653,6 +653,7 @@ function M.bind(modules, test)
           end
         end
         method.class, method.module = record, module
+        method.value_type = types.func(method, true)
         resolve_signature(method, module)
       end
     end

@@ -45,8 +45,15 @@ end
 
 -- The type of a declared function as a value. It is compared by identity, so
 -- calls through it use the declaration's own parameters.
-function M.func(decl)
-  return { kind = "function", fn = decl, name = "function " .. decl.type_name }
+-- A `bound` method keeps its receiver, so calls skip its `self` parameter.
+function M.func(decl, bound)
+  local name = bound and decl.class.type_name .. "." .. decl.name or decl.type_name
+  return { kind = "function", fn = decl, bound = bound, name = "function " .. name }
+end
+
+-- The parameters a call through function type `t` binds.
+function M.params(t)
+  return t.bound and { unpack(t.fn.params, 2) } or t.fn.params
 end
 
 function M.enum(decl)
@@ -209,9 +216,8 @@ end
 local function serves(target, source)
   local params, result = source.params, source.result
   if source.kind == "function" then
-    local fn = source.fn
-    params, result = {}, fn.return_type
-    for i, param in ipairs(fn.params) do
+    params, result = {}, source.fn.return_type
+    for i, param in ipairs(M.params(source)) do
       if i <= #target.params and param.keyword_only or i > #target.params and not param.default then
         return false
       end

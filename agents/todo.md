@@ -365,7 +365,7 @@ example changes it lists. New Rosetta Code examples go in
     omitted defaults at conversion; an explicit `Callable` exposes only the
     positional contract; functions with required keyword-only parameters do
     not convert; one callable member per union
-  - [ ] Bound methods retaining a receiver evaluated once; built-in and
+  - [x] Bound methods retaining a receiver evaluated once; built-in and
     library functions as values where an expected callable type fixes the
     signature
   - [ ] Nested `def` statements and closures: names bound when the definition
