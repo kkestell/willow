@@ -759,21 +759,26 @@ function M.parse(tokens)
     end
   end
 
+  -- Parses an optional `[T, U]` after a function or class name.
+  local function parse_type_params()
+    if not accept("[") then
+      return {}
+    end
+    return parse_list("]", function()
+      local param = expect("NAME", "a type parameter name")
+      if peek().kind == ":" then
+        diag.error(peek().span, "type parameter bounds are not supported")
+      end
+      return { name = param.value, span = param.span }
+    end)
+  end
+
   -- A method's first parameter is `self`, which has no annotation; bind gives
   -- it the class's type.
   parse_function = function(method)
     advance()
     local name = expect("NAME", "a function name")
-    local type_params = {}
-    if accept("[") then
-      type_params = parse_list("]", function()
-        local param = expect("NAME", "a type parameter name")
-        if peek().kind == ":" then
-          diag.error(peek().span, "type parameter bounds are not supported")
-        end
-        return { name = param.value, span = param.span }
-      end)
-    end
+    local type_params = parse_type_params()
     expect("(")
     local params, closed = {}, false
     if method then
@@ -831,6 +836,7 @@ function M.parse(tokens)
   local function parse_record()
     advance()
     local name = expect("NAME", "a class name")
+    local type_params = parse_type_params()
     local exception = false
     local fields = {}
     if accept("(") then
@@ -849,7 +855,8 @@ function M.parse(tokens)
     if exception and accept("pass") then
       expect("NEWLINE", "end of line")
       expect("DEDENT", "the end of the class")
-      return ast.node("Record", name.span, { name = name.value, fields = fields, methods = {}, exception = true })
+      return ast.node("Record", name.span,
+        { name = name.value, type_params = type_params, fields = fields, methods = {}, exception = true })
     end
     local methods = {}
     repeat
@@ -874,7 +881,7 @@ function M.parse(tokens)
       end
     until accept("DEDENT")
     return ast.node("Record", name.span,
-      { name = name.value, fields = fields, methods = methods, exception = exception })
+      { name = name.value, type_params = type_params, fields = fields, methods = methods, exception = exception })
   end
 
   local function parse_enum()

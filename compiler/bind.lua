@@ -138,6 +138,12 @@ local function type_text(node, module)
       names[i] = type_text(element, module)
     end
     return "typing.Callable[[" .. table.concat(names, ", ") .. "], " .. type_text(args[2], module) .. "]"
+  elseif declaration.kind == "Record" and args then
+    local names = {}
+    for i, arg in ipairs(args) do
+      names[i] = type_text(arg, module)
+    end
+    return declaration.type_name .. "[" .. table.concat(names, ", ") .. "]"
   end
   return declaration.type_name
 end
@@ -226,6 +232,22 @@ resolve_type = function(node, module, name)
       params[i] = resolve_type(element, module)
     end
     return types.callable(params, resolve_type(args[2], module))
+  elseif declaration.kind == "Record" and declaration.typevars then
+    local count = #declaration.typevars
+    if not args then
+      diag.error(node.span, "type '" .. declaration.type_name .. "' needs type arguments")
+    elseif #args ~= count then
+      diag.error(node.span, "'" .. declaration.type_name .. "' expects " .. count
+        .. (count == 1 and " type argument" or " type arguments") .. ", received " .. #args)
+    end
+    local resolved = {}
+    for i, arg in ipairs(args) do
+      if arg.kind == "TypeList" then
+        diag.error(arg.span, "expected a type")
+      end
+      resolved[i] = resolve_type(arg, module)
+    end
+    return types.generic(declaration, resolved)
   elseif args then
     diag.error(node.span, "type '" .. declaration.type_name .. "' does not take type arguments")
   end
@@ -356,17 +378,23 @@ end
 -- Resolves the parameter and return types of `fn`. A method's `self` has the
 -- type of its class.
 local function resolve_signature(fn, module)
-  local outer = enter_type_params(fn)
+  -- A method sees its class's type parameters and then its own.
+  local outer = type_scope
+  if fn.class then
+    enter_type_params(fn.class)
+  end
+  enter_type_params(fn)
   check_unique(fn.params, "parameter")
   for i, param in ipairs(fn.params) do
-    param.type = fn.class and i == 1 and fn.class.type or resolve_type(param.type, module)
+    param.type = fn.class and i == 1 and fn.class.self_type or resolve_type(param.type, module)
   end
   fn.return_type = resolve_type(fn.return_type, module)
   type_scope = outer
 end
 
-local function is_generic(fn)
-  return fn and fn.kind == "Function" and #(fn.type_params or {}) > 0
+local function is_generic(declaration)
+  return declaration and (declaration.kind == "Function" or declaration.kind == "Record")
+    and #(declaration.type_params or {}) > 0
 end
 
 local function resolve_function(fn, scope, module)
@@ -384,7 +412,7 @@ local function resolve_function(fn, scope, module)
   -- Makes `node` a function value of `declaration`, or reports why a
   -- declaration named `name` cannot be a value.
   local function declared_value(node, declaration, name)
-    if is_generic(declaration) then
+    if declaration.kind == "Function" and is_generic(declaration) then
       diag.error(node.span, "generic function '" .. name .. "' cannot be used as a value")
     elseif declaration.kind == "Function" then
       -- A qualified name reaches the function even where a local hides it.
@@ -711,7 +739,11 @@ local function resolve_function(fn, scope, module)
     end
   end
 
-  local outer_types = enter_type_params(fn)
+  local outer_types = type_scope
+  if fn.class then
+    enter_type_params(fn.class)
+  end
+  enter_type_params(fn)
   resolve_block(fn.body)
   type_scope = outer_types
 end
@@ -782,6 +814,18 @@ local function declare(module, modules_by_name, entry)
     end
     if declaration.kind == "Record" then
       declaration.type = types.record(declaration)
+      declaration.self_type = declaration.type
+      if #declaration.type_params > 0 then
+        if declaration.exception then
+          diag.error(declaration.type_params[1].span, "exception classes cannot be generic")
+        end
+        -- Methods see the class as specialized by its own type parameters.
+        declaration.typevars = {}
+        for i, param in ipairs(declaration.type_params) do
+          declaration.typevars[i] = types.typevar(param.name)
+        end
+        declaration.self_type = types.generic(declaration, declaration.typevars)
+      end
     elseif declaration.kind == "Enum" then
       declaration.type = types.enum(declaration)
     elseif declaration.kind == "Function" then
@@ -819,17 +863,16 @@ function M.bind(modules, test)
     for _, record in ipairs(module.records) do
       check_unique(record.fields, "field")
       check_unique(record.methods, "method")
+      local outer = enter_type_params(record)
       for _, field in ipairs(record.fields) do
         field.type = resolve_type(field.type, module)
       end
+      type_scope = outer
       for _, method in ipairs(record.methods) do
         for _, field in ipairs(record.fields) do
           if field.name == method.name then
             diag.error(method.span, "method '" .. method.name .. "' has the same name as a field")
           end
-        end
-        if #method.type_params > 0 then
-          diag.error(method.type_params[1].span, "generic methods are not supported")
         end
         method.class, method.module = record, module
         method.value_type = types.func(method, true)

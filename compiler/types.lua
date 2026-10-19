@@ -30,6 +30,25 @@ function M.record(decl)
   return { kind = "record", record = decl, name = decl.type_name }
 end
 
+-- The specialization of generic class `decl` with type arguments `args`.
+-- Specializations are compared by their arguments, so they are invariant.
+function M.generic(decl, args)
+  local names = {}
+  for i, arg in ipairs(args) do
+    names[i] = arg.name
+  end
+  return { kind = "record", record = decl, args = args, name = decl.type_name .. "[" .. table.concat(names, ", ") .. "]" }
+end
+
+-- The substitution a specialization gives its class's type parameters.
+function M.record_map(t)
+  local map = {}
+  for i, typevar in ipairs(t.args and t.record.typevars or {}) do
+    map[typevar] = t.args[i]
+  end
+  return map
+end
+
 -- `typing.Callable[[A, B], R]`: a function taking exactly those positional
 -- arguments. It is compared by structure.
 function M.callable(params, result)
@@ -170,7 +189,8 @@ local function same(a, b, assumed)
   if a == b then
     return true
   end
-  if a.kind ~= b.kind or a.kind == "record" or a.kind == "function" or a.kind == "typevar" or SCALARS[a.kind] then
+  if a.kind ~= b.kind or a.kind == "record" and not (a.args and b.args and a.record == b.record)
+    or a.kind == "function" or a.kind == "typevar" or SCALARS[a.kind] then
     return false
   end
   assumed[a] = assumed[a] or {}
@@ -182,8 +202,8 @@ local function same(a, b, assumed)
     return same(a.element, b.element, assumed)
   elseif a.kind == "dict" then
     return same(a.key, b.key, assumed) and same(a.value, b.value, assumed)
-  elseif a.kind == "tuple" or a.kind == "callable" then
-    local x, y = a.elements or a.params, b.elements or b.params
+  elseif a.kind == "tuple" or a.kind == "callable" or a.kind == "record" then
+    local x, y = a.elements or a.params or a.args, b.elements or b.params or b.args
     if #x ~= #y or a.kind == "callable" and not same(a.result, b.result, assumed) then
       return false
     end
@@ -302,6 +322,8 @@ function M.conflict(members, m)
   for _, other in ipairs(members) do
     if other.kind == m.kind and (m.kind == "list" or m.kind == "dict" or m.kind == "tuple" or m.kind == "callable") then
       return "a union can have only one " .. m.kind .. " member"
+    elseif m.args and other.record == m.record then
+      return "a union can have only one specialization of " .. m.record.type_name
     end
     if M.assignable(other, m) or M.assignable(m, other) then
       return "union members " .. other.name .. " and " .. m.name .. " overlap"
@@ -355,7 +377,7 @@ local function has_typevar(t, seen, only)
   if t.kind == "typevar" then
     return not only or only[t] ~= nil
   end
-  for _, part in ipairs(t.members or t.elements or t.params or {}) do
+  for _, part in ipairs(t.members or t.elements or t.params or t.args or {}) do
     if has_typevar(part, seen, only) then
       return true
     end
@@ -394,6 +416,12 @@ function M.substitute(t, map)
       params[i] = M.substitute(param, map)
     end
     return M.callable(params, M.substitute(t.result, map))
+  elseif kind == "record" then
+    local args = {}
+    for i, arg in ipairs(t.args) do
+      args[i] = M.substitute(arg, map)
+    end
+    return M.generic(t.record, args)
   elseif kind == "union" then
     local members = {}
     for _, member in ipairs(t.members) do

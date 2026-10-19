@@ -1,5 +1,9 @@
 import app.deep.leaf
 
+class Pair[A, B]:
+    first: A
+    second: B
+
 class Item:
     name: str
     count: int

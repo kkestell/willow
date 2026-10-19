@@ -566,6 +566,12 @@ return {
     eq("1:8: type parameter bounds are not supported", parse_error("def f[T: int](x: T) -> T:\n    pass\n"))
   end,
 
+  generic_classes = function()
+    local record = parse("class Box[T, U]:\n    value: T\n\n    def map[V](self, v: V) -> V:\n        return v\n").records[1]
+    eq("T U", record.type_params[1].name .. " " .. record.type_params[2].name)
+    eq("V", record.methods[1].type_params[1].name)
+  end,
+
   lambdas_and_nonlocal = function()
     eq("(lambda x, y: (x + y))", expr("lambda x, y: x + y"))
     eq("(lambda : 1)", expr("lambda: 1"))

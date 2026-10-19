@@ -436,6 +436,10 @@ local function collect(param, arg, candidates)
     for i, element in ipairs(param.elements) do
       collect(element, arg.elements[i], candidates)
     end
+  elseif param.args and arg.args and param.record == arg.record then
+    for i, p in ipairs(param.args) do
+      collect(p, arg.args[i], candidates)
+    end
   elseif param.kind == "callable" and (arg.kind == "callable" or arg.kind == "function") then
     local params, result = arg.params, arg.result
     if arg.kind == "function" then
@@ -474,7 +478,7 @@ local function check_function(fn, entry)
     end
     for _, field in ipairs(object.record.fields) do
       if field.name == node.name then
-        return field.type
+        return types.substitute(field.type, types.record_map(object))
       end
     end
     diag.error(node.span, "class " .. object.name .. " has no field '" .. node.name .. "'")
@@ -671,15 +675,18 @@ local function check_function(fn, entry)
       end
       -- A constructor takes one argument per field.
       local params = target.kind == "Record" and target.fields or target.params
-      local map = target.kind == "Function" and specialize(node, node.name, target)
+      local generic = (target.kind == "Function" or target.kind == "Record") and target.typevars
+      local map = generic and specialize(node, node.name, target)
       if builtin then
         bind_args(node, node.name, builtin_params(builtin), builtin.names and "parameter")
       else
         bind_args(node, node.name, params, target.kind == "Record" and "field" or "parameter")
       end
-      local inferred = target.kind == "Function" and target.typevars and not map
+      local inferred = generic and not map
       if inferred then
-        map = infer_call(node, node.name, params, target, state, expected)
+        -- A constructor's result is its class specialized by the inferred arguments.
+        local signature = target.kind == "Record" and { typevars = target.typevars, return_type = target.self_type } or target
+        map = infer_call(node, node.name, params, signature, state, expected)
       end
       for _, i in ipairs(evaluation_order(node)) do
         local arg = node.args[i]
@@ -712,7 +719,7 @@ local function check_function(fn, entry)
       elseif builtin then
         type = builtin.result
       elseif target.kind == "Record" then
-        type = target.type
+        type = specialized(target.self_type or target.type, map)
       else
         type = specialized(target.return_type, map)
       end
@@ -720,7 +727,9 @@ local function check_function(fn, entry)
       local operand = check_expression(node.operand, state)
       local class = node.class
       for _, m in ipairs(types.members(operand)) do
-        if class.record and m == class.record.type or not class.record and (m.kind == class.name) then
+        -- A class name matches its specialization in the union.
+        if class.record and (m == class.record.type or m.kind == "record" and m.record == class.record)
+          or not class.record and m.kind == class.name then
           node.member = m
         end
       end
@@ -823,6 +832,11 @@ local function check_function(fn, entry)
       -- Reading a method gives it bound to the object.
       local object = check_expression(node.object, state)
       node.method = class_method(object, node.name)
+      if node.method and object.args then
+        diag.error(node.span, "methods of generic classes cannot be used as values")
+      elseif node.method and node.method.typevars then
+        diag.error(node.span, "generic method '" .. node.name .. "' cannot be used as a value")
+      end
       type = node.method and node.method.value_type or field_type(node, object)
     elseif kind == "FString" then
       -- Literal text is a String part.
@@ -880,12 +894,30 @@ local function check_function(fn, entry)
     elseif kind == "MethodCall" then
       local object = check_expression(node.object, state)
       local method = class_method(object, node.name)
-      local params, result, names, defaults
+      local params, result, names, defaults, inferred
       if method then
-        -- A declared method binds its arguments to the parameters after `self`.
-        local rest = { unpack(method.params, 2) }
+        -- A declared method binds its arguments to the parameters after `self`,
+        -- with its class's type parameters replaced by the object's arguments
+        -- and its own inferred.
+        local class_map, rest = types.record_map(object), {}
+        for i = 2, #method.params do
+          local param = method.params[i]
+          rest[i - 1] = {
+            name = param.name, default = param.default, keyword_only = param.keyword_only,
+            type = types.substitute(param.type, class_map),
+          }
+        end
         bind_args(node, node.name, rest, "parameter")
-        params, result = {}, method.return_type
+        result = types.substitute(method.return_type, class_map)
+        inferred = method.typevars ~= nil
+        if inferred then
+          local map = infer_call(node, node.name, rest, { typevars = method.typevars, return_type = result }, state, expected)
+          for _, param in ipairs(rest) do
+            param.type = types.substitute(param.type, map)
+          end
+          result = types.substitute(result, map)
+        end
+        params = {}
         for i, param in ipairs(rest) do
           params[i] = param.type
         end
@@ -904,7 +936,8 @@ local function check_function(fn, entry)
         end
       end
       for _, i in ipairs(evaluation_order(node)) do
-        check_against(node.args[i], state, params[i])
+        local arg = node.args[i]
+        expect_type(arg, params[i], inferred and arg.type or check_expression(arg, state, params[i]))
       end
       type = result
     elseif kind == "ListDisplay" then

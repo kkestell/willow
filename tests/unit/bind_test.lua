@@ -482,6 +482,20 @@ return {
     eq("3:5: 'len' is not generic", bind_error("def main() -> None:\n    xs = [1]\n    len[int](xs)\n"))
   end,
 
+  generic_classes = function()
+    local B = "class Box[T]:\n    value: T\n\n    def get(self) -> T:\n        return self.value\n"
+    eq("6:10: type 'Box' needs type arguments", bind_error(B .. "def f(b: Box) -> None:\n    pass\n" .. MAIN))
+    eq("6:10: 'Box' expects 1 type argument, received 2", bind_error(B .. "def f(b: Box[int, str]) -> None:\n    pass\n" .. MAIN))
+    eq("1:9: exception classes cannot be generic", bind_error("class E[T](Exception):\n    pass\n" .. MAIN))
+    eq("4:11: type parameter 'T' hides another type parameter",
+      bind_error("class B[T]:\n    v: T\n\n    def m[T](self) -> None:\n        pass\n" .. MAIN))
+    eq("6:21: a union can have only one specialization of Box",
+      bind_error(B .. "def f(b: Box[int] | Box[str]) -> None:\n    pass\n" .. MAIN))
+    local program = bind_source(B .. "def f(b: Box[int]) -> None:\n    pass\n" .. MAIN)
+    eq("Box[int]", program.functions[1].params[1].type.name)
+    eq("Box[T]", program.records[1].methods[1].params[1].type.name)
+  end,
+
   nonlocal_declarations = function()
     local main = bind_source("def main() -> None:\n    x = 1\n    def g() -> None:\n        nonlocal x\n        x = 2\n"
       .. "    g()\n").functions[1]

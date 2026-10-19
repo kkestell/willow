@@ -1,0 +1,50 @@
+import typing
+
+class Box[T]:
+    value: T
+
+    def get(self) -> T:
+        return self.value
+
+    def set(self, value: T) -> None:
+        self.value = value
+
+    # A method's own type parameter is inferred at each call.
+    def map[U](self, f: typing.Callable[[T], U]) -> Box[U]:
+        return Box(f(self.value))
+
+# A generic class may refer to its own specialization.
+class Node[T]:
+    value: T
+    next: Node[T] | None = None
+
+def length[T](node: Node[T] | None) -> int:
+    count = 0
+    while node is not None:
+        count = count + 1
+        node = node.next
+    return count
+
+def describe(x: Box[int] | None) -> str:
+    if isinstance(x, Box):
+        return "box " + str(x.get())
+    return "none"
+
+def main() -> None:
+    # The constructor infers T, or takes it explicitly.
+    b = Box(1)
+    print(b.get())
+    b.set(5)
+    print(b.value)
+    s = Box[str]("a")
+    print(s.get())
+    lengths = s.map(lambda x: len(x) + 10)
+    print(lengths.get())
+    chain = Node(1, Node(2, Node(3)))
+    print(length(chain))
+    print(describe(b))
+    print(describe(None))
+    # A float in an int | float specialization stays a float.
+    f = Box[int | float](2.5)
+    v = f.get()
+    print(isinstance(v, float))

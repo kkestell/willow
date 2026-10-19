@@ -389,7 +389,7 @@ example changes it lists. New Rosetta Code examples go in
   - [x] Generic call inference from arguments and the expected result: a
     unique substitution, no invented unions, and undetermined-parameter
     errors
-  - [ ] Generic classes and methods: `class Box[T]`, full type arguments in
+  - [x] Generic classes and methods: `class Box[T]`, full type arguments in
     annotations, constructor inference and `Box[str](...)`, substituted fields
     and methods, method type parameters and class parameters in method
     bodies, invariance, one specialization per union, `isinstance` by class

@@ -853,6 +853,18 @@ return {
     eq("2:9: 'first' expects 1 type argument, received 2", check_errors(in_main("x = first[int, str]([1])", F)))
   end,
 
+  generic_classes = function()
+    local B = "class Box[T]:\n    value: T\n\n    def get(self) -> T:\n        return self.value\n"
+    eq("2:26: expected Box[int | None], received Box[int]", check_errors(in_main("b: Box[int | None] = Box[int](1)", B)))
+    eq("2:25: expected int, received str", check_errors(in_main("Box[int](1).value = 'a'", B)))
+    eq("2:21: expected str, received int", check_errors(in_main("x: str = Box(1).get()", B)))
+    eq("2:16: methods of generic classes cannot be used as values", check_errors(in_main("f = Box(1).get", B)))
+    local P = "class P:\n    n: int\n\n    def pick[U](self, u: U) -> U:\n        return u\n"
+    eq("2:14: generic method 'pick' cannot be used as a value", check_errors(in_main("f = P(1).pick", P)))
+    eq("4:23: operator '+' cannot be applied to T and T",
+      check_errors("class B[T]:\n    v: T\n    def n(self) -> T:\n        return self.v + self.v\n" .. MAIN))
+  end,
+
   lambdas = function()
     local T = "import typing\n"
     eq("3:9: lambda parameters need an expected callable type", check_errors(T .. in_main("f = lambda x: x")))

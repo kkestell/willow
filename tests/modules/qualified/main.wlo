@@ -29,6 +29,9 @@ def main() -> None:
     print(size(app.models.Size.LARGE))
     print(size(app.models.Size.SMALL))
     print(size_name())
+    pair: app.models.Pair[str, int] = app.models.Pair("n", 2)
+    explicit = app.models.Pair[int, int](3, 4)
+    print(f"{pair.first} {pair.second + explicit.second}")
     make = app.util.make
     print(app.models.describe(make("jam", count=3)))
     print(app.deep.leaf.wrap[str]("wrapped")[0])
