@@ -424,12 +424,12 @@ example changes it lists. New Rosetta Code examples go in
     protocol in `shapes.wlo`
     over `Rect` and a new `Circle` class
 
-- [ ] Extensible iteration, `iter`, `next`, and reusable range values (spec §8, §11, §14)
+- [x] Extensible iteration, `iter`, `next`, and reusable range values (spec §8, §11, §14)
   - [x] `iter` and `next` built-ins and `StopIteration`; `for` over any
     `Iterable[T]`, ended only by `StopIteration` from advancement and
     leaving iterators resumable after an early exit; user-defined iterators
     and iterables
-  - [ ] Built-in iterables: `iter` methods on lists, dicts, strings, bytes, and
+  - [x] Built-in iterables: `iter` methods on lists, dicts, strings, bytes, and
     tuples returning fresh iterators under the existing mutation rules and
     satisfying the standard protocols; `range(...)` as a reusable
     `Iterable[int]` value; `io.File.iter()`; `for` loops over files in

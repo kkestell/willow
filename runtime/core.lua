@@ -898,6 +898,58 @@ local function __wlo_str_items(text, site)
   end
 end
 
+local function __wlo_bytes_items(data, site)
+  local octets, i = data.__wlo_octets, 0
+  return function()
+    i = i + 1
+    if i <= #octets then
+      return true, octets:byte(i)
+    end
+  end
+end
+
+-- A built-in iterator advances one of the step functions above and stays
+-- exhausted once it ends.
+local function __wlo_iterator(step)
+  return { __wlo_record = "<iterator>", step = step }
+end
+
+local function __wlo_iterator_iter(iterator, site)
+  return iterator
+end
+
+local function __wlo_iterator_next(iterator, site)
+  if iterator.step then
+    local more, value = iterator.step()
+    if more then
+      return value
+    end
+    iterator.step = nil
+  end
+  __wlo_fail("StopIteration", "", site)
+end
+
+local function __wlo_list_iter(list, site)
+  return __wlo_iterator(__wlo_list_items(list, site))
+end
+
+local function __wlo_dict_iter(dict, site)
+  return __wlo_iterator(__wlo_dict_items(dict, site))
+end
+
+local function __wlo_str_iter(text, site)
+  return __wlo_iterator(__wlo_str_items(text, site))
+end
+
+local function __wlo_bytes_iter(data, site)
+  return __wlo_iterator(__wlo_bytes_items(data, site))
+end
+
+-- The tuple holds its items in the item type's representation.
+local function __wlo_tuple_iter(tuple, site)
+  return __wlo_iterator(__wlo_tuple_items(tuple, site))
+end
+
 -- String helpers work on bytes: a valid UTF-8 needle only matches at code
 -- point boundaries of a valid UTF-8 string.
 local function __wlo_str_contains(text, sub, site)
@@ -1086,6 +1138,28 @@ local function __wlo_range(start, stop, step, site)
       return true, value
     end
   end
+end
+
+-- A range value; each `iter` starts a fresh traversal.
+local function __wlo_range_value(start, stop, step, site)
+  if step == 0 then
+    __wlo_fail("ValueError", "range step must not be zero", site)
+  end
+  return { __wlo_record = "range", start = start, stop = stop, step = step }
+end
+
+local function __wlo_range_iter(range, site)
+  return __wlo_iterator(__wlo_range(range.start, range.stop, range.step, site))
+end
+
+-- The name protocol dispatch finds a value's converters by: its class or
+-- native type, or its built-in kind.
+local function __wlo_tag(value)
+  if type(value) == "string" then
+    return "str"
+  end
+  return value.__wlo_record or value.__wlo_class or value.__wlo_tuple and "tuple"
+    or value.__wlo_octets and "bytes" or value.n and "list" or "dict"
 end
 
 local function __wlo_where(location)

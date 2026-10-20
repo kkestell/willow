@@ -35,16 +35,6 @@ function __wlo_bytes_slice(data, start, stop, site)
   return __wlo_new_bytes(data.__wlo_octets:sub(start + 1, stop))
 end
 
-function __wlo_bytes_items(data, site)
-  local octets, i = data.__wlo_octets, 0
-  return function()
-    i = i + 1
-    if i <= #octets then
-      return true, octets:byte(i)
-    end
-  end
-end
-
 function __wlo_str_encode(text, site)
   return __wlo_new_bytes(text)
 end

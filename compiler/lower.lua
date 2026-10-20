@@ -1,5 +1,6 @@
 -- Lowers the checked tree into explicit evaluation order and control flow.
 local bind = require("compiler.bind")
+local stdlib = require("compiler.stdlib")
 local types = require("compiler.types")
 
 local M = {}
@@ -99,6 +100,16 @@ local function adapter(source, target)
   end
 end
 
+-- Tuple type `t` with each position of its item type, the representation its
+-- iteration yields.
+local function items_tuple(t)
+  local items = {}
+  for i = 1, #t.elements do
+    items[i] = types.items(t)
+  end
+  return types.tuple(items)
+end
+
 -- How a value of type `from` becomes a value of type `to`, or nil when their
 -- representations agree: `float` is "box" or "unbox" for a number, `[i]`
 -- converts tuple position `i`, and `adapt` wraps a function.
@@ -110,6 +121,11 @@ local function conversion(from, to)
     step.float = "unbox"
   end
   local source, target = member(from, "tuple"), member(to, "tuple")
+  if source and not target and member(to, "protocol") then
+    -- A tuple serving a protocol, which iterates it, holds its items in the
+    -- item type's representation.
+    target = items_tuple(source)
+  end
   if source and target then
     for i, element in ipairs(source.elements) do
       step[i] = conversion(element, target.elements[i])
@@ -296,6 +312,19 @@ local function lower_function(fn, sites, helpers, protocols)
     return args
   end
 
+  -- The start, stop, and step of `range` call `node`, evaluated in order.
+  local function range_args(node)
+    local args = {}
+    for i, arg in ipairs(node.args) do
+      args[i] = lower_operand(arg)
+    end
+    if #args == 1 then
+      table.insert(args, 1, { kind = "Literal", value = 0 })
+    end
+    args[3] = args[3] or { kind = "Literal", value = 1 }
+    return args
+  end
+
   -- Moves a call or helper call into a temporary. It consumes its operands'
   -- temporaries above `mark`, so its result reuses them.
   local function spill(value, mark)
@@ -400,6 +429,8 @@ local function lower_function(fn, sites, helpers, protocols)
       end
       local op = node.type == types.str and "concat" or node.op
       return { kind = "Binary", op = op, left = left, right = right }
+    elseif kind == "Call" and node.target.kind == "Builtin" and node.name == "range" then
+      return helper("range_value", range_args(node), node.span)
     elseif kind == "Call" then
       if node.name == "float" and node.args[1].type == types.int then
         -- A Willow integer is already the same Lua number as a float.
@@ -497,6 +528,9 @@ local function lower_function(fn, sites, helpers, protocols)
       return { kind = "Call", callee = dispatch(node.protocol, object, node.name), args = args, span = node.span }
     elseif kind == "MethodCall" then
       local object = lower_operand(node.object)
+      if node.name == "iter" and node.object.type.kind == "tuple" then
+        object = convert(object, node.object.type, items_tuple(node.object.type))
+      end
       local args = lower_args(node)
       table.insert(args, 1, object)
       if node.method then
@@ -654,16 +688,8 @@ local function lower_function(fn, sites, helpers, protocols)
       end
       -- The iterator is created once, after its operands are evaluated here.
       local iterable = statement.iterable
-      if iterable.kind == "Call" and iterable.name == "range" then
-        local args = {}
-        for i, arg in ipairs(iterable.args) do
-          args[i] = lower_operand(arg)
-        end
-        if #args == 1 then
-          table.insert(args, 1, { kind = "Literal", value = 0 })
-        end
-        args[3] = args[3] or { kind = "Literal", value = 1 }
-        node.iterator = helper("range", args, iterable.span)
+      if iterable.kind == "Call" and iterable.target.kind == "Builtin" and iterable.name == "range" then
+        node.iterator = helper("range", range_args(iterable), iterable.span)
       elseif statement.iter_call then
         -- The iterator's `next` is found once and called for each step.
         local iterator = lower_operand(statement.iter_call)
@@ -682,11 +708,7 @@ local function lower_function(fn, sites, helpers, protocols)
         local value = lower_operand(iterable)
         if iterable.type.kind == "tuple" then
           -- Each position takes the representation of the item type.
-          local items = {}
-          for i = 1, #iterable.type.elements do
-            items[i] = statement.type
-          end
-          value = convert(value, iterable.type, types.tuple(items))
+          value = convert(value, iterable.type, items_tuple(iterable.type))
         end
         node.iterator = helper(name, { value }, statement.span)
       end
@@ -886,6 +908,9 @@ function M.lower(modules)
   end)
   for _, native in ipairs(natives) do
     records[#records + 1] = native
+  end
+  for _, dispatched in ipairs(stdlib.dispatched) do
+    records[#records + 1] = dispatched
   end
   local tables = {}
   for i, protocol in ipairs(protocols) do

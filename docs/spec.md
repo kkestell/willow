@@ -426,8 +426,10 @@ The members of a union may be written in any order, and two unions with the same
 members are the same type. When a member is itself a union, such as an alias for
 a union, its members become members of the enclosing union. No member may be
 assignable to another member, and a union may have at most one `list` member and
-at most one `dict`, tuple, and callable member. A union cannot contain different
-specializations of the same generic class. A type parameter may be a union
+at most one `dict`, tuple, and callable member. A protocol member that asks only
+for a parameterless `iter` method cannot share a union with a `list`, `dict`, or
+tuple member. A union cannot contain different specializations of the same
+generic class. A type parameter may be a union
 member only alongside `None`, as in `T | None`; substituting a type argument
 flattens the union, so `T | None` with `T = int | None` is `int | None`. So
 `int | int`, `Exception | ParseError`, `list[int] | list[str]`, and `T | int`

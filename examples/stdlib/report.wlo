@@ -88,8 +88,7 @@ def main() -> None:
             sys.exit(1)
     counts: dict[str, int] = {}
     total = 0
-    line = source.readline()
-    while line is not None:
+    for line in source:
         words = line.strip().split(" ")
         if words[0] != "":
             seen = counts.get(words[0])
@@ -100,7 +99,6 @@ def main() -> None:
         total = total + 1
         if not options.quiet and total % 1000 == 0:
             terminal.progress(f"read {total} lines")
-        line = source.readline()
     if options.path != "-":
         source.close()
     terminal.finish_progress()

@@ -290,7 +290,9 @@ end
 function M.method(t, name)
   local decl = t.record or t.protocol
   if not decl then
-    return nil
+    -- Built-in collections, strings, and bytes have an `iter` method.
+    local item = name == "iter" and M.iteration_item(t)
+    return item and { params = {}, result = M.iterator(item), result_generic = true }
   elseif decl.native then
     local method = decl.native_methods[name]
     if not method then
@@ -298,9 +300,12 @@ function M.method(t, name)
     end
     local params = {}
     for i, type in ipairs(method.params) do
-      params[i] = { name = method.names and method.names[i], type = type, default = method.defaults and method.defaults[i] }
+      params[i] = {
+        name = method.names and method.names[i], type = type, default = method.defaults and method.defaults[i],
+        generic = M.mentions(type),
+      }
     end
-    return { params = params, result = method.result }
+    return { params = params, result = method.result, result_generic = M.mentions(method.result) }
   end
   for _, method in ipairs(decl.methods) do
     if method.name == name and not method.typevars then
@@ -356,8 +361,8 @@ local function member(t, kind)
 end
 
 -- Whether a value of `from` changes representation to serve `to`, or the
--- other way around: a float boxed or unboxed, including in tuple positions and
--- callable parameters and results.
+-- other way around: a float boxed or unboxed, including in tuple positions,
+-- tuple items copied for a protocol, and callable parameters and results.
 function M.converts(from, to)
   from, to = M.expand(from), M.expand(to)
   if M.boxed(to) ~= M.boxed(from) and M.has(M.boxed(to) and from or to, "float") then
@@ -367,6 +372,16 @@ function M.converts(from, to)
   if source and target then
     for i, element in ipairs(source.elements) do
       if M.converts(element, target.elements[i]) then
+        return true
+      end
+    end
+  elseif source and member(to, "protocol") or target and member(from, "protocol") then
+    -- A tuple serving a protocol holds its items in the item type's
+    -- representation.
+    local tuple = source or target
+    local items = M.items(tuple)
+    for _, element in ipairs(tuple.elements) do
+      if M.converts(element, items) then
         return true
       end
     end
@@ -409,6 +424,23 @@ local function representable(want, have, want_generic, have_generic, between)
     return not M.converts(have, want) and not (want_generic and not have_generic and has_float(have))
   end
   return not ((want_generic or have_generic) and M.converts(have, want))
+end
+
+-- The items a built-in value of type `t` yields when iterated, or nil: list
+-- elements, dictionary keys, one-code-point strings, octets, or tuple items.
+function M.iteration_item(t)
+  t = M.expand(t)
+  if t.kind == "list" then
+    return M.expand(t.element)
+  elseif t.kind == "dict" then
+    return t.key
+  elseif t == M.str then
+    return M.str
+  elseif t == M.bytes then
+    return M.int
+  elseif t.kind == "tuple" then
+    return (M.items(t))
+  end
 end
 
 -- Whether method signature `have` accepts every call protocol method `want`
@@ -486,7 +518,8 @@ function M.assignable(target, source)
   end
   return M.same(target, source)
     or is_exception(target) and target.record.type_name == "Exception" and is_exception(source)
-    or target.kind == "protocol" and (source.kind == "record" or source.kind == "protocol") and satisfies(target, source)
+    or target.kind == "protocol" and (source.kind == "record" or source.kind == "protocol" or M.iteration_item(source) ~= nil)
+      and satisfies(target, source)
     -- A bounded type parameter serves wherever its bound does.
     or source.kind == "typevar" and source.bound ~= nil and M.assignable(target, source.bound)
 end
@@ -506,6 +539,20 @@ function M.subset(t, keep)
   return M.union(kept)
 end
 
+-- Whether protocol type `p` can hold a value of `t`, a list, dict, or tuple of
+-- any item types, because `p` asks only for a parameterless `iter` method.
+local function holds_any(p, t)
+  if p.kind ~= "protocol" or not (t.kind == "list" or t.kind == "dict" or t.kind == "tuple") then
+    return false
+  end
+  for _, method in ipairs(p.protocol.methods) do
+    if method.name ~= "iter" or #M.method(p, "iter").params > 0 then
+      return false
+    end
+  end
+  return true
+end
+
 -- The message for adding member `m` to a union with `members`, or nil. Lists,
 -- dicts, tuples, and callables are counted first, so their component types are
 -- never compared.
@@ -516,7 +563,7 @@ function M.conflict(members, m)
     elseif M.generic_decl(m) and M.generic_decl(other) == M.generic_decl(m) then
       return "a union can have only one specialization of " .. M.generic_decl(m).type_name
     end
-    if M.assignable(other, m) or M.assignable(m, other) then
+    if M.assignable(other, m) or M.assignable(m, other) or holds_any(other, m) or holds_any(m, other) then
       return "union members " .. other.name .. " and " .. m.name .. " overlap"
     end
   end
@@ -560,7 +607,8 @@ end
 -- The error for type argument `arg` of type parameter `typevar` that does not
 -- satisfy its bound, or nil.
 function M.unsatisfied(typevar, arg)
-  if typevar.bound and not M.assignable(typevar.bound, arg) then
+  -- A value of a type parameter reaches its bound's methods unconverted.
+  if typevar.bound and (not M.assignable(typevar.bound, arg) or M.converts(arg, typevar.bound)) then
     return "type argument " .. arg.name .. " does not satisfy the bound " .. typevar.bound.name
       .. " of '" .. typevar.name .. "'"
   end

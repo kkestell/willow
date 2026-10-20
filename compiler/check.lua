@@ -8,6 +8,9 @@ local types = require("compiler.types")
 local M = {}
 
 local NUMBER = { int = types.int, float = types.float }
+
+-- The type of a range value.
+local range_type = types.protocol(stdlib.protocols.Iterable, { types.int })
 local unary_types = {
   ["+"] = NUMBER,
   ["-"] = NUMBER,
@@ -113,7 +116,10 @@ local FORMAT_TYPES = { s = types.str, d = types.int, f = types.float }
 -- Parameter types, result type, and, for methods that accept keywords, the
 -- parameter names and defaults of method `name` on `type`, or nil.
 local function method_signature(type, name)
-  if type == types.str then
+  local iter = name == "iter" and types.method(type, name)
+  if iter then
+    return {}, iter.result
+  elseif type == types.str then
     local method = STRING_METHODS[name]
     if method then
       return method[1], method[2], method[3]
@@ -637,6 +643,22 @@ local function check_function(fn, entry)
     return choose_type_args(node, name, fn.typevars, candidates)
   end
 
+  -- Checks the arguments of `range` call `node`.
+  local function check_range(node, state)
+    for _, arg in ipairs(node.args) do
+      if arg.kind == "Keyword" then
+        diag.error(arg.span, "'range' does not accept keyword arguments")
+      end
+    end
+    local count = #node.args
+    if count < 1 or count > 3 then
+      diag.error(node.span, "'range' expects 1 to 3 arguments, received " .. count)
+    end
+    for _, arg in ipairs(node.args) do
+      check_against(arg, state, types.int)
+    end
+  end
+
   -- Checks method call `node` on an object of type `object`, whose expression
   -- is already checked, and returns the call's type.
   check_method = function(node, object, state, expected)
@@ -801,7 +823,9 @@ local function check_function(fn, entry)
     elseif kind == "Call" then
       local target = node.target
       if target.kind == "Builtin" and target.name == "range" then
-        diag.error(node.span, "'range' can only be used as a 'for' iterable")
+        check_range(node, state)
+        node.type = range_type
+        return range_type
       end
       local builtin = target.kind == "Builtin" and target
       if target.kind == "Record" and target.native then
@@ -1356,19 +1380,8 @@ local function check_function(fn, entry)
       -- The iterable is evaluated once, before the loop.
       local iterable = statement.iterable
       local item
-      if iterable.kind == "Call" and iterable.name == "range" then
-        for _, arg in ipairs(iterable.args) do
-          if arg.kind == "Keyword" then
-            diag.error(arg.span, "'range' does not accept keyword arguments")
-          end
-        end
-        local count = #iterable.args
-        if count < 1 or count > 3 then
-          diag.error(iterable.span, "'range' expects 1 to 3 arguments, received " .. count)
-        end
-        for _, arg in ipairs(iterable.args) do
-          check_against(arg, state, types.int)
-        end
+      if iterable.kind == "Call" and iterable.target.kind == "Builtin" and iterable.name == "range" then
+        check_range(iterable, state)
         item = types.int
       else
         local iterable_type = check_expression(iterable, state)

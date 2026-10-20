@@ -20,8 +20,7 @@ def main() -> None:
     out = io.stdout()
     number = 0
     kept = 0
-    line = stdin.readline()
-    while line is not None:
+    for line in stdin:
         number = number + 1
         try:
             record = json.parse(line)
@@ -32,5 +31,4 @@ def main() -> None:
             if text_of(record[args[0]]) == args[1]:
                 out.write_text(line + "\n")
                 kept = kept + 1
-        line = stdin.readline()
     sys.eprint(f"kept {kept} of {number} records")

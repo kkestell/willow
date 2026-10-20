@@ -85,6 +85,16 @@ local function __wlo_write_octets(handle, octets, site)
   end
 end
 
+-- Each iterator reads lines through readline, sharing the file's position.
+function __wlo_file_iter(handle, site)
+  return __wlo_iterator(function()
+    local line = __wlo_file_readline(handle, site)
+    if line ~= nil then
+      return true, line
+    end
+  end)
+end
+
 function __wlo_file_write(handle, data, site)
   __wlo_write_octets(handle, data.__wlo_octets, site)
 end

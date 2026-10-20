@@ -230,7 +230,9 @@ return {
     }, "\n")))
     eq("2:23: expected int, received str", check_errors(in_main("for x in range(1, 'a'):\n    pass")))
     eq("2:14: 'range' expects 1 to 3 arguments, received 0", check_errors(in_main("for x in range():\n    pass")))
-    eq("2:9: 'range' can only be used as a 'for' iterable", check_errors(in_main("x = range(3)")))
+    eq("2:14: expected str, received Iterable[int]", check_errors(in_main("s: str = range(3)")))
+    eq("2:9: 'range' expects 1 to 3 arguments, received 4", check_errors(in_main("x = range(1, 2, 3, 4)")))
+    eq("2:15: expected int, received str", check_errors(in_main("x = range('a')")))
     eq("2:14: cannot iterate over int", check_errors(in_main("for x in 3:\n    pass")))
     eq("3:5: expected str, received int", check_errors(in_main("x = 'a'\nfor x in [1]:\n    pass")))
     eq("4:11: variable 'x' may be used before assignment", check_errors(in_main("for x in [1]:\n    pass\nprint(x)")))
@@ -1066,6 +1068,20 @@ return {
     local X = "def f(xs: Iterable[int]) -> None:\n"
     eq("3:18: expected str, received int", check_errors(X .. "    for x in xs:\n        s: str = x\n" .. MAIN))
     eq("2:14: expected str, received int", check_errors(X .. "    s: str = next(iter(xs))\n" .. MAIN))
+
+    check_source(in_main("a: Iterable[int] = [1, 2]\nb: Iterable[int | float] = (1, 2.5)\nc: Iterable[str] = 'ab'\n"
+      .. "d: Iterable[str] = {'a': 1}\ne: Iterable[int] = range(3)\nf: Iterator[int] = [1].iter()"))
+    eq("2:25: expected Iterable[str], received list[int]", check_errors(in_main("xs: Iterable[str] = [1]")))
+    eq("1:22: union members list[int] and Iterable[int] overlap",
+      check_errors("def f(x: list[int] | Iterable[int]) -> None:\n    pass\n" .. MAIN))
+    eq("1:22: union members list[str] and Iterable[int] overlap",
+      check_errors("def f(x: list[str] | Iterable[int]) -> None:\n    pass\n" .. MAIN))
+    -- A tuple serving a protocol is copied into its item type's representation,
+    -- which a type parameter's value or a protocol's item cannot be.
+    eq("2:9: type argument tuple[int, float] does not satisfy the bound Iterable[int | float] of 'T'",
+      check_errors(in_main("x = f((1, 2.5))", "def f[T: Iterable[int | float]](x: T) -> int:\n    return 1\n")))
+    eq("2:43: expected Iterable[Iterable[int | float]], received list[tuple[int, float]]",
+      check_errors(in_main("xs: Iterable[Iterable[int | float]] = [(1, 2.5)]")))
 
     -- A converter cannot change a float's representation at a position typed
     -- by a type parameter, or between protocols.

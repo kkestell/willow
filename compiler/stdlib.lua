@@ -91,6 +91,8 @@ end)
 local function iterator_of(T)
   return types.protocol(iterator, { T })
 end
+-- types.lua gives built-in values `iter` methods returning iterators.
+types.iterator = iterator_of
 M.protocols = {
   Iterator = iterator,
   Iterable = standard_protocol("Iterable", function(_, T)
@@ -147,6 +149,7 @@ local file = native_record("io", "File", "file", {
   write_text = { params = { types.str }, names = { "text" }, result = types.None },
   flush = { params = {}, result = types.None },
   close = { params = {}, result = types.None },
+  iter = { params = {}, result = iterator_of(types.str) },
 })
 local optional_file = types.union({ file.type, types.None })
 
@@ -435,6 +438,26 @@ local net = provided("net", {
     helper = "net_listen",
   },
 }, { Connection = connection, Listener = listener })
+
+-- Run-time types of built-in values that protocol dispatch finds converters
+-- for, by their dispatch tags, which no class can have. Programs cannot name
+-- them: built-in values are typed by their own kinds, and built-in iterators as
+-- `Iterator[T]`. Their methods lower to helpers named after `prefix`.
+local function dispatched(tag, prefix, next)
+  local T = types.typevar("T")
+  local methods = { iter = { params = {}, result = iterator_of(T) } }
+  if next then
+    methods.next = { params = {}, result = T }
+  end
+  local record = { kind = "Record", name = tag, type_name = tag, fields = {}, native = true, prefix = prefix, native_methods = methods }
+  record.type = types.record(record)
+  return record
+end
+M.dispatched = {}
+for i, name in ipairs({ "list", "dict", "str", "bytes", "tuple", "range" }) do
+  M.dispatched[i] = dispatched(name, name)
+end
+M.dispatched[#M.dispatched + 1] = dispatched("<iterator>", "iterator", true)
 
 M.modules = {
   cli = cli,

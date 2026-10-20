@@ -229,10 +229,7 @@ function M.emit(lowered)
     elseif kind == "HelperValue" then
       return runtime.reference(e.name)
     elseif kind == "Dispatch" then
-      -- Classes and native values carry their type's name in __wlo_record,
-      -- exceptions in __wlo_class.
-      local object = expr(e.object)
-      return protocol_table(e.protocol) .. "[" .. object .. ".__wlo_record or " .. object .. ".__wlo_class]."
+      return protocol_table(e.protocol) .. "[" .. runtime.reference("tag") .. "(" .. expr(e.object) .. ")]."
         .. M.mangle(e.name)
     elseif kind == "Converter" then
       local params = {}
