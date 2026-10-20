@@ -955,6 +955,16 @@ return {
         "def m() -> int | None:\n    return 1\n")))
   end,
 
+  with_statements = function()
+    local M = "class M:\n    n: int\n\n    def enter(self) -> str:\n        return ''\n\n"
+      .. "    def exit(self, error: Exception | None) -> None:\n        pass\n"
+    eq("2:10: type int is not a context manager", check_errors(in_main("with 1:\n    pass")))
+    eq("12:14: expected int, received str", check_errors(M .. in_main("with M(1) as x:\n    pass\ns: int = x")))
+    check_source(M .. in_main("with M(1) as x:\n    pass\nprint(x)"))
+    eq("10:10: type M is not a context manager",
+      check_errors(M:gsub("error: Exception", "e: Exception") .. in_main("with M(1):\n    pass")))
+  end,
+
   builtin_values = function()
     eq("2:9: function 'len' needs an expected callable type", check_errors(in_main("x = len")))
     eq("2:11: function 'print' needs an expected callable type", check_errors(in_main("print(print)")))

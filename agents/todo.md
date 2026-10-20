@@ -453,7 +453,7 @@ example changes it lists. New Rosetta Code examples go in
     "Generator/Exponential"
 
 - [ ] Context managers, `with`, and scoped library resources (spec §8, §14)
-  - [ ] `with` statements: managers satisfying `ContextManager[T]`;
+  - [x] `with` statements: managers satisfying `ContextManager[T]`;
     name and tuple-pattern targets; left-to-right entry and right-to-left exit,
     including after a failed entry; `exit` once with the pending exception or
     `None` on every departure; exit errors replacing the pending exception or

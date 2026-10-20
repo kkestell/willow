@@ -152,6 +152,12 @@ show = function(node)
     return node.value and "raise " .. show(node.value) or "raise"
   elseif kind == "Yield" then
     return "yield " .. show(node.value)
+  elseif kind == "With" then
+    local items = {}
+    for i, item in ipairs(node.items) do
+      items[i] = show(item.manager) .. (item.target and " as " .. show(item.target) or "")
+    end
+    return "with " .. table.concat(items, ", ") .. " " .. show_block(node.body)
   elseif kind == "Try" then
     local text = "try " .. show_block(node.body)
     for _, handler in ipairs(node.handlers) do
@@ -622,8 +628,10 @@ return {
     eq("{ def g(x: int) -> int { return x }; y = g(1) }", body("def g(x: int) -> int:\n    return x\ny = g(1)"))
   end,
 
-  unsupported_reserved_words = function()
-    eq("2:5: 'with' is not supported", body_error("with:\n    pass"))
+  with_statements = function()
+    eq("{ with a as x, b as <y, z> { pass } }", body("with a as x, b as (y, z):\n    pass"))
+    eq("{ with f() { pass } }", body("with f():\n    pass"))
+    eq("2:19: duplicate target 'x'", body_error("with a as (x, x):\n    pass"))
   end,
 
   yield_statements = function()

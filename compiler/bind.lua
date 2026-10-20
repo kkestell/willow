@@ -847,6 +847,16 @@ local function resolve_function(fn, scope, module)
           diag.error(statement.span, "bare 'raise' is only allowed in an 'except' clause")
         end
         statement.try = handling
+      elseif kind == "With" then
+        -- Entering and exiting call the managers' methods.
+        for _, item in ipairs(statement.items) do
+          resolve_expression(item.manager)
+          if item.target then
+            resolve_targets(item.target)
+          end
+          calls = calls + 2
+        end
+        resolve_block(statement.body, handling)
       elseif kind == "Try" then
         resolve_block(statement.body, handling)
         for _, handler in ipairs(statement.handlers) do

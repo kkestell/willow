@@ -1,0 +1,33 @@
+enter a
+enter b
+ab
+exit b
+exit a
+a
+pair 2
+pair done
+enter c
+exit c after body failed
+caught body failed
+enter r
+evaluated
+exit r
+returned r
+enter loop0
+exit loop0
+enter loop1
+exit loop1
+enter first
+exit first after cannot enter second
+caught cannot enter second
+enter y
+exit y after original
+caught exit failed
+enter x
+exit x
+caught exit failed
+enter g
+1
+exit g
+1
+numbers closed

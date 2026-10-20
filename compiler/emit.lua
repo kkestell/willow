@@ -222,6 +222,12 @@ function M.emit(lowered)
       return "__wlo_f"
     elseif kind == "AdapterParam" then
       return "__wlo_p" .. e.index
+    elseif kind == "Manager" then
+      return "__wlo_m" .. e.index
+    elseif kind == "PendingError" then
+      -- A `with` body's pending exception, from its Try's departure.
+      local text = "__wlo_code" .. e.index .. ' == "raise" and __wlo_value' .. e.index .. " or nil"
+      return nested and "(" .. text .. ")" or text
     elseif kind == "AdapterSite" then
       return "__wlo_site"
     elseif kind == "Omitted" then
@@ -343,6 +349,9 @@ function M.emit(lowered)
     end
     for i = 1, fn.temps do
       locals[#locals + 1] = "__wlo_t" .. i
+    end
+    for i = 1, fn.managers do
+      locals[#locals + 1] = "__wlo_m" .. i
     end
     if #locals > 0 then
       line(depth, "local " .. table.concat(locals, ", "), fn.span)

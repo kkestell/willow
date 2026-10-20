@@ -215,6 +215,9 @@ end
 local function lower_function(fn, sites, helpers, protocols)
   local out
   local depth, temps, labels = 0, 0, 0
+  -- The `with` managers entered around the statement being lowered, and the
+  -- most at once; each nesting level keeps its manager in a local of its own.
+  local active, managers = 0, 0
   local loop
   -- The Try nodes whose protected blocks enclose the statement being lowered,
   -- and the index of each Try statement for a bare `raise`.
@@ -479,6 +482,10 @@ local function lower_function(fn, sites, helpers, protocols)
       return { kind = "Function", arity = #node.type.params, body = lower_value(node.call) }
     elseif kind == "Typed" then
       return { kind = "AdapterParam", index = node.index }
+    elseif kind == "ManagerRef" then
+      return { kind = "Manager", index = node.index }
+    elseif kind == "PendingError" then
+      return { kind = "PendingError", index = node.index }
     elseif kind == "Field" and node.method then
       -- The receiver is evaluated once, when the method is read.
       return pure("bind", { lower_operand(node.object), { kind = "FunctionValue", target = node.method } })
@@ -604,13 +611,13 @@ local function lower_function(fn, sites, helpers, protocols)
     emit(node)
   end
 
-  -- Lowers a block that runs as a closure under `__wlo_try`, with its own
-  -- temporaries.
+  -- Lowers a block, or the statements a function emits, that runs as a closure
+  -- under `__wlo_try`, with its own temporaries.
   local function protect(body, node)
     local outer_temps = temps
     temps = 0
     tries[#tries + 1] = node
-    local result = { body = lower_block(body), temps = temps }
+    local result = { body = type(body) == "function" and (capture(body)) or lower_block(body), temps = temps }
     tries[#tries] = nil
     temps = outer_temps
     return result
@@ -628,7 +635,63 @@ local function lower_function(fn, sites, helpers, protocols)
     end
   end
 
-  local function lower_statement(statement)
+  local lower_statement
+
+  -- Emits what leaves Try node `node`'s protected blocks, resumed in the try's
+  -- own context.
+  local function resume(node)
+    node.resume = capture(function()
+      if node.returns then
+        departure("Return", { kind = "TryValue", index = node.index })
+      end
+      if node.breaks then
+        departure("Break")
+      end
+      if node.continues then
+        departure("Continue")
+      end
+    end)
+  end
+
+  -- Enters item `i` of `with` statement `statement` and runs the rest under a
+  -- Try whose `finally` exits it, receiving the exception leaving the body.
+  local function lower_with(statement, i)
+    depth = 0
+    local item = statement.items[i]
+    active = active + 1
+    managers = math.max(managers, active)
+    item.enter_call.object.index = active
+    set({ kind = "Manager", index = active }, lower_value(item.manager), item.manager.span)
+    local entered = lower_node(item.enter_call)
+    if item.target then
+      -- A tuple pattern reads the entered value once for each position.
+      local value = item.target.kind == "Name" and entered or spill(entered, 0)
+      unpack_pattern(item.target, value, item.enter_call.type)
+    else
+      emit({ kind = "Eval", value = entered, span = item.manager.span })
+    end
+    labels = labels + 1
+    local node = { kind = "Try", index = labels, span = statement.span, handlers = {} }
+    node.body = protect(function()
+      if i < #statement.items then
+        lower_with(statement, i + 1)
+      else
+        for _, inner in ipairs(statement.body) do
+          lower_statement(inner)
+        end
+      end
+    end, node)
+    item.exit_call.args[1].index = node.index
+    node.finally_body = capture(function()
+      depth = 0
+      emit({ kind = "Eval", value = lower_node(item.exit_call), span = statement.span })
+    end)
+    resume(node)
+    emit(node)
+    active = active - 1
+  end
+
+  lower_statement = function(statement)
     depth = 0
     local kind = statement.kind
     if kind == "FunctionDef" then
@@ -760,19 +823,10 @@ local function lower_function(fn, sites, helpers, protocols)
         }
       end
       node.finally_body = statement.finally_body and lower_block(statement.finally_body)
-      -- Resume what left the protected blocks, in the try's own context.
-      node.resume = capture(function()
-        if node.returns then
-          departure("Return", { kind = "TryValue", index = node.index })
-        end
-        if node.breaks then
-          departure("Break")
-        end
-        if node.continues then
-          departure("Continue")
-        end
-      end)
+      resume(node)
       emit(node)
+    elseif kind == "With" then
+      lower_with(statement, 1)
     end
   end
 
@@ -797,6 +851,7 @@ local function lower_function(fn, sites, helpers, protocols)
     params = params,
     locals = fn.locals,
     temps = temps,
+    managers = managers,
     body = body,
     generator = fn.generator,
   }

@@ -9,6 +9,8 @@ local M = {}
 
 local NUMBER = { int = types.int, float = types.float }
 
+local optional_exception = types.union({ stdlib.exceptions.Exception.type, types.None })
+
 -- The type of a range value.
 local range_type = types.protocol(stdlib.protocols.Iterable, { types.int })
 local unary_types = {
@@ -1004,6 +1006,9 @@ local function check_function(fn, entry)
       local before = calls
       expect_type(node.call, type.result, check_expression(node.call, copy(state)))
       calls = before
+    elseif kind == "PendingError" then
+      -- A manager's exit receives the exception leaving its body, if any.
+      type = optional_exception
     elseif kind == "Typed" then
       type = node.type
     elseif kind == "CallValue" then
@@ -1373,6 +1378,31 @@ local function check_function(fn, entry)
       return true
     elseif kind == "Try" then
       return check_try(statement, state, in_loop)
+    elseif kind == "With" then
+      for _, item in ipairs(statement.items) do
+        local manager = check_expression(item.manager, state)
+        local enter = method_of(manager, "enter")
+        if not (enter and types.assignable(types.protocol(stdlib.protocols.ContextManager, { enter.result }), manager)) then
+          diag.error(item.manager.span, "type " .. manager.name .. " is not a context manager")
+        end
+        -- Both calls receive the stored manager.
+        local ref = { kind = "ManagerRef" }
+        item.enter_call = { kind = "MethodCall", object = ref, name = "enter", args = {}, span = item.manager.span }
+        item.enter_call.type = check_method(item.enter_call, manager, state)
+        local pending = { kind = "PendingError", span = statement.span }
+        item.exit_call = { kind = "MethodCall", object = ref, name = "exit", args = { pending }, span = statement.span }
+        item.exit_call.type = check_method(item.exit_call, manager, state)
+        calls = calls + 1
+        forget_captured(state)
+        if item.target then
+          check_pattern(item.target, item.enter_call.type, state)
+        end
+      end
+      local body_state, transfers = check_block(statement.body, state, in_loop)
+      replace(state, body_state)
+      calls = calls + 1
+      forget_captured(state)
+      return transfers
     elseif kind == "If" then
       local true_facts, false_facts = check_condition(statement.condition, state)
       local body_state, body_transfers = check_block(statement.body, narrow(state, true_facts), in_loop)

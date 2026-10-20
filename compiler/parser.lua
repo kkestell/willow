@@ -10,7 +10,7 @@ local set = lexer.set
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
-async await case del from global match with
+async await case del from global match
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
@@ -691,6 +691,18 @@ function M.parse(tokens)
       end
       node.body = parse_block()
       return node
+    elseif kind == "with" then
+      -- Commas separate managers, so a tuple target is parenthesized.
+      advance()
+      local items, seen = {}, {}
+      repeat
+        local item = { manager = parse_expression() }
+        if accept("as") then
+          item.target = check_targets(parse_target(), seen)
+        end
+        items[#items + 1] = item
+      until not accept(",")
+      return ast.node("With", token.span, { items = items, body = parse_block() })
     elseif kind == "try" then
       advance()
       return parse_try(token)

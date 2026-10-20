@@ -1,0 +1,98 @@
+class Resource:
+    name: str
+    fail_enter: bool
+    fail_exit: bool
+
+    def enter(self) -> str:
+        if self.fail_enter:
+            raise ValueError("cannot enter " + self.name)
+        print("enter " + self.name)
+        return self.name
+
+    def exit(self, error: Exception | None) -> None:
+        if error is None:
+            print("exit " + self.name)
+        else:
+            print("exit " + self.name + " after " + error.message)
+        if self.fail_exit:
+            raise RuntimeError("exit failed")
+
+class Pair:
+    n: int
+
+    def enter(self) -> tuple[str, int]:
+        return ("pair", self.n)
+
+    def exit(self, error: Exception | None) -> None:
+        print("pair done")
+
+def plain(name: str) -> Resource:
+    return Resource(name, False, False)
+
+def evaluated(text: str) -> str:
+    print("evaluated")
+    return text
+
+# The return value is evaluated before the manager exits.
+def returning() -> str:
+    with plain("r") as name:
+        return evaluated("returned " + name)
+
+def replaced() -> str:
+    with Resource("x", False, True):
+        return "never"
+
+def suspended() -> Generator[int]:
+    with plain("g"):
+        yield 1
+        yield 2
+
+def numbers() -> Generator[int]:
+    try:
+        yield 1
+        yield 2
+    finally:
+        print("numbers closed")
+
+def main() -> None:
+    with plain("a") as a, plain("b") as b:
+        print(a + b)
+    print(a)
+    with Pair(2) as (label, count):
+        print(f"{label} {count}")
+
+    try:
+        with plain("c"):
+            raise ValueError("body failed")
+    except ValueError as error:
+        print("caught " + error.message)
+
+    print(returning())
+    for i in range(3):
+        with plain(f"loop{i}"):
+            if i == 0:
+                continue
+            break
+
+    try:
+        with plain("first"), Resource("second", True, False):
+            print("unreachable")
+    except ValueError as failure:
+        print("caught " + failure.message)
+
+    try:
+        with Resource("y", False, True):
+            raise ValueError("original")
+    except RuntimeError as replacement:
+        print("caught " + replacement.message)
+    try:
+        print(replaced())
+    except RuntimeError as again:
+        print("caught " + again.message)
+
+    g = suspended()
+    print(next(g))
+    g.close()
+
+    with numbers() as gen:
+        print(next(gen))
