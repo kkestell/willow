@@ -24,13 +24,7 @@ def main() -> None:
             counts[info.kind] = seen + 1
             sizes[info.kind] = sizes[info.kind] + info.size
     print("")
-    for kind in sorted(keys(counts)):
+    for kind in sorted(counts):
         print(f"{kind:<10}{counts[kind]:>4d} entries{sizes[kind]:>10d} bytes")
     elapsed = time.monotonic() - start
     print(f"listed {directory} in {elapsed:.3f}s")
-
-def keys(items: dict[str, int]) -> list[str]:
-    result: list[str] = []
-    for key in items:
-        result.append(key)
-    return result

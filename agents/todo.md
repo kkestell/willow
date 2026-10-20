@@ -466,7 +466,7 @@ example changes it lists. New Rosetta Code examples go in
     tests, with `enter` and `exit` on `framing.Channel`
 
 - [ ] Iterable sorting, tuple ordering, and `key` callbacks (spec §7)
-  - [ ] `sorted` over any `Iterable[T]`, consumed fully before sorting;
+  - [x] `sorted` over any `Iterable[T]`, consumed fully before sorting;
     sorting comparable tuples, with NaN anywhere in a key raising
     `cannot sort NaN`; `sorted` directly over dictionaries in place of the
     `keys` helpers in `report.wlo`, `listing.wlo`, and `kv/server.wlo` and

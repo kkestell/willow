@@ -27,16 +27,10 @@ def reply(store: dict[str, json.Json], request: json.Json) -> json.Json:
         return {"value": store.get(key)}
     elif op == "keys":
         names: list[json.Json] = []
-        for name in sorted(keys(store)):
+        for name in sorted(store):
             names.append(name)
         return {"keys": names}
     return {"error": "unknown request"}
-
-def keys(store: dict[str, json.Json]) -> list[str]:
-    result: list[str] = []
-    for key in store:
-        result.append(key)
-    return result
 
 # Serves one client; returns True when it asked the server to stop.
 def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:

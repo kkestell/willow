@@ -315,6 +315,31 @@ local function lower_function(fn, sites, helpers, protocols)
     return args
   end
 
+  -- The Lua iterator over the items of `iterable`, whose checked `iter` and
+  -- `next` calls `holder` keeps when it iterates through them.
+  local function items_iterator(holder, iterable, span)
+    if holder.iter_call then
+      -- The iterator's `next` is found once and called for each step.
+      local iterator = lower_operand(holder.iter_call)
+      local next_call, callee = holder.next_call, nil
+      if next_call.protocol then
+        callee = dispatch(next_call.protocol, iterator, "next")
+      elseif next_call.method then
+        callee = { kind = "FunctionValue", target = next_call.method }
+      else
+        callee = { kind = "HelperValue", name = prefix(next_call.receiver or holder.iter_call.type) .. "next" }
+        helpers[callee.name] = true
+      end
+      return helper("iterate", { callee, iterator }, span)
+    end
+    local value = lower_operand(iterable)
+    if iterable.type.kind == "tuple" then
+      -- Each position takes the representation of the item type.
+      value = convert(value, iterable.type, items_tuple(iterable.type))
+    end
+    return helper(prefix(iterable.type) .. "items", { value }, span)
+  end
+
   -- The start, stop, and step of `range` call `node`, evaluated in order.
   local function range_args(node)
     local args = {}
@@ -432,6 +457,15 @@ local function lower_function(fn, sites, helpers, protocols)
       end
       local op = node.type == types.str and "concat" or node.op
       return { kind = "Binary", op = op, left = left, right = right }
+    elseif kind == "Call" and node.target.kind == "Builtin" and node.name == "sorted"
+      and node.args[1].type.kind ~= "list" then
+      -- Any other iterable is collected into a new list, which is then sorted.
+      local args = {}
+      for _, i in ipairs(node.order) do
+        args[i] = i == 1 and items_iterator(node, node.args[1], node.span) or lower_operand(node.args[i])
+      end
+      args[2] = args[2] or lower_operand(node.args[2])
+      return helper("sort_items", args, node.span)
     elseif kind == "Call" and node.target.kind == "Builtin" and node.name == "range" then
       return helper("range_value", range_args(node), node.span)
     elseif kind == "Call" then
@@ -753,27 +787,8 @@ local function lower_function(fn, sites, helpers, protocols)
       local iterable = statement.iterable
       if iterable.kind == "Call" and iterable.target.kind == "Builtin" and iterable.name == "range" then
         node.iterator = helper("range", range_args(iterable), iterable.span)
-      elseif statement.iter_call then
-        -- The iterator's `next` is found once and called for each step.
-        local iterator = lower_operand(statement.iter_call)
-        local next_call, callee = statement.next_call, nil
-        if next_call.protocol then
-          callee = dispatch(next_call.protocol, iterator, "next")
-        elseif next_call.method then
-          callee = { kind = "FunctionValue", target = next_call.method }
-        else
-          callee = { kind = "HelperValue", name = prefix(next_call.receiver or statement.iter_call.type) .. "next" }
-          helpers[callee.name] = true
-        end
-        node.iterator = helper("iterate", { callee, iterator }, statement.span)
       else
-        local name = prefix(iterable.type) .. "items"
-        local value = lower_operand(iterable)
-        if iterable.type.kind == "tuple" then
-          -- Each position takes the representation of the item type.
-          value = convert(value, iterable.type, items_tuple(iterable.type))
-        end
-        node.iterator = helper(name, { value }, statement.span)
+        node.iterator = items_iterator(statement, iterable, statement.span)
       end
       local enclosing = loop
       loop = node

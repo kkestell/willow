@@ -56,18 +56,6 @@ def parse_options() -> Options:
     enabled = color == ColorMode.ALWAYS or (color == ColorMode.AUTO and terminal.color_enabled(io.stdout()))
     return Options(path, limit, sort, enabled, args.get_bool("quiet"))
 
-def keys(items: dict[str, int]) -> list[str]:
-    result: list[str] = []
-    for key in items:
-        result.append(key)
-    return result
-
-def count_keys(items: dict[int, list[str]]) -> list[int]:
-    result: list[int] = []
-    for key in items:
-        result.append(key)
-    return result
-
 def level_color(level: str) -> str:
     if level == "ERROR":
         return "red"
@@ -103,7 +91,7 @@ def main() -> None:
         source.close()
     terminal.finish_progress()
 
-    levels = sorted(keys(counts))
+    levels = sorted(counts)
     if options.sort == Sort.COUNT:
         by_count: dict[int, list[str]] = {}
         for level in levels:
@@ -112,7 +100,7 @@ def main() -> None:
                 by_count[n] = []
             by_count[n].append(level)
         ordered: list[str] = []
-        for n in sorted(count_keys(by_count), reverse=True):
+        for n in sorted(by_count, reverse=True):
             for level in by_count[n]:
                 ordered.append(level)
         levels = ordered

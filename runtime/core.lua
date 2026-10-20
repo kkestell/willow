@@ -754,22 +754,38 @@ local function __wlo_list_slice(list, start, stop, site)
   return __wlo_list(items, math.max(stop - start, 0))
 end
 
--- Values are int, float, or str, so NaN is the only value unequal to itself.
--- Equal values keep their order, in either direction.
+-- Whether `value`, an int, float, str, or comparable tuple, holds NaN.
+local function __wlo_has_nan(value)
+  if type(value) == "table" then
+    for i = 1, value.__wlo_tuple do
+      if __wlo_has_nan(value[i]) then
+        return true
+      end
+    end
+    return false
+  end
+  return value ~= value
+end
+
+-- Without NaN, the values are totally ordered. Equal values keep their order,
+-- in either direction.
 local function __wlo_sorted_values(list, reverse, site)
   local order = {}
   for i = 1, list.n do
-    if list[i] ~= list[i] then
+    if __wlo_has_nan(list[i]) then
       __wlo_fail("ValueError", "cannot sort NaN", site)
     end
     order[i] = i
   end
   table.sort(order, function(i, j)
     local a, b = list[i], list[j]
-    if a == b then
+    if a == b or type(a) == "table" and __wlo_equal(a, b) then
       return i < j
     elseif reverse then
-      return a > b
+      a, b = b, a
+    end
+    if type(a) == "table" then
+      return __wlo_tuple_order(a, b, "<")
     end
     return a < b
   end)
@@ -789,6 +805,18 @@ local function __wlo_list_sort(list, reverse, site)
   for i = 1, list.n do
     list[i] = values[i]
   end
+end
+
+-- Collects the items of a `for` iterator into a new list and sorts it.
+local function __wlo_sort_items(step, reverse, site)
+  local items, n = {}, 0
+  for _, item in step do
+    n = n + 1
+    items[n] = item
+  end
+  local list = __wlo_list(items, n)
+  __wlo_list_sort(list, reverse, site)
+  return list
 end
 
 local function __wlo_list_append(list, value, site)

@@ -110,9 +110,6 @@ local STRING_METHODS = {
   rjust = { { types.int }, types.str, { "width" } },
 }
 
--- The element types sorted and sort accept.
-local SORTABLE = { [types.int] = true, [types.float] = true, [types.str] = true }
-
 local FORMAT_TYPES = { s = types.str, d = types.int, f = types.float }
 
 -- Parameter types, result type, and, for methods that accept keywords, the
@@ -565,9 +562,10 @@ local function specialized(type, map)
   return map and types.substitute(type, map) or type
 end
 
--- Checks that a list of `type` can be sorted.
-local function check_sortable(node, type)
-  if not (type.kind == "list" and SORTABLE[list_element(type)]) then
+-- Checks that `node`, of type `type` with items of `item`, can be sorted: the
+-- items are int, float, str, or comparable tuples.
+local function check_sortable(node, type, item)
+  if not types.ordered(item, item) then
     diag.error(node.span, "cannot sort a value of type " .. type.name)
   end
 end
@@ -672,6 +670,32 @@ local function check_function(fn, entry)
     end
   end
 
+  -- Returns the item type of `iterable`, an already checked expression of type
+  -- `type`. Iterating a value that only satisfies `Iterable[T]` calls `iter`
+  -- once and `next` for each item; `holder` keeps those checked calls as
+  -- `iter_call` and `next_call`.
+  local function check_iterable(iterable, type, holder, state)
+    local item, message
+    if type.kind == "tuple" then
+      item, message = types.items(type)
+    else
+      item = type == types.bytes and types.int or item_type(type)
+    end
+    local iterator = not item and not message and iteration(type)
+    if iterator then
+      local iter_call = { kind = "MethodCall", object = iterable, name = "iter", args = {}, span = iterable.span }
+      iter_call.type = check_method(iter_call, type, state)
+      local next_call = { kind = "MethodCall", name = "next", args = {}, span = holder.span }
+      next_call.type = check_method(next_call, iterator, state)
+      holder.iter_call, holder.next_call, item = iter_call, next_call, next_call.type
+      calls = calls + 1
+    end
+    if not item then
+      diag.error(iterable.span, "cannot iterate over " .. type.name .. (message and ": " .. message or ""))
+    end
+    return item
+  end
+
   -- Checks method call `node` on an object of type `object`, whose expression
   -- is already checked, and returns the call's type.
   check_method = function(node, object, state, expected)
@@ -728,7 +752,7 @@ local function check_function(fn, entry)
       end
       if object.kind == "list" and node.name == "sort" then
         bind_args(node, node.name, SORT_PARAMS, "parameter")
-        check_sortable(node, object)
+        check_sortable(node, object, list_element(object))
       else
         local signature = { params = params, names = names, defaults = defaults }
         bind_args(node, node.name, builtin_params(signature), names and "parameter")
@@ -892,8 +916,9 @@ local function check_function(fn, entry)
         node.kind, node.object, node.args, node.target = "MethodCall", node.args[1], {}, nil
         type = check_method(node, arg_type, state, expected)
       elseif builtin and name == "sorted" then
-        check_sortable(node.args[1], arg_type)
-        type = arg_type
+        local item = check_iterable(node.args[1], arg_type, node, state)
+        check_sortable(node.args[1], arg_type, item)
+        type = types.list(item)
       elseif builtin then
         type = builtin.result
       elseif target.kind == "Record" then
@@ -1435,26 +1460,7 @@ local function check_function(fn, entry)
         check_range(iterable, state)
         item = types.int
       else
-        local iterable_type = check_expression(iterable, state)
-        local message
-        if iterable_type.kind == "tuple" then
-          item, message = types.items(iterable_type)
-        else
-          item = iterable_type == types.bytes and types.int or item_type(iterable_type)
-        end
-        local iterator = not item and not message and iteration(iterable_type)
-        if iterator then
-          -- The loop calls `iter` once and `next` before each step.
-          local iter_call = { kind = "MethodCall", object = iterable, name = "iter", args = {}, span = iterable.span }
-          iter_call.type = check_method(iter_call, iterable_type, state)
-          local next_call = { kind = "MethodCall", name = "next", args = {}, span = statement.span }
-          next_call.type = check_method(next_call, iterator, state)
-          statement.iter_call, statement.next_call, item = iter_call, next_call, next_call.type
-          calls = calls + 1
-        end
-        if not item then
-          diag.error(iterable.span, "cannot iterate over " .. iterable_type.name .. (message and ": " .. message or ""))
-        end
+        item = check_iterable(iterable, check_expression(iterable, state), statement, state)
       end
       statement.type = item
       forget_narrowing(state, { statement })

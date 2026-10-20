@@ -5,10 +5,7 @@ def main() -> None:
     for name in ages:
         print(f"{name}: {ages[name]}")
     print("")
-    names: list[str] = []
-    for name in ages:
-        names.append(name)
-    for name in sorted(names, reverse=True):
+    for name in sorted(ages, reverse=True):
         print(name)
     print("")
     for name in ages:

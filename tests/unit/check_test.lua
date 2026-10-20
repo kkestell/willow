@@ -955,6 +955,14 @@ return {
         "def m() -> int | None:\n    return 1\n")))
   end,
 
+  sorting = function()
+    eq("2:14: expected int, received list[str]", check_errors(in_main("x: int = sorted({'a': 1})")))
+    check_source(in_main("x = sorted([(1, 'a')])\ny: list[tuple[str, int]] = []\ny.sort()"))
+    eq("2:16: cannot sort a value of type list[tuple[int, list[int]]]", check_errors(in_main("x = sorted([(1, [2])])")))
+    eq("3:16: cannot sort a value of type list[int | float]", check_errors(in_main("xs: list[int | float] = []\nx = sorted(xs)")))
+    eq("2:16: cannot iterate over int", check_errors(in_main("x = sorted(3)")))
+  end,
+
   with_statements = function()
     local M = "class M:\n    n: int\n\n    def enter(self) -> str:\n        return ''\n\n"
       .. "    def exit(self, error: Exception | None) -> None:\n        pass\n"
