@@ -1,5 +1,3 @@
-import typing
-
 def add(a: int, b: int = 10) -> int:
     return a + b
 
@@ -22,19 +20,19 @@ def half(x: float) -> float:
 
 # Calls through a callable use exactly its positional arguments; conversion
 # supplies the function's omitted defaults.
-def apply(f: typing.Callable[[int], int], x: int) -> int:
+def apply(f: (int) -> int, x: int) -> int:
     return f(x)
 
-def twice(f: typing.Callable[[int], int]) -> typing.Callable[[int], int]:
+def twice(f: (int) -> int) -> (int) -> int:
     return f
 
-def run(g: typing.Callable[[typing.Callable[[int], int]], int]) -> int:
+def run(g: ((int) -> int) -> int) -> int:
     return g(double)
 
-def use(f: typing.Callable[[int], int]) -> int:
+def use(f: (int) -> int) -> int:
     return f(5)
 
-def call_optional(o: typing.Callable[[int], int] | None) -> int:
+def call_optional(o: ((int) -> int) | None) -> int:
     if o is not None:
         return o(21)
     return -1
@@ -44,17 +42,17 @@ def main() -> None:
     print(apply(scaled, 2))
     print(apply(maybe, 4))
     # Floats are boxed or unboxed between the callable's types and the function's.
-    d: typing.Callable[[float], str] = describe
+    d: (float) -> str = describe
     print(d(1.5))
-    h: typing.Callable[[float], int | float] = half
+    h: (float) -> int | float = half
     r = h(3.0)
     print(isinstance(r, float))
     print(r)
     # One callable converts to another.
-    k: typing.Callable[[float], float] = half
-    w: typing.Callable[[float], int | float] = k
+    k: (float) -> float = half
+    w: (float) -> int | float = k
     print(w(1.0))
-    fs: list[typing.Callable[[int], int]] = [double, add, maybe]
+    fs: list[(int) -> int] = [double, add, maybe]
     for f in fs:
         print(f(1))
     print(call_optional(double))
@@ -64,5 +62,5 @@ def main() -> None:
     print(twice(add)(7))
     # A tuple position adapts its function too.
     pair = (add, 1)
-    adapted: tuple[typing.Callable[[int], int], int] = pair
+    adapted: tuple[(int) -> int, int] = pair
     print(adapted[0](adapted[1]))

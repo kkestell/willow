@@ -1,5 +1,4 @@
 import io
-import typing
 
 def first[T](items: list[T]) -> T:
     return items[0]
@@ -24,7 +23,7 @@ def pair_same[T](a: T, b: T) -> list[T]:
 def empty[T]() -> list[T]:
     return []
 
-def map_list[T, U](f: typing.Callable[[T], U], xs: list[T]) -> list[U]:
+def map_list[T, U](f: (T) -> U, xs: list[T]) -> list[U]:
     result: list[U] = []
     for x in xs:
         result.append(f(x))
@@ -35,7 +34,7 @@ def count[T](xs: list[T] | None) -> int:
         return 0
     return len(xs)
 
-def apply_maybe[T](f: typing.Callable[[T], list[int | None]], x: T) -> list[int | None]:
+def apply_maybe[T](f: (T) -> list[int | None], x: T) -> list[int | None]:
     return f(x)
 
 def maybe() -> int | None:
@@ -102,7 +101,7 @@ def send[F: io.File](f: F, text: str) -> F:
 def identity[T](x: T) -> T:
     return x
 
-def apply(f: typing.Callable[[str], str], s: str) -> str:
+def apply(f: (str) -> str, s: str) -> str:
     return f(s)
 
 def aliases_bounds_values() -> None:

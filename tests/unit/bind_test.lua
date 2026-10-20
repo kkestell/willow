@@ -448,18 +448,16 @@ return {
   end,
 
   callable_types = function()
-    local T = "import typing\nclass P:\n    n: int\n"
-    local program = bind_source(T .. "def f(g: typing.Callable[[int, str | None], bool]) -> None:\n    pass\n" .. MAIN)
-    eq("typing.Callable[[int, str | None], bool]", program.functions[1].params[1].type.name)
-    eq("4:10: typing.Callable expects a list of parameter types and a return type",
-      bind_error(T .. "def f(g: typing.Callable[int]) -> None:\n    pass\n" .. MAIN))
-    eq("4:10: typing.Callable expects a list of parameter types and a return type",
-      bind_error(T .. "def f(g: typing.Callable) -> None:\n    pass\n" .. MAIN))
-    eq("4:10: type 'P' does not take type arguments", bind_error(T .. "def f(g: P[int]) -> None:\n    pass\n" .. MAIN))
-    eq("4:40: a union can have only one callable member",
-      bind_error(T .. "def f(g: typing.Callable[[int], int] | typing.Callable[[str], int]) -> None:\n    pass\n" .. MAIN))
-    eq("5:23: typing.Callable cannot be used in isinstance",
-      bind_error(T .. "def main() -> None:\n    b = isinstance(1, typing.Callable)\n"))
+    local P = "class P:\n    n: int\n"
+    local program = bind_source(P .. "def f(g: (int, str | None) -> bool, h: ((int) -> int) | None) -> None:\n    pass\n" .. MAIN)
+    eq("(int, str | None) -> bool", program.functions[1].params[1].type.name)
+    eq("((int) -> int) | None", program.functions[1].params[2].type.name)
+    eq("list[((int) -> int) | None]",
+      bind_source("def f(g: list[((int) -> int) | None]) -> None:\n    pass\n" .. MAIN).functions[1].params[1].type.name)
+    eq("3:10: type 'P' does not take type arguments", bind_error(P .. "def f(g: P[int]) -> None:\n    pass\n" .. MAIN))
+    eq("3:28: a union can have only one callable member",
+      bind_error(P .. "def f(g: ((int) -> int) | ((str) -> int)) -> None:\n    pass\n" .. MAIN))
+    eq("1:10: unknown module 'typing'", bind_error("def f(g: typing.Callable) -> None:\n    pass\n" .. MAIN))
   end,
 
   generic_functions = function()
@@ -583,8 +581,8 @@ return {
     eq("4:9: protocol 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
     eq("3:10: duplicate protocol 'P'", bind_error(P .. P .. MAIN))
     eq("8:14: union members C and P overlap", bind_error(P .. C .. "def f(x: C | P) -> None:\n    pass\n" .. MAIN))
-    eq("typing.Callable[[P], None]",
-      bind_source("import typing\n" .. P .. "def f(x: typing.Callable[[P], None]) -> None:\n    pass\n" .. MAIN)
+    eq("(P) -> None",
+      bind_source(P .. "def f(x: (P) -> None) -> None:\n    pass\n" .. MAIN)
         .functions[1].params[1].type.name)
   end,
 }

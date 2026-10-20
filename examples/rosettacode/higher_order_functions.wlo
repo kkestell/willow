@@ -1,8 +1,6 @@
 # https://rosettacode.org/wiki/Higher-order_functions
 
-import typing
-
-def first(f: typing.Callable[[int], int]) -> int:
+def first(f: (int) -> int) -> int:
     return f(10)
 
 def second(n: int) -> int:

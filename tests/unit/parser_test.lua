@@ -66,8 +66,8 @@ show = function(node)
   elseif kind == "Type" then
     local name = (node.module and node.module .. "." or "") .. node.name
     return node.args and name .. "[" .. show_list(node.args, ", ") .. "]" or name
-  elseif kind == "TypeList" then
-    return "[" .. show_list(node.elements, ", ") .. "]"
+  elseif kind == "CallableType" then
+    return "((" .. show_list(node.params, ", ") .. ") -> " .. show(node.result) .. ")"
   elseif kind == "UnionType" then
     return show_list(node.members, " | ")
   elseif kind == "Alias" then
@@ -249,8 +249,18 @@ return {
   end,
 
   callable_annotations = function()
-    eq("def f(g: typing.Callable[[int, str], bool], h: typing.Callable[[], int]) -> None { pass }",
-      show(parse("def f(g: typing.Callable[[int, str], bool], h: typing.Callable[[], int]) -> None:\n    pass\n").functions[1]))
+    local function annotation(text)
+      return show(parse("def f(g: " .. text .. ") -> None:\n    pass\n").functions[1].params[1].type)
+    end
+    eq("def f(g: ((int, str) -> bool), h: (() -> int)) -> None { pass }",
+      show(parse("def f(g: (int, str) -> bool, h: () -> int) -> None:\n    pass\n").functions[1]))
+    eq("((int) -> str | None)", annotation("(int) -> str | None"))
+    eq("((int) -> str) | None", annotation("((int) -> str) | None"))
+    eq("int", annotation("(int)"))
+    eq("tuple[(() -> int), int]", annotation("tuple[() -> int, int]"))
+    eq("((int) -> ((str) -> bool))", annotation("(int) -> (str) -> bool"))
+    eq("((((int) -> int)) -> int)", annotation("((int) -> int) -> int"))
+    eq("1:20: expected '->', found ')'", parse_error("def f(g: (int, str)) -> None:\n    pass\n"))
   end,
 
   keyword_only_parameters = function()

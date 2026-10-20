@@ -82,10 +82,10 @@ local function lookup(from, module, name, span)
   return declaration
 end
 
--- Returns the record, protocol, enum, alias, or `typing.Callable` that `ref`, a `{ name, module, span }` in a type,
--- an `except` clause, or `isinstance`, names. These are found through
--- file-level declarations, imports, and built-in exception classes, which
--- locals never shadow.
+-- Returns the record, protocol, enum, or alias that `ref`, a
+-- `{ name, module, span }` in a type, an `except` clause, or `isinstance`,
+-- names. These are found through file-level declarations, imports, and
+-- built-in exception classes, which locals never shadow.
 local function resolve_named(ref, module)
   local declaration
   if ref.module then
@@ -98,7 +98,7 @@ local function resolve_named(ref, module)
     declaration = module.declarations[ref.name] or exceptions[ref.name]
   end
   local kind = declaration and declaration.kind
-  if not (kind == "Record" or kind == "Protocol" or kind == "Enum" or kind == "Alias" or kind == "Callable") then
+  if not (kind == "Record" or kind == "Protocol" or kind == "Enum" or kind == "Alias") then
     diag.error(ref.span, "unknown type '" .. (ref.module and ref.module .. "." or "") .. ref.name .. "'")
   end
   return declaration
@@ -116,8 +116,17 @@ local function type_text(node, module)
     local names = {}
     for i, member in ipairs(node.members) do
       names[i] = type_text(member, module)
+      if member.kind == "CallableType" then
+        names[i] = "(" .. names[i] .. ")"
+      end
     end
     return table.concat(names, " | ")
+  elseif node.kind == "CallableType" then
+    local names = {}
+    for i, param in ipairs(node.params) do
+      names[i] = type_text(param, module)
+    end
+    return "(" .. table.concat(names, ", ") .. ") -> " .. type_text(node.result, module)
   elseif node.name == "list" then
     return "list[" .. type_text(node.args[1], module) .. "]"
   elseif node.name == "dict" then
@@ -135,13 +144,7 @@ local function type_text(node, module)
     return type_scope[node.name].name
   end
   local declaration, args = resolve_named(node, module), node.args
-  if declaration.kind == "Callable" and args and #args == 2 and args[1].kind == "TypeList" then
-    local names = {}
-    for i, element in ipairs(args[1].elements) do
-      names[i] = type_text(element, module)
-    end
-    return "typing.Callable[[" .. table.concat(names, ", ") .. "], " .. type_text(args[2], module) .. "]"
-  elseif (declaration.kind == "Record" or declaration.kind == "Protocol" or declaration.kind == "Alias") and args then
+  if (declaration.kind == "Record" or declaration.kind == "Protocol" or declaration.kind == "Alias") and args then
     local names = {}
     for i, arg in ipairs(args) do
       names[i] = type_text(arg, module)
@@ -312,6 +315,12 @@ resolve_type = function(node, module, name)
       end
     end
     return union
+  elseif node.kind == "CallableType" then
+    local params = {}
+    for i, param in ipairs(node.params) do
+      params[i] = resolve_type(param, module)
+    end
+    return types.callable(params, resolve_type(node.result, module))
   elseif node.name == "list" then
     return types.list(lazy(node.args[1], module))
   elseif node.name == "dict" then
@@ -335,16 +344,7 @@ resolve_type = function(node, module, name)
     return type_scope[node.name]
   end
   local declaration, args = resolve_named(node, module), node.args
-  if declaration.kind == "Callable" then
-    if not (args and #args == 2 and args[1].kind == "TypeList" and args[2].kind ~= "TypeList") then
-      diag.error(node.span, "typing.Callable expects a list of parameter types and a return type")
-    end
-    local params = {}
-    for i, element in ipairs(args[1].elements) do
-      params[i] = resolve_type(element, module)
-    end
-    return types.callable(params, resolve_type(args[2], module))
-  elseif declaration.typevars or #(declaration.type_params or {}) > 0 then
+  if declaration.typevars or #(declaration.type_params or {}) > 0 then
     -- A generic class or alias takes all of its type arguments.
     local count = #declaration.type_params
     if not args then
@@ -355,9 +355,6 @@ resolve_type = function(node, module, name)
     end
     local resolved = {}
     for i, arg in ipairs(args) do
-      if arg.kind == "TypeList" then
-        diag.error(arg.span, "expected a type")
-      end
       resolved[i] = resolve_type(arg, module)
       local unsatisfied = declaration.typevars and types.unsatisfied(declaration.typevars[i], resolved[i])
       if unsatisfied then
@@ -496,7 +493,7 @@ local function resolve_signature(fn, module)
 end
 
 -- The declaration kinds that name no function or class to call.
-local CANNOT_CALL = { Alias = true, Enum = true, Callable = true, Protocol = true }
+local CANNOT_CALL = { Alias = true, Enum = true, Protocol = true }
 
 local function is_generic(declaration)
   return declaration and (declaration.kind == "Function" or declaration.kind == "Record")
@@ -703,8 +700,6 @@ local function resolve_function(fn, scope, module)
         local declaration = resolve_named(class, module)
         if declaration.kind == "Alias" then
           diag.error(class.span, "alias '" .. class.name .. "' cannot be used in isinstance")
-        elseif declaration.kind == "Callable" then
-          diag.error(class.span, "typing.Callable cannot be used in isinstance")
         elseif declaration.kind == "Protocol" then
           diag.error(class.span, "protocol '" .. class.name .. "' cannot be used in isinstance")
         end

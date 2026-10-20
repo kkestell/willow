@@ -408,7 +408,7 @@ example changes it lists. New Rosetta Code examples go in
     after substitution (broader arguments, narrower returns, matching keyword
     names, no extra required arguments); protocol assignability; no
     construction, fields, or `isinstance`
-  - [ ] Callable type syntax: `(A, B, ...) -> R` annotations in place of
+  - [x] Callable type syntax: `(A, B, ...) -> R` annotations in place of
     `typing.Callable[[A, B, ...], R]`, with the return type extending as far as
     possible and parentheses grouping a type, as in `((int) -> str) | None`;
     callable type names in diagnostics; remove the `typing` module; update the

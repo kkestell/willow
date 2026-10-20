@@ -1,7 +1,5 @@
-import typing
-
 # Each counter rebinds its own `count`.
-def counter() -> typing.Callable[[], int]:
+def counter() -> () -> int:
     count = 0
 
     def increment() -> int:
@@ -23,10 +21,10 @@ def total() -> int:
     add(4)
     return sum
 
-def apply(f: typing.Callable[[int], int], x: int) -> int:
+def apply(f: (int) -> int, x: int) -> int:
     return f(x)
 
-def threshold(minimum: int) -> typing.Callable[[int], bool]:
+def threshold(minimum: int) -> (int) -> bool:
     return lambda score: score >= minimum
 
 def main() -> None:
@@ -40,18 +38,18 @@ def main() -> None:
     ok = threshold(5)
     print(ok(3))
     print(ok(7))
-    fs: list[typing.Callable[[int], int]] = [lambda x: x + 1, lambda x: x * x]
+    fs: list[(int) -> int] = [lambda x: x + 1, lambda x: x * x]
     for f in fs:
         print(f(5))
     # A parameterless lambda needs no expected type.
     answer = lambda: 42
     print(answer())
     # The lambda's float result is boxed for the callable's result type.
-    half: typing.Callable[[], int | float] = lambda: 1.5
+    half: () -> int | float = lambda: 1.5
     r = half()
     print(isinstance(r, float))
     # A lambda in a loop shares the loop variable's binding.
-    getters: list[typing.Callable[[], int]] = []
+    getters: list[() -> int] = []
     for i in range(3):
         getters.append(lambda: i)
     print(getters[0]())

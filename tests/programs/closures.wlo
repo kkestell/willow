@@ -1,7 +1,5 @@
-import typing
-
 # The closure reads the binding, which the outer call rebinds after creating it.
-def make_counter(start: int) -> typing.Callable[[], int]:
+def make_counter(start: int) -> () -> int:
     count = start
 
     def read() -> int:
@@ -20,7 +18,7 @@ def fact(n: int) -> int:
 
 # Closures made in a loop share the loop variable's one binding.
 def loop() -> None:
-    fs: list[typing.Callable[[], int]] = []
+    fs: list[() -> int] = []
     for i in range(3):
         def get() -> int:
             return i
@@ -31,7 +29,7 @@ def loop() -> None:
 class Box:
     n: int
 
-    def doubler(self) -> typing.Callable[[int], int]:
+    def doubler(self) -> (int) -> int:
         def apply(x: int) -> int:
             return x * self.n
         return apply

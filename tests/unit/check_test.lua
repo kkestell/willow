@@ -843,13 +843,13 @@ return {
     eq("2:14: type T has no field 'n'", body_errors("return x.n"))
     eq("2:21: expected int, received str", check_errors(in_main("x = first[int](['a'])", F)))
     local G = F .. "def pair_same[T](a: T, b: T) -> list[T]:\n    return [a, b]\ndef empty[T]() -> list[T]:\n    return []\n"
-      .. "def apply[T](f: typing.Callable[[T], T]) -> int:\n    return 1\n"
-    eq("3:9: cannot infer type parameter 'T' of 'pair_same' from int and str",
-      check_errors("import typing\n" .. in_main("x = pair_same(1, 'a')", G)))
-    eq("3:9: cannot infer type parameter 'T' of 'empty'", check_errors("import typing\n" .. in_main("x = empty()", G)))
-    eq("3:21: expected list[str], received list[int]", check_errors("import typing\n" .. in_main("xs: list[str] = first([[1]])", G)))
-    eq("3:15: cannot infer the parameter types of this lambda",
-      check_errors("import typing\n" .. in_main("x = apply(lambda v: v)", G)))
+      .. "def apply[T](f: (T) -> T) -> int:\n    return 1\n"
+    eq("2:9: cannot infer type parameter 'T' of 'pair_same' from int and str",
+      check_errors(in_main("x = pair_same(1, 'a')", G)))
+    eq("2:9: cannot infer type parameter 'T' of 'empty'", check_errors(in_main("x = empty()", G)))
+    eq("2:21: expected list[str], received list[int]", check_errors(in_main("xs: list[str] = first([[1]])", G)))
+    eq("2:15: cannot infer the parameter types of this lambda",
+      check_errors(in_main("x = apply(lambda v: v)", G)))
     eq("2:9: 'first' expects 1 type argument, received 2", check_errors(in_main("x = first[int, str]([1])", F)))
   end,
 
@@ -868,8 +868,8 @@ return {
     eq("4:14: class N has no field 'age'", check_errors("class N:\n    name: str\ndef f[T: N](x: T) -> int:\n    return x.age\n" .. MAIN))
     eq("2:9: generic function 'identity' needs type arguments or an expected callable type",
       check_errors(in_main("h = identity", N)))
-    eq("3:38: cannot infer type parameter 'T' of 'identity' from int and str",
-      check_errors("import typing\n" .. in_main("q: typing.Callable[[int], str] = identity", N)))
+    eq("2:23: cannot infer type parameter 'T' of 'identity' from int and str",
+      check_errors(in_main("q: (int) -> str = identity", N)))
   end,
 
   generic_classes = function()
@@ -885,12 +885,11 @@ return {
   end,
 
   lambdas = function()
-    local T = "import typing\n"
-    eq("3:9: lambda parameters need an expected callable type", check_errors(T .. in_main("f = lambda x: x")))
-    eq("3:38: expected typing.Callable[[int], int], received a lambda with 2 parameters",
-      check_errors(T .. in_main("f: typing.Callable[[int], int] = lambda x, y: x")))
-    eq("3:48: expected str, received int", check_errors(T .. in_main("f: typing.Callable[[int], str] = lambda x: x")))
-    eq("3:17: variable 'y' may be used before assignment", check_errors(T .. in_main("g = lambda: y\ny = 1")))
+    eq("2:9: lambda parameters need an expected callable type", check_errors(in_main("f = lambda x: x")))
+    eq("2:23: expected (int) -> int, received a lambda with 2 parameters",
+      check_errors(in_main("f: (int) -> int = lambda x, y: x")))
+    eq("2:33: expected str, received int", check_errors(in_main("f: (int) -> str = lambda x: x")))
+    eq("2:17: variable 'y' may be used before assignment", check_errors(in_main("g = lambda: y\ny = 1")))
     eq("5:13: expected int, received str",
       check_errors(in_main("x = 1\ndef inner() -> None:\n    nonlocal x\n    x = 's'\ninner()")))
   end,
@@ -922,8 +921,8 @@ return {
       check_errors(in_main(capture .. "if x is not None:\n    k(b=g(), a=x + 1, c=1)", K)))
     check_source(in_main(capture .. "if x is not None:\n    k(c=x + 1, b=g(), a=1)", K))
     -- Taking a built-in function as a value calls nothing.
-    check_source("import typing\n" .. in_main(capture .. "if x is not None:\n"
-      .. "    f: typing.Callable[[str], int] = len\n    print(x + 1)", H))
+    check_source(in_main(capture .. "if x is not None:\n"
+      .. "    f: (str) -> int = len\n    print(x + 1)", H))
     -- Calls in a lambda's body do not run when the lambda is created.
     check_source(in_main(capture .. "if x is not None:\n    try:\n        h = lambda: g()\n"
       .. "    except ValueError:\n        print(x + 1)", H))
@@ -932,25 +931,25 @@ return {
   builtin_values = function()
     eq("2:9: function 'len' needs an expected callable type", check_errors(in_main("x = len")))
     eq("2:11: function 'print' needs an expected callable type", check_errors(in_main("print(print)")))
-    eq("3:38: 'len' cannot be applied to int", check_errors("import typing\n" .. in_main("f: typing.Callable[[int], int] = len")))
-    eq("3:38: expected str, received int", check_errors("import typing\n" .. in_main("f: typing.Callable[[str], str] = len")))
+    eq("2:23: 'len' cannot be applied to int", check_errors(in_main("f: (int) -> int = len")))
+    eq("2:23: expected str, received int", check_errors(in_main("f: (str) -> str = len")))
   end,
 
   callable_types = function()
-    local T = "import typing\n"
     local F = "def f(a: int) -> int:\n    return a\ndef k(a: int, *, b: int) -> int:\n    return a\n"
       .. "def s() -> str:\n    return ''\n"
     local function body(text)
-      return T .. F .. "def main() -> None:\n" .. text:gsub("[^\n]+", "    %0") .. "\n"
+      return F .. "def main() -> None:\n" .. text:gsub("[^\n]+", "    %0") .. "\n"
     end
-    eq("9:38: expected typing.Callable[[int], int], received function k", check_errors(body("g: typing.Callable[[int], int] = k")))
-    eq("9:45: expected typing.Callable[[int | None], int], received function f",
-      check_errors(body("g: typing.Callable[[int | None], int] = f")))
-    eq("9:35: expected typing.Callable[[], int], received function s", check_errors(body("g: typing.Callable[[], int] = s")))
-    eq("10:11: 'g' does not accept keyword arguments", check_errors(body("g: typing.Callable[[int], int] = f\nx = g(a=1)")))
-    eq("10:9: 'g' expects 1 argument, received 0", check_errors(body("g: typing.Callable[[int], int] = f\nx = g()")))
-    eq("10:11: cannot print a value of type typing.Callable[[int], int]",
-      check_errors(body("g: typing.Callable[[int], int] = f\nprint(g)")))
+    eq("8:23: expected (int) -> int, received function k", check_errors(body("g: (int) -> int = k")))
+    eq("8:30: expected (int | None) -> int, received function f",
+      check_errors(body("g: (int | None) -> int = f")))
+    eq("8:20: expected () -> int, received function s", check_errors(body("g: () -> int = s")))
+    eq("9:11: 'g' does not accept keyword arguments", check_errors(body("g: (int) -> int = f\nx = g(a=1)")))
+    eq("9:9: 'g' expects 1 argument, received 0", check_errors(body("g: (int) -> int = f\nx = g()")))
+    eq("9:11: cannot print a value of type (int) -> int",
+      check_errors(body("g: (int) -> int = f\nprint(g)")))
+    eq("8:32: expected ((int) -> int) | None, received int", check_errors(body("g: ((int) -> int) | None = 1")))
   end,
 
   keyword_only_parameters = function()

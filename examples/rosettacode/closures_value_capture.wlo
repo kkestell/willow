@@ -1,14 +1,12 @@
 # https://rosettacode.org/wiki/Closures/Value_capture
 
-import typing
-
 # A loop reuses its variable's binding, so each closure gets its own index
 # through a call.
-def square_of(i: int) -> typing.Callable[[], int]:
+def square_of(i: int) -> () -> int:
     return lambda: i * i
 
 def main() -> None:
-    funcs: list[typing.Callable[[], int]] = []
+    funcs: list[() -> int] = []
     for i in range(10):
         funcs.append(square_of(i))
     print(funcs[3]())

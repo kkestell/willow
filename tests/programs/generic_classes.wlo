@@ -1,5 +1,3 @@
-import typing
-
 class Box[T]:
     value: T
 
@@ -10,7 +8,7 @@ class Box[T]:
         self.value = value
 
     # A method's own type parameter is inferred at each call.
-    def map[U](self, f: typing.Callable[[T], U]) -> Box[U]:
+    def map[U](self, f: (T) -> U) -> Box[U]:
         return Box(f(self.value))
 
 # A generic class may refer to its own specialization.

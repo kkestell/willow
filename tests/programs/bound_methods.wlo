@@ -1,6 +1,5 @@
 import fs
 import time
-import typing
 
 class Counter:
     n: int
@@ -13,7 +12,7 @@ def make() -> Counter:
     print("make")
     return Counter(0)
 
-def apply(f: typing.Callable[[int], int], x: int) -> int:
+def apply(f: (int) -> int, x: int) -> int:
     return f(x)
 
 def main() -> None:
@@ -29,17 +28,17 @@ def main() -> None:
     print(g())
     print(apply(c.add, 10))
     # Built-in and library functions become values of an expected callable type.
-    size: typing.Callable[[str], int] = len
+    size: (str) -> int = len
     print(size("hello"))
-    text: typing.Callable[[float], str] = str
+    text: (float) -> str = str
     print(text(2.5))
-    say: typing.Callable[[str], None] = print
+    say: (str) -> None = print
     say("hi")
-    now: typing.Callable[[], float] = time.time
+    now: () -> float = time.time
     print(now() > 0.0)
-    exists: typing.Callable[[str], bool] = fs.exists
+    exists: (str) -> bool = fs.exists
     print(exists("/no/such/path"))
-    parse: typing.Callable[[str], int] = int
+    parse: (str) -> int = int
     print(parse("42"))
     try:
         parse("x")

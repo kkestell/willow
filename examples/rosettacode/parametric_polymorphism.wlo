@@ -1,14 +1,12 @@
 # https://rosettacode.org/wiki/Parametric_polymorphism
 
-import typing
-
 class Tree[T]:
     value: T
     left: Tree[T] | None = None
     right: Tree[T] | None = None
 
     # Builds a tree of the same shape whose values are `f` of this tree's.
-    def map[U](self, f: typing.Callable[[T], U]) -> Tree[U]:
+    def map[U](self, f: (T) -> U) -> Tree[U]:
         result = Tree(f(self.value))
         left = self.left
         if left is not None:

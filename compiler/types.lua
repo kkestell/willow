@@ -65,8 +65,8 @@ function M.record_map(t)
   return map
 end
 
--- `typing.Callable[[A, B], R]`: a function taking exactly those positional
--- arguments. It is compared by structure.
+-- `(A, B) -> R`: a function taking exactly those positional arguments. It is
+-- compared by structure.
 function M.callable(params, result)
   local names = {}
   for i, param in ipairs(params) do
@@ -74,7 +74,7 @@ function M.callable(params, result)
   end
   return {
     kind = "callable", params = params, result = result,
-    name = "typing.Callable[[" .. table.concat(names, ", ") .. "], " .. result.name .. "]",
+    name = "(" .. table.concat(names, ", ") .. ") -> " .. result.name,
   }
 end
 
@@ -125,7 +125,8 @@ function M.union(members, name)
   for _, member in ipairs(members) do
     for _, m in ipairs(M.members(member)) do
       flat[#flat + 1] = m
-      names[#names + 1] = m.name
+      -- A callable's result would otherwise absorb the members after it.
+      names[#names + 1] = m.kind == "callable" and "(" .. m.name .. ")" or m.name
     end
   end
   if #flat == 1 then

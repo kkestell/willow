@@ -87,7 +87,8 @@ function M.parse(tokens)
 
   -- A member is a `Type` node: a type keyword or a possibly module-qualified
   -- name, with `args` holding a list's element, a dict's key and value, a
-  -- tuple's positions, or a named type's arguments.
+  -- tuple's positions, or a named type's arguments. It is also a
+  -- `CallableType` with `params` and a `result`, or a parenthesized type.
   local parse_type
 
   -- Reads `. NAME` parts after `first`, a NAME already consumed, into `ref`:
@@ -104,8 +105,33 @@ function M.parse(tokens)
     return ref
   end
 
+  -- Parses what follows `(`: a callable's parameter list and `-> R`, or a
+  -- type the parentheses group. The result extends as far as possible.
+  local function parse_parenthesized(open)
+    local params = {}
+    if not accept(")") then
+      params[1] = parse_type()
+      if accept(",") then
+        for _, param in ipairs(parse_list(")", parse_type)) do
+          params[#params + 1] = param
+        end
+      else
+        expect(")")
+        if peek().kind ~= "->" then
+          return params[1]
+        end
+      end
+    end
+    expect("->")
+    return ast.node("CallableType", open.span, { params = params, result = parse_type() })
+  end
+
   local function parse_member()
     local token = peek()
+    local open = accept("(")
+    if open then
+      return parse_parenthesized(open)
+    end
     if not type_names[token.kind] and token.kind ~= "NAME" then
       unexpected("a type")
     end
@@ -113,16 +139,8 @@ function M.parse(tokens)
     local node = ast.node("Type", token.span, { name = token.kind })
     if token.kind == "NAME" then
       qualify(node, token.value, "a type name")
-      -- An argument is a type or, as in `typing.Callable[[int], str]`, a
-      -- bracketed list of types.
       if accept("[") then
-        node.args = parse_list("]", function()
-          local open = accept("[")
-          if open then
-            return ast.node("TypeList", open.span, { elements = parse_list("]", parse_type) })
-          end
-          return parse_type()
-        end)
+        node.args = parse_list("]", parse_type)
       end
     elseif token.kind == "list" then
       expect("[")
@@ -135,11 +153,12 @@ function M.parse(tokens)
       node.args = { key, parse_type() }
       expect("]")
     elseif token.kind == "tuple" then
-      -- `tuple[()]` is the empty tuple type.
+      -- `tuple[()]` is the empty tuple type; `()` before `->` starts a callable.
       expect("[")
       node.args = {}
-      if accept("(") then
-        expect(")")
+      if peek().kind == "(" and tokens[pos + 1].kind == ")" and tokens[pos + 2].kind == "]" then
+        advance()
+        advance()
       else
         repeat
           node.args[#node.args + 1] = parse_type()
