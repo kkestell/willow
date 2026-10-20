@@ -436,7 +436,7 @@ example changes it lists. New Rosetta Code examples go in
     place of the `readline` loops in `report.wlo` and `jsonl.wlo`
 
 - [ ] Generators and deterministic generator cleanup (spec §8, §14)
-  - [ ] Generator functions: `yield` statements; the three return
+  - [x] Generator functions: `yield` statements; the three return
     annotations and yield type checks; bare `return` and no every-path rule; a
     body started on the first `next`; exhaustion, body exceptions closing the
     generator, `generator raised StopIteration`, and `generator already

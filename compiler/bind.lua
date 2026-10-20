@@ -835,6 +835,11 @@ local function resolve_function(fn, scope, module)
         if statement.message then
           resolve_expression(statement.message)
         end
+      elseif kind == "Yield" then
+        -- A yield suspends the body, letting other code run, like a call.
+        resolve_expression(statement.value)
+        fn.generator = true
+        calls = calls + 1
       elseif kind == "Raise" then
         if statement.value then
           resolve_expression(statement.value)

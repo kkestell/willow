@@ -1,0 +1,99 @@
+def count(limit: int) -> Generator[int]:
+    print("started")
+    n = 0
+    while n < limit:
+        yield n
+        n = n + 1
+
+def first[T](items: list[T]) -> Iterator[T]:
+    for item in items:
+        yield item
+        return
+
+def maybe() -> Iterator[int | None]:
+    yield 1
+    yield None
+
+def failing() -> Iterator[int]:
+    yield 1
+    raise ValueError("bad")
+
+def leaking() -> Iterator[int]:
+    empty: list[int] = []
+    yield 1
+    yield next(iter(empty))
+
+class Words:
+    text: str
+
+    def words(self) -> Iterable[str]:
+        for word in self.text.split(" "):
+            yield word
+
+def guarded(log: list[str]) -> Generator[int]:
+    try:
+        yield 1
+        yield 2
+    except Exception:
+        log.append("handler")
+    finally:
+        log.append("cleanup")
+
+def main() -> None:
+    numbers = count(3)
+    print("created")
+    print(next(numbers))
+    for n in numbers:
+        print(n)
+    try:
+        next(numbers)
+    except StopIteration:
+        print("exhausted")
+
+    for item in first(["a", "b"]):
+        print(item)
+    for value in maybe():
+        print(value is None)
+    for word in Words("x y").words():
+        print(word)
+
+    broken = failing()
+    print(next(broken))
+    try:
+        next(broken)
+    except ValueError as error:
+        print(error.message)
+    try:
+        next(broken)
+    except StopIteration:
+        print("closed after error")
+
+    leaky = leaking()
+    print(next(leaky))
+    try:
+        next(leaky)
+    except RuntimeError as failure:
+        print(failure.message)
+
+    holder: list[Iterator[int]] = []
+    def reentrant() -> Iterator[int]:
+        yield next(holder[0])
+    holder.append(reentrant())
+    try:
+        next(holder[0])
+    except RuntimeError as again:
+        print(again.message)
+
+    log: list[str] = []
+    g = guarded(log)
+    print(next(g))
+    g.close()
+    print(len(log))
+    print(log[0])
+    g.close()
+    unstarted = count(1)
+    unstarted.close()
+    try:
+        next(unstarted)
+    except StopIteration:
+        print("closed before start")

@@ -10,7 +10,7 @@ local set = lexer.set
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
-async await case del from global match with yield
+async await case del from global match with
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
@@ -729,6 +729,9 @@ function M.parse(tokens)
         end
       end
       node = ast.node("Raise", token.span, { value = value })
+    elseif kind == "yield" then
+      advance()
+      node = ast.node("Yield", token.span, { value = parse_expression() })
     elseif simple_statements[kind] then
       advance()
       node = ast.node(simple_statements[kind], token.span, {})

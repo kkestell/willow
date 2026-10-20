@@ -441,14 +441,13 @@ local net = provided("net", {
 
 -- Run-time types of built-in values that protocol dispatch finds converters
 -- for, by their dispatch tags, which no class can have. Programs cannot name
--- them: built-in values are typed by their own kinds, and built-in iterators as
--- `Iterator[T]`. Their methods lower to helpers named after `prefix`.
-local function dispatched(tag, prefix, next)
+-- them: built-in values are typed by their own kinds, and built-in iterators
+-- and generators by protocols. Their methods lower to helpers named after
+-- `prefix`. `extra` gives methods beyond `iter` from the item type parameter.
+local function dispatched(tag, prefix, extra)
   local T = types.typevar("T")
-  local methods = { iter = { params = {}, result = iterator_of(T) } }
-  if next then
-    methods.next = { params = {}, result = T }
-  end
+  local methods = extra and extra(T) or {}
+  methods.iter = { params = {}, result = iterator_of(T) }
   local record = { kind = "Record", name = tag, type_name = tag, fields = {}, native = true, prefix = prefix, native_methods = methods }
   record.type = types.record(record)
   return record
@@ -457,7 +456,17 @@ M.dispatched = {}
 for i, name in ipairs({ "list", "dict", "str", "bytes", "tuple", "range" }) do
   M.dispatched[i] = dispatched(name, name)
 end
-M.dispatched[#M.dispatched + 1] = dispatched("<iterator>", "iterator", true)
+M.dispatched[#M.dispatched + 1] = dispatched("<iterator>", "iterator", function(T)
+  return { next = { params = {}, result = T } }
+end)
+M.dispatched[#M.dispatched + 1] = dispatched("<generator>", "generator", function(T)
+  return {
+    next = { params = {}, result = T },
+    close = { params = {}, result = types.None },
+    enter = { params = {}, result = types.protocol(M.protocols.Generator, { T }) },
+    exit = { params = { optional_exception }, names = { "error" }, result = types.None },
+  }
+end)
 
 M.modules = {
   cli = cli,

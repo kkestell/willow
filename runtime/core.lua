@@ -95,14 +95,21 @@ local function __wlo_catch(err)
   return err
 end
 
--- Runs a protected block. Returns the block's departure code and value, or
--- "raise" and the exception; host failures propagate.
+-- Closing a generator raises this at its suspended `yield`. Protected blocks
+-- run their `finally` clauses but no `except` handlers for it, and the
+-- generator's coroutine catches it.
+local __wlo_cancel = {}
+
+-- Runs a protected block. Returns the block's departure code and value,
+-- "raise" and the exception, or "cancel"; host failures propagate.
 local function __wlo_try(body)
   local ok, code, value = xpcall(body, __wlo_catch)
   if ok then
     return code, value
   end
-  if not code.__wlo_class then
+  if code == __wlo_cancel then
+    return "cancel", code
+  elseif not code.__wlo_class then
     error(code, 0)
   end
   return "raise", code
@@ -1160,6 +1167,84 @@ local function __wlo_tag(value)
   end
   return value.__wlo_record or value.__wlo_class or value.__wlo_tuple and "tuple"
     or value.__wlo_octets and "bytes" or value.n and "list" or "dict"
+end
+
+-- A generator runs `body` in a coroutine, from the first `next`. Its state is
+-- "unstarted", "suspended", "running", or "done". Errors are caught inside the
+-- coroutine, so their frames are recorded where they happen.
+local function __wlo_generator(body)
+  local co = coroutine.create(function()
+    return xpcall(body, __wlo_catch)
+  end)
+  return { __wlo_record = "<generator>", state = "unstarted", co = co }
+end
+
+local function __wlo_yield(value)
+  if coroutine.yield(value) == __wlo_cancel then
+    error(__wlo_cancel, 0)
+  end
+end
+
+-- Raises `err` from a finished generator in its caller, whose frames follow
+-- the generator's.
+local function __wlo_generator_raise(err)
+  if type(err) == "table" and err.__wlo_frames then
+    for _, frame in ipairs(__wlo_frames()) do
+      err.__wlo_frames[#err.__wlo_frames + 1] = frame
+    end
+  end
+  error(err, 0)
+end
+
+local function __wlo_generator_next(generator, site)
+  if generator.state == "running" then
+    __wlo_fail("RuntimeError", "generator already running", site)
+  elseif generator.state == "done" then
+    __wlo_fail("StopIteration", "", site)
+  end
+  generator.state = "running"
+  local _, value, err = coroutine.resume(generator.co)
+  if coroutine.status(generator.co) == "suspended" then
+    generator.state = "suspended"
+    return value
+  end
+  generator.state = "done"
+  if value then
+    __wlo_fail("StopIteration", "", site)
+  elseif type(err) == "table" and err.__wlo_class == "StopIteration" then
+    __wlo_fail("RuntimeError", "generator raised StopIteration", site)
+  end
+  __wlo_generator_raise(err)
+end
+
+-- Closing runs a suspended body's pending cleanup; an unstarted body never
+-- runs.
+local function __wlo_generator_close(generator, site)
+  if generator.state == "running" then
+    __wlo_fail("RuntimeError", "generator already running", site)
+  end
+  if generator.state ~= "suspended" then
+    generator.state = "done"
+    return
+  end
+  generator.state = "running"
+  local _, ok, err = coroutine.resume(generator.co, __wlo_cancel)
+  generator.state = "done"
+  if not ok and err ~= __wlo_cancel then
+    __wlo_generator_raise(err)
+  end
+end
+
+local function __wlo_generator_iter(generator, site)
+  return generator
+end
+
+local function __wlo_generator_enter(generator, site)
+  return generator
+end
+
+local function __wlo_generator_exit(generator, exception, site)
+  __wlo_generator_close(generator, site)
 end
 
 local function __wlo_where(location)

@@ -1,0 +1,4 @@
+generator_traceback.wlo:3:5: error: ValueError: bad item
+  in numbers at generator_traceback.wlo:3:5
+  called from total at generator_traceback.wlo:7:5
+  called from main at generator_traceback.wlo:12:11

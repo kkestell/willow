@@ -587,6 +587,17 @@ local function check_function(fn, entry)
   end
 
   local return_type = fn.return_type
+  -- A generator function's yielded values have the type its annotation's
+  -- protocol iterates.
+  local yield_type
+  if fn.generator then
+    local protocols = stdlib.protocols
+    local decl = return_type.kind == "protocol" and return_type.protocol
+    if not (decl == protocols.Generator or decl == protocols.Iterator or decl == protocols.Iterable) then
+      diag.error(fn.span, "a generator function must be annotated Generator[T], Iterator[T], or Iterable[T]")
+    end
+    yield_type = return_type.args[1]
+  end
   -- The number of `finally` clauses enclosing the statement being checked.
   -- `in_loop` is this count at the innermost loop, or false outside loops.
   local finally_depth = 0
@@ -1321,12 +1332,22 @@ local function check_function(fn, entry)
       if finally_depth > 0 then
         diag.error(statement.span, "'return' cannot leave a 'finally' clause")
       end
-      if statement.value then
+      if yield_type and statement.value then
+        diag.error(statement.span, "a generator cannot return a value")
+      elseif statement.value then
         check_against(statement.value, state, return_type)
-      else
+      elseif not yield_type then
         expect_type(statement, return_type, types.None)
       end
       return true
+    elseif kind == "Yield" then
+      if finally_depth > 0 then
+        diag.error(statement.span, "'yield' cannot be used in a 'finally' clause")
+      end
+      check_against(statement.value, state, yield_type)
+      -- Other code runs while the body is suspended.
+      calls = calls + 1
+      forget_captured(state)
     elseif kind == "Break" or kind == "Continue" then
       if not in_loop then
         diag.error(statement.span, "'" .. kind:lower() .. "' outside of a loop")
@@ -1447,7 +1468,7 @@ local function check_function(fn, entry)
   end
   -- Outside a loop only `return` transfers control at function level.
   local _, transfers = check_block(fn.body, state, false)
-  if return_type ~= types.None and not transfers then
+  if return_type ~= types.None and not yield_type and not transfers then
     local name = fn.class and "method '" .. fn.class.name .. "." or "function '"
     diag.error(fn.span, name .. fn.name .. "' must return a value on every path")
   end

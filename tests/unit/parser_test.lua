@@ -150,6 +150,8 @@ show = function(node)
     return "assert " .. show(node.condition) .. (node.message and ", " .. show(node.message) or "")
   elseif kind == "Raise" then
     return node.value and "raise " .. show(node.value) or "raise"
+  elseif kind == "Yield" then
+    return "yield " .. show(node.value)
   elseif kind == "Try" then
     local text = "try " .. show_block(node.body)
     for _, handler in ipairs(node.handlers) do
@@ -622,7 +624,11 @@ return {
 
   unsupported_reserved_words = function()
     eq("2:5: 'with' is not supported", body_error("with:\n    pass"))
-    eq("2:5: 'yield' is not supported", body_error("yield"))
+  end,
+
+  yield_statements = function()
+    eq("{ yield (x + 1) }", body("yield x + 1"))
+    eq("2:10: expected an expression, found end of line", body_error("yield"))
   end,
 
   enums = function()

@@ -735,6 +735,8 @@ local function lower_function(fn, sites, helpers, protocols)
         emit({ kind = "Eval", value = helper("assert_fail", { message }, statement.span), span = statement.span })
       end)
       emit({ kind = "If", condition = { kind = "Not", operand = condition }, body = body, span = statement.span })
+    elseif kind == "Yield" then
+      emit({ kind = "Eval", value = pure("yield", { lower_value(statement.value) }), span = statement.span })
     elseif kind == "Raise" then
       local value
       if statement.value then
@@ -796,6 +798,7 @@ local function lower_function(fn, sites, helpers, protocols)
     locals = fn.locals,
     temps = temps,
     body = body,
+    generator = fn.generator,
   }
 end
 

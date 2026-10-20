@@ -936,6 +936,20 @@ return {
       .. "    except ValueError:\n        print(x + 1)", H))
   end,
 
+  generators = function()
+    eq("1:5: a generator function must be annotated Generator[T], Iterator[T], or Iterable[T]",
+      check_errors("def g() -> int:\n    yield 1\n" .. MAIN))
+    eq("3:5: a generator cannot return a value", check_errors("def g() -> Iterator[int]:\n    yield 1\n    return 1\n" .. MAIN))
+    eq("2:11: expected int, received str", check_errors("def g() -> Iterator[int]:\n    yield 'a'\n" .. MAIN))
+    eq("5:9: 'yield' cannot be used in a 'finally' clause",
+      check_errors("def g() -> Iterator[int]:\n    try:\n        pass\n    finally:\n        yield 1\n" .. MAIN))
+    check_source("def g(n: int) -> Generator[int]:\n    if n > 0:\n        yield n\n" .. MAIN)
+    -- A suspension may let other code rebind a captured variable.
+    eq("6:21: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main("x = m()\ndef g() -> Iterator[int]:\n    if x is not None:\n        yield 1\n        yield x + 1",
+        "def m() -> int | None:\n    return 1\n")))
+  end,
+
   builtin_values = function()
     eq("2:9: function 'len' needs an expected callable type", check_errors(in_main("x = len")))
     eq("2:11: function 'print' needs an expected callable type", check_errors(in_main("print(print)")))

@@ -329,8 +329,14 @@ function M.emit(lowered)
     return table.concat(params, ", ")
   end
 
-  -- Writes the locals and body of lowered function `fn` at `depth`.
+  -- Writes the locals and body of lowered function `fn` at `depth`. A
+  -- generator's call binds its parameters and returns a generator whose
+  -- coroutine runs the body.
   local function function_body(fn, depth)
+    if fn.generator then
+      line(depth, "return __wlo_generator(function()", fn.span)
+      depth = depth + 1
+    end
     local locals = {}
     for _, symbol in ipairs(fn.locals) do
       locals[#locals + 1] = M.mangle(symbol.name)
@@ -342,6 +348,9 @@ function M.emit(lowered)
       line(depth, "local " .. table.concat(locals, ", "), fn.span)
     end
     block(fn.body, depth)
+    if fn.generator then
+      line(depth - 1, "end)")
+    end
   end
 
   local function statement(s, depth)
@@ -390,7 +399,7 @@ function M.emit(lowered)
       if s.finally_body then
         block(s.finally_body, depth + 1)
       end
-      line(depth + 1, "if " .. code .. ' == "raise" then')
+      line(depth + 1, "if " .. code .. ' == "raise" or ' .. code .. ' == "cancel" then')
       line(depth + 2, "__wlo_reraise(" .. value .. ")")
       line(depth + 1, "end")
       for _, resume in ipairs(s.resume) do
