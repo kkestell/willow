@@ -435,7 +435,7 @@ example changes it lists. New Rosetta Code examples go in
     `Iterable[int]` value; `io.File.iter()`; `for` loops over files in
     place of the `readline` loops in `report.wlo` and `jsonl.wlo`
 
-- [ ] Generators and deterministic generator cleanup (spec §8, §14)
+- [x] Generators and deterministic generator cleanup (spec §8, §14)
   - [x] Generator functions: `yield` statements; the three return
     annotations and yield type checks; bare `return` and no every-path rule; a
     body started on the first `next`; exhaustion, body exceptions closing the
@@ -445,7 +445,7 @@ example changes it lists. New Rosetta Code examples go in
     value that `__wlo_try` reports as a `"cancel"` departure, so protected
     blocks skip `except` handlers, run `finally`, and re-raise it for `close`
     to catch at the coroutine boundary
-  - [ ] Generator cleanup: `close()` runs pending `finally` clauses inner to
+  - [x] Generator cleanup: `close()` runs pending `finally` clauses inner to
     outer without entering `except` handlers; closing unstarted, exhausted, and
     closed generators; cleanup errors; `yield` rejected directly in `finally`;
     `enter` and `exit`; `Iterator` and `Iterable` annotations hiding `close`;

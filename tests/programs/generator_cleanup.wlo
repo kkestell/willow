@@ -1,0 +1,48 @@
+def nested(log: list[str]) -> Generator[int]:
+    try:
+        try:
+            yield 1
+        finally:
+            log.append("inner")
+    except Exception:
+        log.append("handler")
+    finally:
+        log.append("outer")
+
+def failing_cleanup() -> Generator[int]:
+    try:
+        yield 1
+    finally:
+        raise ValueError("cleanup failed")
+
+def main() -> None:
+    log: list[str] = []
+    g = nested(log)
+    print(next(g))
+    g.close()
+    for entry in log:
+        print(entry)
+    g.close()
+    finished = nested(log)
+    for n in finished:
+        pass
+    finished.close()
+    print(len(log))
+
+    bad = failing_cleanup()
+    next(bad)
+    try:
+        bad.close()
+    except ValueError as error:
+        print(error.message)
+    try:
+        next(bad)
+    except StopIteration:
+        print("closed")
+    bad.close()
+
+    managed = nested(log)
+    entered = managed.enter()
+    print(next(entered))
+    managed.exit(None)
+    print(log[len(log) - 1])

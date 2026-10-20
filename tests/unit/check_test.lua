@@ -944,6 +944,11 @@ return {
     eq("5:9: 'yield' cannot be used in a 'finally' clause",
       check_errors("def g() -> Iterator[int]:\n    try:\n        pass\n    finally:\n        yield 1\n" .. MAIN))
     check_source("def g(n: int) -> Generator[int]:\n    if n > 0:\n        yield n\n" .. MAIN)
+    -- Iterator and Iterable annotations expose only those protocols' methods.
+    eq("5:8: type Iterator[int] has no method 'close'",
+      check_errors("def g() -> Iterator[int]:\n    yield 1\n" .. in_main("it = g()\nit.close()")))
+    eq("4:13: type Iterable[int] has no method 'next'",
+      check_errors("def g() -> Iterable[int]:\n    yield 1\n" .. in_main("x = g().next()")))
     -- A suspension may let other code rebind a captured variable.
     eq("6:21: operator '+' cannot be applied to int | None and int",
       check_errors(in_main("x = m()\ndef g() -> Iterator[int]:\n    if x is not None:\n        yield 1\n        yield x + 1",
