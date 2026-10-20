@@ -3,6 +3,10 @@
 Willow is a small, statically typed language with Python-like syntax. It compiles
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension.
 
+Async support (§15) is specified but not yet implemented. Its open design and
+implementation questions are tracked in
+[the async milestone](../agents/todo.md#async-support).
+
 ## 1. Programs
 
 ```python
@@ -31,24 +35,28 @@ Hello, Willow
 
 A program consists of an entry file and the modules it imports (§12). A program
 can also be organized as a project with a `willow.json` file (§12). A file
-contains `import` statements followed by `def`, `class`, `enum`, and `type`
-declarations in any order. No other statements may appear at file scope.
+contains `import` statements followed by `def`, `async def`, `class`, `enum`,
+and `type` declarations in any order. No other statements may appear at file
+scope.
 
 The entry file must define exactly one `main` function, with the signature
-`def main() -> None:`. In other modules, `main` is an ordinary function name. The
-program reads its command-line arguments with `sys.args()` (§14).
+`def main() -> None:` or `async def main() -> None:`. In other modules, `main`
+is an ordinary function name. The program reads its command-line arguments with
+`sys.args()` (§14).
 
 Test files (§12) are entry files that have no `main` function. `willow test` runs
 the test functions they define.
 
 The whole program is checked before any of it runs, and an error in any module
 prevents the program from running. When the program runs, it calls `main` once.
+For an async `main`, the runtime drives its coroutine as the root task (§15).
 User code may also call `main`, and such a call behaves like any other function
-call. Programs cannot access Lua globals or `require`.
+call, including producing a coroutine when `main` is async. Programs cannot
+access Lua globals or `require`.
 
-The exit status is 0 when `main` returns and 1 when an exception propagates out
-of `main` or the program reports another failure (§10). When the program calls
-`sys.exit` (§14), the exit status is the status passed to it.
+The exit status is 0 when `main`'s body completes and 1 when an exception
+propagates out of it or the program reports another failure (§10). When the
+program calls `sys.exit` (§14), the exit status is the status passed to it.
 
 ## 2. Lexical structure
 
@@ -82,7 +90,8 @@ not or pass protocol raise return try type while with yield
 ```
 
 The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, `dict`, `tuple`,
-`Iterable`, `Iterator`, `ContextManager`, and `Generator` are also reserved. Using a reserved word that does not begin one of the
+`Iterable`, `Iterator`, `ContextManager`, `Generator`, `Coroutine`, and `Task`
+are also reserved. Using a reserved word that does not begin one of the
 constructs in this specification is an error.
 
 ### Numeric literals
@@ -154,6 +163,11 @@ aliases are declared only at file scope.
 Parameter lists and argument lists may end with a trailing comma. A function may
 call functions declared later in the file, and functions may be directly or
 mutually recursive.
+
+An async function is declared with `async def`. Its parameters, type parameters,
+defaults, and body return values follow the same rules. Functions and methods
+may be async, including nested functions. An async function annotated `-> T`
+produces a `Coroutine[T]` when called; §15 defines when its body runs.
 
 ### Classes
 
@@ -354,6 +368,7 @@ The forms of type annotations are:
 ```text
 int  float  bool  str  None
 list[T]  dict[K, V]  tuple[A, B, ...]  tuple[()]
+Coroutine[T]  Task[T]
 Class  module.Class  Class[T, ...]
 Alias  module.Alias  Alias[T, ...]
 Enum  module.Enum  Protocol  module.Protocol  Protocol[T, ...]
@@ -383,19 +398,22 @@ Generic declarations and applications have fixed arity.
 | `tuple[A, B, ...]` | Immutable, fixed-length groups with a type for each position |
 | Enums | Named values of a declared enum |
 | `(A, B, ...) -> R` | Functions taking the listed positional arguments and returning `R` |
+| `Coroutine[T]` | Unstarted async computations producing `T` (§15) |
+| `Task[T]` | Handles to scheduled computations producing `T` (§15) |
 | Protocols | Values satisfying the protocol's method signatures |
 | Classes | Values of a declared class, including exception classes |
 | Native types | Library values such as `io.File` (§14) |
 
-Built-in value types other than `None` have lowercase names. Classes,
-protocols, and enums, including built-in ones such as `Exception` and
-`Iterable`, have capitalized names.
+Primitive and collection types other than `None` have lowercase names. Classes,
+protocols, enums, and the async types `Coroutine` and `Task` have capitalized
+names.
 
 The scalar types are `int`, `float`, `bool`, `str`, `bytes`, enums, and `None`.
 A type is printable if it is a scalar type other than `bytes`, or a union of
 such types.
-Lists, dictionaries, and class values are reference types. Assigning one or
-passing it as an argument shares the same value instead of copying it.
+Lists, dictionaries, class values, coroutines, and task handles are reference
+types. Assigning one or passing it as an argument shares the same value instead
+of copying it.
 
 ### Assignability
 
@@ -460,16 +478,16 @@ def describe(value: int | str | None) -> str:
 
 ### `None`
 
-Functions annotated `-> None` return `None`. A `return` statement with no value
-returns `None`, and such a function may also return by reaching the end of its
-body.
+Function bodies annotated `-> None` return `None`. A `return` statement with no
+value returns `None`, and such a body may also return by reaching its end.
+Calling an async function still produces a coroutine (§15).
 
 ## 5. Expressions
 
 The forms of expressions are literals, names, parenthesized expressions, list,
-dict, and tuple displays, calls, indexing, slicing, field access, lambdas, and
-unary and binary operations. Generic specialization uses the type argument syntax
-in §3.
+dict, and tuple displays, calls, indexing, slicing, field access, lambdas,
+`await` expressions (§15), and unary and binary operations. Generic
+specialization uses the type argument syntax in §3.
 
 Operator precedence, from lowest to highest:
 
@@ -480,9 +498,10 @@ Operator precedence, from lowest to highest:
 5. Binary `+`, `-`
 6. `*`, `/`, `//`, `%`
 7. Unary `+`, `-`
-8. Postfix operations: calls, indexing `a[i]`, slicing `a[i:j]`, and field or
+8. `await`
+9. Postfix operations: calls, indexing `a[i]`, slicing `a[i:j]`, and field or
    method access `a.name`
-9. Literals, names, parenthesized expressions, and displays
+10. Literals, names, parenthesized expressions, and displays
 
 Lambda expressions bind less tightly than all these operations; the expression
 after their colon extends as far to the right as its enclosing expression allows.
@@ -911,6 +930,7 @@ name: Type = expression
 items[index] = expression
 point.x = expression
 function_call()
+await expression
 return expression
 return
 pass
@@ -944,15 +964,20 @@ finally:
 with expression as target:
     statements
 
+async with expression as name:
+    statements
+
 yield expression
 nonlocal name
 ```
 
-A block must contain at least one statement. Use `pass` for an empty block. The
-only expressions that may be used as statements are calls. An assignment has
-one target, which may be a tuple pattern (§7), and one value. Chained assignment,
-augmented assignment such as `+=`, and assignment expressions are not supported.
-Nested `def` statements bind function values as described in §9.
+A block must contain at least one statement. Use `pass` for an empty block.
+Calls and `await` expressions may be used as statements. An expression statement
+cannot discard a `Coroutine[T]`; its body would not run (§15). An assignment
+has one target, which may be a tuple pattern (§7), and one value. Chained
+assignment, augmented assignment such as `+=`, and assignment expressions are
+not supported. Nested `def` and `async def` statements bind function values as
+described in §9.
 
 Conditions must have type `bool`. Other types cannot be used as conditions, so
 `if count:` is a type error.
@@ -1078,8 +1103,8 @@ variable scope.
 
 Each function has a single local scope. Parameters, assignment targets, `for`
 loop variables, nested function names, unpacking targets, and names bound by
-`except ... as` or `with ... as` are local to the whole function, except those
-declared `nonlocal`. Blocks do not create scopes, and
+`except ... as`, `with ... as`, or `async with ... as` are local to the whole
+function, except those declared `nonlocal`. Blocks do not create scopes, and
 there are no module-level variables or global variables.
 
 The file scope contains functions, classes, protocols, enums, aliases, and
@@ -1158,9 +1183,11 @@ path that reaches that point. This is determined from the structure of the code:
 - The body of a `while` or `for` loop may run zero times, so assignments in the
   body do not count as assignments after the loop.
 - A variable bound by `except ... as` is assigned inside its `except` clause.
-- A `with ... as` target is assigned after successful entry and before its body.
-  Assignments made on all normally completing paths through the body remain
-  definite after the statement.
+- A plain `with ... as` target is assigned after successful entry and before
+  its body. Assignments made on all normally completing paths through the body
+  remain definite after the statement.
+- An `async with ... as` target is also assigned before its body, but graceful
+  cancellation adds possible exits from that body (§15).
 
 The checker does not evaluate conditions. Both branches of every `if` are
 checked, and `if False:` and `while True:` are treated the same as any other
@@ -1180,7 +1207,8 @@ every path. The checker never treats a loop as guaranteeing a return, so a final
 
 `yield` suspends execution and is not a terminating control transfer; statements
 after it are reachable. Generator return rules are defined in §8.
-A `with` statement transfers control when its body transfers control.
+A plain `with` statement transfers control when its body transfers control.
+Async group scopes have additional possible exits (§15).
 
 ### Narrowing
 
@@ -1228,9 +1256,10 @@ def describe(name: str | None) -> str:
 Captured variables are checked against their full binding types at the start of
 a closure body; narrowing at closure creation does not become a permanent fact.
 For any captured binding, every function call, including implicit protocol
-calls, and every generator suspension removes its narrowing. A fresh test or
-assignment can establish it again. Copying the value to a separate local permits
-narrowing that is independent of later rebinding.
+calls, every generator suspension, every `await`, and every implicit task-group
+join removes its narrowing. A fresh test or assignment can establish it again.
+Copying the value to a separate local permits narrowing that is independent of
+later rebinding.
 
 ### `try`
 
@@ -1287,7 +1316,7 @@ These built-in exception classes have only the `message` field:
 | `ValueError` | Invalid values for conversions, `ord`, `chr`, `range`, `split`, `sys.exit`, and UTF-8 input |
 | `IndexError` | Invalid list indexes and `pop` from an empty list |
 | `KeyError` | Missing dictionary keys |
-| `RuntimeError` | Mutation during iteration or sorting, and invalid generator state |
+| `RuntimeError` | Mutation during iteration or sorting, and invalid generator, coroutine, task, or task-group state |
 | `OSError` | Failed filesystem and host operations |
 | `TimeoutError` | Expired time limits |
 | `StopIteration` | Iterator exhaustion |
@@ -1482,6 +1511,9 @@ A test file does not need a `main` function. Its functions whose names begin
 with `test_` are its tests. Each test function must take no parameters and
 return `None`.
 
+Async test entry points remain an [open question](../agents/todo.md#async-support);
+§15 specifies the async program entry point.
+
 All test files and the modules they import are checked before any test runs.
 Tests run in order of file path and then function name. Each test runs in a new
 process with no program arguments, an empty stdin, and the current working
@@ -1529,6 +1561,16 @@ Each location includes the name of its file. Diagnostics are written to stderr.
 
 The standard library consists of modules that are included with Willow. They are
 imported in the same way as a program's own modules (§12).
+
+### `aio`
+
+| Declaration | Meaning |
+| --- | --- |
+| `task_group() -> TaskGroup` | Create an inactive, single-use task group |
+| `class TaskGroup` | A scope owning concurrent tasks, entered with `async with` (§15) |
+
+The task-group and task-handle operations are specified in §15. The initial
+async I/O APIs are still an [open question](../agents/todo.md#async-support).
 
 ### `cli`
 
@@ -2126,6 +2168,218 @@ Both functions flush stderr, which they write through the same buffer as
 finite. `utc` rounds down to whole seconds and supports years 0001 through 9999.
 Timestamps outside that range raise `ValueError` with the message
 `timestamp out of range`.
+
+## 15. Asynchronous execution
+
+Async functions run cooperatively on one thread. A task runs until it suspends
+or finishes; other tasks can make progress while it waits. An `await` is a
+cancellation checkpoint, but need not suspend if its result is ready. Ordinary
+synchronous calls keep their behavior, including blocking the entire event loop.
+
+```python
+import aio
+
+async def square(value: int) -> int:
+    return value * value
+
+async def main() -> None:
+    async with aio.task_group() as group:
+        first = group.start(square(3))
+        second = group.start(square(4))
+    print(first.result() + second.result())    # 25
+```
+
+### Coroutines and task handles
+
+Calling an async function evaluates and binds its arguments normally but runs
+none of its body. The call produces a `Coroutine[T]`, where `T` is the
+function's return annotation. Thus a function declared
+`async def f(value: int) -> str` has callable type `(int) -> Coroutine[str]`.
+Its body must return values assignable to `str`, following §9's return rules.
+
+`Coroutine[T]` and `Task[T]` are opaque nominal types. They are invariant in
+`T`, and the restriction on unions containing different specializations of one
+generic class also applies to each of them. They cannot be constructed directly.
+They are not structural protocols; user-defined values cannot make themselves
+awaitable.
+
+A coroutine may be stored, passed, or returned. It may be consumed only once,
+either by `await` or by a group's `start` method. Attempting either operation
+on a coroutine that has already been consumed raises `RuntimeError`. Aliases
+share that consumed state. An unused coroutine never starts, and discarding it
+does not run its body or cleanup. Expression statements follow §8's restriction
+on discarding coroutines; storing one does not prove that it will eventually run.
+
+A `Task[T]` is a handle to a scheduled computation. It may be awaited repeatedly
+and has one method:
+
+| Method | Meaning |
+| --- | --- |
+| `result() -> T` | Return the completed task's value, or raise its final exception |
+
+`result` does not wait. It raises `RuntimeError` if the task is unfinished or
+was cancelled. Handles may outlive the group and continue to expose the task's
+outcome; the task's execution cannot outlive that group.
+
+### `await`
+
+`await expression` requires a `Coroutine[T]` or `Task[T]` and produces `T`.
+Its operand is evaluated once. Awaiting a coroutine consumes it and runs its
+body as part of the current task, without starting a separate task. Awaiting
+a task waits for that task's final outcome. Both forms return the resulting
+value or raise the resulting exception. Awaiting a cancelled task raises
+`RuntimeError`; pending cancellation of the current task may instead interrupt
+the await.
+
+`await` is allowed only inside an async function or method, including its
+`finally` clauses. It is not allowed in a synchronous nested function, lambda,
+or generator body. An async function cannot contain `yield` in its own body.
+There are no async generators, async lambdas, or `async for` statements.
+
+A sequence of direct coroutine awaits runs those computations sequentially.
+Tasks already scheduled through groups continue independently of the order in
+which their handles are awaited.
+
+### Task groups
+
+`async with expression as name:` is allowed only in an async function or method.
+It evaluates the expression once and enters its `aio.TaskGroup`. The optional
+`as name` binds that group as a local variable; the statement introduces no new
+variable scope. A group may be entered only once. Entering an active or
+previously exited group raises `RuntimeError`.
+
+This is a built-in task-group scope. It accepts only `aio.TaskGroup`, which
+does not satisfy `ContextManager`. General async context managers are not
+supported.
+
+| Method | Meaning |
+| --- | --- |
+| `start[T](coro: Coroutine[T]) -> Task[T]` | Consume `coro` and schedule a child task |
+| `cancel() -> None` | Request a graceful stop of this group's body and children |
+
+`start` neither suspends its caller nor executes the child inline. Every
+scheduled task belongs to a group except the root task running async `main`.
+A group may be passed to its children so they can start further children in
+the same group. There is no operation to start a detached task or cancel an
+individual task through its handle.
+
+When the body completes normally, returns, breaks, or continues, the group
+waits for all its children before continuing that departure. This wait is
+called joining. During a normal join, running children may still start children
+in the group. Failure or cancellation stops admission of new children.
+Starting on an inactive, stopping, or exited group raises `RuntimeError`.
+
+A final exception from the body or a child stops admission, requests
+cancellation of the remaining children, and interrupts a still-active body at
+a cancellation checkpoint. The group joins its children, including their
+cleanup, before propagating its failure. Catching an exception obtained from
+a task handle does not clear its group's failure; a child must handle an
+expected error within its own body to complete successfully.
+
+`cancel` is idempotent while the group is active, including while it is joining.
+Calling it on an inactive or exited group raises `RuntimeError`. If the request
+interrupts the active body, the rest of that body is skipped. At its boundary,
+the group absorbs its own graceful stop and completes normally after joining,
+unless it has recorded a failure or cancellation from an outer group remains
+pending. An inner group cannot absorb an outer group's request.
+
+A stop requested during a join preserves any return, break, or continue already
+pending. After absorbing its own stop, the boundary continues that departure.
+Calling `cancel` is a request, not an immediate transfer: the caller can finish
+normally before reaching another checkpoint.
+
+### Cancellation and cleanup
+
+Cancellation is control flow outside the `Exception` hierarchy. It bypasses
+`except` handlers and unwinds through `finally` and `with` cleanup. A plain
+context manager's `exit` receives `None`, as for other control transfers.
+Suspension at an await does not exit active scopes.
+
+Requests retain the identity of their originating group. Delivery occurs at a
+suspended await, a later cancellation checkpoint, or the relevant group-exit
+boundary. An admitted task enters its body even if cancellation was requested
+before its first scheduled turn. Its initial synchronous setup runs before
+cancellation is delivered at its first await or group-exit checkpoint. A task
+that finishes without another checkpoint may complete normally despite the
+request.
+
+In async code, `finally` bodies and resource exits are protected from
+cancellation originating in enclosing scopes. This includes a first request
+arriving during cleanup entered by an ordinary return or exception. Cleanup
+may await. A group entered inside that protected cleanup can still interrupt
+its own body for its own failure or stop; outer cancellation does not cancel
+that protected group's children. Groups outside that protection still receive
+cancellation. Pending outer requests survive inner boundaries and resume
+propagation when protection is left.
+
+A join of a group not protected from an outer request stops its children and
+waits for their cleanup. A protected group's join waits for its children
+normally. Interruption never abandons a join.
+
+Cancellation cannot forcibly interrupt synchronous work. Cleanup that does not
+finish can keep a group from exiting. There is no cleanup deadline or public
+operation for shielding, suppressing, or clearing cancellation. `sys.exit` and
+the fatal failures in §10 retain their immediate process-ending behavior.
+
+### Competing failures
+
+Within a task, ordinary `try` and `finally` rules apply: a cleanup exception
+can replace that task's pending exception. The group observes a child's final
+exception when the task completes, or the body's final exception when it
+departs after its cleanup.
+
+The first final exception observed by the group is its failure. Later failures
+do not replace it and are neither aggregated nor automatically logged. This
+includes later failures from another child's cleanup. Observation order depends
+on scheduling and I/O; it is not promised to be the same across runs. A
+`finally` outside the group may replace its propagated failure as usual.
+
+An outer cancellation request remains pending if an inner group also fails.
+The exact delivery order in that case is an
+[open design question](../agents/todo.md#async-support); all children must be
+joined, and failure reporting must not erase the outer request.
+
+### Static checking across a group
+
+A graceful stop can exit a group's body normally at a cancellation checkpoint.
+Definite assignment, narrowing, and control-transfer checking merge these
+possible exits with ordinary completion. Assignments before the first
+checkpoint remain definite, but an assignment or return only after a possible
+graceful exit is not guaranteed to run. A nested group's implicit join can
+also be a checkpoint for an enclosing group.
+
+For example, a value assigned only after an await in the body cannot be assumed
+assigned after the group. Likewise, a return after that await does not by
+itself satisfy the enclosing function's requirement to return on every path.
+A return whose expression has finished and is already pending during the join
+is preserved. Interruption for a failure leaves by exception, rather than
+creating a normal exit.
+
+Captured-variable narrowing is removed at every await and implicit join (§9).
+
+### Async I/O boundaries
+
+Async I/O uses explicit async APIs and handle types. Calling a synchronous
+library operation from an async function never makes that operation suspend
+cooperatively. Plain `with` remains suitable for handles whose closing is
+synchronous.
+
+A caller must scope or hand off an acquired resource before its next await.
+For example, after accepting a connection it may immediately pass it to
+`group.start(serve(connection))`, where `serve` enters `with connection:`
+before its first await. The admitted-task startup rule lets that cleanup scope
+be established even under a pending cancellation request. Starting a task does
+not automatically manage resources passed as its arguments.
+
+Async native operations must either deliver an acquired resource to the caller
+or release it on interruption. Cancellation removes pending I/O waits. A
+cancelled send that may have sent partial data makes the connection unusable,
+as a failed `sendall` does in §14. Closing an async handle wakes pending
+operations, which raise `ValueError` with that handle's closed-handle message.
+Closing must not leave a wait attached to a reused file descriptor.
+
+The first async I/O APIs and their nonblocking implementations remain
+[open questions](../agents/todo.md#async-support).
 
 ## References
 

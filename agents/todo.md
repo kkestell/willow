@@ -4,6 +4,57 @@ Completed slices record the implementation history. Older section numbers refer
 to the specification at the time. New milestones reference `docs/spec.md`, which
 owns language and library semantics.
 
+## Async support
+
+- [ ] Implement the agreed async model in [spec §15](../docs/spec.md#15-asynchronous-execution).
+  The specification records the language contract; the questions below remain
+  open before choosing implementation slices.
+
+### Open design decisions
+
+- **Outer cancellation and inner failure.** If an inner group finishes with an
+  exception while its owner has a pending outer cancellation request, what is
+  delivered first, and where is the exception observed? Preserve the outer
+  request and join all children. Specify this without introducing exception
+  aggregation or accidentally swallowing cancellation.
+- **First useful workload and library surface.** Choose a concrete server,
+  network client, or subprocess workload and the async operations it needs.
+  Timers and TCP are a candidate starting point, not a settled scope. Define
+  the async API names, handle operations, and timeout behavior together.
+- **Scheduling and progress.** Decide the ready-task policy and whether an
+  explicit operation to yield is needed. The spec makes await a cancellation
+  checkpoint without promising that awaiting a ready result suspends.
+- **Async tests and diagnostics.** Decide how `willow test` discovers and drives
+  async tests. Define traceback frames across task and await boundaries,
+  including repeatedly observing a failed task's outcome.
+
+### Implementation questions
+
+- **Cancellation and cleanup.** Design the runtime representation of request
+  origins and cleanup protection. A single undifferentiated cancel flag does
+  not express the agreed nested behavior. Prototype simultaneous inner/outer
+  cancellation, a first request during ordinary `finally`, and a group created
+  inside protected cleanup. Neither the representation nor its cost has been
+  validated.
+- **Compiler control flow.** Work out how graceful exits at checkpoints join
+  definite-assignment, narrowing, and return states. Preserve assignments
+  before the first checkpoint and transfers already pending during a join.
+  Keep task-group lowering distinct from the current non-suppressing `with`.
+- **Event loop and host integration.** Choose how shared readiness waits and
+  timers drive the Lua coroutines. Existing TCP descriptors are nonblocking,
+  but their operation-level waits block; host-name resolution uses blocking
+  `getaddrinfo`, HTTP uses `curl_easy_perform`, and file/process operations
+  need their own integration. Async wrappers alone do not solve those waits.
+- **Resource ownership.** Validate cancellation before an admitted handler's
+  first turn, interrupted acquisition and partial sends, and close during a
+  pending wait. A long-running group should retain unfinished children, not
+  every completed task and its result.
+
+Use a few representative compiler/runtime tests when implementing these
+decisions: a server failure that wakes an accepting group body, graceful
+shutdown, nested cleanup, resource handoff, failure precedence, and static
+rejection of assignments or returns skipped by graceful cancellation.
+
 ## First slice
 
 - [x] Scaffold
