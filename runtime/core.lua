@@ -434,6 +434,22 @@ end
 -- implementation's default.
 local __wlo_omitted = {}
 
+-- The Lua iterator of a `for` loop over an iterable whose iterator is
+-- `iterator`: each step calls `advance(iterator, site)`. Only StopIteration
+-- from that call ends the loop; other errors propagate with the frames
+-- `__wlo_catch` records where they happened.
+local function __wlo_iterate(advance, iterator, site)
+  return function()
+    local ok, value = xpcall(advance, __wlo_catch, iterator, site)
+    if ok then
+      return true, value
+    elseif value.__wlo_class == "StopIteration" then
+      return nil
+    end
+    error(value, 0)
+  end
+end
+
 -- `kind` is a Lua type name, "box", "bytes", "list", "dict", or "tuple".
 local function __wlo_isinstance(value, kind)
   if type(value) ~= "table" then

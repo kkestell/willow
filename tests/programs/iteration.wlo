@@ -1,0 +1,93 @@
+class Countdown:
+    n: int
+
+    def iter(self) -> Countdown:
+        return self
+
+    def next(self) -> int:
+        if self.n == 0:
+            raise StopIteration("")
+        self.n = self.n - 1
+        return self.n + 1
+
+# Each traversal starts over.
+class Bag:
+    size: int
+
+    def iter(self) -> Countdown:
+        return Countdown(self.size)
+
+class Faulty:
+    n: int
+
+    def iter(self) -> Faulty:
+        return self
+
+    def next(self) -> int:
+        raise ValueError("broken")
+
+class Pairs:
+    left: int
+
+    def iter(self) -> Pairs:
+        return self
+
+    def next(self) -> tuple[str, int]:
+        if self.left == 0:
+            raise StopIteration("")
+        self.left = self.left - 1
+        return ("p", self.left)
+
+def sum_all(xs: Iterable[int]) -> int:
+    sum = 0
+    for x in xs:
+        sum = sum + x
+    return sum
+
+def total[T: Iterable[int]](xs: T) -> int:
+    sum = 0
+    for x in xs:
+        sum = sum + x
+    return sum
+
+def main() -> None:
+    for n in Countdown(3):
+        print(n)
+    bag = Bag(2)
+    for n in bag:
+        print(n)
+    for n in bag:
+        print(n)
+    print(sum_all(Bag(4)))
+    print(total(Bag(3)))
+
+    # An early exit leaves the iterator where it stopped.
+    counter = Countdown(5)
+    for n in counter:
+        if n == 4:
+            break
+    print(next(counter))
+    for n in counter:
+        print(n)
+
+    it = iter(Bag(1))
+    print(next(it))
+    try:
+        next(it)
+    except StopIteration:
+        print("exhausted")
+
+    try:
+        for n in Countdown(2):
+            raise StopIteration("from the body")
+    except StopIteration as error:
+        print(error.message)
+
+    try:
+        for n in Faulty(0):
+            print(n)
+    except ValueError as failure:
+        print(failure.message)
+
+    for name, left in Pairs(2):
+        print(f"{name} {left}")

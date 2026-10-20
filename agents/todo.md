@@ -425,7 +425,7 @@ example changes it lists. New Rosetta Code examples go in
     over `Rect` and a new `Circle` class
 
 - [ ] Extensible iteration, `iter`, `next`, and reusable range values (spec §8, §11, §14)
-  - [ ] `iter` and `next` built-ins and `StopIteration`; `for` over any
+  - [x] `iter` and `next` built-ins and `StopIteration`; `for` over any
     `Iterable[T]`, ended only by `StopIteration` from advancement and
     leaving iterators resumable after an early exit; user-defined iterators
     and iterables

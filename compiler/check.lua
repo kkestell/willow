@@ -66,6 +66,29 @@ local function item_type(type)
   return list_element(type)
 end
 
+-- The signature of method `name` on `t`, through its bound for a type
+-- parameter, or nil.
+local function method_of(t, name)
+  return types.method(t.bound or t, name)
+end
+
+-- The iterator and item types of `t` when it satisfies `Iterable[T]`, or nil.
+local function iteration(t)
+  local iter = method_of(t, "iter")
+  local next = iter and method_of(iter.result, "next")
+  if next and types.assignable(types.protocol(stdlib.protocols.Iterable, { next.result }), t) then
+    return iter.result, next.result
+  end
+end
+
+-- The item type of `t` when it satisfies `Iterator[T]`, or nil.
+local function advancement(t)
+  local next = method_of(t, "next")
+  if next and types.assignable(types.protocol(stdlib.protocols.Iterator, { next.result }), t) then
+    return next.result
+  end
+end
+
 -- Parameter types, result types, and parameter names of the string methods.
 local STRING_METHODS = {
   startswith = { { types.str }, types.bool, { "prefix" } },
@@ -562,7 +585,7 @@ local function check_function(fn, entry)
   -- `in_loop` is this count at the innermost loop, or false outside loops.
   local finally_depth = 0
 
-  local check_expression
+  local check_expression, check_method
   -- The number of calls checked so far.
   local calls = 0
 
@@ -612,6 +635,75 @@ local function check_function(fn, entry)
       end
     end
     return choose_type_args(node, name, fn.typevars, candidates)
+  end
+
+  -- Checks method call `node` on an object of type `object`, whose expression
+  -- is already checked, and returns the call's type.
+  check_method = function(node, object, state, expected)
+    if object.bound then
+      -- A bounded type parameter has its bound's methods.
+      object = object.bound
+      node.receiver = object
+    end
+    local method = class_method(object, node.name)
+    local params, result, names, defaults, inferred
+    if object.kind == "protocol" then
+      -- A protocol value exposes only its declared methods.
+      local signature = types.method(object, node.name)
+      if not signature then
+        diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
+      end
+      bind_args(node, node.name, signature.params, "parameter")
+      params, result = {}, signature.result
+      for i, param in ipairs(signature.params) do
+        params[i] = param.type
+      end
+      node.protocol = object.protocol
+    elseif method then
+      -- A declared method binds its arguments to the parameters after `self`,
+      -- with its class's type parameters replaced by the object's arguments
+      -- and its own inferred.
+      local class_map, rest = types.record_map(object), {}
+      for i = 2, #method.params do
+        local param = method.params[i]
+        rest[i - 1] = {
+          name = param.name, default = param.default, keyword_only = param.keyword_only,
+          type = types.substitute(param.type, class_map),
+        }
+      end
+      bind_args(node, node.name, rest, "parameter")
+      result = types.substitute(method.return_type, class_map)
+      inferred = method.typevars ~= nil
+      if inferred then
+        local map = infer_call(node, node.name, rest, { typevars = method.typevars, return_type = result }, state, expected)
+        for _, param in ipairs(rest) do
+          param.type = types.substitute(param.type, map)
+        end
+        result = types.substitute(result, map)
+      end
+      params = {}
+      for i, param in ipairs(rest) do
+        params[i] = param.type
+      end
+      node.method = method
+    else
+      params, result, names, defaults = method_signature(object, node.name)
+      if not params then
+        diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
+      end
+      if object.kind == "list" and node.name == "sort" then
+        bind_args(node, node.name, SORT_PARAMS, "parameter")
+        check_sortable(node, object)
+      else
+        local signature = { params = params, names = names, defaults = defaults }
+        bind_args(node, node.name, builtin_params(signature), names and "parameter")
+      end
+    end
+    for _, i in ipairs(evaluation_order(node)) do
+      local arg = node.args[i]
+      expect_type(arg, params[i], inferred and arg.type or check_expression(arg, state, params[i]))
+    end
+    return result
   end
 
   -- Returns the type of `node` in `state`, then the facts that hold when it is
@@ -755,7 +847,14 @@ local function check_function(fn, entry)
         and not index_types(arg_type) then
         diag.error(node.span, "'len' cannot be applied to " .. arg_type.name)
       end
-      if builtin and name == "sorted" then
+      if builtin and (name == "iter" or name == "next") then
+        -- `iter(x)` is `x.iter()` and `next(x)` is `x.next()`.
+        if not (name == "iter" and iteration or advancement)(arg_type) then
+          diag.error(node.span, "'" .. name .. "' cannot be applied to " .. arg_type.name)
+        end
+        node.kind, node.object, node.args, node.target = "MethodCall", node.args[1], {}, nil
+        type = check_method(node, arg_type, state, expected)
+      elseif builtin and name == "sorted" then
         check_sortable(node.args[1], arg_type)
         type = arg_type
       elseif builtin then
@@ -963,71 +1062,7 @@ local function check_function(fn, entry)
       end
       type = object
     elseif kind == "MethodCall" then
-      local object = check_expression(node.object, state)
-      if object.bound then
-        -- A bounded type parameter has its bound's methods.
-        object = object.bound
-        node.receiver = object
-      end
-      local method = class_method(object, node.name)
-      local params, result, names, defaults, inferred
-      if object.kind == "protocol" then
-        -- A protocol value exposes only its declared methods.
-        local signature = types.method(object, node.name)
-        if not signature then
-          diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
-        end
-        bind_args(node, node.name, signature.params, "parameter")
-        params, result = {}, signature.result
-        for i, param in ipairs(signature.params) do
-          params[i] = param.type
-        end
-        node.protocol = object.protocol
-      elseif method then
-        -- A declared method binds its arguments to the parameters after `self`,
-        -- with its class's type parameters replaced by the object's arguments
-        -- and its own inferred.
-        local class_map, rest = types.record_map(object), {}
-        for i = 2, #method.params do
-          local param = method.params[i]
-          rest[i - 1] = {
-            name = param.name, default = param.default, keyword_only = param.keyword_only,
-            type = types.substitute(param.type, class_map),
-          }
-        end
-        bind_args(node, node.name, rest, "parameter")
-        result = types.substitute(method.return_type, class_map)
-        inferred = method.typevars ~= nil
-        if inferred then
-          local map = infer_call(node, node.name, rest, { typevars = method.typevars, return_type = result }, state, expected)
-          for _, param in ipairs(rest) do
-            param.type = types.substitute(param.type, map)
-          end
-          result = types.substitute(result, map)
-        end
-        params = {}
-        for i, param in ipairs(rest) do
-          params[i] = param.type
-        end
-        node.method = method
-      else
-        params, result, names, defaults = method_signature(object, node.name)
-        if not params then
-          diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
-        end
-        if object.kind == "list" and node.name == "sort" then
-          bind_args(node, node.name, SORT_PARAMS, "parameter")
-          check_sortable(node, object)
-        else
-          local signature = { params = params, names = names, defaults = defaults }
-          bind_args(node, node.name, builtin_params(signature), names and "parameter")
-        end
-      end
-      for _, i in ipairs(evaluation_order(node)) do
-        local arg = node.args[i]
-        expect_type(arg, params[i], inferred and arg.type or check_expression(arg, state, params[i]))
-      end
-      type = result
+      type = check_method(node, check_expression(node.object, state), state, expected)
     elseif kind == "ListDisplay" then
       type = display_member(expected, "list")
       local element = type and list_element(type)
@@ -1343,13 +1378,23 @@ local function check_function(fn, entry)
         else
           item = iterable_type == types.bytes and types.int or item_type(iterable_type)
         end
+        local iterator = not item and not message and iteration(iterable_type)
+        if iterator then
+          -- The loop calls `iter` once and `next` before each step.
+          local iter_call = { kind = "MethodCall", object = iterable, name = "iter", args = {}, span = iterable.span }
+          iter_call.type = check_method(iter_call, iterable_type, state)
+          local next_call = { kind = "MethodCall", name = "next", args = {}, span = statement.span }
+          next_call.type = check_method(next_call, iterator, state)
+          statement.iter_call, statement.next_call, item = iter_call, next_call, next_call.type
+          calls = calls + 1
+        end
         if not item then
           diag.error(iterable.span, "cannot iterate over " .. iterable_type.name .. (message and ": " .. message or ""))
         end
       end
       statement.type = item
       forget_narrowing(state, { statement })
-      if statement.calls then
+      if statement.calls or statement.iter_call then
         forget_captured(state)
       end
       local body_state = copy(state)

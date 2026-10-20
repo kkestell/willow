@@ -1,0 +1,3 @@
+iteration_traceback.wlo:8:9: error: ValueError: broken
+  in Faulty.next at iteration_traceback.wlo:8:9
+  called from main at iteration_traceback.wlo:11:5

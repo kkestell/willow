@@ -237,6 +237,16 @@ local function lower_function(fn, sites, helpers, protocols)
 
   local lower_node, lower_value, lower_operand, lower_object
 
+  -- The converter of the type of `object`, an operand, for method `name` of
+  -- `protocol`, whose table the program then gets.
+  local function dispatch(protocol, object, name)
+    if not protocols[protocol] then
+      protocols[protocol] = true
+      protocols[#protocols + 1] = protocol
+    end
+    return { kind = "Dispatch", protocol = protocol, object = object, name = name }
+  end
+
   -- The text of an evaluated operand of a printable type, as print writes it.
   local function text(operand, type)
     if type == types.str then
@@ -484,12 +494,7 @@ local function lower_function(fn, sites, helpers, protocols)
       end
       sites[#sites + 1] = node.span
       args[#args + 1] = { kind = "Literal", value = #sites }
-      if not protocols[node.protocol] then
-        protocols[node.protocol] = true
-        protocols[#protocols + 1] = node.protocol
-      end
-      local callee = { kind = "Dispatch", protocol = node.protocol, object = object, name = node.name }
-      return { kind = "Call", callee = callee, args = args, span = node.span }
+      return { kind = "Call", callee = dispatch(node.protocol, object, node.name), args = args, span = node.span }
     elseif kind == "MethodCall" then
       local object = lower_operand(node.object)
       local args = lower_args(node)
@@ -659,6 +664,19 @@ local function lower_function(fn, sites, helpers, protocols)
         end
         args[3] = args[3] or { kind = "Literal", value = 1 }
         node.iterator = helper("range", args, iterable.span)
+      elseif statement.iter_call then
+        -- The iterator's `next` is found once and called for each step.
+        local iterator = lower_operand(statement.iter_call)
+        local next_call, callee = statement.next_call, nil
+        if next_call.protocol then
+          callee = dispatch(next_call.protocol, iterator, "next")
+        elseif next_call.method then
+          callee = { kind = "FunctionValue", target = next_call.method }
+        else
+          callee = { kind = "HelperValue", name = prefix(next_call.receiver or statement.iter_call.type) .. "next" }
+          helpers[callee.name] = true
+        end
+        node.iterator = helper("iterate", { callee, iterator }, statement.span)
       else
         local name = prefix(iterable.type) .. "items"
         local value = lower_operand(iterable)

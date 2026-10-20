@@ -28,6 +28,8 @@ local builtins = builtins_of({
   int = { params = { "any" }, result = types.int },
   float = { params = { "any" }, result = types.float },
   len = { params = { "any" }, result = types.int },
+  iter = { params = { "any" } },
+  next = { params = { "any" } },
   range = {},
   input = { params = {}, result = optional_str },
   ord = { params = { types.str }, result = types.int },
@@ -59,7 +61,7 @@ end
 -- The built-in exception classes.
 local exceptions = {}
 M.exceptions = exceptions
-for name in ("Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError TimeoutError"):gmatch("%S+") do
+for name in ("Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError TimeoutError StopIteration"):gmatch("%S+") do
   exceptions[name] = exception(name, name)
 end
 

@@ -915,6 +915,12 @@ return {
     eq("9:21: operator '+' cannot be applied to int | None and int",
       check_errors(in_main(capture .. "if x is not None:\n    try:\n        g()\n    except ValueError:\n"
         .. "        print(x + 1)", H)))
+    -- A `for` over an iterable calls its `iter` and `next`.
+    local C = H .. "class C:\n    n: int\n\n    def iter(self) -> C:\n        return self\n\n"
+      .. "    def next(self) -> int:\n        return 1\n"
+    eq("11:21: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main(capture .. "c = C(1)\nif x is not None:\n    try:\n        for y in c:\n            pass\n"
+        .. "    except ValueError:\n        print(x + 1)", C)))
     -- Arguments are checked in the order they are written.
     local K = H .. "def k(a: int, b: bool, c: int) -> None:\n    pass\n"
     eq("6:22: operator '+' cannot be applied to int | None and int",
@@ -1052,6 +1058,14 @@ return {
     eq("9:9: type argument int does not satisfy the bound Shape of 'T'", check_errors(B .. in_main("x = total([1])")))
     eq("4:14: type Shape has no field 'width'", check_errors("protocol Shape:\n    def area(self) -> float\n"
       .. "def f[T: Shape](x: T) -> float:\n    return x.width\n" .. MAIN))
+
+    eq("2:9: 'iter' cannot be applied to int", check_errors(in_main("x = iter(1)")))
+    local Q = "class Q:\n    n: int\n\n    def next(self) -> int:\n        return 1\n"
+    eq("7:9: 'next' cannot be applied to Q", check_errors(Q .. in_main("x = next(Q(1))")))
+    eq("7:14: cannot iterate over Q", check_errors(Q .. in_main("for x in Q(1):\n    pass")))
+    local X = "def f(xs: Iterable[int]) -> None:\n"
+    eq("3:18: expected str, received int", check_errors(X .. "    for x in xs:\n        s: str = x\n" .. MAIN))
+    eq("2:14: expected str, received int", check_errors(X .. "    s: str = next(iter(xs))\n" .. MAIN))
 
     -- A converter cannot change a float's representation at a position typed
     -- by a type parameter, or between protocols.

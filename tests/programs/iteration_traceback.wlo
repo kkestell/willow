@@ -1,0 +1,12 @@
+class Faulty:
+    n: int
+
+    def iter(self) -> Faulty:
+        return self
+
+    def next(self) -> int:
+        raise ValueError("broken")
+
+def main() -> None:
+    for n in Faulty(0):
+        print(n)
