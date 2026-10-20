@@ -400,27 +400,33 @@ example changes it lists. New Rosetta Code examples go in
     generic functions as values specialized by explicit arguments or an
     expected callable type; Rosetta Code "Parametric polymorphism"
 
-- [ ] Structural protocols and the `typing` module (spec §3, §14)
-  - [ ] Protocol declarations and satisfaction: `class P(typing.Protocol)`
-    with `pass`-bodied method signatures; generic and self-referential
+- [ ] Structural protocols, standard protocols, and callable type syntax (spec §2–5)
+  - [x] Protocol declarations and satisfaction: reserve `protocol`;
+    `protocol P:` declarations of bodiless method signatures, without
+    method type parameters; generic and self-referential
     protocols; compatibility for classes, native types, and other protocols
     after substitution (broader arguments, narrower returns, matching keyword
     names, no extra required arguments); protocol assignability; no
     construction, fields, or `isinstance`
+  - [ ] Callable type syntax: `(A, B, ...) -> R` annotations in place of
+    `typing.Callable[[A, B, ...], R]`, with the return type extending as far as
+    possible and parentheses grouping a type, as in `((int) -> str) | None`;
+    callable type names in diagnostics; remove the `typing` module; update the
+    examples and tests that import it
   - [ ] Protocol values: a protocol value is the underlying value, and each
     call dispatches on its run-time type through a generated converter per
     type and protocol that supplies implementation defaults and extra
     optional parameters and converts arguments and results; run-time tags
     for the built-in and native values that need them; only declared methods
     exposed
-  - [ ] `typing.Iterable`, `Iterator`, `ContextManager`, and `Generator` as
-    standard protocols; protocol bounds on type parameters; a `Shape`
+  - [ ] Built-in standard protocols `Iterable`, `Iterator`, `ContextManager`,
+    and `Generator`, reserved like `list`; protocol bounds on type parameters; a `Shape`
     protocol in `shapes.wlo`
     over `Rect` and a new `Circle` class
 
 - [ ] Extensible iteration, `iter`, `next`, and reusable range values (spec §8, §11, §14)
   - [ ] `iter` and `next` built-ins and `StopIteration`; `for` over any
-    `typing.Iterable[T]`, ended only by `StopIteration` from advancement and
+    `Iterable[T]`, ended only by `StopIteration` from advancement and
     leaving iterators resumable after an early exit; user-defined iterators
     and iterables
   - [ ] Built-in iterables: `iter` methods on lists, dicts, strings, bytes, and
@@ -447,7 +453,7 @@ example changes it lists. New Rosetta Code examples go in
     "Generator/Exponential"
 
 - [ ] Context managers, `with`, and scoped library resources (spec §8, §14)
-  - [ ] `with` statements: managers satisfying `typing.ContextManager[T]`;
+  - [ ] `with` statements: managers satisfying `ContextManager[T]`;
     name and tuple-pattern targets; left-to-right entry and right-to-left exit,
     including after a failed entry; `exit` once with the pending exception or
     `None` on every departure; exit errors replacing the pending exception or

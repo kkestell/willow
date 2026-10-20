@@ -82,7 +82,7 @@ local function lookup(from, module, name, span)
   return declaration
 end
 
--- Returns the record, enum, alias, or `typing.Callable` that `ref`, a `{ name, module, span }` in a type,
+-- Returns the record, protocol, enum, alias, or `typing.Callable` that `ref`, a `{ name, module, span }` in a type,
 -- an `except` clause, or `isinstance`, names. These are found through
 -- file-level declarations, imports, and built-in exception classes, which
 -- locals never shadow.
@@ -98,7 +98,7 @@ local function resolve_named(ref, module)
     declaration = module.declarations[ref.name] or exceptions[ref.name]
   end
   local kind = declaration and declaration.kind
-  if not (kind == "Record" or kind == "Enum" or kind == "Alias" or kind == "Callable") then
+  if not (kind == "Record" or kind == "Protocol" or kind == "Enum" or kind == "Alias" or kind == "Callable") then
     diag.error(ref.span, "unknown type '" .. (ref.module and ref.module .. "." or "") .. ref.name .. "'")
   end
   return declaration
@@ -141,7 +141,7 @@ local function type_text(node, module)
       names[i] = type_text(element, module)
     end
     return "typing.Callable[[" .. table.concat(names, ", ") .. "], " .. type_text(args[2], module) .. "]"
-  elseif (declaration.kind == "Record" or declaration.kind == "Alias") and args then
+  elseif (declaration.kind == "Record" or declaration.kind == "Protocol" or declaration.kind == "Alias") and args then
     local names = {}
     for i, arg in ipairs(args) do
       names[i] = type_text(arg, module)
@@ -200,6 +200,10 @@ local function enter_type_params(fn)
   end
   return outer
 end
+
+-- Whether method signatures are resolved, so that unions with protocol members
+-- can be checked for overlap. Until then those checks wait in `waiting`.
+local ready, waiting = false, {}
 
 -- How many generic alias applications enclose each alias body's type scope.
 local alias_depth = {}
@@ -275,21 +279,31 @@ resolve_type = function(node, module, name)
       local named = member.kind == "Type" and not member.module and type_scope[member.name]
       substituted = substituted or named and named.kind ~= "typevar"
     end
-    local members = {}
+    local members, spans, protocol = {}, {}, false
     for _, member in ipairs(node.members) do
       for _, m in ipairs(types.members(resolve_type(member, module))) do
         local held = false
         for _, other in ipairs(substituted and members or {}) do
           held = held or types.same(other, m)
         end
-        local message = not held and types.conflict(members, m)
-        if message then
-          diag.error(member.span, message)
-        end
         if not held then
-          members[#members + 1] = m
+          members[#members + 1], spans[#members + 1] = m, member.span
+          protocol = protocol or m.kind == "protocol"
         end
       end
+    end
+    local function check_overlap()
+      for i = 2, #members do
+        local message = types.conflict({ unpack(members, 1, i - 1) }, members[i])
+        if message then
+          diag.error(spans[i], message)
+        end
+      end
+    end
+    if ready or not protocol then
+      check_overlap()
+    else
+      waiting[#waiting + 1] = check_overlap
     end
     local union = types.union(members, name)
     for _, m in ipairs(members) do
@@ -352,6 +366,8 @@ resolve_type = function(node, module, name)
     end
     if declaration.kind == "Alias" then
       return apply_alias(declaration, resolved, node.span)
+    elseif declaration.kind == "Protocol" then
+      return types.protocol(declaration, resolved)
     end
     return types.generic(declaration, resolved)
   elseif args then
@@ -478,6 +494,9 @@ local function resolve_signature(fn, module)
   fn.return_type = resolve_type(fn.return_type, module)
   type_scope = outer
 end
+
+-- The declaration kinds that name no function or class to call.
+local CANNOT_CALL = { Alias = true, Enum = true, Callable = true, Protocol = true }
 
 local function is_generic(declaration)
   return declaration and (declaration.kind == "Function" or declaration.kind == "Record")
@@ -642,7 +661,7 @@ local function resolve_function(fn, scope, module)
       node.target = node.target or declarations[node.name] or builtins[node.name] or exceptions[node.name]
       if not node.target then
         diag.error(node.span, "unknown function '" .. node.name .. "'")
-      elseif node.target.kind == "Alias" or node.target.kind == "Enum" or node.target.kind == "Callable" then
+      elseif CANNOT_CALL[node.target.kind] then
         diag.error(node.span, node.target.kind:lower() .. " '" .. node.name .. "' cannot be called")
       end
       for _, arg in ipairs(node.args) do
@@ -661,7 +680,7 @@ local function resolve_function(fn, scope, module)
       node.kind = "Call"
       node.target = lookup(module, imported, node.name, node.span)
       node.name = path .. "." .. node.name
-      if node.target.kind == "Alias" or node.target.kind == "Enum" or node.target.kind == "Callable" then
+      if CANNOT_CALL[node.target.kind] then
         diag.error(node.span, node.target.kind:lower() .. " '" .. node.name .. "' cannot be called")
       end
       node.object = nil
@@ -686,6 +705,8 @@ local function resolve_function(fn, scope, module)
           diag.error(class.span, "alias '" .. class.name .. "' cannot be used in isinstance")
         elseif declaration.kind == "Callable" then
           diag.error(class.span, "typing.Callable cannot be used in isinstance")
+        elseif declaration.kind == "Protocol" then
+          diag.error(class.span, "protocol '" .. class.name .. "' cannot be used in isinstance")
         end
         class.record = declaration
       end
@@ -852,7 +873,7 @@ local function resolve_function(fn, scope, module)
   type_scope = outer_types
 end
 
--- Collects one module's imports, functions, records, enums, and aliases, which share one
+-- Collects one module's imports, functions, records, protocols, enums, and aliases, which share one
 -- namespace; clashes are reported in source order.
 local function declare(module, modules_by_name, entry)
   local ordered = {}
@@ -865,6 +886,9 @@ local function declare(module, modules_by_name, entry)
   end
   for _, record in ipairs(module.records) do
     ordered[#ordered + 1] = record
+  end
+  for _, protocol in ipairs(module.protocols) do
+    ordered[#ordered + 1] = protocol
   end
   for _, enum in ipairs(module.enums) do
     ordered[#ordered + 1] = enum
@@ -930,6 +954,16 @@ local function declare(module, modules_by_name, entry)
         end
         declaration.self_type = types.generic(declaration, declaration.typevars)
       end
+    elseif declaration.kind == "Protocol" then
+      declaration.type = types.protocol(declaration)
+      declaration.self_type = declaration.type
+      if #declaration.type_params > 0 then
+        declaration.typevars = {}
+        for i, param in ipairs(declaration.type_params) do
+          declaration.typevars[i] = types.typevar(param.name)
+        end
+        declaration.self_type = types.protocol(declaration, declaration.typevars)
+      end
     elseif declaration.kind == "Enum" then
       declaration.type = types.enum(declaration)
     elseif declaration.kind == "Function" then
@@ -946,7 +980,7 @@ function M.bind(modules, test)
   for _, module in ipairs(modules) do
     modules_by_name[module.name or ""] = module
   end
-  type_scope = {}
+  type_scope, ready, waiting = {}, false, {}
   for _, module in ipairs(modules) do
     declare(module, modules_by_name, entry)
   end
@@ -983,11 +1017,24 @@ function M.bind(modules, test)
         resolve_signature(method, module)
       end
     end
+    for _, protocol in ipairs(module.protocols) do
+      check_unique(protocol.methods, "method")
+      local outer = enter_type_params(protocol)
+      type_scope = outer
+      for _, method in ipairs(protocol.methods) do
+        method.class, method.module = protocol, module
+        resolve_signature(method, module)
+      end
+    end
     for _, fn in ipairs(module.functions) do
       resolve_signature(fn, module)
     end
   end
   force_pending()
+  ready = true
+  for _, check_overlap in ipairs(waiting) do
+    check_overlap()
+  end
   for _, module in ipairs(modules) do
     for _, record in ipairs(module.records) do
       for _, field in ipairs(record.fields) do
@@ -1000,6 +1047,15 @@ function M.bind(modules, test)
       for _, param in ipairs(fn.params) do
         if param.default then
           check_default(param, module)
+        end
+      end
+    end
+    for _, protocol in ipairs(module.protocols) do
+      for _, method in ipairs(protocol.methods) do
+        for _, param in ipairs(method.params) do
+          if param.default then
+            check_default(param, module)
+          end
         end
       end
     end

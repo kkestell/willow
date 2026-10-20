@@ -198,9 +198,9 @@ return {
   end,
 
   file_scope_holds_only_declarations = function()
-    eq("1:1: only function, class, enum, and type declarations are allowed at file scope", parse_error("x = 1\n"))
+    eq("1:1: only function, class, protocol, enum, and type declarations are allowed at file scope", parse_error("x = 1\n"))
     eq("1:1: 'from' is not supported", parse_error("from os import path\n"))
-    eq("1:5: only function, class, enum, and type declarations are allowed at file scope",
+    eq("1:5: only function, class, protocol, enum, and type declarations are allowed at file scope",
       parse_error("    def f() -> None:\n        pass\n"))
   end,
 
@@ -434,6 +434,16 @@ return {
     eq("2:5: exception class cannot declare field 'message'", parse_error("class E(Exception):\n    message: str\n"))
     eq("2:5: class bodies hold only field and method declarations", parse_error("class E:\n    pass\n"))
     eq("3:5: class bodies hold only field and method declarations", parse_error("class E(Exception):\n    x: int\n    pass\n"))
+  end,
+
+  protocols = function()
+    local program = parse("protocol P[T]:\n    def read(self, size: int) -> T\n    def close(self) -> None\n")
+    local protocol = program.protocols[1]
+    eq("P 1 2", protocol.name .. " " .. #protocol.type_params .. " " .. #protocol.methods)
+    eq(0, #program.records)
+    eq("2:5: protocols hold only method signatures", parse_error("protocol P:\n    x: int\n"))
+    eq("2:23: protocol methods have no bodies", parse_error("protocol P:\n    def f(self) -> int:\n        return 1\n"))
+    eq("2:11: protocol methods cannot be generic", parse_error("protocol P:\n    def f[T](self, x: T) -> T\n"))
   end,
 
   raise = function()

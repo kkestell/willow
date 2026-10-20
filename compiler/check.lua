@@ -440,9 +440,25 @@ local function collect(param, arg, candidates)
     for i, element in ipairs(param.elements) do
       collect(element, arg.elements[i], candidates)
     end
-  elseif param.args and arg.args and param.record == arg.record then
+  elseif types.generic_decl(param) and types.generic_decl(param) == types.generic_decl(arg) then
     for i, p in ipairs(param.args) do
       collect(p, arg.args[i], candidates)
+    end
+  elseif param.kind == "protocol" then
+    -- Another type serving a protocol matches it method by method, its
+    -- parameters by name.
+    for _, method in ipairs(param.protocol.methods) do
+      local want, have = types.method(param, method.name), types.method(arg, method.name)
+      if have then
+        for _, p in ipairs(want.params) do
+          for _, h in ipairs(have.params) do
+            if h.name == p.name then
+              collect(p.type, h.type, candidates)
+            end
+          end
+        end
+        collect(want.result, have.result, candidates)
+      end
     end
   elseif param.kind == "callable" and (arg.kind == "callable" or arg.kind == "function") then
     local params, result = arg.params, arg.result
@@ -945,6 +961,9 @@ local function check_function(fn, entry)
         -- A bounded type parameter has its bound's methods.
         object = object.bound
         node.receiver = object
+      end
+      if object.kind == "protocol" then
+        diag.error(node.span, "method calls on protocol values are not supported yet")
       end
       local method = class_method(object, node.name)
       local params, result, names, defaults, inferred

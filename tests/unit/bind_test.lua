@@ -575,4 +575,16 @@ return {
     eq("5:15: dictionary keys must be int, str, or an enum",
       bind_error(E .. "def f(d: dict[E | F, int]) -> None:\n    pass\n" .. MAIN))
   end,
+  protocols = function()
+    local P = "protocol P:\n    def area(self) -> int\n"
+    local C = "class C:\n    n: int\n\n    def area(self) -> int:\n        return self.n\n"
+    eq("4:9: protocol 'P' cannot be called", bind_error(P .. "def main() -> None:\n    x = P()\n"))
+    eq("4:23: protocol 'P' cannot be used in isinstance", bind_error(P .. "def main() -> None:\n    x = isinstance(1, P)\n"))
+    eq("4:9: protocol 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
+    eq("3:10: duplicate protocol 'P'", bind_error(P .. P .. MAIN))
+    eq("8:14: union members C and P overlap", bind_error(P .. C .. "def f(x: C | P) -> None:\n    pass\n" .. MAIN))
+    eq("typing.Callable[[P], None]",
+      bind_source("import typing\n" .. P .. "def f(x: typing.Callable[[P], None]) -> None:\n    pass\n" .. MAIN)
+        .functions[1].params[1].type.name)
+  end,
 }

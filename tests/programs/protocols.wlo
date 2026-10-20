@@ -1,0 +1,47 @@
+import io
+
+protocol Shape:
+    def area(self) -> float
+    def scaled(self, factor: float) -> Shape
+
+protocol Writer:
+    def write_text(self, text: str) -> None
+
+protocol Source[T]:
+    def get(self) -> T
+
+class Rect:
+    width: float
+    height: float
+
+    def area(self) -> float:
+        return self.width * self.height
+
+    def scaled(self, factor: float, *, square: bool = False) -> Rect:
+        return Rect(self.width * factor, self.height * factor)
+
+class Circle:
+    radius: float
+
+    def area(self) -> float:
+        return 3.0 * self.radius * self.radius
+
+    def scaled(self, factor: float) -> Circle:
+        return Circle(self.radius * factor)
+
+    def get(self) -> float:
+        return self.radius
+
+def keep(shape: Shape) -> Shape:
+    return shape
+
+def fallback[T](source: Source[T], value: T) -> T:
+    return value
+
+def main() -> None:
+    shapes: list[Shape] = [Rect(2.0, 3.0), keep(Circle(1.0))]
+    out: Writer = io.stdout()
+    maybe: Shape | None = None
+    print(len(shapes))
+    print(maybe is None)
+    print(fallback(Circle(4.0), 2.5))

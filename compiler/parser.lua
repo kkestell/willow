@@ -794,8 +794,8 @@ function M.parse(tokens)
   end
 
   -- A method's first parameter is `self`, which has no annotation; bind gives
-  -- it the class's type.
-  parse_function = function(method)
+  -- it the class's type. A `signature` ends at its return type, with no body.
+  parse_function = function(method, signature)
     advance()
     local name = expect("NAME", "a function name")
     local type_params = parse_type_params()
@@ -846,9 +846,41 @@ function M.parse(tokens)
     end
     expect("->")
     local return_type = parse_type()
+    local body
+    if signature then
+      if peek().kind == ":" then
+        diag.error(peek().span, "protocol methods have no bodies")
+      end
+      expect("NEWLINE", "end of line")
+    else
+      body = parse_block()
+    end
     return ast.node("Function", name.span, {
-      name = name.value, type_params = type_params, params = params, return_type = return_type, body = parse_block(),
+      name = name.value, type_params = type_params, params = params, return_type = return_type, body = body,
     })
+  end
+
+  -- A protocol holds method signatures, which have no bodies.
+  local function parse_protocol()
+    advance()
+    local name = expect("NAME", "a protocol name")
+    local type_params = parse_type_params()
+    expect(":")
+    expect("NEWLINE", "end of line")
+    expect("INDENT", "an indented block")
+    local methods = {}
+    repeat
+      local token = peek()
+      if token.kind ~= "def" then
+        diag.error(token.span, "protocols hold only method signatures")
+      end
+      local method = parse_function(true, true)
+      if #method.type_params > 0 then
+        diag.error(method.type_params[1].span, "protocol methods cannot be generic")
+      end
+      methods[#methods + 1] = method
+    until accept("DEDENT")
+    return ast.node("Protocol", name.span, { name = name.value, type_params = type_params, methods = methods })
   end
 
   -- An exception class has `message: str` as its first field and may have a
@@ -935,7 +967,7 @@ function M.parse(tokens)
     imports[#imports + 1] = { name = table.concat(names, "."), root = name.value, span = name.span }
   end
 
-  local functions, records, enums, aliases = {}, {}, {}, {}
+  local functions, records, protocols, enums, aliases = {}, {}, {}, {}, {}
   while peek().kind ~= "EOF" do
     local token = peek()
     if token.kind == "import" then
@@ -944,6 +976,8 @@ function M.parse(tokens)
       functions[#functions + 1] = parse_function()
     elseif token.kind == "class" then
       records[#records + 1] = parse_record()
+    elseif token.kind == "protocol" then
+      protocols[#protocols + 1] = parse_protocol()
     elseif token.kind == "enum" then
       enums[#enums + 1] = parse_enum()
     elseif token.kind == "type" then
@@ -956,12 +990,12 @@ function M.parse(tokens)
       expect("NEWLINE", "end of line")
     else
       reject_unsupported(token)
-      diag.error(token.span, "only function, class, enum, and type declarations are allowed at file scope")
+      diag.error(token.span, "only function, class, protocol, enum, and type declarations are allowed at file scope")
     end
   end
   local path = peek().span.path
   return ast.node("Program", span.new(1, 1, 1, 0, path),
-    { imports = imports, functions = functions, records = records, enums = enums, aliases = aliases })
+    { imports = imports, functions = functions, records = records, protocols = protocols, enums = enums, aliases = aliases })
 end
 
 return M

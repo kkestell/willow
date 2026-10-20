@@ -985,4 +985,48 @@ return {
       .. "    return E.A\n" .. E .. MAIN))
     eq("2:20: expected E, received F", check_errors(in_main("x = {E.A: 1, F.A: 2}", E)))
   end,
+  protocols = function()
+    local R = "import io\nprotocol Reader:\n    def read(self, size: int) -> bytes | None\n"
+    -- Each class `C` follows Reader; `main` starts on line 9.
+    local function satisfied(method)
+      return R .. "class C:\n    n: int\n\n" .. method .. "\n" .. in_main("r: Reader = C(1)")
+    end
+    local rejected = "10:17: expected Reader, received C"
+    eq(rejected, check_errors(R .. "class C:\n    n: int\n\n    def write(self) -> None:\n        pass\n"
+      .. in_main("r: Reader = C(1)")))
+    eq(rejected, check_errors(satisfied("    def read(self, count: int) -> bytes:\n        return bytes([])")))
+    eq(rejected, check_errors(satisfied("    def read(self, size: bool) -> bytes:\n        return bytes([])")))
+    eq(rejected, check_errors(satisfied("    def read(self, size: int, more: int) -> bytes:\n        return bytes([])")))
+    eq(rejected, check_errors(satisfied("    def read(self, *, size: int) -> bytes:\n        return bytes([])")))
+    eq(rejected, check_errors(satisfied("    def read(self, size: int) -> str:\n        return ''")))
+    check_source(satisfied("    def read(self, size: int | None, more: int = 0) -> bytes:\n        return bytes([])"))
+
+    local K = "protocol K:\n    def get(self, *, key: str, n: int = 1) -> int\n"
+    check_source(K .. "class C:\n    n: int\n\n    def get(self, key: str, n: int = 2) -> int:\n        return 1\n"
+      .. in_main("k: K = C(1)"))
+    eq("9:12: expected K, received C", check_errors(K .. "class C:\n    n: int\n\n    def get(self, key: str, n: int) -> int:\n"
+      .. "        return 1\n" .. in_main("k: K = C(1)")))
+
+    local W = "import io\nprotocol W:\n    def write_text(self, text: str) -> None\n"
+      .. "protocol D:\n    def write_text(self, data: str) -> None\n"
+      .. "protocol F:\n    def write_text(self, text: str) -> None\n"
+      .. "    def flush(self) -> None\n"
+    check_source(W .. in_main("w: W = io.stdout()\nf: F = io.stdout()\nv: W = f"))
+    eq("10:15: expected D, received io.File", check_errors(W .. in_main("d: D = io.stdout()")))
+    eq("11:12: expected F, received W", check_errors(W .. in_main("w: W = io.stdout()\nf: F = w")))
+
+    local S = "protocol Source[T]:\n    def get(self) -> T\n"
+      .. "class C:\n    n: int\n\n    def get(self) -> int:\n        return self.n\n"
+      .. "def take[T](s: Source[T]) -> T:\n    return take(s)\n"
+    check_source(S .. in_main("s: Source[int] = C(1)\nx: int = take(C(1))\ny: int = take(s)"))
+    eq("11:22: expected Source[str], received C", check_errors(S .. in_main("s: Source[str] = C(1)")))
+    eq("11:14: expected str, received int", check_errors(S .. in_main("x: str = take(C(1))")))
+
+    local N = "protocol Node:\n    def next(self) -> Node | None\n"
+      .. "class Link:\n    n: int\n\n    def next(self) -> Link | None:\n        return None\n"
+    check_source(N .. in_main("n: Node = Link(1)"))
+    eq("10:11: type Node has no field 'n'", check_errors(N .. in_main("n: Node = Link(1)\nx = n.n")))
+    eq("10:7: method calls on protocol values are not supported yet",
+      check_errors(N .. in_main("n: Node = Link(1)\nn.next()")))
+  end,
 }

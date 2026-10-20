@@ -78,11 +78,11 @@ with a digit. They are case-sensitive. These words are reserved:
 ```text
 False None True and as assert async await break case class continue def del
 elif else enum except finally for from global if import in is lambda match nonlocal
-not or pass raise return try type while with yield
+not or pass protocol raise return try type while with yield
 ```
 
-The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, `dict`, and
-`tuple` are also reserved. Using a reserved word that does not begin one of the
+The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, `dict`, `tuple`,
+`Iterable`, `Iterator`, `ContextManager`, and `Generator` are also reserved. Using a reserved word that does not begin one of the
 constructs in this specification is an error.
 
 ### Numeric literals
@@ -256,16 +256,12 @@ assignability follow their own rules (§4). Exception classes cannot be generic.
 
 ### Protocols
 
-A protocol names a structural interface. It is declared with
-`typing.Protocol` as its only base and contains method signatures with `pass`
-bodies:
+A protocol names a structural interface. It is declared with `protocol` and
+contains method signatures, which have no bodies:
 
 ```python
-import typing
-
-class ByteReader(typing.Protocol):
-    def read(self, size: int) -> bytes:
-        pass
+protocol ByteReader:
+    def read(self, size: int) -> bytes
 
 def read_prefix(source: ByteReader) -> bytes:
     return source.read(16)
@@ -277,14 +273,45 @@ is required. Compatibility preserves every call the protocol permits: argument
 types may be broader, return types may be narrower, parameter names must match
 wherever the protocol permits keyword calls, and the implementation cannot
 require additional arguments. Defaults need not have the same values. Extra
-methods are allowed. Method matching uses the signatures after substituting type arguments, including
-when one protocol satisfies another.
+methods are allowed. Method matching uses the signatures after substituting type
+arguments, including when one protocol satisfies another.
 
-Protocols may have type parameters and may refer to themselves in signatures.
-They declare no fields, constructors, or default method bodies, and cannot be
-instantiated. A protocol value exposes only its declared methods. Protocol
-membership is checked statically; protocols cannot be used in `isinstance`.
-Ordinary classes still have no inheritance beyond exception classes.
+Protocols may have type parameters, as in `protocol Source[T]:`, and may refer to
+themselves in signatures. Their methods have no type parameters of their own.
+Protocols declare no fields or constructors and cannot be instantiated. A
+protocol value exposes only its declared methods. Protocol membership is checked
+statically; protocols cannot be used in `isinstance`. Ordinary classes still
+have no inheritance beyond exception classes.
+
+### Standard protocols
+
+These protocols are built in:
+
+| Protocol | Contract |
+| --- | --- |
+| `Iterable[T]` | Provides `iter() -> Iterator[T]` |
+| `Iterator[T]` | Provides `iter() -> Iterator[T]` and `next() -> T` |
+| `ContextManager[T]` | Provides `enter() -> T` and `exit(error: Exception \| None) -> None` |
+| `Generator[T]` | Provides the iterator methods, `close() -> None`, `enter() -> Generator[T]`, and `exit(error: Exception \| None) -> None` |
+
+`iter(value)` calls `value.iter()` and returns its iterator. An iterator's `iter`
+method returns itself, so an iterator is also iterable. `next(iterator)` calls
+its `next` method. Exhaustion raises `StopIteration` with an empty message;
+after exhaustion an iterator remains exhausted. Neither built-in accepts a
+default value or other arguments.
+
+Lists, dictionaries, strings, bytes, tuples, and range values provide `iter`
+methods and satisfy the corresponding iterable protocols. Each call returns a
+fresh iterator, with the element types and mutation rules given in §7 and §8.
+Dictionary iteration yields keys. `io.File` provides line iteration as specified
+in its module. User-defined iterators and managers participate through the same
+method matching, without registration or special inheritance.
+
+An iterable argument is borrowed: consuming it does not close either the
+iterable or its iterator. This also applies to `sorted`. Resource ownership is
+expressed separately by `with` or explicit closing. A generator annotated as
+`Iterator[T]` or `Iterable[T]` exposes only those protocols' methods; annotate it
+as `Generator[T]` when callers need scoped or explicit closing.
 
 ### Enums
 
@@ -330,11 +357,14 @@ list[T]  dict[K, V]  tuple[A, B, ...]  tuple[()]
 Class  module.Class  Class[T, ...]
 Alias  module.Alias  Alias[T, ...]
 Enum  module.Enum  Protocol  module.Protocol  Protocol[T, ...]
-typing.Callable[[A, B, ...], R]
+(A, B, ...) -> R
 A | B | ...
 ```
 
 Here `...` indicates additional type entries, not literal ellipsis syntax.
+A callable type's return type extends as far as possible, so `(int) -> str | None`
+returns `str | None`; `((int) -> str) | None` is an optional callable.
+Otherwise, parentheses around a type group it.
 Generic declarations and applications have fixed arity.
 
 ## 4. Types and values
@@ -352,10 +382,14 @@ Generic declarations and applications have fixed arity.
 | `dict[K, V]` | Mutable maps from `K` to `V` that keep insertion order |
 | `tuple[A, B, ...]` | Immutable, fixed-length groups with a type for each position |
 | Enums | Named values of a declared enum |
-| `typing.Callable[[A, B, ...], R]` | Functions taking the listed positional arguments and returning `R` |
+| `(A, B, ...) -> R` | Functions taking the listed positional arguments and returning `R` |
 | Protocols | Values satisfying the protocol's method signatures |
 | Classes | Values of a declared class, including exception classes |
 | Native types | Library values such as `io.File` (§14) |
+
+Built-in value types other than `None` have lowercase names. Classes,
+protocols, and enums, including built-in ones such as `Exception` and
+`Iterable`, have capitalized names.
 
 The scalar types are `int`, `float`, `bool`, `str`, `bytes`, enums, and `None`.
 A type is printable if it is a scalar type other than `bytes`, or a union of
@@ -491,19 +525,19 @@ positional arguments.
 ### Function values and lambdas
 
 File-level functions, nested functions, lambdas, and bound methods are values.
-`typing.Callable[[int, str], bool]` describes a function that takes exactly an
+`(int, str) -> bool` describes a function that takes exactly an
 `int` and a `str` positionally and returns `bool`. A callable parameter accepts
 any function that can accept those arguments, including one with additional
 defaulted parameters. Its return type must be assignable to the callable's
 return type. Parameter types are checked in the opposite direction: a function
 accepting `int | None` can serve a callable expecting `int`.
 
-Calls through `Callable` use exactly its listed positional arguments; parameter
+Calls through a callable type use exactly its listed positional arguments; parameter
 names and defaults are not part of that type. Direct calls and inferred aliases
 of declared functions and bound methods retain their complete call signatures,
-including names, defaults, and keyword-only requirements. An explicit `Callable`
+including names, defaults, and keyword-only requirements. An explicit callable
 annotation exposes only its positional contract. A function with required
-keyword-only parameters cannot be converted to `Callable`, but can still be
+keyword-only parameters cannot be converted to a callable type, but can still be
 aliased and called with its inferred signature. Built-in functions can become
 values when an expected callable type determines a compatible signature.
 
@@ -520,9 +554,7 @@ Lambdas have no defaults or annotations; use a nested `def` when explicit
 annotations or multiple statements are needed. Captures follow §9.
 
 ```python
-import typing
-
-def threshold(minimum: int) -> typing.Callable[[int], bool]:
+def threshold(minimum: int) -> (int) -> bool:
     return lambda score: score >= minimum
 ```
 
@@ -815,7 +847,7 @@ Replacing the value of an existing key keeps the entry in its current position.
 A key that is removed and then inserted again moves to the end.
 
 `sorted(items, reverse=False, *, key=None)` returns a new sorted list from an
-`Iterable[T]` (§14), and `xs.sort(reverse=False, *, key=None)` sorts a list in
+`Iterable[T]` (§3), and `xs.sort(reverse=False, *, key=None)` sorts a list in
 place. `reverse` is a `bool`. Without `key`, the element type must be exactly
 `int`, `float`, `str`, or a comparable tuple. With `key`, its callable takes one
 `T` and returns one of those comparable types, and elements may have any type:
@@ -938,7 +970,7 @@ evaluated.
 iterable can be a list, which produces its elements in index order; a
 dictionary, which produces its keys in insertion order; a string, which produces
 each code point as a one-code-point string; bytes; a tuple; or a value satisfying
-`typing.Iterable[T]` (§14). `range` produces an iterable of integers.
+`Iterable[T]` (§3). `range` produces an iterable of integers.
 
 The loop obtains one iterator by calling `iter(iterable)`, and calls `next` for
 each step. Only `StopIteration` raised by that advancement ends the loop;
@@ -949,7 +981,7 @@ can be resumed. Use `with` for an owned iterator that needs cleanup.
 - `range(stop)`, `range(start, stop)`, and `range(start, stop, step)` take
   integers and produce the same sequence as in Python. A step of zero raises
   `ValueError` with the message `range step must not be zero`. The range value
-  satisfies `typing.Iterable[int]`; each `iter` call starts a fresh traversal.
+  satisfies `Iterable[int]`; each `iter` call starts a fresh traversal.
 - The iterable and the arguments to `range` are evaluated once, before the first
   iteration.
 - Assigning to the loop variable inside the body does not change the iteration.
@@ -964,8 +996,8 @@ can be resumed. Use `with` for an owned iterator that needs cleanup.
 ### Generators
 
 A function containing `yield expression` in its own body is a generator
-function. Its return annotation is `typing.Generator[T]`, `typing.Iterator[T]`,
-or `typing.Iterable[T]`, and each yielded expression must be assignable to `T`.
+function. Its return annotation is `Generator[T]`, `Iterator[T]`,
+or `Iterable[T]`, and each yielded expression must be assignable to `T`.
 Calling it binds and checks arguments normally, but runs none of its body. The
 body starts on the first `next` and resumes after each `yield` on subsequent
 calls. Local variables, captured bindings, and active exception handlers remain
@@ -973,9 +1005,8 @@ in effect while suspended.
 
 ```python
 import io
-import typing
 
-def lines(path: str) -> typing.Generator[str]:
+def lines(path: str) -> Generator[str]:
     with io.open(path) as source:
         for line in source:
             yield line
@@ -1017,7 +1048,7 @@ are not supported; these generators provide pull iteration, not coroutines.
 ### Scoped cleanup
 
 `with manager as target:` requires a value satisfying
-`typing.ContextManager[T]` (§14). The expression is evaluated once; its
+`ContextManager[T]` (§3). The expression is evaluated once; its
 `enter() -> T` method runs, and the returned value is assigned to the optional
 `as` target. A target is a name or tuple pattern. After successful entry,
 `exit(error: Exception | None) -> None` runs exactly once when control leaves
@@ -1067,9 +1098,7 @@ function create separate bindings. A loop reuses its variable's binding, so
 closures created in the same loop observe its latest value.
 
 ```python
-import typing
-
-def counter() -> typing.Callable[[], int]:
+def counter() -> () -> int:
     count = 0
 
     def increment() -> int:
@@ -1315,8 +1344,8 @@ one of these failures; it does not deliver a signal to the program.
 | `print(value) -> None` | Write a printable value and `\n` to stdout |
 | `input() -> str \| None` | The next line of stdin without its line ending, or `None` at end of input |
 | `len`, `range`, `int`, `float`, `str`, `bytes`, `ord`, `chr`, `isinstance`, `sorted` | See §4, §6, §7, and §8 |
-| `iter(value)` | Obtain the iterator of an iterable (§14) |
-| `next(iterator)` | Obtain its next value, or raise `StopIteration` (§14) |
+| `iter(value)` | Obtain the iterator of an iterable (§3) |
+| `next(iterator)` | Obtain its next value, or raise `StopIteration` (§3) |
 
 The built-in names are these functions and the built-in exception classes.
 
@@ -1771,7 +1800,7 @@ def main() -> None:
 | `readline() -> str \| None` | Read the next line the same way `input` does, or return `None` at end of input |
 | `write(data: bytes) -> None` | Write all of `data` |
 | `write_text(text: str) -> None` | Write the UTF-8 encoding of `text`, without adding a newline |
-| `iter() -> typing.Iterator[str]` | Iterate over lines from the current file position |
+| `iter() -> Iterator[str]` | Iterate over lines from the current file position |
 | `flush() -> None` | Write any buffered data |
 | `close() -> None` | Flush and close the file |
 | `enter() -> File` | Return this open file for scoped use |
@@ -2095,42 +2124,6 @@ Both functions flush stderr, which they write through the same buffer as
 finite. `utc` rounds down to whole seconds and supports years 0001 through 9999.
 Timestamps outside that range raise `ValueError` with the message
 `timestamp out of range`.
-
-### `typing`
-
-This module supplies callable annotations, the protocol declaration marker, and
-the standard structural protocols. Import it with `import typing`; type names
-are qualified in the same way as other module types. `Callable` is an annotation
-form and `Protocol` is a declaration marker, not a runtime constructor or a type
-for ordinary values.
-
-| Declaration | Contract |
-| --- | --- |
-| `Callable[[A, B, ...], R]` | A function with the positional signature in §5 |
-| `Protocol` | The base marker for structural protocol declarations (§3) |
-| `Iterable[T]` | Provides `iter() -> Iterator[T]` |
-| `Iterator[T]` | Provides `iter() -> Iterator[T]` and `next() -> T` |
-| `ContextManager[T]` | Provides `enter() -> T` and `exit(error: Exception \| None) -> None` |
-| `Generator[T]` | Provides the iterator methods, `close() -> None`, `enter() -> Generator[T]`, and `exit(error: Exception \| None) -> None` |
-
-`iter(value)` calls `value.iter()` and returns its iterator. An iterator's `iter`
-method returns itself, so an iterator is also iterable. `next(iterator)` calls
-its `next` method. Exhaustion raises `StopIteration` with an empty message;
-after exhaustion an iterator remains exhausted. Neither built-in accepts a
-default value or other arguments.
-
-Lists, dictionaries, strings, bytes, tuples, and range values provide `iter`
-methods and satisfy the corresponding iterable protocols. Each call returns a
-fresh iterator, with the element types and mutation rules given in §7 and §8.
-Dictionary iteration yields keys. `io.File` provides line iteration as specified
-in its module. User-defined iterators and managers participate through the same
-method matching, without registration or special inheritance.
-
-An iterable argument is borrowed: consuming it does not close either the
-iterable or its iterator. This also applies to `sorted`. Resource ownership is
-expressed separately by `with` or explicit closing. A generator annotated as
-`Iterator[T]` or `Iterable[T]` exposes only those protocols' methods; annotate it
-as `Generator[T]` when callers need scoped or explicit closing.
 
 ## References
 

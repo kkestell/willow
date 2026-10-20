@@ -40,10 +40,26 @@ function M.generic(decl, args)
   return { kind = "record", record = decl, args = args, name = decl.type_name .. "[" .. table.concat(names, ", ") .. "]" }
 end
 
--- The substitution a specialization gives its class's type parameters.
+-- A protocol, or with `args` a generic protocol's specialization, compared by
+-- its arguments like a generic class.
+function M.protocol(decl, args)
+  local names = {}
+  for i, arg in ipairs(args or {}) do
+    names[i] = arg.name
+  end
+  local name = args and decl.type_name .. "[" .. table.concat(names, ", ") .. "]" or decl.type_name
+  return { kind = "protocol", protocol = decl, args = args, name = name }
+end
+
+-- The generic class or protocol `t` specializes, or nil.
+function M.generic_decl(t)
+  return t.args and (t.record or t.protocol)
+end
+
+-- The substitution a specialization gives its declaration's type parameters.
 function M.record_map(t)
   local map = {}
-  for i, typevar in ipairs(t.args and t.record.typevars or {}) do
+  for i, typevar in ipairs(t.args and (t.record or t.protocol).typevars or {}) do
     map[typevar] = t.args[i]
   end
   return map
@@ -180,7 +196,7 @@ end
 -- Union members are matched by kind, or by declaration for records, enums,
 -- and functions.
 local function key(t)
-  return t.record or t.enum or t.fn or (t.kind == "typevar" and t) or t.kind
+  return t.record or t.enum or t.fn or t.protocol or (t.kind == "typevar" and t) or t.kind
 end
 
 -- `assumed` holds pairs already being compared, so recursive types terminate.
@@ -189,7 +205,8 @@ local function same(a, b, assumed)
   if a == b then
     return true
   end
-  if a.kind ~= b.kind or a.kind == "record" and not (a.args and b.args and a.record == b.record)
+  if a.kind ~= b.kind
+    or (a.kind == "record" or a.kind == "protocol") and not (a.args and b.args and M.generic_decl(a) == M.generic_decl(b))
     or a.kind == "function" or a.kind == "typevar" or SCALARS[a.kind] then
     return false
   end
@@ -202,7 +219,7 @@ local function same(a, b, assumed)
     return same(a.element, b.element, assumed)
   elseif a.kind == "dict" then
     return same(a.key, b.key, assumed) and same(a.value, b.value, assumed)
-  elseif a.kind == "tuple" or a.kind == "callable" or a.kind == "record" then
+  elseif a.kind == "tuple" or a.kind == "callable" or a.kind == "record" or a.kind == "protocol" then
     local x, y = a.elements or a.params or a.args, b.elements or b.params or b.args
     if #x ~= #y or a.kind == "callable" and not same(a.result, b.result, assumed) then
       return false
@@ -263,6 +280,91 @@ local function serves(target, source)
   return M.assignable(target.result, result)
 end
 
+-- The signature of method `name` on `t`, a class, native type, or protocol,
+-- with `t`'s type arguments substituted, or nil. `params` lists the
+-- parameters after `self` as `{ name, type, default, keyword_only }`; a native
+-- method without `names` has positional-only parameters. A generic method has
+-- no single signature, so it is left out.
+function M.method(t, name)
+  local decl = t.record or t.protocol
+  if not decl then
+    return nil
+  elseif decl.native then
+    local method = decl.native_methods[name]
+    if not method then
+      return nil
+    end
+    local params = {}
+    for i, type in ipairs(method.params) do
+      params[i] = { name = method.names and method.names[i], type = type, default = method.defaults and method.defaults[i] }
+    end
+    return { params = params, result = method.result }
+  end
+  for _, method in ipairs(decl.methods) do
+    if method.name == name and not method.typevars then
+      local map, params = M.record_map(t), {}
+      for i = 2, #method.params do
+        local param = method.params[i]
+        params[i - 1] = {
+          name = param.name, type = M.substitute(param.type, map), default = param.default,
+          keyword_only = param.keyword_only,
+        }
+      end
+      return { params = params, result = M.substitute(method.return_type, map) }
+    end
+  end
+end
+
+-- Whether method signature `have` accepts every call protocol method `want`
+-- permits, by position and by keyword, and returns a result `want` accepts.
+local function compatible(want, have)
+  if not have then
+    return false
+  end
+  local used = {}
+  for i, param in ipairs(want.params) do
+    local index
+    for j, h in ipairs(have.params) do
+      if h.name == param.name then
+        index = j
+      end
+    end
+    local h = index and have.params[index]
+    if not h or not param.keyword_only and (index ~= i or h.keyword_only)
+      or param.default and not h.default or not M.assignable(h.type, param.type) then
+      return false
+    end
+    used[index] = true
+  end
+  for j, h in ipairs(have.params) do
+    if not used[j] and not h.default then
+      return false
+    end
+  end
+  return M.assignable(want.result, have.result)
+end
+
+-- The protocol and source pairs being checked by `satisfies`, keyed by type
+-- name because substitution builds fresh objects for the same specialization.
+local assuming = {}
+
+-- Whether `source` provides every method of protocol `target` compatibly. A
+-- pair already being checked is assumed to hold, so self-referential
+-- protocols terminate.
+local function satisfies(target, source)
+  local pair = target.name .. " <- " .. source.name
+  if assuming[pair] then
+    return true
+  end
+  assuming[pair] = true
+  local ok = true
+  for _, method in ipairs(target.protocol.methods) do
+    ok = ok and compatible(M.method(target, method.name), M.method(source, method.name))
+  end
+  assuming[pair] = nil
+  return ok
+end
+
 local function is_exception(t)
   return t.kind == "record" and t.record.exception
 end
@@ -298,6 +400,7 @@ function M.assignable(target, source)
   end
   return M.same(target, source)
     or is_exception(target) and target.record.type_name == "Exception" and is_exception(source)
+    or target.kind == "protocol" and (source.kind == "record" or source.kind == "protocol") and satisfies(target, source)
     -- A bounded type parameter serves wherever its bound does.
     or source.kind == "typevar" and source.bound ~= nil and M.assignable(target, source.bound)
 end
@@ -324,8 +427,8 @@ function M.conflict(members, m)
   for _, other in ipairs(members) do
     if other.kind == m.kind and (m.kind == "list" or m.kind == "dict" or m.kind == "tuple" or m.kind == "callable") then
       return "a union can have only one " .. m.kind .. " member"
-    elseif m.args and other.record == m.record then
-      return "a union can have only one specialization of " .. m.record.type_name
+    elseif M.generic_decl(m) and M.generic_decl(other) == M.generic_decl(m) then
+      return "a union can have only one specialization of " .. M.generic_decl(m).type_name
     end
     if M.assignable(other, m) or M.assignable(m, other) then
       return "union members " .. other.name .. " and " .. m.name .. " overlap"
@@ -433,6 +536,12 @@ function M.substitute(t, map)
       args[i] = M.substitute(arg, map)
     end
     return M.generic(t.record, args)
+  elseif kind == "protocol" then
+    local args = {}
+    for i, arg in ipairs(t.args) do
+      args[i] = M.substitute(arg, map)
+    end
+    return M.protocol(t.protocol, args)
   elseif kind == "union" then
     local members = {}
     for _, member in ipairs(t.members) do
