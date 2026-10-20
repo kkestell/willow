@@ -518,7 +518,7 @@ return {
     end
     bind_source(A .. table.concat(uses) .. MAIN)
     eq("3:10: type 'Pair' needs type arguments", bind_error(A .. "def f(p: Pair) -> None:\n    pass\n" .. MAIN))
-    eq("1:10: a type parameter's bound must be a class or native type",
+    eq("1:10: a type parameter's bound must be a class, native type, or protocol",
       bind_error("def f[T: int](x: T) -> None:\n    pass\n" .. MAIN))
     eq("5:14: type argument int does not satisfy the bound N of 'T'",
       bind_error("class N:\n    n: int\nclass Box[T: N]:\n    v: T\ndef f(b: Box[int]) -> None:\n    pass\n" .. MAIN))
@@ -581,6 +581,9 @@ return {
     eq("4:9: protocol 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
     eq("3:10: duplicate protocol 'P'", bind_error(P .. P .. MAIN))
     eq("8:14: union members C and P overlap", bind_error(P .. C .. "def f(x: C | P) -> None:\n    pass\n" .. MAIN))
+    eq("4:23: protocol 'Iterable' cannot be used in isinstance",
+      bind_error(P .. "def main() -> None:\n    x = isinstance(1, Iterable)\n"))
+    eq("1:10: type 'Iterable' needs type arguments", bind_error("def f(x: Iterable) -> None:\n    pass\n" .. MAIN))
     eq("(P) -> None",
       bind_source(P .. "def f(x: (P) -> None) -> None:\n    pass\n" .. MAIN)
         .functions[1].params[1].type.name)

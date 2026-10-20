@@ -84,8 +84,8 @@ end
 
 -- Returns the record, protocol, enum, or alias that `ref`, a
 -- `{ name, module, span }` in a type, an `except` clause, or `isinstance`,
--- names. These are found through file-level declarations, imports, and
--- built-in exception classes, which locals never shadow.
+-- names. These are found through file-level declarations, imports, built-in
+-- exception classes, and built-in protocols, which locals never shadow.
 local function resolve_named(ref, module)
   local declaration
   if ref.module then
@@ -95,7 +95,7 @@ local function resolve_named(ref, module)
     end
     declaration = lookup(module, imported, ref.name, ref.span)
   else
-    declaration = module.declarations[ref.name] or exceptions[ref.name]
+    declaration = module.declarations[ref.name] or exceptions[ref.name] or stdlib.protocols[ref.name]
   end
   local kind = declaration and declaration.kind
   if not (kind == "Record" or kind == "Protocol" or kind == "Enum" or kind == "Alias") then
@@ -195,8 +195,8 @@ local function enter_type_params(fn)
   for i, param in ipairs(fn.type_params) do
     if param.bound and not fn.typevars[i].bound then
       local bound = resolve_type(param.bound, fn.module)
-      if bound.kind ~= "record" then
-        diag.error(param.bound.span, "a type parameter's bound must be a class or native type")
+      if bound.kind ~= "record" and bound.kind ~= "protocol" then
+        diag.error(param.bound.span, "a type parameter's bound must be a class, native type, or protocol")
       end
       fn.typevars[i].bound = bound
     end

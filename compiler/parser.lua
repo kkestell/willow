@@ -14,7 +14,9 @@ async await case del from global match with yield
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
-local type_names = set("int float bool str bytes None list dict tuple")
+local type_names = set("int float bool str bytes None list dict tuple Iterable Iterator ContextManager Generator")
+-- The built-in protocols, which take type arguments like a named type.
+local protocol_names = set("Iterable Iterator ContextManager Generator")
 local expression_starts = set("NAME INT FLOAT STRING FSTRING True False None int float str bytes ( [ { - + not")
 local simple_statements = { pass = "Pass", ["break"] = "Break", continue = "Continue" }
 
@@ -137,8 +139,10 @@ function M.parse(tokens)
     end
     advance()
     local node = ast.node("Type", token.span, { name = token.kind })
-    if token.kind == "NAME" then
-      qualify(node, token.value, "a type name")
+    if token.kind == "NAME" or protocol_names[token.kind] then
+      if token.kind == "NAME" then
+        qualify(node, token.value, "a type name")
+      end
       if accept("[") then
         node.args = parse_list("]", parse_type)
       end

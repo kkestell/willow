@@ -400,7 +400,7 @@ example changes it lists. New Rosetta Code examples go in
     generic functions as values specialized by explicit arguments or an
     expected callable type; Rosetta Code "Parametric polymorphism"
 
-- [ ] Structural protocols, standard protocols, and callable type syntax (spec §2–5)
+- [x] Structural protocols, standard protocols, and callable type syntax (spec §2–5)
   - [x] Protocol declarations and satisfaction: reserve `protocol`;
     `protocol P:` declarations of bodiless method signatures, without
     method type parameters; generic and self-referential
@@ -419,7 +419,7 @@ example changes it lists. New Rosetta Code examples go in
     optional parameters and converts arguments and results; run-time tags
     for the built-in and native values that need them; only declared methods
     exposed
-  - [ ] Built-in standard protocols `Iterable`, `Iterator`, `ContextManager`,
+  - [x] Built-in standard protocols `Iterable`, `Iterator`, `ContextManager`,
     and `Generator`, reserved like `list`; protocol bounds on type parameters; a `Shape`
     protocol in `shapes.wlo`
     over `Rect` and a new `Circle` class

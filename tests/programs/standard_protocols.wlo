@@ -1,0 +1,57 @@
+protocol Shape:
+    def area(self) -> float
+
+class Countdown:
+    n: int
+
+    def iter(self) -> Countdown:
+        return self
+
+    def next(self) -> int:
+        self.n = self.n - 1
+        return self.n
+
+class Session:
+    name: str
+
+    def enter(self) -> str:
+        print("enter " + self.name)
+        return self.name
+
+    def exit(self, error: Exception | None) -> None:
+        print(error is None)
+
+class Rect:
+    width: float
+    height: float
+
+    def area(self) -> float:
+        return self.width * self.height
+
+class Circle:
+    radius: float
+
+    def area(self) -> float:
+        return 3.0 * self.radius * self.radius
+
+def total[T: Shape](shapes: list[T]) -> float:
+    sum = 0.0
+    for shape in shapes:
+        sum = sum + shape.area()
+    return sum
+
+def first(items: Iterable[int]) -> int:
+    return items.iter().next()
+
+def main() -> None:
+    it: Iterator[int] = Countdown(3)
+    print(it.next())
+    print(it.iter().next())
+    print(first(Countdown(10)))
+
+    manager: ContextManager[str] = Session("db")
+    print(manager.enter())
+    manager.exit(None)
+
+    print(total([Rect(2.0, 3.0), Rect(1.0, 1.0)]))
+    print(total([Circle(1.0)]))

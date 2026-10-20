@@ -63,6 +63,48 @@ for name in ("Exception AssertionError OverflowError ZeroDivisionError ValueErro
   exceptions[name] = exception(name, name)
 end
 
+-- A built-in protocol with one type parameter `T`, resolved as bind resolves
+-- a declared one. `methods` returns its { name, params, result } entries from
+-- its self type and `T`, where `params` follow `self` as { name, type }.
+local function standard_protocol(name, methods)
+  local T = types.typevar("T")
+  local decl = { kind = "Protocol", name = name, type_name = name, type_params = { { name = "T" } }, typevars = { T } }
+  decl.self_type = types.protocol(decl, { T })
+  decl.methods = {}
+  for i, method in ipairs(methods(decl.self_type, T)) do
+    local params = { { name = "self", type = decl.self_type } }
+    for j, param in ipairs(method[2]) do
+      params[j + 1] = { name = param[1], type = param[2] }
+    end
+    decl.methods[i] = { kind = "Function", name = method[1], params = params, return_type = method[3], class = decl }
+  end
+  return decl
+end
+
+-- The built-in standard protocols.
+local optional_exception = types.union({ exceptions.Exception.type, types.None })
+local iterator = standard_protocol("Iterator", function(self, T)
+  return { { "iter", {}, self }, { "next", {}, T } }
+end)
+local function iterator_of(T)
+  return types.protocol(iterator, { T })
+end
+M.protocols = {
+  Iterator = iterator,
+  Iterable = standard_protocol("Iterable", function(_, T)
+    return { { "iter", {}, iterator_of(T) } }
+  end),
+  ContextManager = standard_protocol("ContextManager", function(_, T)
+    return { { "enter", {}, T }, { "exit", { { "error", optional_exception } }, types.None } }
+  end),
+  Generator = standard_protocol("Generator", function(self, T)
+    return {
+      { "iter", {}, iterator_of(T) }, { "next", {}, T }, { "close", {}, types.None }, { "enter", {}, self },
+      { "exit", { { "error", optional_exception } }, types.None },
+    }
+  end),
+}
+
 -- An ordinary record of a provided module with `fields` as { name, type }.
 local function provided_record(module, name, fields)
   local record = { kind = "Record", name = name, type_name = module .. "." .. name, fields = {}, methods = {} }

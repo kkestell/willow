@@ -406,6 +406,10 @@ local function specialize(node, name, fn)
   return map
 end
 
+-- The protocol and argument pairs being matched by `collect`, keyed by type
+-- name like `satisfies` in types.lua, so self-referential protocols terminate.
+local matching = {}
+
 -- Adds to `candidates`, lists keyed by type parameter, the types that matching
 -- parameter type `param` against argument type `arg` gives those parameters.
 local function collect(param, arg, candidates)
@@ -444,9 +448,11 @@ local function collect(param, arg, candidates)
     for i, p in ipairs(param.args) do
       collect(p, arg.args[i], candidates)
     end
-  elseif param.kind == "protocol" then
+  elseif param.kind == "protocol" and not matching[param.name .. " <- " .. arg.name] then
     -- Another type serving a protocol matches it method by method, its
     -- parameters by name.
+    local pair = param.name .. " <- " .. arg.name
+    matching[pair] = true
     for _, method in ipairs(param.protocol.methods) do
       local want, have = types.method(param, method.name), types.method(arg, method.name)
       if have then
@@ -460,6 +466,7 @@ local function collect(param, arg, candidates)
         collect(want.result, have.result, candidates)
       end
     end
+    matching[pair] = nil
   elseif param.kind == "callable" and (arg.kind == "callable" or arg.kind == "function") then
     local params, result = arg.params, arg.result
     if arg.kind == "function" then

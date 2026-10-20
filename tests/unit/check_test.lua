@@ -1030,6 +1030,29 @@ return {
     eq("5:12: 'read' has no parameter 'count'",
       check_errors(R .. "def f(r: Reader) -> None:\n    r.read(count=1)\n" .. MAIN))
 
+    local I = "class Counter:\n    n: int\n\n    def iter(self) -> Counter:\n        return self\n\n"
+      .. "    def next(self) -> int:\n        return self.n\n"
+      .. "class Manager:\n    n: int\n\n    def enter(self) -> str:\n        return ''\n\n"
+      .. "    def exit(self, error: Exception | None) -> None:\n        pass\n"
+    check_source(I .. in_main("a: Iterator[int] = Counter(1)\nb: Iterable[int] = Counter(1)\nc: ContextManager[str] = Manager(1)"))
+    eq("18:24: expected Iterator[str], received Counter", check_errors(I .. in_main("a: Iterator[str] = Counter(1)")))
+    -- Inference through a self-referential protocol terminates.
+    eq("18:14: expected str, received int", check_errors(I .. in_main("a: str = first(Counter(1))",
+      "def first[T](xs: Iterable[T]) -> T:\n    return xs.iter().next()\n")))
+    eq("18:30: expected ContextManager[str], received Manager",
+      check_errors(I:gsub("error: Exception", "e: Exception") .. in_main("c: ContextManager[str] = Manager(1)")))
+    local G = "def g(x: Generator[int]) -> None:\n    a: Iterator[int] = x\n    b: ContextManager[Generator[int]] = x\n"
+    check_source(G .. MAIN)
+    eq("2:25: expected Generator[int], received Iterator[int]",
+      check_errors("def g(x: Iterator[int]) -> None:\n    a: Generator[int] = x\n" .. MAIN))
+
+    local B = "protocol Shape:\n    def area(self) -> float\n"
+      .. "def total[T: Shape](xs: list[T]) -> float:\n    sum = 0.0\n    for x in xs:\n        sum = sum + x.area()\n    return sum\n"
+    check_source(B .. MAIN)
+    eq("9:9: type argument int does not satisfy the bound Shape of 'T'", check_errors(B .. in_main("x = total([1])")))
+    eq("4:14: type Shape has no field 'width'", check_errors("protocol Shape:\n    def area(self) -> float\n"
+      .. "def f[T: Shape](x: T) -> float:\n    return x.width\n" .. MAIN))
+
     -- A converter cannot change a float's representation at a position typed
     -- by a type parameter, or between protocols.
     local F = "protocol Source[T]:\n    def get(self) -> T\nprotocol Number:\n    def get(self) -> int | float\n"

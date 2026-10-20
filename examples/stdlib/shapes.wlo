@@ -1,6 +1,11 @@
-# Sums the areas of rectangles given as WIDTHxHEIGHT arguments:
-# willow run shapes.wlo 3x4 2x2.5
+# Sums the areas of shapes given as WIDTHxHEIGHT for a rectangle or rRADIUS
+# for a circle:
+# willow run shapes.wlo 3x4 2x2.5 r1
 import sys
+
+protocol Shape:
+    def area(self) -> float
+    def scaled(self, factor: float) -> Shape
 
 class Rect:
     width: float
@@ -12,29 +17,43 @@ class Rect:
     def scaled(self, factor: float) -> Rect:
         return Rect(self.width * factor, self.height * factor)
 
+class Circle:
+    radius: float
+
+    def area(self) -> float:
+        return 3.141592653589793 * self.radius * self.radius
+
+    def scaled(self, factor: float) -> Circle:
+        return Circle(self.radius * factor)
+
 class ShapeError(Exception):
     text: str
 
     def report(self) -> str:
         return f"{self.text}: {self.message}"
 
-def parse_rect(text: str) -> Rect:
-    parts = text.split("x")
-    if len(parts) != 2:
-        raise ShapeError("expected WIDTHxHEIGHT", text)
+def parse_number(number: str, text: str) -> float:
     try:
-        return Rect(float(parts[0]), float(parts[1]))
+        return float(number)
     except ValueError:
         raise ShapeError("not a number", text)
+
+def parse_shape(text: str) -> Shape:
+    if text.startswith("r"):
+        return Circle(parse_number(text[1:], text))
+    parts = text.split("x")
+    if len(parts) != 2:
+        raise ShapeError("expected WIDTHxHEIGHT or rRADIUS", text)
+    return Rect(parse_number(parts[0], text), parse_number(parts[1], text))
 
 def main() -> None:
     total = 0.0
     for text in sys.args():
         try:
-            rect = parse_rect(text)
+            shape = parse_shape(text)
         except ShapeError as error:
             sys.eprint(error.report())
             sys.exit(2)
-        print(f"{text}: {rect.area()} (doubled {rect.scaled(2.0).area()})")
-        total = total + rect.area()
+        print(f"{text}: {shape.area()} (doubled {shape.scaled(2.0).area()})")
+        total = total + shape.area()
     print(f"total {total}")

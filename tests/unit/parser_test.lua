@@ -263,6 +263,12 @@ return {
     eq("1:20: expected '->', found ')'", parse_error("def f(g: (int, str)) -> None:\n    pass\n"))
   end,
 
+  standard_protocols = function()
+    eq("def f(x: Iterable[int], y: ContextManager[str]) -> Generator[Iterator[int]] { pass }",
+      show(parse("def f(x: Iterable[int], y: ContextManager[str]) -> Generator[Iterator[int]]:\n    pass\n").functions[1]))
+    eq("2:5: expected a statement, found 'Iterator'", body_error("Iterator = 1"))
+  end,
+
   keyword_only_parameters = function()
     eq("def f(a: int, *b: int = 1, *c: str) -> None { pass }",
       show(parse("def f(a: int, *, b: int = 1, c: str) -> None:\n    pass\n").functions[1]))
