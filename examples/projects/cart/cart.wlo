@@ -9,8 +9,11 @@ class Cart:
     items: list[Item]
     discount: int = 0
 
-    def add(self, name: str, price: int, quantity: int = 1) -> None:
+    def add(self, name: str, price: int, *, quantity: int = 1) -> None:
         self.items.append(Item(name, price, quantity))
+
+    def iter(self) -> Iterator[Item]:
+        return self.items.iter()
 
     def subtotal(self) -> int:
         total = 0

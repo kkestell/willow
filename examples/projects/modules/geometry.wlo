@@ -10,7 +10,7 @@ def distance_squared(a: Point, b: Point) -> float:
     dy = a.y - b.y
     return dx * dx + dy * dy
 
-def nearest(origin: Point, points: list[Point]) -> Point | None:
+def nearest(origin: Point, points: Iterable[Point]) -> Point | None:
     best: Point | None = None
     best_distance = 0.0
     for point in points:

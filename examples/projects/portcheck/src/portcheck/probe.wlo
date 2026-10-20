@@ -35,9 +35,8 @@ def parse_target(text: str) -> Target:
 def check(target: Target, timeout: float) -> Probe:
     start = time.monotonic()
     try:
-        connection = net.connect(target.host, target.port, timeout=timeout)
-        connection.close()
-        return Probe(target, True, _millis(start), "open")
+        with net.connect(target.host, target.port, timeout=timeout):
+            return Probe(target, True, _millis(start), "open")
     except OSError as error:
         return Probe(target, False, _millis(start), error.message)
     except TimeoutError:

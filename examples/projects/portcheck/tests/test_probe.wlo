@@ -14,18 +14,14 @@ def test_parse_target() -> None:
             pass
 
 def test_open_port() -> None:
-    listener = net.listen("127.0.0.1", 0)
-    try:
+    with net.listen("127.0.0.1", 0) as listener:
         target = portcheck.probe.Target("127.0.0.1", listener.local_port())
         result = portcheck.probe.check(target, 2.0)
         assert result.open, result.detail
-    finally:
-        listener.close()
 
 def test_closed_port() -> None:
-    listener = net.listen("127.0.0.1", 0)
-    port = listener.local_port()
-    listener.close()
+    with net.listen("127.0.0.1", 0) as listener:
+        port = listener.local_port()
     result = portcheck.probe.check(portcheck.probe.Target("127.0.0.1", port), 2.0)
     assert not result.open
     assert result.detail.startswith("cannot connect to 127.0.0.1:"), result.detail
