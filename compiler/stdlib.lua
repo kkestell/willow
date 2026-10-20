@@ -36,9 +36,10 @@ local builtins = builtins_of({
   chr = { params = { types.int }, result = types.str },
   isinstance = {},
   sorted = {
-    params = { "any", types.bool },
-    names = { "items", "reverse" },
-    defaults = { [2] = { kind = "Bool", value = false } },
+    params = { "any", types.bool, "any" },
+    names = { "items", "reverse", "key" },
+    defaults = { [2] = { kind = "Bool", value = false }, [3] = { kind = "None" } },
+    keyword_only = { [3] = true },
   },
   bytes = { params = { types.list(types.int) }, result = types.bytes },
 })

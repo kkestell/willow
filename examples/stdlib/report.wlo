@@ -93,17 +93,8 @@ def main() -> None:
 
     levels = sorted(counts)
     if options.sort == Sort.COUNT:
-        by_count: dict[int, list[str]] = {}
-        for level in levels:
-            n = counts[level]
-            if n not in by_count:
-                by_count[n] = []
-            by_count[n].append(level)
-        ordered: list[str] = []
-        for n in sorted(by_count, reverse=True):
-            for level in by_count[n]:
-                ordered.append(level)
-        levels = ordered
+        # Most lines first, then by name.
+        levels = sorted(counts, key=lambda level: (-counts[level], level))
     print(terminal.style(f"{'level':<10}{'lines':>8}", bold=True, enabled=options.color))
     for level in levels[:options.limit]:
         name = terminal.style(f"{level:<10}", color=level_color(level), enabled=options.color)

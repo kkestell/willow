@@ -1,0 +1,17 @@
+dee:1 cy:2 bob:2 ada:3
+dee:1 bob:2 cy:2 ada:3
+ada:3 cy:2 bob:2 dee:1
+ada:3 bob:2 cy:2 dee:1
+ada:3 cy:2 bob:2 dee:1
+a bb ccc
+yield ada
+yield bob
+key ada
+key bob
+ada:3 bob:1
+list changed during sort
+3 1 2 0 0 0
+bad key
+cy:2 ada:3 bob:2 dee:1
+cannot sort NaN
+cy:2 ada:3 bob:2 dee:1

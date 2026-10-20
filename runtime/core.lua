@@ -767,18 +767,43 @@ local function __wlo_has_nan(value)
   return value ~= value
 end
 
--- Without NaN, the values are totally ordered. Equal values keep their order,
--- in either direction.
-local function __wlo_sorted_values(list, reverse, site)
+-- The elements of `list` in sorted order, by `key` when it is given. Keys are
+-- evaluated once each, in input order, and an in-place sort fails if they
+-- changed the list. Without NaN, keys are totally ordered; equal keys keep
+-- their order in either direction. Nothing is reordered before every check
+-- passes, since callers write the result back afterwards.
+local function __wlo_sorted_values(list, reverse, key, in_place, site)
+  local n, values, keys = list.n, {}, {}
+  for i = 1, n do
+    values[i] = list[i]
+  end
+  for i = 1, n do
+    if key then
+      keys[i] = key(values[i])
+    else
+      keys[i] = values[i]
+    end
+  end
+  if in_place and key then
+    local changed = list.n ~= n
+    for i = 1, n do
+      -- A NaN element is unequal to itself but unchanged.
+      local a, b = list[i], values[i]
+      changed = changed or a ~= b and (a == a or b == b)
+    end
+    if changed then
+      __wlo_fail("RuntimeError", "list changed during sort", site)
+    end
+  end
   local order = {}
-  for i = 1, list.n do
-    if __wlo_has_nan(list[i]) then
+  for i = 1, n do
+    if __wlo_has_nan(keys[i]) then
       __wlo_fail("ValueError", "cannot sort NaN", site)
     end
     order[i] = i
   end
   table.sort(order, function(i, j)
-    local a, b = list[i], list[j]
+    local a, b = keys[i], keys[j]
     if a == b or type(a) == "table" and __wlo_equal(a, b) then
       return i < j
     elseif reverse then
@@ -789,34 +814,32 @@ local function __wlo_sorted_values(list, reverse, site)
     end
     return a < b
   end)
-  local values = {}
+  local sorted = {}
   for i, index in ipairs(order) do
-    values[i] = list[index]
+    sorted[i] = values[index]
   end
-  return values
+  return sorted
 end
 
-local function __wlo_sorted(list, reverse, site)
-  return __wlo_list(__wlo_sorted_values(list, reverse, site), list.n)
+local function __wlo_sorted(list, reverse, key, site)
+  return __wlo_list(__wlo_sorted_values(list, reverse, key, false, site), list.n)
 end
 
-local function __wlo_list_sort(list, reverse, site)
-  local values = __wlo_sorted_values(list, reverse, site)
+local function __wlo_list_sort(list, reverse, key, site)
+  local values = __wlo_sorted_values(list, reverse, key, true, site)
   for i = 1, list.n do
     list[i] = values[i]
   end
 end
 
 -- Collects the items of a `for` iterator into a new list and sorts it.
-local function __wlo_sort_items(step, reverse, site)
+local function __wlo_sort_items(step, reverse, key, site)
   local items, n = {}, 0
   for _, item in step do
     n = n + 1
     items[n] = item
   end
-  local list = __wlo_list(items, n)
-  __wlo_list_sort(list, reverse, site)
-  return list
+  return __wlo_list(__wlo_sorted_values(__wlo_list(items, n), reverse, key, false, site), n)
 end
 
 local function __wlo_list_append(list, value, site)

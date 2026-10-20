@@ -1,0 +1,10 @@
+# https://rosettacode.org/wiki/Sort_using_a_custom_comparator
+
+# Longer strings first, then case-insensitive lexicographic order.
+def order(text: str) -> tuple[int, str]:
+    return (-len(text), text.lower())
+
+def main() -> None:
+    strings = ["Here", "are", "some", "sample", "strings", "to", "be", "sorted"]
+    for text in sorted(strings, key=order):
+        print(text)

@@ -464,7 +464,9 @@ local function lower_function(fn, sites, helpers, protocols)
       for _, i in ipairs(node.order) do
         args[i] = i == 1 and items_iterator(node, node.args[1], node.span) or lower_operand(node.args[i])
       end
-      args[2] = args[2] or lower_operand(node.args[2])
+      for i = 2, #node.args do
+        args[i] = args[i] or lower_operand(node.args[i])
+      end
       return helper("sort_items", args, node.span)
     elseif kind == "Call" and node.target.kind == "Builtin" and node.name == "range" then
       return helper("range_value", range_args(node), node.span)

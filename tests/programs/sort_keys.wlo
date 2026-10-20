@@ -1,0 +1,73 @@
+class Row:
+    name: str
+    score: int
+
+class Ranker:
+    bonus: int
+
+    def rank(self, row: Row) -> int:
+        return self.bonus - row.score
+
+def by_name(row: Row) -> str:
+    return row.name
+
+def rows() -> Generator[Row]:
+    print("yield ada")
+    yield Row("ada", 3)
+    print("yield bob")
+    yield Row("bob", 1)
+
+def names(xs: list[Row]) -> str:
+    texts: list[str] = []
+    for x in xs:
+        texts.append(f"{x.name}:{x.score}")
+    return " ".join(texts)
+
+def ints(xs: list[int]) -> str:
+    texts: list[str] = []
+    for x in xs:
+        texts.append(str(x))
+    return " ".join(texts)
+
+def main() -> None:
+    data = [Row("cy", 2), Row("ada", 3), Row("bob", 2), Row("dee", 1)]
+    print(names(sorted(data, key=lambda row: row.score)))
+    print(names(sorted(data, key=lambda row: (row.score, row.name))))
+    print(names(sorted(data, reverse=True, key=lambda row: row.score)))
+    print(names(sorted(data, key=by_name)))
+    print(names(sorted(data, key=Ranker(10).rank)))
+    words = ["bb", "a", "ccc"]
+    words.sort(key=len)
+    print(" ".join(words))
+
+    def logged(row: Row) -> str:
+        print("key " + row.name)
+        return row.name
+    print(names(sorted(rows(), key=logged)))
+
+    # A key's own effects stay, but the list is not reordered.
+    xs = [3, 1, 2]
+    def growing(x: int) -> int:
+        xs.append(0)
+        return x
+    try:
+        xs.sort(key=growing)
+    except RuntimeError as error:
+        print(error.message)
+    print(ints(xs))
+
+    def failing(row: Row) -> int:
+        if row.name == "bob":
+            raise ValueError("bad key")
+        return row.score
+    try:
+        data.sort(key=failing)
+    except ValueError as failure:
+        print(failure.message)
+    print(names(data))
+    nan = float("nan")
+    try:
+        data.sort(key=lambda row: nan)
+    except ValueError as again:
+        print(again.message)
+    print(names(data))

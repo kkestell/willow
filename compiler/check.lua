@@ -325,12 +325,18 @@ end
 local function builtin_params(builtin)
   local params = {}
   for i = 1, #builtin.params do
-    params[i] = { name = builtin.names and builtin.names[i], default = builtin.defaults and builtin.defaults[i] }
+    params[i] = {
+      name = builtin.names and builtin.names[i], default = builtin.defaults and builtin.defaults[i],
+      keyword_only = builtin.keyword_only and builtin.keyword_only[i],
+    }
   end
   return params
 end
 
-local SORT_PARAMS = { { name = "reverse", default = { kind = "Bool", value = false } } }
+local SORT_PARAMS = {
+  { name = "reverse", default = { kind = "Bool", value = false } },
+  { name = "key", default = { kind = "None" }, keyword_only = true },
+}
 
 -- A copy of default `node` for one call, spanning the call, so that each call
 -- checks nodes of its own.
@@ -570,6 +576,13 @@ local function check_sortable(node, type, item)
   end
 end
 
+-- Whether sort key `key` is checked after the other arguments, against the
+-- items: a lambda or a built-in function value takes its parameter types from
+-- them, and creating either calls nothing.
+local function deferred_key(key)
+  return key.kind == "Lambda" or key.kind == "BuiltinValue"
+end
+
 -- `entry` maps the variables `fn` captures to their types at its start.
 local function check_function(fn, entry)
   -- The type of field `node.name` on a value of `object` type.
@@ -696,6 +709,35 @@ local function check_function(fn, entry)
     return item
   end
 
+  -- Checks the sort of `node`, of type `type` with items of `item`, by `key`,
+  -- an argument that is None for no key. A key takes one item and returns
+  -- an orderable value; a lambda's body and a built-in's declared result give
+  -- that value's type. Any other key is already checked.
+  local function check_sort_key(node, type, item, key, state)
+    if key.kind == "None" then
+      check_sortable(node, type, item)
+      return
+    end
+    local key_type = key.type
+    if key.kind == "Lambda" then
+      local count = #key.fn.params
+      if count ~= 1 then
+        diag.error(key.span, "a sort key takes 1 parameter, received a lambda with " .. count .. " parameters")
+      end
+      key.infer_result = true
+      key_type = check_expression(key, state, types.callable({ item }, types.None))
+    elseif key.kind == "BuiltinValue" then
+      key_type = check_expression(key, state, types.callable({ item }, key.target.result or types.None))
+    end
+    local result = key_type.kind == "callable" and key_type.result or key_type.kind == "function" and key_type.fn.return_type
+    if not result then
+      diag.error(key.span, "a sort key must be a function, received " .. key_type.name)
+    elseif not types.ordered(result, result) then
+      diag.error(key.span, "cannot sort by a key of type " .. result.name)
+    end
+    expect_type(key, types.callable({ item }, result), key_type)
+  end
+
   -- Checks method call `node` on an object of type `object`, whose expression
   -- is already checked, and returns the call's type.
   check_method = function(node, object, state, expected)
@@ -705,6 +747,7 @@ local function check_function(fn, entry)
       node.receiver = object
     end
     local method = class_method(object, node.name)
+    local sorting = object.kind == "list" and node.name == "sort"
     local params, result, names, defaults, inferred
     if object.kind == "protocol" then
       -- A protocol value exposes only its declared methods.
@@ -750,9 +793,8 @@ local function check_function(fn, entry)
       if not params then
         diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
       end
-      if object.kind == "list" and node.name == "sort" then
+      if sorting then
         bind_args(node, node.name, SORT_PARAMS, "parameter")
-        check_sortable(node, object, list_element(object))
       else
         local signature = { params = params, names = names, defaults = defaults }
         bind_args(node, node.name, builtin_params(signature), names and "parameter")
@@ -760,7 +802,16 @@ local function check_function(fn, entry)
     end
     for _, i in ipairs(evaluation_order(node)) do
       local arg = node.args[i]
-      expect_type(arg, params[i], inferred and arg.type or check_expression(arg, state, params[i]))
+      -- A deferred key is checked against the elements below.
+      if not (sorting and i == 2 and deferred_key(arg)) then
+        local arg_type = inferred and arg.type or check_expression(arg, state, params[i])
+        if params[i] then
+          expect_type(arg, params[i], arg_type)
+        end
+      end
+    end
+    if sorting then
+      check_sort_key(node, object, list_element(object), node.args[2], state)
     end
     return result
   end
@@ -883,17 +934,21 @@ local function check_function(fn, entry)
         local signature = target.kind == "Record" and { typevars = target.typevars, return_type = target.self_type } or target
         map = infer_call(node, node.name, params, signature, state, expected)
       end
+      local sorting = builtin and target.name == "sorted"
       for _, i in ipairs(evaluation_order(node)) do
         local arg = node.args[i]
-        local param
-        if builtin then
-          param = builtin.params[i] ~= "any" and builtin.params[i] or nil
-        else
-          param = specialized(params[i].type, map)
-        end
-        local arg_type = inferred and arg.type or check_expression(arg, state, param)
-        if param then
-          expect_type(arg, param, arg_type)
+        -- A deferred key is checked against the items below.
+        if not (sorting and i == 3 and deferred_key(arg)) then
+          local param
+          if builtin then
+            param = builtin.params[i] ~= "any" and builtin.params[i] or nil
+          else
+            param = specialized(params[i].type, map)
+          end
+          local arg_type = inferred and arg.type or check_expression(arg, state, param)
+          if param then
+            expect_type(arg, param, arg_type)
+          end
         end
       end
       local arg_type = builtin and node.args[1] and node.args[1].type
@@ -917,7 +972,7 @@ local function check_function(fn, entry)
         type = check_method(node, arg_type, state, expected)
       elseif builtin and name == "sorted" then
         local item = check_iterable(node.args[1], arg_type, node, state)
-        check_sortable(node.args[1], arg_type, item)
+        check_sort_key(node.args[1], arg_type, item, node.args[3], state)
         type = types.list(item)
       elseif builtin then
         type = builtin.result

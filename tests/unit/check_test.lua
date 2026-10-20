@@ -616,10 +616,10 @@ return {
     eq("3:16: cannot sort a value of type list[int | None]",
       check_errors(in_main("x: list[int | None] = []\ny = sorted(x)")))
     eq("3:16: cannot sort a value of type list[P]", check_errors(in_main("x = [P(1)]\ny = sorted(x)", "class P:\n    n: int\n")))
-    eq("2:9: 'sorted' expects 1 to 2 arguments, received 3", check_errors(in_main("x = sorted([1], True, True)")))
-    eq("3:7: 'sort' expects 0 to 1 arguments, received 2", check_errors(in_main("x = [1]\nx.sort(True, True)")))
+    eq("2:27: 'sorted' received a positional argument for keyword-only parameter 'key'", check_errors(in_main("x = sorted([1], True, True)")))
+    eq("3:18: 'sort' received a positional argument for keyword-only parameter 'key'", check_errors(in_main("x = [1]\nx.sort(True, True)")))
     eq("2:11: 'print' does not accept keyword arguments", check_errors(in_main("print(end='')")))
-    eq("2:21: 'sorted' has no parameter 'key'", check_errors(in_main("x = sorted([1], key=True)")))
+    eq("2:25: a sort key must be a function, received bool", check_errors(in_main("x = sorted([1], key=True)")))
     eq("2:9: 'sorted' is missing argument 'items'", check_errors(in_main("x = sorted(reverse=True)")))
     eq("3:16: expected int, received None", check_errors(in_main("x = [1]\ny: int = x.sort()")))
     eq("2:12: format type 'd' requires int, received str", check_errors(in_main("x = f'{\"a\":d}'")))
@@ -961,6 +961,25 @@ return {
     eq("2:16: cannot sort a value of type list[tuple[int, list[int]]]", check_errors(in_main("x = sorted([(1, [2])])")))
     eq("3:16: cannot sort a value of type list[int | float]", check_errors(in_main("xs: list[int | float] = []\nx = sorted(xs)")))
     eq("2:16: cannot iterate over int", check_errors(in_main("x = sorted(3)")))
+    -- A key orders elements of any type.
+    eq("2:14: expected str, received list[list[int]]",
+      check_errors(in_main("s: str = sorted([[1]], key=lambda x: len(x))")))
+    check_source(in_main("xs = ['b', 'a']\nxs.sort(key=len)"))
+    eq("2:25: cannot sort by a key of type list[int]", check_errors(in_main("x = sorted([1], key=lambda x: [x])")))
+    eq("2:25: expected (int) -> str, received function f",
+      check_errors(in_main("x = sorted([1], key=f)", "def f(s: str) -> str:\n    return s\n")))
+    eq("2:16: cannot sort a value of type list[list[int]]", check_errors(in_main("x = sorted([[1]])")))
+    eq("3:17: a sort key takes 1 parameter, received a lambda with 2 parameters",
+      check_errors(in_main("xs = [1]\nxs.sort(key=lambda a, b: a)")))
+    -- A key that calls runs before the arguments after it.
+    eq("7:39: expected bool, received bool | None", check_errors(in_main(table.concat({
+      "flag: bool | None = True",
+      "def mk() -> (int) -> int:",
+      "    nonlocal flag",
+      "    flag = None",
+      "    return lambda x: x",
+      "x = sorted([1], key=mk(), reverse=flag)",
+    }, "\n"))))
   end,
 
   with_statements = function()

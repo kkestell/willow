@@ -465,13 +465,13 @@ example changes it lists. New Rosetta Code examples go in
     `copy.wlo`, `trash.wlo`, `jobs.wlo`, and the `kv` client, server, and
     tests, with `enter` and `exit` on `framing.Channel`
 
-- [ ] Iterable sorting, tuple ordering, and `key` callbacks (spec §7)
+- [x] Iterable sorting, tuple ordering, and `key` callbacks (spec §7)
   - [x] `sorted` over any `Iterable[T]`, consumed fully before sorting;
     sorting comparable tuples, with NaN anywhere in a key raising
     `cannot sort NaN`; `sorted` directly over dictionaries in place of the
     `keys` helpers in `report.wlo`, `listing.wlo`, and `kv/server.wlo` and
     the copy loop in `associative_array_iteration.wlo`
-  - [ ] Keyword-only `key` on `sorted` and `list.sort`: any element type, one
+  - [x] Keyword-only `key` on `sorted` and `list.sort`: any element type, one
     evaluation per element in input order, `list changed during sort`, and no
     reordering after key or validation failures; a count-then-name `key` in
     `report.wlo` in place of its `by_count` grouping, and Rosetta Code "Sort
