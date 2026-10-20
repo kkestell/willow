@@ -30,11 +30,8 @@ def move(path: str) -> None:
         if created:
             fs.rmdir(trash)
         raise
-    log = io.open(fs.join(parent, ".trash.log"), mode="a")
-    try:
+    with io.open(fs.join(parent, ".trash.log"), mode="a") as log:
         log.write_text(f"{time.utc(time.time())} {fs.basename(path)}\n")
-    finally:
-        log.close()
 
 # Deletes the trash in `directory` and returns the number of files deleted.
 def empty(directory: str) -> int:

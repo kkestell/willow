@@ -11,10 +11,7 @@ def main() -> None:
     if len(args) < 2:
         sys.eprint("usage: client <port> <request>...")
         sys.exit(2)
-    channel = framing.channel(net.connect("127.0.0.1", int(args[0]), timeout=5.0))
-    try:
+    with framing.channel(net.connect("127.0.0.1", int(args[0]), timeout=5.0)) as channel:
         for request in args[1:]:
             channel.send(json.parse(request))
             print(json.dump(channel.receive(timeout=5.0)))
-    finally:
-        channel.close()

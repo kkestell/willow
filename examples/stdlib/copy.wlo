@@ -5,20 +5,13 @@ import sys
 
 def copy(source_path: str, target_path: str) -> int:
     total = 0
-    source = io.open(source_path)
-    try:
-        target = io.open(target_path, mode="w")
-        try:
-            while True:
-                chunk = source.read(65536)
-                if len(chunk) == 0:
-                    break
-                target.write(chunk)
-                total = total + len(chunk)
-        finally:
-            target.close()
-    finally:
-        source.close()
+    with io.open(source_path) as source, io.open(target_path, mode="w") as target:
+        while True:
+            chunk = source.read(65536)
+            if len(chunk) == 0:
+                break
+            target.write(chunk)
+            total = total + len(chunk)
     return total
 
 def main() -> None:

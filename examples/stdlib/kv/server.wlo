@@ -40,7 +40,7 @@ def keys(store: dict[str, json.Json]) -> list[str]:
 
 # Serves one client; returns True when it asked the server to stop.
 def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:
-    try:
+    with channel:
         while True:
             try:
                 line = channel.read_line()
@@ -57,8 +57,6 @@ def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:
                 channel.send({"ok": True})
                 return True
             channel.send(reply(store, request))
-    finally:
-        channel.close()
     return False
 
 def main() -> None:
@@ -66,17 +64,14 @@ def main() -> None:
     if len(args) != 1:
         sys.eprint("usage: server <port-file>")
         sys.exit(2)
-    listener = net.listen("127.0.0.1", 0)
-    # Publishing by rename means a reader never sees a partial port number.
-    fs.write_file(args[0] + ".tmp", str(listener.local_port()))
-    fs.rename(args[0] + ".tmp", args[0])
-    store: dict[str, json.Json] = {}
-    try:
+    with net.listen("127.0.0.1", 0) as listener:
+        # Publishing by rename means a reader never sees a partial port number.
+        fs.write_file(args[0] + ".tmp", str(listener.local_port()))
+        fs.rename(args[0] + ".tmp", args[0])
+        store: dict[str, json.Json] = {}
         while True:
             try:
                 if serve(framing.channel(listener.accept()), store):
                     break
             except OSError as error:
                 sys.eprint(f"client failed: {error.message}")
-    finally:
-        listener.close()

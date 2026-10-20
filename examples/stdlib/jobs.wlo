@@ -45,11 +45,10 @@ def main() -> None:
     fs.mkdir(logs, parents=True, exist_ok=True)
 
     # Jobs get empty input instead of sharing this program's stdin.
-    nothing = io.open("/dev/null")
     running: list[Job] = []
-    for command in args.get_list("command"):
-        running.append(start(len(running) + 1, command, logs, nothing))
-    nothing.close()
+    with io.open("/dev/null") as nothing:
+        for command in args.get_list("command"):
+            running.append(start(len(running) + 1, command, logs, nothing))
 
     deadline = time.monotonic() + args.get_float("limit")
     failed = 0

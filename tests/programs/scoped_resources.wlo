@@ -1,0 +1,59 @@
+import fs
+import io
+import net
+import time
+
+def lines(path: str, opened: list[io.File]) -> Generator[str]:
+    with io.open(path) as source:
+        opened.append(source)
+        for line in source:
+            yield line
+
+def main() -> None:
+    path = fs.join("/tmp", "wlo_scoped_" + str(int(time.time() * 1000000.0)))
+    fs.write_file(path, "one\ntwo\nthree\n")
+
+    with io.open(path) as f:
+        print(f.readline())
+    try:
+        f.readline()
+    except ValueError as closed:
+        print(closed.message)
+    try:
+        with f:
+            print("unreachable")
+    except ValueError as again:
+        print(again.message)
+    try:
+        with io.stdout():
+            print("unreachable")
+    except ValueError as standard:
+        print(standard.message)
+
+    opened: list[io.File] = []
+    with lines(path, opened) as rows:
+        for line in rows:
+            print(line)
+            break
+    try:
+        opened[0].readline()
+    except ValueError as generator_closed:
+        print("generator closed its file: " + generator_closed.message)
+
+    with net.listen("127.0.0.1", 0) as listener:
+        with net.connect("127.0.0.1", listener.local_port(), timeout=5.0) as connection:
+            print("connected")
+    try:
+        connection.recv(1)
+    except ValueError as connection_closed:
+        print(connection_closed.message)
+    try:
+        with connection:
+            print("unreachable")
+    except ValueError as reentered:
+        print(reentered.message)
+    try:
+        listener.local_port()
+    except ValueError as listener_closed:
+        print(listener_closed.message)
+    fs.remove(path)

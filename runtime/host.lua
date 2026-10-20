@@ -985,6 +985,15 @@ function __wlo_net_connection_close(connection, site)
   end
 end
 
+function __wlo_net_connection_enter(connection, site)
+  __wlo_usable_socket(connection, "connection", site)
+  return connection
+end
+
+function __wlo_net_connection_exit(connection, error, site)
+  __wlo_net_connection_close(connection, site)
+end
+
 function __wlo_net_listener_accept(listener, timeout, site)
   __wlo_usable_socket(listener, "listener", site)
   __wlo_check_timeout(timeout, site)
@@ -1018,4 +1027,13 @@ function __wlo_net_listener_close(listener, site)
     listener.closed = true
     __wlo_C.__wlo_c_close(listener.fd)
   end
+end
+
+function __wlo_net_listener_enter(listener, site)
+  __wlo_usable_socket(listener, "listener", site)
+  return listener
+end
+
+function __wlo_net_listener_exit(listener, error, site)
+  __wlo_net_listener_close(listener, site)
 end

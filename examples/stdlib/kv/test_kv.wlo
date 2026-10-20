@@ -10,10 +10,17 @@ import subprocess
 import sys
 import time
 
+# A running server, stopped when its scope ends.
 class Server:
     process: subprocess.Process
     port_file: str
     port: int
+
+    def enter(self) -> Server:
+        return self
+
+    def exit(self, error: Exception | None) -> None:
+        _stop(self)
 
 def _server_path() -> str:
     for path in ["server.wlo", "examples/stdlib/kv/server.wlo"]:
@@ -45,23 +52,16 @@ def _ask(channel: framing.Channel, request: json.Json) -> str:
     return json.dump(channel.receive(timeout=5.0))
 
 def test_set_get_and_keys() -> None:
-    server = _start()
-    try:
-        channel = framing.channel(net.connect("127.0.0.1", server.port))
+    with _start() as server, framing.channel(net.connect("127.0.0.1", server.port)) as channel:
         assert _ask(channel, {"op": "set", "key": "b", "value": [1, 2]}) == '{"ok":true}'
         assert _ask(channel, {"op": "set", "key": "a", "value": "x"}) == '{"ok":true}'
         assert _ask(channel, {"op": "get", "key": "b"}) == '{"value":[1,2]}'
         assert _ask(channel, {"op": "get", "key": "missing"}) == '{"value":null}'
         assert _ask(channel, {"op": "keys"}) == '{"keys":["a","b"]}'
         assert _ask(channel, {"op": "nope"}) == '{"error":"unknown request"}'
-        channel.close()
-    finally:
-        _stop(server)
 
 def test_split_code_point_is_reassembled() -> None:
-    server = _start()
-    try:
-        channel = framing.channel(net.connect("127.0.0.1", server.port))
+    with _start() as server, framing.channel(net.connect("127.0.0.1", server.port)) as channel:
         message = '{"op": "set", "key": "café", "value": "naïve"}\n'.encode()
         # Split inside the two bytes of "é".
         cut = len('{"op": "set", "key": "caf'.encode()) + 1
@@ -71,20 +71,12 @@ def test_split_code_point_is_reassembled() -> None:
         reply = channel.receive(timeout=5.0)
         assert json.dump(reply) == '{"ok":true}', json.dump(reply)
         assert _ask(channel, {"op": "get", "key": "café"}) == '{"value":"naïve"}'
-        channel.close()
-    finally:
-        _stop(server)
 
 def test_clients_are_served_in_turn() -> None:
-    server = _start()
-    try:
-        first = framing.channel(net.connect("127.0.0.1", server.port))
-        assert _ask(first, {"op": "set", "key": "k", "value": 1}) == '{"ok":true}'
-        first.close()
-        second = framing.channel(net.connect("127.0.0.1", server.port))
-        assert _ask(second, {"op": "get", "key": "k"}) == '{"value":1}'
-        assert _ask(second, {"op": "shutdown"}) == '{"ok":true}'
-        second.close()
+    with _start() as server:
+        with framing.channel(net.connect("127.0.0.1", server.port)) as first:
+            assert _ask(first, {"op": "set", "key": "k", "value": 1}) == '{"ok":true}'
+        with framing.channel(net.connect("127.0.0.1", server.port)) as second:
+            assert _ask(second, {"op": "get", "key": "k"}) == '{"value":1}'
+            assert _ask(second, {"op": "shutdown"}) == '{"ok":true}'
         assert server.process.wait(timeout=5.0) == 0
-    finally:
-        _stop(server)

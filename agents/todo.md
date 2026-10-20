@@ -452,13 +452,13 @@ example changes it lists. New Rosetta Code examples go in
     Rosetta Code
     "Generator/Exponential"
 
-- [ ] Context managers, `with`, and scoped library resources (spec §8, §14)
+- [x] Context managers, `with`, and scoped library resources (spec §8, §14)
   - [x] `with` statements: managers satisfying `ContextManager[T]`;
     name and tuple-pattern targets; left-to-right entry and right-to-left exit,
     including after a failed entry; `exit` once with the pending exception or
     `None` on every departure; exit errors replacing the pending exception or
     transfer; definite assignment, control transfer, and no new scope
-  - [ ] Scoped library resources: `enter` and `exit` on `io.File`,
+  - [x] Scoped library resources: `enter` and `exit` on `io.File`,
     `net.Connection`, and `net.Listener`, rejecting closed handles and
     standard streams on entry; generators under `with`, closing their
     suspended contexts; `with` in place of `try`/`finally` cleanup in

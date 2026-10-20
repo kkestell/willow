@@ -1386,7 +1386,7 @@ local function check_function(fn, entry)
           diag.error(item.manager.span, "type " .. manager.name .. " is not a context manager")
         end
         -- Both calls receive the stored manager.
-        local ref = { kind = "ManagerRef" }
+        local ref = { kind = "ManagerRef", type = manager }
         item.enter_call = { kind = "MethodCall", object = ref, name = "enter", args = {}, span = item.manager.span }
         item.enter_call.type = check_method(item.enter_call, manager, state)
         local pending = { kind = "PendingError", span = statement.span }

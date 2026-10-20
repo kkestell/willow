@@ -142,6 +142,13 @@ local function native_record(module, name, prefix, methods)
   return record
 end
 
+-- Gives native type `record` the context-manager methods: `enter` returns the
+-- open handle and `exit` closes it.
+local function scoped(record)
+  record.native_methods.enter = { params = {}, result = record.type }
+  record.native_methods.exit = { params = { optional_exception }, names = { "error" }, result = types.None }
+end
+
 local file = native_record("io", "File", "file", {
   read = { params = { types.int }, names = { "size" }, result = types.bytes },
   readline = { params = {}, result = optional_str },
@@ -151,6 +158,7 @@ local file = native_record("io", "File", "file", {
   close = { params = {}, result = types.None },
   iter = { params = {}, result = iterator_of(types.str) },
 })
+scoped(file)
 local optional_file = types.union({ file.type, types.None })
 
 local io = provided("io", {
@@ -422,6 +430,8 @@ local listener = native_record("net", "Listener", "net_listener", {
   local_port = { params = {}, result = types.int },
   close = { params = {}, result = types.None },
 })
+scoped(connection)
+scoped(listener)
 local net = provided("net", {
   connect = {
     params = { types.str, types.int, optional_float },

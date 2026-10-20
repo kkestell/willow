@@ -113,6 +113,20 @@ function __wlo_file_flush(handle, site)
   end
 end
 
+-- A file entered for scoped use must be open and closable.
+function __wlo_file_enter(handle, site)
+  if handle.borrowed then
+    __wlo_fail("ValueError", "cannot close a standard stream", site)
+  elseif handle.closed then
+    __wlo_fail("ValueError", "I/O operation on closed file", site)
+  end
+  return handle
+end
+
+function __wlo_file_exit(handle, error, site)
+  __wlo_file_close(handle, site)
+end
+
 -- The handle is closed even when closing the file fails.
 function __wlo_file_close(handle, site)
   if handle.borrowed then

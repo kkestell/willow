@@ -34,6 +34,12 @@ class Channel:
     def close(self) -> None:
         self.connection.close()
 
+    def enter(self) -> Channel:
+        return self
+
+    def exit(self, error: Exception | None) -> None:
+        self.close()
+
 def channel(connection: net.Connection) -> Channel:
     return Channel(connection, bytes([]))
 
