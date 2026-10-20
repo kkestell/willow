@@ -1,0 +1,2 @@
+protocol_native_failure.wlo:8:7: error: ValueError: file is not open for writing
+  in main at protocol_native_failure.wlo:8:7

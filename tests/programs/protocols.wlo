@@ -4,11 +4,29 @@ protocol Shape:
     def area(self) -> float
     def scaled(self, factor: float) -> Shape
 
+protocol Area:
+    def area(self) -> float
+
 protocol Writer:
     def write_text(self, text: str) -> None
 
 protocol Source[T]:
     def get(self) -> T
+
+protocol Greeter:
+    def greet(self, name: str | None = "you", *, loud: bool = False) -> str
+
+protocol Number:
+    def value(self) -> int | float
+
+protocol Scaler:
+    def scale(self, by: float = 1.0) -> float
+
+protocol Pair:
+    def pair(self) -> tuple[int]
+
+protocol Described:
+    def describe(self) -> str
 
 class Rect:
     width: float
@@ -18,6 +36,8 @@ class Rect:
         return self.width * self.height
 
     def scaled(self, factor: float, *, square: bool = False) -> Rect:
+        if square:
+            return Rect(self.width * factor, self.width * factor)
         return Rect(self.width * factor, self.height * factor)
 
 class Circle:
@@ -32,16 +52,111 @@ class Circle:
     def get(self) -> float:
         return self.radius
 
-def keep(shape: Shape) -> Shape:
-    return shape
+class Box[T]:
+    item: T
 
-def fallback[T](source: Source[T], value: T) -> T:
-    return value
+    def get(self) -> T:
+        return self.item
+
+# The protocol's keyword-only `loud` comes after an extra `polite`, and the
+# defaults differ from the protocol's.
+class Host:
+    tag: str
+
+    def greet(self, name: str | None = "friend", *, polite: bool = True, loud: bool = True) -> str:
+        who = "nobody"
+        if name is not None:
+            who = name
+        text = self.tag + " greets " + who
+        if polite:
+            text = text + " politely"
+        if loud:
+            text = text + "!"
+        return text
+
+class Half:
+    n: int
+
+    def value(self) -> float:
+        return 2.5
+
+class Three:
+    n: int
+
+    def value(self) -> int:
+        return 3
+
+class Doubler:
+    n: int
+
+    def scale(self, by: int | float = 3) -> float:
+        if isinstance(by, float):
+            return by * 2.0
+        return -1.0
+
+class One:
+    n: int
+
+    def pair(self) -> tuple[int]:
+        return (self.n,)
+
+# Not a Pair: its tuple is longer.
+class Two:
+    n: int
+
+    def pair(self) -> tuple[int, float]:
+        return (self.n, 1.0)
+
+class Oops(Exception):
+    code: int
+
+    def describe(self) -> str:
+        return self.message + " " + str(self.code)
+
+def take[T](source: Source[T]) -> T:
+    return source.get()
+
+def show(number: Number) -> None:
+    r = number.value()
+    print(isinstance(r, float))
+    print(r)
 
 def main() -> None:
-    shapes: list[Shape] = [Rect(2.0, 3.0), keep(Circle(1.0))]
+    shapes: list[Shape] = [Rect(2.0, 3.0), Circle(1.0)]
+    for shape in shapes:
+        print(shape.area())
+        print(shape.scaled(2.0).area())
+    area: Area = shapes[0]
+    print(area.area())
+    later = lambda: area.area()
+    print(later())
+
+    def nested() -> float:
+        return area.area()
+
+    print(nested())
+
     out: Writer = io.stdout()
-    maybe: Shape | None = None
-    print(len(shapes))
-    print(maybe is None)
-    print(fallback(Circle(4.0), 2.5))
+    out.write_text(text="written\n")
+
+    print(take(Box(4)))
+    print(take(Circle(4.0)))
+
+    greeter: Greeter = Host("Ann")
+    print(greeter.greet())
+    print(greeter.greet(None, loud=False))
+    print(greeter.greet("Bo"))
+
+    show(Half(0))
+    show(Three(0))
+
+    scaler: Scaler = Doubler(0)
+    print(scaler.scale(1.5))
+    print(scaler.scale())
+
+    pair: Pair = One(1)
+    print(pair.pair()[0])
+    print(Two(2).pair()[1])
+
+    described: Described = Oops("bad", 7)
+    print(described.describe())

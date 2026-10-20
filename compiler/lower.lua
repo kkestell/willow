@@ -51,6 +51,10 @@ end
 
 local convert
 
+-- The types of the literals that library defaults, which are never checked,
+-- are written as.
+local literal_types = { Int = types.int, Float = types.float, String = types.str, Bool = types.bool, None = types.None }
+
 -- A parameter's default as a lowered value of the parameter's `type`.
 local function lower_default(node, type)
   local value
@@ -65,7 +69,7 @@ local function lower_default(node, type)
   else
     value = { kind = "Literal", value = node.value }
   end
-  return convert(value, node.type, type)
+  return convert(value, node.type or literal_types[node.kind], type)
 end
 
 -- The function that lets a value of `source`, a function or callable type,
@@ -192,7 +196,7 @@ local function is_pure(node)
   return true
 end
 
-local function lower_function(fn, sites, helpers)
+local function lower_function(fn, sites, helpers, protocols)
   local out
   local depth, temps, labels = 0, 0, 0
   local loop
@@ -425,7 +429,7 @@ local function lower_function(fn, sites, helpers)
       return { kind = "EnumMember", enum = node.enum, name = node.name }
     elseif kind == "Lambda" then
       -- Creating a closure has no effects, so it is set into a temporary first.
-      return spill({ kind = "Closure", fn = lower_function(node.fn, sites, helpers) }, depth)
+      return spill({ kind = "Closure", fn = lower_function(node.fn, sites, helpers, protocols) }, depth)
     elseif kind == "FunctionValue" then
       local value = { kind = "FunctionValue", target = node.target, qualified = node.qualified }
       -- A specialized generic function takes its callable's representation.
@@ -466,6 +470,26 @@ local function lower_function(fn, sites, helpers)
       local start = node.start and lower_operand(node.start) or { kind = "Literal" }
       local stop = node.stop and lower_operand(node.stop) or { kind = "Literal" }
       return helper(prefix(node.object.type) .. "slice", { object, start, stop }, node.span)
+    elseif kind == "MethodCall" and node.protocol then
+      -- The value's own type's converter takes the receiver, the arguments in
+      -- the protocol's order, with a marker for each left to a default, and
+      -- the call's site.
+      local object = lower_operand(node.object)
+      local args = { object }
+      for _, i in ipairs(node.order) do
+        args[i + 1] = lower_operand(node.args[i])
+      end
+      for i in ipairs(node.args) do
+        args[i + 1] = args[i + 1] or { kind = "Omitted" }
+      end
+      sites[#sites + 1] = node.span
+      args[#args + 1] = { kind = "Literal", value = #sites }
+      if not protocols[node.protocol] then
+        protocols[node.protocol] = true
+        protocols[#protocols + 1] = node.protocol
+      end
+      local callee = { kind = "Dispatch", protocol = node.protocol, object = object, name = node.name }
+      return { kind = "Call", callee = callee, args = args, span = node.span }
     elseif kind == "MethodCall" then
       local object = lower_operand(node.object)
       local args = lower_args(node)
@@ -569,7 +593,7 @@ local function lower_function(fn, sites, helpers)
     depth = 0
     local kind = statement.kind
     if kind == "FunctionDef" then
-      local closure = { kind = "Closure", fn = lower_function(statement.fn, sites, helpers) }
+      local closure = { kind = "Closure", fn = lower_function(statement.fn, sites, helpers, protocols) }
       set({ kind = "Local", symbol = statement.symbol }, closure, statement.span)
     elseif kind == "Unpack" then
       -- A target may be the source local itself, so the source is read from a temporary.
@@ -735,16 +759,128 @@ local function lower_function(fn, sites, helpers)
   }
 end
 
+-- The converters that let `record`, a class or native type, serve `protocol`,
+-- by method name, or nil when its methods do not line up with the protocol's
+-- or their concrete positions' types are not compatible.
+-- They are built from the declared signatures, so one serves every
+-- specialization; positions whose declared types mention a type parameter pass
+-- through, as protocol compatibility requires. A converter that changes
+-- nothing is the method itself.
+local function converters(protocol, record, helpers)
+  local methods = {}
+  for _, declared in ipairs(protocol.methods) do
+    local name = declared.name
+    local want = types.method(protocol.self_type or protocol.type, name)
+    local have = types.method(record.self_type or record.type, name)
+    local indexes = have and types.match(want, have)
+    if not indexes then
+      return nil
+    end
+    local wanted = {}
+    for i, j in ipairs(indexes) do
+      wanted[j] = i
+    end
+    local args, defaults = { { kind = "AdapterParam", index = 0 } }, {}
+    local changed = #have.params ~= #want.params
+    for j, h in ipairs(have.params) do
+      local i, value = wanted[j], nil
+      if i then
+        local param = want.params[i]
+        local concrete = not (param.generic or h.generic)
+        if concrete and not types.assignable(h.type, param.type) then
+          return nil
+        end
+        value = { kind = "AdapterParam", index = i }
+        if concrete then
+          value = convert(value, param.type, h.type)
+        end
+        if param.default then
+          -- An omitted argument takes the implementation's default, already
+          -- in the implementation's representation.
+          defaults[#defaults + 1] = { index = i, default = lower_default(h.default, h.type), value = value }
+          value = { kind = "AdapterParam", index = i }
+        end
+        changed = changed or i ~= j or value.kind ~= "AdapterParam" or param.default ~= nil
+      else
+        value = lower_default(h.default, h.type)
+      end
+      args[j + 1] = value
+    end
+    local call, target
+    if record.native then
+      target = record.prefix .. "_" .. name
+      helpers[target] = true
+      args[#args + 1] = { kind = "AdapterSite" }
+      call = { kind = "Pure", name = target, args = args }
+    else
+      for _, method in ipairs(record.methods) do
+        if method.name == name then
+          target = method
+        end
+      end
+      call = { kind = "Call", target = target, args = args }
+    end
+    local body = call
+    if not (want.result_generic or have.result_generic) then
+      if not types.assignable(want.result, have.result) then
+        return nil
+      end
+      body = convert(call, have.result, want.result)
+    end
+    if changed or body ~= call then
+      methods[name] = { kind = "Converter", arity = #want.params, defaults = defaults, body = body }
+    elseif record.native then
+      methods[name] = { kind = "HelperValue", name = target }
+    else
+      methods[name] = { kind = "FunctionValue", target = target }
+    end
+  end
+  return methods
+end
+
 -- Lowers every function and method of `modules`, the entry module first.
+-- Each protocol with method calls gets converters for every class and every
+-- native type of an imported library module that lines up with it.
 function M.lower(modules)
-  local sites, helpers = {}, {}
+  local sites, helpers, protocols = {}, {}, {}
   local functions = {}
   for _, module in ipairs(modules) do
     for _, fn in ipairs(bind.functions(module)) do
-      functions[#functions + 1] = lower_function(fn, sites, helpers)
+      functions[#functions + 1] = lower_function(fn, sites, helpers, protocols)
     end
   end
-  return { modules = modules, functions = functions, sites = sites, helpers = helpers }
+  local records, natives = {}, {}
+  for _, module in ipairs(modules) do
+    for _, record in ipairs(module.records) do
+      records[#records + 1] = record
+    end
+    for _, imported in pairs(module.imported) do
+      for _, declaration in pairs(imported.declarations) do
+        if declaration.native and not natives[declaration] then
+          natives[declaration] = true
+          natives[#natives + 1] = declaration
+        end
+      end
+    end
+  end
+  table.sort(natives, function(a, b)
+    return a.type_name < b.type_name
+  end)
+  for _, native in ipairs(natives) do
+    records[#records + 1] = native
+  end
+  local tables = {}
+  for i, protocol in ipairs(protocols) do
+    local entries = {}
+    for _, record in ipairs(records) do
+      local methods = converters(protocol, record, helpers)
+      if methods then
+        entries[#entries + 1] = { tag = record.type_name, methods = methods }
+      end
+    end
+    tables[i] = { protocol = protocol, entries = entries }
+  end
+  return { modules = modules, functions = functions, sites = sites, helpers = helpers, protocols = tables }
 end
 
 return M

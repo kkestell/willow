@@ -962,12 +962,21 @@ local function check_function(fn, entry)
         object = object.bound
         node.receiver = object
       end
-      if object.kind == "protocol" then
-        diag.error(node.span, "method calls on protocol values are not supported yet")
-      end
       local method = class_method(object, node.name)
       local params, result, names, defaults, inferred
-      if method then
+      if object.kind == "protocol" then
+        -- A protocol value exposes only its declared methods.
+        local signature = types.method(object, node.name)
+        if not signature then
+          diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
+        end
+        bind_args(node, node.name, signature.params, "parameter")
+        params, result = {}, signature.result
+        for i, param in ipairs(signature.params) do
+          params[i] = param.type
+        end
+        node.protocol = object.protocol
+      elseif method then
         -- A declared method binds its arguments to the parameters after `self`,
         -- with its class's type parameters replaced by the object's arguments
         -- and its own inferred.

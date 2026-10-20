@@ -283,9 +283,10 @@ end
 
 -- The signature of method `name` on `t`, a class, native type, or protocol,
 -- with `t`'s type arguments substituted, or nil. `params` lists the
--- parameters after `self` as `{ name, type, default, keyword_only }`; a native
--- method without `names` has positional-only parameters. A generic method has
--- no single signature, so it is left out.
+-- parameters after `self` as `{ name, type, default, keyword_only, generic }`;
+-- a native method without `names` has positional-only parameters. `generic`,
+-- and `result_generic` for the result, mark declared types that mention a type
+-- parameter. A generic method has no single signature, so it is left out.
 function M.method(t, name)
   local decl = t.record or t.protocol
   if not decl then
@@ -308,21 +309,23 @@ function M.method(t, name)
         local param = method.params[i]
         params[i - 1] = {
           name = param.name, type = M.substitute(param.type, map), default = param.default,
-          keyword_only = param.keyword_only,
+          keyword_only = param.keyword_only, generic = M.mentions(param.type),
         }
       end
-      return { params = params, result = M.substitute(method.return_type, map) }
+      return {
+        params = params, result = M.substitute(method.return_type, map),
+        result_generic = M.mentions(method.return_type),
+      }
     end
   end
 end
 
--- Whether method signature `have` accepts every call protocol method `want`
--- permits, by position and by keyword, and returns a result `want` accepts.
-local function compatible(want, have)
-  if not have then
-    return false
-  end
-  local used = {}
+-- The index of the parameter of method signature `have` that serves each
+-- parameter of protocol method `want`, matched by position and name or, for a
+-- keyword-only parameter, by name, or nil when the parameters do not line up.
+-- Every parameter of `have` left unmatched has a default.
+function M.match(want, have)
+  local indexes, used = {}, {}
   for i, param in ipairs(want.params) do
     local index
     for j, h in ipairs(have.params) do
@@ -331,18 +334,100 @@ local function compatible(want, have)
       end
     end
     local h = index and have.params[index]
-    if not h or not param.keyword_only and (index ~= i or h.keyword_only)
-      or param.default and not h.default or not M.assignable(h.type, param.type) then
-      return false
+    if not h or not param.keyword_only and (index ~= i or h.keyword_only) or param.default and not h.default then
+      return nil
     end
-    used[index] = true
+    indexes[i], used[index] = index, true
   end
   for j, h in ipairs(have.params) do
     if not used[j] and not h.default then
+      return nil
+    end
+  end
+  return indexes
+end
+
+local function member(t, kind)
+  for _, m in ipairs(M.members(t)) do
+    if m.kind == kind then
+      return m
+    end
+  end
+end
+
+-- Whether a value of `from` changes representation to serve `to`, or the
+-- other way around: a float boxed or unboxed, including in tuple positions and
+-- callable parameters and results.
+function M.converts(from, to)
+  from, to = M.expand(from), M.expand(to)
+  if M.boxed(to) ~= M.boxed(from) and M.has(M.boxed(to) and from or to, "float") then
+    return true
+  end
+  local source, target = member(from, "tuple"), member(to, "tuple")
+  if source and target then
+    for i, element in ipairs(source.elements) do
+      if M.converts(element, target.elements[i]) then
+        return true
+      end
+    end
+  end
+  source, target = member(from, "callable"), member(to, "callable")
+  if source and target then
+    for i, param in ipairs(target.params) do
+      if M.converts(param, source.params[i]) then
+        return true
+      end
+    end
+    return M.converts(source.result, target.result)
+  end
+  return false
+end
+
+-- Whether `t` holds a float whose representation a conversion could change.
+local function has_float(t)
+  t = M.expand(t)
+  if t.kind == "float" then
+    return true
+  end
+  for _, part in ipairs(t.kind == "union" and t.members or t.elements or t.params or {}) do
+    if has_float(part) then
+      return true
+    end
+  end
+  return t.kind == "callable" and has_float(t.result)
+end
+
+-- Whether a protocol converter can carry values between a protocol method's
+-- position of type `want` and the matching position `have` of the method that
+-- serves it; each is generic when its declared type mentions a type parameter.
+-- A converter is built from declared types, so it converts only where neither
+-- is generic. A value reached through another protocol uses its own type's
+-- converter, so between protocols nothing may convert, and a position generic
+-- only in `want` cannot hold a float that converter may have changed.
+local function representable(want, have, want_generic, have_generic, between)
+  if between then
+    return not M.converts(have, want) and not (want_generic and not have_generic and has_float(have))
+  end
+  return not ((want_generic or have_generic) and M.converts(have, want))
+end
+
+-- Whether method signature `have` accepts every call protocol method `want`
+-- permits, by position and by keyword, and returns a result `want` accepts.
+-- `between` is true when `have` is a protocol's method.
+local function compatible(want, have, between)
+  local indexes = have and M.match(want, have)
+  if not indexes then
+    return false
+  end
+  for i, param in ipairs(want.params) do
+    local h = have.params[indexes[i]]
+    if not M.assignable(h.type, param.type)
+      or not representable(param.type, h.type, param.generic, h.generic, between) then
       return false
     end
   end
   return M.assignable(want.result, have.result)
+    and representable(want.result, have.result, want.result_generic, have.result_generic, between)
 end
 
 -- The protocol and source pairs being checked by `satisfies`, keyed by type
@@ -360,7 +445,7 @@ local function satisfies(target, source)
   assuming[pair] = true
   local ok = true
   for _, method in ipairs(target.protocol.methods) do
-    ok = ok and compatible(M.method(target, method.name), M.method(source, method.name))
+    ok = ok and compatible(M.method(target, method.name), M.method(source, method.name), source.kind == "protocol")
   end
   assuming[pair] = nil
   return ok

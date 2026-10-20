@@ -1025,7 +1025,21 @@ return {
       .. "class Link:\n    n: int\n\n    def next(self) -> Link | None:\n        return None\n"
     check_source(N .. in_main("n: Node = Link(1)"))
     eq("10:11: type Node has no field 'n'", check_errors(N .. in_main("n: Node = Link(1)\nx = n.n")))
-    eq("10:7: method calls on protocol values are not supported yet",
-      check_errors(N .. in_main("n: Node = Link(1)\nn.next()")))
+    eq("10:7: type Node has no method 'prev'", check_errors(N .. in_main("n: Node = Link(1)\nn.prev()")))
+    eq("5:7: 'read' expects 1 argument, received 0", check_errors(R .. "def f(r: Reader) -> None:\n    r.read()\n" .. MAIN))
+    eq("5:12: 'read' has no parameter 'count'",
+      check_errors(R .. "def f(r: Reader) -> None:\n    r.read(count=1)\n" .. MAIN))
+
+    -- A converter cannot change a float's representation at a position typed
+    -- by a type parameter, or between protocols.
+    local F = "protocol Source[T]:\n    def get(self) -> T\nprotocol Number:\n    def get(self) -> int | float\n"
+      .. "class C:\n    n: float\n\n    def get(self) -> float:\n        return self.n\n"
+      .. "class Box[T]:\n    v: T\n\n    def get(self) -> T:\n        return self.v\n"
+    check_source(F .. in_main("a: Source[float] = C(1.0)\nb: Number = C(1.0)\nc: Source[float] = Box(1.0)"))
+    eq("16:30: expected Source[int | float], received C", check_errors(F .. in_main("a: Source[int | float] = C(1.0)")))
+    eq("16:30: expected Source[int | float], received Box[float]",
+      check_errors(F .. in_main("a: Source[int | float] = Box(1.0)")))
+    eq("17:30: expected Source[int | float], received Number",
+      check_errors(F .. in_main("b: Number = C(1.0)\na: Source[int | float] = b")))
   end,
 }

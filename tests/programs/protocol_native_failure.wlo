@@ -1,0 +1,8 @@
+import io
+
+protocol Writer:
+    def write_text(self, text: str) -> None
+
+def main() -> None:
+    w: Writer = io.stdin()
+    w.write_text("x")

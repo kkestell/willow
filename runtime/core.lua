@@ -430,6 +430,10 @@ local function __wlo_convert(value, step)
   return value
 end
 
+-- A protocol call passes this for an argument it leaves to the
+-- implementation's default.
+local __wlo_omitted = {}
+
 -- `kind` is a Lua type name, "box", "bytes", "list", "dict", or "tuple".
 local function __wlo_isinstance(value, kind)
   if type(value) ~= "table" then

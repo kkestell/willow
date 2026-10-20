@@ -413,7 +413,7 @@ example changes it lists. New Rosetta Code examples go in
     possible and parentheses grouping a type, as in `((int) -> str) | None`;
     callable type names in diagnostics; remove the `typing` module; update the
     examples and tests that import it
-  - [ ] Protocol values: a protocol value is the underlying value, and each
+  - [x] Protocol values: a protocol value is the underlying value, and each
     call dispatches on its run-time type through a generated converter per
     type and protocol that supplies implementation defaults and extra
     optional parameters and converts arguments and results; run-time tags

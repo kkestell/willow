@@ -107,6 +107,12 @@ function M.emit(lowered)
     return "__wlo_class_" .. escape(record.type_name)
   end
 
+  -- Each protocol with method calls keeps its converters in a table, keyed by
+  -- the name of the type each serves.
+  local function protocol_table(protocol)
+    return "__wlo_protocol_" .. escape(protocol.type_name)
+  end
+
   -- Each enum keeps its members in a table. A member is a table of its own,
   -- so it differs from strings and from members of other enums.
   local function enum_table(enum)
@@ -216,6 +222,35 @@ function M.emit(lowered)
       return "__wlo_f"
     elseif kind == "AdapterParam" then
       return "__wlo_p" .. e.index
+    elseif kind == "AdapterSite" then
+      return "__wlo_site"
+    elseif kind == "Omitted" then
+      return "__wlo_omitted"
+    elseif kind == "HelperValue" then
+      return runtime.reference(e.name)
+    elseif kind == "Dispatch" then
+      -- Classes and native values carry their type's name in __wlo_record,
+      -- exceptions in __wlo_class.
+      local object = expr(e.object)
+      return protocol_table(e.protocol) .. "[" .. object .. ".__wlo_record or " .. object .. ".__wlo_class]."
+        .. M.mangle(e.name)
+    elseif kind == "Converter" then
+      local params = {}
+      for i = 0, e.arity do
+        params[i + 1] = "__wlo_p" .. i
+      end
+      params[#params + 1] = "__wlo_site"
+      local parts = { "function(" .. table.concat(params, ", ") .. ")" }
+      for _, d in ipairs(e.defaults) do
+        local param = "__wlo_p" .. d.index
+        local text = "if " .. param .. " == __wlo_omitted then " .. param .. " = " .. expr(d.default)
+        if d.value.kind ~= "AdapterParam" then
+          text = text .. " else " .. param .. " = " .. expr(d.value)
+        end
+        parts[#parts + 1] = text .. " end"
+      end
+      parts[#parts + 1] = "return " .. expr(e.body) .. " end"
+      return table.concat(parts, " ")
     elseif kind == "Function" then
       local params = {}
       for i = 1, e.arity do
@@ -440,6 +475,9 @@ function M.emit(lowered)
   for _, record in ipairs(classes) do
     line(0, "local " .. class_table(record) .. " = {}")
   end
+  for _, dispatch in ipairs(lowered.protocols) do
+    line(0, "local " .. protocol_table(dispatch.protocol) .. " = {}")
+  end
   for _, module in ipairs(lowered.modules) do
     for _, enum in ipairs(module.enums) do
       line(0, "local " .. enum_table(enum) .. " = {")
@@ -457,6 +495,19 @@ function M.emit(lowered)
     line(0, "function " .. function_name(fn) .. "(" .. param_list(fn) .. ")", fn.span)
     function_body(fn, 1)
     line(0, "end")
+  end
+
+  -- Converters refer to methods, so they follow the definitions.
+  for _, dispatch in ipairs(lowered.protocols) do
+    line(0, "")
+    local name = protocol_table(dispatch.protocol)
+    for _, entry in ipairs(dispatch.entries) do
+      line(0, name .. "[" .. M.quote(entry.tag) .. "] = {")
+      for _, declared in ipairs(dispatch.protocol.methods) do
+        line(1, M.mangle(declared.name) .. " = " .. expr(entry.methods[declared.name]) .. ",")
+      end
+      line(0, "}")
+    end
   end
 
   local mapped = #lines
