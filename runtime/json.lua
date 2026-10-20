@@ -93,7 +93,8 @@ local function __wlo_json_string(pos)
   end
 end
 
--- An integer in the int range stays an int; any other number is a float.
+-- A number with no fraction or exponent is an int, which must be in range; any
+-- other number is a float.
 local function __wlo_json_number(pos)
   local text = __wlo_json_text
   local int_end = text:match("^-?0()", pos) or text:match("^-?[1-9]%d*()", pos)
@@ -112,9 +113,10 @@ local function __wlo_json_number(pos)
   local number = text:sub(pos, stop - 1)
   if stop == int_end then
     local value = tonumber(number)
-    if math.abs(value) <= __wlo_MAX_INT then
-      return value == 0 and 0 or value, stop
+    if math.abs(value) > __wlo_MAX_INT then
+      __wlo_json_error("integer out of range", pos)
     end
+    return value == 0 and 0 or value, stop
   end
   return __wlo_box(__wlo_parse_float(number, __wlo_json_site)), stop
 end

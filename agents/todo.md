@@ -477,6 +477,6 @@ example changes it lists. New Rosetta Code examples go in
     `report.wlo` in place of its `by_count` grouping, and Rosetta Code "Sort
     using a custom comparator"
 
-- [ ] Strict JSON integer range handling (spec §14)
-  - [ ] `json.parse` raises `JsonError` `integer out of range` at the number's
+- [x] Strict JSON integer range handling (spec §14)
+  - [x] `json.parse` raises `JsonError` `integer out of range` at the number's
     first character for integer tokens outside the `int` range
