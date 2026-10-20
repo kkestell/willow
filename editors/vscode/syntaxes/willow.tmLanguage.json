@@ -25,14 +25,14 @@
           }
         },
         {
-          "match": "\\b(class)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "match": "\\b(class|enum|protocol)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": { "name": "storage.type.class.willow" },
             "2": { "name": "entity.name.type.class.willow" }
           }
         },
         {
-          "match": "^\\s*(type)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?==)",
+          "match": "^\\s*(type)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*[\\[=])",
           "captures": {
             "1": { "name": "storage.type.willow" },
             "2": { "name": "entity.name.type.willow" }
@@ -89,6 +89,8 @@
           "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.willow" } },
           "endCaptures": { "0": { "name": "punctuation.section.embedded.end.willow" } },
           "patterns": [
+            { "include": "#format_spec" },
+            { "include": "#string" },
             { "include": "#number" },
             { "include": "#keyword" },
             { "include": "#builtin" },
@@ -96,6 +98,10 @@
           ]
         }
       ]
+    },
+    "format_spec": {
+      "name": "constant.other.format-spec.willow",
+      "match": ":[<>^]?[0-9]*(\\.[0-9]+)?[sdf]?(?=\\})"
     },
     "escape": {
       "name": "constant.character.escape.willow",
@@ -107,24 +113,30 @@
     },
     "keyword": {
       "patterns": [
+        { "name": "storage.type.function.lambda.willow", "match": "\\blambda\\b" },
         {
           "name": "keyword.control.willow",
-          "match": "\\b(if|elif|else|while|for|in|return|break|continue|pass|try|except|finally|raise|assert|import|as)\\b"
+          "match": "\\b(if|elif|else|while|for|in|return|yield|break|continue|pass|try|except|finally|raise|assert|with|import|as|nonlocal)\\b"
         },
         { "name": "keyword.operator.logical.willow", "match": "\\b(and|or|not|is)\\b" },
-        { "name": "constant.language.willow", "match": "\\b(True|False|None)\\b" }
+        { "name": "keyword.other.reserved.willow", "match": "\\b(async|await|case|del|from|global|match)\\b" },
+        { "name": "constant.language.willow", "match": "\\b(True|False|None)\\b" },
+        { "name": "variable.language.self.willow", "match": "\\bself\\b" }
       ]
     },
     "builtin": {
       "patterns": [
-        { "name": "support.type.willow", "match": "\\b(int|float|bool|str|list|dict)\\b" },
+        {
+          "name": "support.type.willow",
+          "match": "\\b(int|float|bool|str|bytes|list|dict|tuple|Iterable|Iterator|ContextManager|Generator)\\b"
+        },
         {
           "name": "support.function.builtin.willow",
-          "match": "\\b(print|input|len|range|ord|chr|isinstance|sorted)\\b"
+          "match": "\\b(print|input|len|range|ord|chr|isinstance|sorted|iter|next)\\b"
         },
         {
           "name": "support.type.exception.willow",
-          "match": "\\b(Exception|AssertionError|OverflowError|ZeroDivisionError|ValueError|IndexError|KeyError|RuntimeError|OSError)\\b"
+          "match": "\\b(Exception|AssertionError|OverflowError|ZeroDivisionError|ValueError|IndexError|KeyError|RuntimeError|OSError|TimeoutError|StopIteration)\\b"
         }
       ]
     },
