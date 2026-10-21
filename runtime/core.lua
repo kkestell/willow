@@ -1320,19 +1320,6 @@ local function __wlo_await(c, site)
   return __wlo_consume(c, site)()
 end
 
--- Drives coroutine `c` of async `main` or an async test as the root task, in a
--- Lua coroutine of its own whose frames end at the task's body. Nothing
--- suspends yet, so one resume runs it to completion.
-local function __wlo_root(c)
-  local task = coroutine.create(function()
-    return xpcall(__wlo_consume(c), __wlo_catch)
-  end)
-  local _, ok, err = coroutine.resume(task)
-  if not ok then
-    error(err, 0)
-  end
-end
-
 local function __wlo_where(location)
   return __wlo_paths[location[3]] .. ":" .. location[1] .. ":" .. location[2]
 end

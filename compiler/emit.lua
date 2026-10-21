@@ -555,11 +555,14 @@ function M.emit(lowered)
     quoted[i] = M.quote(path)
   end
   line(0, "__wlo_paths = { " .. table.concat(quoted, ", ") .. " }")
-  -- The function __wlo_run calls for `main` or a test, which drives an
+  -- The function __wlo_run calls for `main` or a test. The event loop runs an
   -- async one's coroutine as the root task.
   local function root(fn)
     local name = M.mangle(fn.name)
-    return fn.async and "function() __wlo_root(" .. name .. "()) end" or name
+    if fn.async then
+      return "function() " .. runtime.reference("aio_run") .. "(__wlo_consume(" .. name .. "())) end"
+    end
+    return name
   end
   local tests = entry.tests
   if tests then

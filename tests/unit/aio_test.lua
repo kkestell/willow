@@ -3,8 +3,8 @@ local runtime = require("compiler.runtime")
 
 local eq = require("tests.support").eq
 
-local run, start, sleep, wait_fd, monotonic = runtime.load({ aio_run = true, monotonic = true },
-  { "__wlo_aio_run", "__wlo_aio_start", "__wlo_aio_sleep", "__wlo_aio_wait_fd", "__wlo_monotonic" })
+local run, start, sleep, wait_fd, monotonic, report = runtime.load({ aio_run = true, monotonic = true },
+  { "__wlo_aio_run", "__wlo_aio_start", "__wlo_aio_sleep", "__wlo_aio_wait_fd", "__wlo_monotonic", "__wlo_report" })
 
 ffi.cdef([[
 int __wlo_test_pipe(int fds[2]) __asm__("pipe");
@@ -139,6 +139,7 @@ function tests.deadlock_is_reported()
   eq(false, ok)
   eq("deadlock: all tasks are waiting", err.message)
   eq(nil, err.__wlo_class)
+  eq("error: deadlock: all tasks are waiting", report(err))
   assert(monotonic() - started < 1)
 end
 

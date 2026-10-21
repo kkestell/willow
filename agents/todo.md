@@ -17,14 +17,15 @@ tests and `make test`. The design review and runtime prototype are in
     `-> Coroutine[T]`; `await` at its precedence level, only in async bodies,
     and no `yield` in them; the discard rule for coroutine types and unions,
     exempting type parameters
-  - [x] Each coroutine a Lua coroutine emitted like a generator body; `await`
-    of a coroutine as a helper call that consumes it and runs it inline;
+  - [x] Each task a Lua coroutine; each Willow coroutine a deferred body
+    emitted like a generator body; `await` of a coroutine as a helper call
+    that consumes it and runs it inline;
     `coroutine was already awaited or started`; async `main` and async
     `test_*` functions driven as the root task
 - [ ] Task groups, the event loop, and cancellation (spec §10, §13, §15)
   - [x] A `poll` loop with a FIFO ready queue and a timer heap; fd waits with
     deadlines for async TCP; the deadlock check (`runtime/aio.lua`)
-  - [ ] `aio.sleep`, with `sleep(0)` always suspending; async `main` and tests
+  - [x] `aio.sleep`, with `sleep(0)` always suspending; async `main` and tests
     run through the loop, with the fatal deadlock report
   - [ ] `aio.task_group`, `aio.Task`, `start`, `cancel`, and `result`; group
     states and their messages; joining, admission, first-failure recording,
