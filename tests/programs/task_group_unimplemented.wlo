@@ -1,9 +1,0 @@
-import aio
-
-async def square(value: int) -> int:
-    return value * value
-
-async def main() -> None:
-    async with aio.task_group() as group:
-        task = group.start(square(3))
-    print(await task)
