@@ -874,6 +874,17 @@ local function resolve_function(fn, scope, module)
           calls = calls + 2
         end
         resolve_block(statement.body, handling)
+      elseif kind == "AsyncWith" then
+        if not fn.async then
+          diag.error(statement.span, "'async with' is only allowed in an async function")
+        end
+        resolve_expression(statement.manager)
+        if statement.target then
+          resolve_targets(statement.target)
+        end
+        -- The join lets other code run.
+        calls = calls + 1
+        resolve_block(statement.body, handling)
       elseif kind == "Try" then
         resolve_block(statement.body, handling)
         for _, handler in ipairs(statement.handlers) do

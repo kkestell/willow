@@ -27,6 +27,8 @@ tests and `make test`. The design review and runtime prototype are in
     deadlines for async TCP; the deadlock check (`runtime/aio.lua`)
   - [x] `aio.sleep`, with `sleep(0)` always suspending; async `main` and tests
     run through the loop, with the fatal deadlock report
+  - [x] Front end: `aio.task_group`, `aio.TaskGroup`, and `aio.Task[T]`
+    declarations, `await` of a task, and `async with` parsing and checking
   - [ ] `aio.task_group`, `aio.Task`, `start`, `cancel`, and `result`; group
     states and their messages; joining, admission, first-failure recording,
     and task traceback frames ending in `in task started at`
@@ -35,7 +37,7 @@ tests and `make test`. The design review and runtime prototype are in
     `finally` and resource exits; checkpoints and persistent requests;
     failure precedence over an outer request; group exits lowered through
     `lower_with`'s `Try` with an exit that absorbs or converts the departure
-  - [ ] Static checking: each `await` and nested group exit as a possible
+  - [x] Static checking: each `await` and nested group exit as a possible
     transfer to the end of enclosing groups, carrying intervening `finally`
     effects; narrowing removed at awaits and joins
 - [ ] Async TCP (spec §14, §15)

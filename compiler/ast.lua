@@ -18,10 +18,10 @@ local function visit_targets(pattern, visit)
 end
 
 -- Calls `visit(node)` for each Assign, For, FunctionDef, Nonlocal, named except
--- handler, and target of an Unpack, For pattern, or With in `body` and its
--- nested blocks, outer before inner and left to right; `node.name` is the name it
--- assigns, and a Nonlocal names the outer variables later ones rebind. Nested
--- function bodies are scopes of their own and are not visited.
+-- handler, and target of an Unpack, For pattern, With, or AsyncWith in `body`
+-- and its nested blocks, outer before inner and left to right; `node.name` is
+-- the name it assigns, and a Nonlocal names the outer variables later ones
+-- rebind. Nested function bodies are scopes of their own and are not visited.
 function M.assignments(body, visit)
   for _, statement in ipairs(body) do
     local kind = statement.kind
@@ -42,6 +42,11 @@ function M.assignments(body, visit)
         if item.target then
           visit_targets(item.target, visit)
         end
+      end
+      M.assignments(statement.body, visit)
+    elseif kind == "AsyncWith" then
+      if statement.target then
+        visit(statement.target)
       end
       M.assignments(statement.body, visit)
     elseif kind == "Try" then
