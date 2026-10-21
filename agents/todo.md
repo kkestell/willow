@@ -22,17 +22,17 @@ tests and `make test`. The design review and runtime prototype are in
     that consumes it and runs it inline;
     `coroutine was already awaited or started`; async `main` and async
     `test_*` functions driven as the root task
-- [ ] Task groups, the event loop, and cancellation (spec §10, §13, §15)
+- [x] Task groups, the event loop, and cancellation (spec §10, §13, §15)
   - [x] A `poll` loop with a FIFO ready queue and a timer heap; fd waits with
     deadlines for async TCP; the deadlock check (`runtime/aio.lua`)
   - [x] `aio.sleep`, with `sleep(0)` always suspending; async `main` and tests
     run through the loop, with the fatal deadlock report
   - [x] Front end: `aio.task_group`, `aio.TaskGroup`, and `aio.Task[T]`
     declarations, `await` of a task, and `async with` parsing and checking
-  - [ ] `aio.task_group`, `aio.Task`, `start`, `cancel`, and `result`; group
+  - [x] `aio.task_group`, `aio.Task`, `start`, `cancel`, and `result`; group
     states and their messages; joining, admission, first-failure recording,
     and task traceback frames ending in `in task started at`
-  - [ ] Cancellation: the generator cancel sentinel; a `cancelled` flag and
+  - [x] Cancellation: the generator cancel sentinel; a `cancelled` flag and
     parent pointer per group and a scope per task, saved and cleared around
     `finally` and resource exits; checkpoints and persistent requests;
     failure precedence over an outer request; group exits lowered through

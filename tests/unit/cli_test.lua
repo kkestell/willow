@@ -518,6 +518,21 @@ return {
     eq("", stderr)
   end,
 
+  async_tests_run_task_groups = function()
+    local status, stdout = willow(ROOT, "test tests/suites/async")
+    eq(1, status)
+    eq(table.concat({
+      "PASS tests/suites/async/test_groups.wlo test_double",
+      "FAIL tests/suites/async/test_groups.wlo test_halve_odd",
+      "  tests/suites/async/test_groups.wlo:9:9: error: ValueError: odd",
+      "    in halve at tests/suites/async/test_groups.wlo:9:9",
+      "    in task started at tests/suites/async/test_groups.wlo:19:15",
+      "  test did not return (exit status 1)",
+      "1 passed, 1 failed",
+      "",
+    }, "\n"), stdout)
+  end,
+
   async_tests_run_in_the_event_loop = function()
     in_temp_dir(function(dir)
       write(dir .. "/test_sleep.wlo", "import aio\n"

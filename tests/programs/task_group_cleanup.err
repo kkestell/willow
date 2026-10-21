@@ -1,0 +1,2 @@
+task_group_cleanup.wlo:20:13: error: RuntimeError: task was cancelled
+  in main at task_group_cleanup.wlo:20:13

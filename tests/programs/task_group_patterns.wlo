@@ -1,0 +1,86 @@
+import aio
+
+# Ports of agents/prototypes/async/programs: a pipeline, a fan-out with a
+# deadline, and a retry. Sleeps stand in for network operations.
+
+class Buffer:
+    items: list[str]
+    done: bool
+
+async def producer(buffer: Buffer) -> None:
+    for line in ["a", "b", "c"]:
+        while len(buffer.items) >= 2:
+            await aio.sleep(0.0)
+        buffer.items.append(line)
+    buffer.done = True
+
+async def consumer(buffer: Buffer) -> None:
+    while True:
+        if len(buffer.items) > 0:
+            print(buffer.items[0])
+            buffer.items = buffer.items[1:]
+        elif buffer.done:
+            return
+        else:
+            await aio.sleep(0.0)
+
+class Flag:
+    fired: bool
+
+async def fetch(name: str, seconds: float) -> str:
+    await aio.sleep(seconds)
+    return name
+
+async def deadline(group: aio.TaskGroup, seconds: float, flag: Flag) -> None:
+    await aio.sleep(seconds)
+    flag.fired = True
+    group.cancel()
+
+async def flaky(attempts: list[int]) -> int:
+    attempts[0] = attempts[0] + 1
+    await aio.sleep(0.0)
+    if attempts[0] < 3:
+        raise ValueError("try again")
+    return attempts[0]
+
+async def retry[T](attempt: () -> Coroutine[T], tries: int) -> T:
+    while tries > 1:
+        try:
+            return await attempt()
+        except ValueError:
+            tries = tries - 1
+            await aio.sleep(0.0)
+    return await attempt()
+
+async def retry_once[T](attempt: Coroutine[T]) -> T:
+    try:
+        return await attempt
+    except ValueError:
+        return await attempt
+
+async def main() -> None:
+    buffer = Buffer([], False)
+    async with aio.task_group() as group:
+        group.start(producer(buffer))
+        group.start(consumer(buffer))
+
+    tasks: list[aio.Task[str]] = []
+    flag = Flag(False)
+    async with aio.task_group() as group:
+        tasks.append(group.start(fetch("fast", 0.01)))
+        tasks.append(group.start(fetch("slow", 10.0)))
+        group.start(deadline(group, 0.05, flag))
+    print(flag.fired)
+    for task in tasks:
+        try:
+            print(task.result())
+        except RuntimeError as error:
+            print(error.message)
+
+    attempts = [0]
+    print(await retry(lambda: flaky(attempts), 5))
+    attempts = [0]
+    try:
+        await retry_once(flaky(attempts))
+    except RuntimeError as error:
+        print(error.message)

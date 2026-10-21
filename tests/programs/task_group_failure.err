@@ -1,0 +1,4 @@
+task_group_failure.wlo:12:9: error: ValueError: negative value
+  in check at task_group_failure.wlo:12:9
+  called from worker at task_group_failure.wlo:15:5
+  in task started at task_group_failure.wlo:21:19
