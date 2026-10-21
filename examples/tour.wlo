@@ -1,0 +1,156 @@
+# Fetch logs from two hosts concurrently, parse them, and print a report.
+
+import aio
+
+enum Level:
+    INFO
+    WARN
+    ERROR
+
+class Entry:
+    host: str
+    level: Level
+    text: str
+    millis: int | None = None
+
+class ParseError(Exception):
+    line: int
+
+type Timing = tuple[int, str]
+
+# Any class with a matching `check` method is a Rule; no declaration needed.
+protocol Rule:
+    def check(self, entry: Entry) -> str | None
+
+class SlowerThan:
+    limit: int
+
+    def check(self, entry: Entry) -> str | None:
+        # Fields are not narrowed, so copy to a local before testing for None.
+        millis = entry.millis
+        if millis is not None and millis > self.limit:
+            return f"took {millis}ms"
+        return None
+
+class Mentions:
+    word: str
+
+    def check(self, entry: Entry) -> str | None:
+        if self.word in entry.text:
+            return f"mentions {self.word}"
+        return None
+
+# A context manager is any value with `enter` and `exit` methods.
+class Section:
+    title: str
+
+    def enter(self) -> None:
+        print(f"== {self.title} ==")
+
+    def exit(self, error: Exception | None) -> None:
+        print("")
+
+def sample_logs() -> dict[str, str]:
+    return {
+        "web": """
+INFO GET /home [12ms]
+WARN GET /search [840ms]
+ERROR POST /login: database timeout [3000ms]
+""",
+        "db": """
+INFO connected
+oops
+WARN slow query [1200ms]
+ERROR disk full
+""",
+    }
+
+async def fetch_log(host: str) -> str:
+    await aio.sleep(0.01)    # stands in for a network request
+    return sample_logs()[host]
+
+# "slow query [1200ms]" -> ("slow query", 1200)
+def split_millis(text: str) -> tuple[str, int | None]:
+    if not text.endswith("ms]"):
+        return (text, None)
+    start = text.find(" [")
+    return (text[:start], int(text[start + 2:-3]))
+
+def parse_line(host: str, line: str, number: int) -> Entry:
+    levels = {"INFO": Level.INFO, "WARN": Level.WARN, "ERROR": Level.ERROR}
+    word = line.split(" ")[0]
+    level = levels.get(word)
+    if level is None:
+        raise ParseError(f"unknown level '{word}'", number)
+    text, millis = split_millis(line[len(word) + 1:])
+    return Entry(host, level, text, millis=millis)
+
+# A generator: its body runs a step at a time as the caller iterates.
+def parse(host: str, text: str) -> Iterator[Entry]:
+    number = 0
+    for line in text.strip().split("\n"):
+        number = number + 1
+        try:
+            entry = parse_line(host, line, number)
+        except ParseError as error:
+            print(f"{host}:{error.line}: {error.message}")
+            continue
+        yield entry
+
+def first[T](items: list[T], *, where: (T) -> bool) -> T | None:
+    for item in items:
+        if where(item):
+            return item
+    return None
+
+def counter(prefix: str = "#") -> () -> str:
+    count = 0
+
+    def next_label() -> str:
+        nonlocal count
+        count = count + 1
+        return f"{prefix}{count}"
+
+    return next_label
+
+async def main() -> None:
+    hosts = ["web", "db"]
+    downloads: dict[str, aio.Task[str]] = {}
+    async with aio.task_group() as group:
+        for host in hosts:
+            downloads[host] = group.start(fetch_log(host))
+
+    # The group has waited for every task, so each result is ready.
+    entries: list[Entry] = []
+    for host in hosts:
+        for entry in parse(host, downloads[host].result()):
+            entries.append(entry)
+
+    with Section("Levels"):
+        counts = {Level.INFO: 0, Level.WARN: 0, Level.ERROR: 0}
+        for entry in entries:
+            counts[entry.level] = counts[entry.level] + 1
+        for level in counts:
+            print(f"{level:<12}{counts[level]:>3d}")
+
+    with Section("Slowest"):
+        timings: list[Timing] = []
+        for entry in entries:
+            millis = entry.millis
+            if millis is not None:
+                timings.append((millis, f"{entry.host} {entry.text}"))
+        for millis, text in sorted(timings, reverse=True)[:2]:
+            print(f"{millis:>6d}ms  {text}")
+
+    with Section("Alerts"):
+        rules: list[Rule] = [SlowerThan(limit=1000), Mentions("timeout")]
+        label = counter()
+        for entry in entries:
+            for rule in rules:
+                alert = rule.check(entry)
+                if alert is not None:
+                    print(f"{label()} {entry.host}: {entry.text} ({alert})")
+
+    error = first(entries, where=lambda entry: entry.level == Level.ERROR)
+    if error is not None:
+        print(f"First error: {error.text} on {error.host}")

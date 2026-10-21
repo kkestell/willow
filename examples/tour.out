@@ -1,0 +1,16 @@
+db:2: unknown level 'oops'
+== Levels ==
+Level.INFO    2
+Level.WARN    2
+Level.ERROR   2
+
+== Slowest ==
+  3000ms  web POST /login: database timeout
+  1200ms  db slow query
+
+== Alerts ==
+#1 web: POST /login: database timeout (took 3000ms)
+#2 web: POST /login: database timeout (mentions timeout)
+#3 db: slow query (took 1200ms)
+
+First error: POST /login: database timeout on web

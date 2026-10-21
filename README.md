@@ -45,8 +45,9 @@ example `luajit number.lua out.txt` or `./number out.txt`.
 `willow test` accepts a test file or a directory of `test_*.wlo` files.
 
 `examples/` has one program for each language feature, named after the feature,
-with its output in a matching `.out` file. `examples/rosettacode/` has
-solutions to Rosetta Code tasks.
+with its output in a matching `.out` file. `examples/tour.wlo` is one short
+program that uses most of the language. `examples/rosettacode/` has solutions to
+Rosetta Code tasks.
 
 Error messages are written to stderr and program output to stdout. The exit
 status is 0 on success and 1 for usage errors, source errors, output failures,
