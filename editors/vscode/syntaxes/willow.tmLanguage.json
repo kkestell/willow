@@ -18,6 +18,14 @@
     "declaration": {
       "patterns": [
         {
+          "match": "\\b(async)\\s+(def)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.modifier.async.willow" },
+            "2": { "name": "storage.type.function.willow" },
+            "3": { "name": "entity.name.function.willow" }
+          }
+        },
+        {
           "match": "\\b(def)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": { "name": "storage.type.function.willow" },
@@ -114,12 +122,13 @@
     "keyword": {
       "patterns": [
         { "name": "storage.type.function.lambda.willow", "match": "\\blambda\\b" },
+        { "name": "storage.modifier.async.willow", "match": "\\b(async)\\s+(?=with\\b)" },
         {
           "name": "keyword.control.willow",
-          "match": "\\b(if|elif|else|while|for|in|return|yield|break|continue|pass|try|except|finally|raise|assert|with|import|as|nonlocal)\\b"
+          "match": "\\b(if|elif|else|while|for|in|return|yield|break|continue|pass|try|except|finally|raise|assert|with|import|as|nonlocal|async|await)\\b"
         },
         { "name": "keyword.operator.logical.willow", "match": "\\b(and|or|not|is)\\b" },
-        { "name": "keyword.other.reserved.willow", "match": "\\b(async|await|case|del|from|global|match)\\b" },
+        { "name": "keyword.other.reserved.willow", "match": "\\b(case|del|from|global|match)\\b" },
         { "name": "constant.language.willow", "match": "\\b(True|False|None)\\b" },
         { "name": "variable.language.self.willow", "match": "\\bself\\b" }
       ]
@@ -128,7 +137,7 @@
       "patterns": [
         {
           "name": "support.type.willow",
-          "match": "\\b(int|float|bool|str|bytes|list|dict|tuple|Iterable|Iterator|ContextManager|Generator)\\b"
+          "match": "\\b(int|float|bool|str|bytes|list|dict|tuple|Iterable|Iterator|ContextManager|Generator|Coroutine)\\b"
         },
         {
           "name": "support.function.builtin.willow",
