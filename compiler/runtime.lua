@@ -39,6 +39,7 @@ local optional_runtimes = {
   optional_runtime(read_runtime("runtime.cli")),
   optional_runtime(read_runtime("runtime.http")),
   optional_runtime(read_runtime("runtime.json")),
+  optional_runtime(read_runtime("runtime.aio")),
 }
 
 -- The generated reference to a helper named without its __wlo_ prefix.
