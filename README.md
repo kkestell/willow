@@ -109,14 +109,17 @@ push to `main` changes the compiler, the runtime, or the benchmarks, and it can
 be started by hand from the Actions tab.
 
 <!-- benchmarks:start -->
-Seconds of wall-clock time, best of 3 runs, on Apple M4 Max, Darwin.
+Seconds of wall-clock time, best of 3 runs, on AMD EPYC 7763 64-Core Processor, Linux.
 
 | Benchmark (size) | C | Go | Node | LuaJIT | Willow | Python |
 |---|---:|---:|---:|---:|---:|---:|
-| n-body (5,000,000) | 0.16 | 0.28 | 0.24 | 0.32 | 0.37 | 12.94 |
-| spectral-norm (2,000) | 0.12 | 0.14 | 0.35 | 0.12 | 0.50 | 12.93 |
-| fannkuch-redux (10) | 0.14 | 0.14 | 0.22 | 0.22 | 0.28 | 2.85 |
-| binary-trees (18) | 0.85 | 0.82 | 0.48 | 2.72 | 2.21 | 11.64 |
+| n-body (5,000,000) | 0.34 | 0.44 | 0.58 | 0.81 | 1.29 | 27.27 |
+| spectral-norm (2,000) | 0.23 | 0.23 | 0.27 | 0.26 | 1.00 | 28.10 |
+| fannkuch-redux (10) | 0.22 | 0.20 | 0.28 | 0.51 | 0.73 | 6.51 |
+| binary-trees (18) | 1.38 | 2.43 | 1.15 | 5.86 | 6.79 | 33.12 |
+| fasta (2,500,000) | 0.43 | 0.39 | 1.04 | 1.03 | 4.21 | 5.62 |
+| mandelbrot (2,500) | 0.45 | 0.45 | 0.54 | 0.48 | 0.70 | 18.95 |
+| k-nucleotide (2,500,000) | 0.34 | 0.46 | 1.60 | 0.55 | 8.43 | 3.63 |
 <!-- benchmarks:end -->
 
 ## Editor support
