@@ -3,10 +3,6 @@
 Willow is a small, statically typed language with Python-like syntax. It compiles
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension.
 
-Async support (§15 and `aio` in §14) is specified but not yet implemented. Its
-implementation is tracked in
-[the async milestone](../agents/todo.md#async-support).
-
 ## 1. Programs
 
 ```python
@@ -1629,7 +1625,7 @@ async def main() -> None:
 | `Listener.enter() -> Listener` | Return this open listener for scoped use |
 | `Listener.exit(error: Exception \| None) -> None` | Close the listener |
 
-`sleep` validates its argument as `time.sleep` does. `await aio.sleep(0)`
+`sleep` validates its argument as `time.sleep` does. `await aio.sleep(0.0)`
 always suspends the current task, so other ready tasks run before it continues.
 The task and task-group operations are specified in §15.
 
@@ -2311,7 +2307,7 @@ value or raise the resulting exception. Awaiting a cancelled task raises
 `RuntimeError` with the message `task was cancelled`. A group's join already
 waits for every child, so cleanup in the group's body need not await them.
 
-An await whose result is ready need not suspend. `await aio.sleep(0)` always
+An await whose result is ready need not suspend. `await aio.sleep(0.0)` always
 suspends, letting other ready tasks run first (§14).
 
 `await` is allowed only inside an async function or method, including its
