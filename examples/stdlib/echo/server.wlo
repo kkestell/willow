@@ -1,0 +1,33 @@
+# An echo server on 127.0.0.1:
+# willow run server.wlo <port>
+# Each connection is echoed by its own task until a client sends the line
+# "quit", which stops the server and closes every connection.
+
+import aio
+import sys
+
+async def echo(connection: aio.Connection, group: aio.TaskGroup) -> None:
+    with connection:
+        while True:
+            data = await connection.recv(1024)
+            if len(data) == 0:
+                return
+            if data == "quit\n".encode():
+                group.cancel()
+                return
+            await connection.sendall(data)
+
+async def serve(listener: aio.Listener) -> None:
+    async with aio.task_group() as group:
+        while True:
+            # The connection is scoped by its task before that task's first
+            # await, so a stop still closes it (§15).
+            group.start(echo(await listener.accept(), group))
+
+async def main() -> None:
+    args = sys.args()
+    if len(args) != 1:
+        sys.eprint("usage: server <port>")
+        sys.exit(2)
+    with aio.listen("127.0.0.1", int(args[0])) as listener:
+        await serve(listener)
