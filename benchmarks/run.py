@@ -32,9 +32,9 @@ BENCHMARKS = [
     ("spectral_norm", "spectral-norm", 2_000),
     ("fannkuch_redux", "fannkuch-redux", 10),
     ("binary_trees", "binary-trees", 18),
-    ("fasta", "fasta", 500_000),
-    ("mandelbrot", "mandelbrot", 1_000),
-    ("k_nucleotide", "k-nucleotide", 1_000_000),
+    ("fasta", "fasta", 2_500_000),
+    ("mandelbrot", "mandelbrot", 2_500),
+    ("k_nucleotide", "k-nucleotide", 2_500_000),
 ]
 
 LANGUAGES = ["C", "Go", "Node", "LuaJIT", "Willow", "Python"]
