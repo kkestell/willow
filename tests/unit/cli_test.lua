@@ -518,6 +518,20 @@ return {
     eq("", stderr)
   end,
 
+  async_tests_run_in_the_event_loop = function()
+    in_temp_dir(function(dir)
+      write(dir .. "/test_sleep.wlo", "import aio\n"
+        .. "async def test_sleeps() -> None:\n    await aio.sleep(0.0)\n    print('woke')\n"
+        .. "async def test_bad_sleep() -> None:\n    await aio.sleep(-1.0)\n")
+      local status, stdout = willow(dir, "test")
+      eq(1, status)
+      eq("FAIL test_sleep.wlo test_bad_sleep\n"
+        .. "  test_sleep.wlo:6:15: error: ValueError: sleep length must be finite and nonnegative\n"
+        .. "    in test_bad_sleep at test_sleep.wlo:6:5\n  test did not return (exit status 1)\n"
+        .. "PASS test_sleep.wlo test_sleeps\n1 passed, 1 failed\n", stdout)
+    end)
+  end,
+
   test_command_checks_before_running = function()
     in_temp_dir(function(dir)
       write(dir .. "/test_a.wlo", "def test_a() -> None:\n    print('ran')\n    assert False\n")

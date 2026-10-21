@@ -194,3 +194,14 @@ function __wlo_aio_run(body)
   end
   return root.value
 end
+
+-- `aio.sleep`: a coroutine that checks `seconds` as `time.sleep` does once it
+-- is awaited, then sleeps.
+function __wlo_aio_sleep_coroutine(seconds, site)
+  return __wlo_coroutine(function()
+    if not (seconds >= 0 and seconds < math.huge) then
+      __wlo_fail("ValueError", "sleep length must be finite and nonnegative", site)
+    end
+    __wlo_aio_sleep(seconds)
+  end)
+end

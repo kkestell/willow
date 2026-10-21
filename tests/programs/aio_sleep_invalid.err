@@ -1,0 +1,3 @@
+aio_sleep_invalid.wlo:4:15: error: ValueError: sleep length must be finite and nonnegative
+  in wait at aio_sleep_invalid.wlo:4:5
+  called from main at aio_sleep_invalid.wlo:8:5

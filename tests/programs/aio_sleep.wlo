@@ -1,0 +1,26 @@
+import aio
+import time
+
+async def nap(seconds: float, name: str) -> str:
+    await aio.sleep(seconds)
+    return name
+
+async def main() -> None:
+    start = time.monotonic()
+    print(await nap(0.02, "first"))
+    await aio.sleep(0.0)
+    print(await nap(0.0, "second"))
+    await aio.sleep(0.03)
+    print(time.monotonic() - start >= 0.05)
+
+    # The argument is checked when the coroutine runs, not when it is created.
+    pending = aio.sleep(-1.0)
+    print("created")
+    try:
+        await pending
+    except ValueError as error:
+        print(error.message)
+    try:
+        await pending
+    except RuntimeError as consumed:
+        print(consumed.message)
