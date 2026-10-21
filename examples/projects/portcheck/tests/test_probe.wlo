@@ -1,4 +1,4 @@
-import net
+import aio
 import portcheck.probe
 
 def test_parse_target() -> None:
@@ -13,15 +13,15 @@ def test_parse_target() -> None:
         except ValueError:
             pass
 
-def test_open_port() -> None:
-    with net.listen("127.0.0.1", 0) as listener:
+async def test_open_port() -> None:
+    with aio.listen("127.0.0.1", 0) as listener:
         target = portcheck.probe.Target("127.0.0.1", listener.local_port())
-        result = portcheck.probe.check(target, 2.0)
+        result = await portcheck.probe.check(target, 2.0)
         assert result.open, result.detail
 
-def test_closed_port() -> None:
-    with net.listen("127.0.0.1", 0) as listener:
+async def test_closed_port() -> None:
+    with aio.listen("127.0.0.1", 0) as listener:
         port = listener.local_port()
-    result = portcheck.probe.check(portcheck.probe.Target("127.0.0.1", port), 2.0)
+    result = await portcheck.probe.check(portcheck.probe.Target("127.0.0.1", port), 2.0)
     assert not result.open
     assert result.detail.startswith("cannot connect to 127.0.0.1:"), result.detail
