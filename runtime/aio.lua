@@ -20,7 +20,9 @@ local __wlo_aio_EINTR = 4
 local __wlo_aio_current -- the running task
 local __wlo_aio_ready -- tasks to resume, in the order they became ready
 local __wlo_aio_timers -- a min-heap of { at, task, wait } by time, then wait id
-local __wlo_aio_fd_waits -- { fd, events, task, wait } entries
+-- { fd, events, task, wait } entries; closing a handle outside the loop finds
+-- none.
+local __wlo_aio_fd_waits = {}
 local __wlo_aio_waiting -- the set of suspended tasks
 local __wlo_aio_last_wait = 0
 
@@ -49,6 +51,16 @@ local function __wlo_aio_wake(task, id, signal)
   end
 end
 
+-- Wakes the tasks waiting on `fd`, so a closed handle's operations re-check
+-- it. A wait that has already ended is ignored, as for any other wake.
+function __wlo_aio_wake_fd(fd)
+  for _, entry in ipairs(__wlo_aio_fd_waits) do
+    if entry.fd == fd then
+      __wlo_aio_wake(entry.task, entry.wait, false)
+    end
+  end
+end
+
 -- Whether a request from one of `task`'s groups is in effect.
 local function __wlo_aio_pending(task)
   local group = task.scope
@@ -61,7 +73,7 @@ local function __wlo_aio_pending(task)
   return false
 end
 
-local function __wlo_aio_checkpoint()
+function __wlo_aio_checkpoint()
   if __wlo_aio_pending(__wlo_aio_current) then
     error(__wlo_cancel, 0)
   end

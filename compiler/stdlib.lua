@@ -248,13 +248,57 @@ local task_group = native_record("aio", "TaskGroup", "aio_group", {
 })
 M.task_group = task_group
 
+-- `aio`'s TCP handles behave like `net`'s, but `recv`, `sendall`, and `accept`
+-- return coroutines that wait by suspending their task.
+local aio_connection = native_record("aio", "Connection", "aio_connection", {
+  recv = {
+    params = { types.int, optional_float },
+    names = { "size", "timeout" },
+    defaults = { [2] = { kind = "None" } },
+    result = types.generic(M.coroutine, { types.bytes }),
+  },
+  sendall = {
+    params = { types.bytes, optional_float },
+    names = { "data", "timeout" },
+    defaults = { [2] = { kind = "None" } },
+    result = types.generic(M.coroutine, { types.None }),
+  },
+  close = { params = {}, result = types.None },
+})
+local aio_listener = native_record("aio", "Listener", "aio_listener", {
+  accept = {
+    params = { optional_float },
+    names = { "timeout" },
+    defaults = { { kind = "None" } },
+    result = types.generic(M.coroutine, { aio_connection.type }),
+  },
+  local_port = { params = {}, result = types.int },
+  close = { params = {}, result = types.None },
+})
+scoped(aio_connection)
+scoped(aio_listener)
+
 local aio = provided("aio", {
   sleep = {
     params = { types.float }, names = { "seconds" }, result = types.generic(M.coroutine, { types.None }),
     helper = "aio_sleep_coroutine",
   },
   task_group = { params = {}, result = task_group.type, helper = "aio_task_group" },
-}, { Task = task, TaskGroup = task_group })
+  connect = {
+    params = { types.str, types.int, optional_float },
+    names = { "host", "port", "timeout" },
+    defaults = { [3] = { kind = "Float", value = 30.0 } },
+    result = types.generic(M.coroutine, { aio_connection.type }),
+    helper = "aio_connect_coroutine",
+  },
+  listen = {
+    params = { types.str, types.int, types.int },
+    names = { "host", "port", "backlog" },
+    defaults = { [3] = { kind = "Int", value = 16 } },
+    result = aio_listener.type,
+    helper = "aio_listen",
+  },
+}, { Task = task, TaskGroup = task_group, Connection = aio_connection, Listener = aio_listener })
 
 local time = provided("time", {
   time = { params = {}, result = types.float },

@@ -6,6 +6,8 @@ local eq = require("tests.support").eq
 local A = {}
 local names = { "aio_run", "aio_sleep", "aio_wait_fd", "aio_task_group", "aio_group_enter", "aio_group_exit",
   "aio_group_start", "aio_group_cancel", "aio_task_result", "aio_await_task", "aio_scope", "aio_set_scope",
+  "aio_listen", "aio_connect_coroutine", "aio_listener_local_port", "aio_listener_accept",
+  "aio_listener_close", "aio_connection_recv", "aio_connection_sendall", "aio_connection_close",
   "coroutine", "await", "try", "fail", "monotonic", "report", "sites", "paths" }
 local helpers, references = {}, {}
 for i, name in ipairs(names) do
@@ -23,9 +25,22 @@ int __wlo_test_close(int fd) __asm__("close");
 typedef struct { uint64_t cur, max; } __wlo_test_rlimit_t;
 int __wlo_test_getrlimit(int resource, __wlo_test_rlimit_t *limit) __asm__("getrlimit");
 int __wlo_test_setrlimit(int resource, const __wlo_test_rlimit_t *limit) __asm__("setrlimit");
+int __wlo_test_fcntl(int fd, int command, ...) __asm__("fcntl");
 ]])
 
 local POLLIN = 1
+
+-- The number of open descriptors below 256: F_GETFD fails only for a closed
+-- one.
+local function open_fds()
+  local count = 0
+  for fd = 0, 256 do
+    if ffi.C.__wlo_test_fcntl(fd, 1, 0) >= 0 then
+      count = count + 1
+    end
+  end
+  return count
+end
 
 local run = A.run
 
@@ -582,6 +597,155 @@ function tests.task_failures_report_where_the_task_started()
   end)
   eq(false, ok)
   eq("server.wlo:12:9: error: ValueError: bad request\n  in task started at server.wlo:31:17", A.report(err))
+end
+
+-- A connected client and the connection its listener accepted. Call it from a
+-- task, since the operations suspend.
+local function aio_pair()
+  local listener = A.listen("127.0.0.1", 0, 16, 0)
+  local client = A.await(A.connect_coroutine("127.0.0.1", A.listener_local_port(listener, 0), 5.0, 0), 0)
+  local server = A.await(A.listener_accept(listener, 5.0, 0), 0)
+  return listener, client, server
+end
+
+-- Runs `body` and returns the class and message of the exception it raises.
+local function raised(body)
+  local code, err = A.try(body)
+  eq("raise", code)
+  return err.__wlo_class, err.message
+end
+
+function tests.aio_one_operation_per_direction()
+  run(function()
+    local listener, client, server = aio_pair()
+    local group = A.task_group()
+    local code, err = A.try(function()
+      async_with(group, function()
+        start(group, function()
+          A.await(A.connection_recv(server, 10, nil, 0), 0)
+        end)
+        A.sleep(0)
+        eq("recv is already in progress", runtime_error(function()
+          A.await(A.connection_recv(server, 10, nil, 0), 0)
+        end))
+        -- The other direction is free while a recv is unfinished.
+        A.await(A.connection_sendall(server, { __wlo_octets = "hi" }, 5.0, 0), 0)
+        -- Closing wakes the recv, which reports the closed handle.
+        A.connection_close(server, 0)
+      end)
+    end)
+    eq("raise", code)
+    eq("I/O operation on closed connection", err.message)
+    A.connection_close(client, 0)
+    A.listener_close(listener, 0)
+  end)
+end
+
+function tests.aio_one_sendall_at_a_time_and_cancellation_breaks_the_connection()
+  run(function()
+    local listener, client, server = aio_pair()
+    local big = { __wlo_octets = string.rep("x", 16 * 1024 * 1024) }
+    local group = A.task_group()
+    async_with(group, function()
+      start(group, function()
+        A.await(A.connection_sendall(server, big, 5.0, 0), 0)
+      end)
+      A.sleep(0)
+      eq("sendall is already in progress", runtime_error(function()
+        A.await(A.connection_sendall(server, { __wlo_octets = "y" }, 5.0, 0), 0)
+      end))
+      A.group_cancel(group)
+    end)
+    -- The cancelled send may have delivered part of the data.
+    local class, message = raised(function()
+      A.await(A.connection_sendall(server, { __wlo_octets = "y" }, 5.0, 0), 0)
+    end)
+    eq("ValueError", class)
+    eq("connection is unusable after a failed send", message)
+    A.connection_close(server, 0)
+    A.connection_close(client, 0)
+    A.listener_close(listener, 0)
+  end)
+end
+
+function tests.aio_close_wakes_a_pending_accept()
+  run(function()
+    local listener = A.listen("127.0.0.1", 0, 16, 0)
+    local group = A.task_group()
+    local code, err = A.try(function()
+      async_with(group, function()
+        start(group, function()
+          A.await(A.listener_accept(listener, nil, 0), 0)
+        end)
+        A.sleep(0)
+        A.listener_close(listener, 0)
+      end)
+    end)
+    eq("raise", code)
+    eq("I/O operation on closed listener", err.message)
+  end)
+end
+
+function tests.aio_cancelled_connect_closes_its_socket()
+  run(function()
+    -- A listener that never accepts: once its backlog is full, further
+    -- connects stay pending.
+    local listener = A.listen("127.0.0.1", 0, 1, 0)
+    local port = A.listener_local_port(listener, 0)
+    local before = open_fds()
+    local connected = {}
+    local group = A.task_group()
+    async_with(group, function()
+      for _ = 1, 8 do
+        start(group, function()
+          local connection = A.await(A.connect_coroutine("127.0.0.1", port, 30.0, 0), 0)
+          connected[#connected + 1] = connection
+        end)
+      end
+      A.sleep(0.05)
+      eq(before + 8, open_fds())
+      assert(#connected < 8, "no connect stayed pending")
+      A.group_cancel(group)
+    end)
+    for _, connection in ipairs(connected) do
+      A.connection_close(connection, 0)
+    end
+    eq(before, open_fds())
+    A.listener_close(listener, 0)
+  end)
+end
+
+-- A send blocked on a full buffer and a recv share one descriptor; data for
+-- the recv wakes it while the send stays blocked.
+function tests.aio_recv_and_sendall_wait_at_the_same_time()
+  run(function()
+    local listener, client, server = aio_pair()
+    local big = { __wlo_octets = string.rep("x", 16 * 1024 * 1024) }
+    local log = {}
+    local group = A.task_group()
+    async_with(group, function()
+      start(group, function()
+        A.await(A.connection_sendall(server, big, 5.0, 0), 0)
+        log[#log + 1] = "sent"
+      end)
+      start(group, function()
+        local data = A.await(A.connection_recv(server, 10, 5.0, 0), 0)
+        log[#log + 1] = "received " .. data.__wlo_octets
+      end)
+      A.sleep(0.01)
+      A.await(A.connection_sendall(client, { __wlo_octets = "ping" }, 5.0, 0), 0)
+      A.sleep(0.01)
+      eq("received ping", table.concat(log, " "))
+      local total = 0
+      while total < #big.__wlo_octets do
+        total = total + #A.await(A.connection_recv(client, 1024 * 1024, 5.0, 0), 0).__wlo_octets
+      end
+    end)
+    eq("received ping sent", table.concat(log, " "))
+    A.connection_close(server, 0)
+    A.connection_close(client, 0)
+    A.listener_close(listener, 0)
+  end)
 end
 
 return tests

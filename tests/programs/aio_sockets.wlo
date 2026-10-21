@@ -1,0 +1,105 @@
+import aio
+
+async def echo(listener: aio.Listener) -> None:
+    with await listener.accept(timeout=5.0) as connection:
+        await connection.sendall(await connection.recv(1024))
+
+async def read(connection: aio.Connection) -> str:
+    return (await connection.recv(1024)).decode()
+
+async def take_second_recv(connection: aio.Connection) -> None:
+    try:
+        await connection.recv(1024)
+    except RuntimeError as error:
+        print(error.message)
+
+async def main() -> None:
+    # The §14 echo example, with a task group.
+    with aio.listen("127.0.0.1", 0) as listener:
+        async with aio.task_group() as group:
+            group.start(echo(listener))
+            with await aio.connect("127.0.0.1", listener.local_port()) as client:
+                await client.sendall("ping\n".encode())
+                print((await client.recv(1024)).decode())
+
+    # One echo without a group, then the end of the peer's side.
+    with aio.listen("127.0.0.1", 0) as listener:
+        print(listener.local_port() > 0)
+        client = await aio.connect("127.0.0.1", listener.local_port())
+        await client.sendall("ping\n".encode())
+        await echo(listener)
+        print((await client.recv(1024)).decode())
+        print(len(await client.recv(1)))
+        client.close()
+
+        # A live pair for timeouts, closing, and validation.
+        client = await aio.connect("127.0.0.1", listener.local_port(), timeout=5.0)
+        server = await listener.accept(timeout=5.0)
+        try:
+            await server.recv(10, timeout=0.1)
+        except TimeoutError as t:
+            print(t.message)
+        await client.sendall("again".encode())
+        print((await server.recv(10)).decode())
+        try:
+            await server.recv(0)
+        except ValueError as v:
+            print(v.message)
+        try:
+            await aio.connect("bad host", 80)
+        except ValueError as v:
+            print(v.message)
+        try:
+            await aio.connect("127.0.0.1", 1, timeout=-1.0)
+        except ValueError as v:
+            print(v.message)
+        try:
+            await listener.accept(timeout=0.1)
+        except TimeoutError as t:
+            print(t.message)
+        await aio.sleep(0.0)
+        client.close()
+        print(len(await server.recv(10)))
+        try:
+            await client.sendall("late".encode())
+        except ValueError as v:
+            print(v.message)
+        server.close()
+        try:
+            await server.sendall("gone".encode())
+        except ValueError as v:
+            print(v.message)
+
+    # A second recv in the same direction is refused, and the first completes.
+    with aio.listen("127.0.0.1", 0) as listener:
+        client = await aio.connect("127.0.0.1", listener.local_port())
+        server = await listener.accept(timeout=5.0)
+        async with aio.task_group() as group:
+            first = group.start(read(server))
+            group.start(take_second_recv(server))
+            await aio.sleep(0.05)
+            await client.sendall("hello".encode())
+        print(first.result())
+        client.close()
+        server.close()
+
+    # Close in another task wakes the pending recv with the closed handle.
+    with aio.listen("127.0.0.1", 0) as listener:
+        client = await aio.connect("127.0.0.1", listener.local_port())
+        server = await listener.accept(timeout=5.0)
+        try:
+            async with aio.task_group() as group:
+                group.start(read(server))
+                await aio.sleep(0.05)
+                server.close()
+        except ValueError as error:
+            print(error.message)
+        client.close()
+
+    # A closed listener rejects new operations.
+    listener = aio.listen("127.0.0.1", 0)
+    listener.close()
+    try:
+        await listener.accept()
+    except ValueError as v:
+        print(v.message)
