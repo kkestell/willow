@@ -1,6 +1,7 @@
 # Reports which TCP ports accept connections:
 # willow run -- [--timeout SECONDS] [--json] host:port...
 
+import aio
 import cli
 import io
 import json
@@ -8,7 +9,7 @@ import portcheck.probe
 import sys
 import textkit.table
 
-def main() -> None:
+async def main() -> None:
     parser = cli.parser("portcheck", description="Check whether TCP ports accept connections.")
     parser.add_float("timeout", 2.0, help="Seconds to wait for each connection", short="t")
     parser.add_flag("json", help="Write one JSON object per target")
@@ -33,13 +34,19 @@ def main() -> None:
         sys.eprint("portcheck: error: expected at least one host:port")
         sys.exit(2)
 
+    # Every target is probed at once, so the slowest probe bounds the wait.
+    probes: list[aio.Task[portcheck.probe.Probe]] = []
+    async with aio.task_group() as group:
+        for target in targets:
+            probes.append(group.start(portcheck.probe.check(target, args.get_float("timeout"))))
+
     all_open = True
     rows: list[list[str]] = []
-    for target in targets:
-        result = portcheck.probe.check(target, args.get_float("timeout"))
+    for probe in probes:
+        result = probe.result()
         if not result.open:
             all_open = False
-        name = f"{target.host}:{target.port}"
+        name = f"{result.target.host}:{result.target.port}"
         if args.get_bool("json"):
             print(json.dump({"target": name, "open": result.open, "detail": result.detail}))
         else:

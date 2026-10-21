@@ -1,6 +1,6 @@
 # Checks whether TCP ports accept connections.
 
-import net
+import aio
 import time
 
 class Target:
@@ -32,10 +32,10 @@ def parse_target(text: str) -> Target:
         raise ValueError(f"invalid port in '{text}'")
     return Target(host, port)
 
-def check(target: Target, timeout: float) -> Probe:
+async def check(target: Target, timeout: float) -> Probe:
     start = time.monotonic()
     try:
-        with net.connect(target.host, target.port, timeout=timeout):
+        with await aio.connect(target.host, target.port, timeout=timeout):
             return Probe(target, True, _millis(start), "open")
     except OSError as error:
         return Probe(target, False, _millis(start), error.message)
