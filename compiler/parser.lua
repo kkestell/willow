@@ -717,6 +717,17 @@ function M.parse(tokens)
     elseif kind == "try" then
       advance()
       return parse_try(token)
+    elseif kind == "async" and tokens[pos + 1].kind == "with" then
+      -- A task-group scope enters one group and may name it.
+      advance()
+      advance()
+      local node = ast.node("AsyncWith", token.span, { manager = parse_expression() })
+      if accept("as") then
+        local name = expect("NAME", "a name")
+        node.target = ast.node("Name", name.span, { name = name.value })
+      end
+      node.body = parse_block()
+      return node
     elseif kind == "def" or kind == "async" then
       local fn = parse_function()
       return ast.node("FunctionDef", fn.span, { fn = fn, name = fn.name })

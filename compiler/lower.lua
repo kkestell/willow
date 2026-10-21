@@ -1,5 +1,6 @@
 -- Lowers the checked tree into explicit evaluation order and control flow.
 local bind = require("compiler.bind")
+local diag = require("compiler.diag")
 local stdlib = require("compiler.stdlib")
 local types = require("compiler.types")
 
@@ -490,7 +491,10 @@ local function lower_function(fn, sites, helpers, protocols)
         }
       elseif node.target.kind == "Builtin" then
         local name = node.target.helper or node.target.name
-        if name == "str" then
+        if name == "aio_task_group" then
+          -- Without a group, no task or group operation can run either.
+          diag.error(node.span, "task groups are not implemented yet")
+        elseif name == "str" then
           return text(args[1], node.args[1].type)
         elseif (name == "print" or name == "eprint") and is_float(node.args[1].type) then
           name = name .. "_float"
@@ -581,7 +585,8 @@ local function lower_function(fn, sites, helpers, protocols)
       end
       return helper(prefix(node.receiver or node.object.type) .. node.name, args, node.span)
     elseif kind == "Await" then
-      return helper("await", { lower_operand(node.operand) }, node.span)
+      local name = node.operand.type.record == stdlib.task and "aio_await_task" or "await"
+      return helper(name, { lower_operand(node.operand) }, node.span)
     elseif kind == "ListDisplay" then
       local elements = {}
       for i, element in ipairs(node.elements) do
@@ -846,6 +851,8 @@ local function lower_function(fn, sites, helpers, protocols)
       emit(node)
     elseif kind == "With" then
       lower_with(statement, 1)
+    elseif kind == "AsyncWith" then
+      diag.error(statement.span, "task groups are not implemented yet")
     end
   end
 

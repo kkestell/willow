@@ -996,6 +996,63 @@ return {
         .. "    return 0", F .. "def m() -> int | None:\n    return 1\n")))
   end,
 
+  task_groups = function()
+    local F = "import aio\nasync def f() -> int:\n    return 1\n"
+    -- `main` starts on line 4.
+    local function in_async_main(statements, helpers)
+      return F .. "async " .. in_main(statements, helpers)
+    end
+    check_source(in_async_main("async with aio.task_group() as group:\n    t = group.start(f())\n"
+      .. "x: int = t.result() + await t"))
+    eq("5:5: 'async with' is only allowed in an async function",
+      check_errors(F .. in_main("async with aio.task_group() as g:\n    pass")))
+    eq("5:16: expected aio.TaskGroup, received int", check_errors(in_async_main("async with 1 as g:\n    pass")))
+    eq("5:14: type aio.TaskGroup is not a context manager",
+      check_errors(in_async_main("with aio.task_group() as g:\n    pass")))
+    eq("5:9: cannot await a value of type aio.TaskGroup", check_errors(in_async_main("x = await aio.task_group()")))
+    eq("6:30: expected aio.Task[str], received aio.Task[int]",
+      check_errors(in_async_main("async with aio.task_group() as g:\n    t: aio.Task[str] = g.start(f())")))
+    eq("5:24: a union can have only one specialization of aio.Task",
+      check_errors(in_async_main("x: aio.Task[int] | aio.Task[str] | None = None")))
+    eq("5:13: cannot construct native type aio.Task", check_errors(in_async_main("t = aio.Task[int]()")))
+
+    -- An await in a group body may leave it, so later assignments are not
+    -- definite after the group; earlier ones are.
+    eq("8:11: variable 'x' may be used before assignment",
+      check_errors(in_async_main("async with aio.task_group() as g:\n    y = 1\n    x = await f()\nprint(x + y)")))
+    check_source(in_async_main("async with aio.task_group() as g:\n    x = 1\n    await f()\nprint(x)"))
+    -- Cleanup on the way out still runs: a finally clause's assignments count,
+    -- and an await inside a finally clause cannot leave the group.
+    check_source(in_async_main("async with aio.task_group() as g:\n    try:\n        await f()\n    finally:\n"
+      .. "        x = 1\nprint(x)"))
+    check_source(in_async_main("async with aio.task_group() as g:\n    try:\n        pass\n    finally:\n"
+      .. "        await f()\n        x = 1\nprint(x)"))
+    -- A nested group's exit may leave the outer group, even with no await.
+    eq("9:11: variable 'x' may be used before assignment",
+      check_errors(in_async_main("async with aio.task_group() as outer:\n    async with aio.task_group() as inner:\n"
+        .. "        inner.start(f())\n    x = 1\nprint(x)")))
+    check_source(in_async_main("async with aio.task_group() as outer:\n    async with aio.task_group() as inner:\n"
+      .. "        x = 1\nprint(x)"))
+    -- A return after an await does not return on every path; without an await
+    -- it does, and the statement after the group is unreachable.
+    local G = F .. "def main() -> None:\n    pass\n"
+    eq("6:11: function 'g' must return a value on every path",
+      check_errors(G .. "async def g() -> int:\n    async with aio.task_group() as t:\n        return await f()\n"))
+    eq("10:5: unreachable statement",
+      check_errors(G .. "async def g() -> int:\n    async with aio.task_group() as t:\n        t.start(f())\n"
+        .. "        return 1\n    return 2\n"))
+    check_source(G .. "async def g() -> int:\n    async with aio.task_group() as outer:\n"
+      .. "        async with aio.task_group() as inner:\n            return 1\n    return 2\n")
+    -- The narrowing at a transfer joins the body's.
+    eq("10:13: operator '+' cannot be applied to int | None and int",
+      check_errors(in_async_main("y = m()\nasync with aio.task_group() as g:\n    y = None\n    await f()\n    y = 1\n"
+        .. "print(y + 1)", "def m() -> int | None:\n    return 1\n")))
+    -- The join removes captured narrowing.
+    eq("12:17: operator '+' cannot be applied to int | None and int",
+      check_errors(in_async_main("y = m()\ndef h() -> None:\n    nonlocal y\n    y = None\nif y is not None:\n"
+        .. "    async with aio.task_group() as g:\n        pass\n    print(y + 1)", "def m() -> int | None:\n    return 1\n")))
+  end,
+
   sorting = function()
     eq("2:14: expected int, received list[str]", check_errors(in_main("x: int = sorted({'a': 1})")))
     check_source(in_main("x = sorted([(1, 'a')])\ny: list[tuple[str, int]] = []\ny.sort()"))
