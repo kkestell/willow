@@ -3,7 +3,7 @@ name: Benchmarks
 on:
   workflow_dispatch:
   push:
-    branches: [main, benchmarks-ci]
+    branches: [main]
     paths:
       - compiler/**
       - runtime/**
