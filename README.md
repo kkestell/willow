@@ -84,14 +84,13 @@ into one executable.
 ## Benchmarks
 
 `benchmarks/` has seven programs from the Computer Language Benchmarks Game,
-written in Willow and, for comparison, in C, Go, JavaScript for Node, Lua for
-LuaJIT, and Python. Each language uses the same single-threaded algorithm, and
-the problem sizes are smaller than the official ones so that Python finishes in
-reasonable time. Two programs differ from the official ones: mandelbrot prints
-a checksum of the image instead of the image, and k-nucleotide generates its
-sequence instead of reading one from a file. Willow runs as the Lua it compiles
-to, on the same LuaJIT as the hand-written Lua. To time the Willow programs,
-run:
+written in Willow and, for comparison, in C, Lua for LuaJIT, and Python. Each
+language uses the same single-threaded algorithm, and the problem sizes are
+smaller than the official ones so that Python finishes in reasonable time. Two
+programs differ from the official ones: mandelbrot prints a checksum of the
+image instead of the image, and k-nucleotide generates its sequence instead of
+reading one from a file. Willow runs as the Lua it compiles to, on the same
+LuaJIT as the hand-written Lua. To time the Willow programs, run:
 
 ```sh
 make
@@ -100,8 +99,8 @@ python3 benchmarks/run.py
 
 Name benchmarks, such as `n-body`, to run only those. `--all` also times the
 other languages, and `--readme` times every language and updates the table
-below. Both need `cc`, `go`, and `node` on the `PATH`. The runner checks the
-SHA-256 digest of each program's output against `benchmarks/expected`.
+below. Both need `cc` on the `PATH`. The runner checks the SHA-256 digest of
+each program's output against `benchmarks/expected`.
 
 The table below comes from the Benchmarks workflow in `.github/workflows`,
 which runs on a GitHub-hosted runner and commits the result. It runs when a
@@ -111,15 +110,15 @@ be started by hand from the Actions tab.
 <!-- benchmarks:start -->
 Seconds of wall-clock time, best of 3 runs, on AMD EPYC 7763 64-Core Processor, Linux.
 
-| Benchmark (size) | C | Go | Node | LuaJIT | Willow | Python |
-|---|---:|---:|---:|---:|---:|---:|
-| n-body (5,000,000) | 0.34 | 0.44 | 0.58 | 0.81 | 1.29 | 27.27 |
-| spectral-norm (2,000) | 0.23 | 0.23 | 0.27 | 0.26 | 1.00 | 28.10 |
-| fannkuch-redux (10) | 0.22 | 0.20 | 0.28 | 0.51 | 0.73 | 6.51 |
-| binary-trees (18) | 1.38 | 2.43 | 1.15 | 5.86 | 6.79 | 33.12 |
-| fasta (2,500,000) | 0.43 | 0.39 | 1.04 | 1.03 | 4.21 | 5.62 |
-| mandelbrot (2,500) | 0.45 | 0.45 | 0.54 | 0.48 | 0.70 | 18.95 |
-| k-nucleotide (2,500,000) | 0.34 | 0.46 | 1.60 | 0.55 | 8.43 | 3.63 |
+| Benchmark (size) | C | LuaJIT | Willow | Python |
+|---|---:|---:|---:|---:|
+| n-body (5,000,000) | 0.34 | 0.81 | 1.29 | 27.27 |
+| spectral-norm (2,000) | 0.23 | 0.26 | 1.00 | 28.10 |
+| fannkuch-redux (10) | 0.22 | 0.51 | 0.73 | 6.51 |
+| binary-trees (18) | 1.38 | 5.86 | 6.79 | 33.12 |
+| fasta (2,500,000) | 0.43 | 1.03 | 4.21 | 5.62 |
+| mandelbrot (2,500) | 0.45 | 0.48 | 0.70 | 18.95 |
+| k-nucleotide (2,500,000) | 0.34 | 0.55 | 8.43 | 3.63 |
 <!-- benchmarks:end -->
 
 ## Editor support

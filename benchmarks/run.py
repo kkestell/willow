@@ -4,8 +4,8 @@ program's output against benchmarks/expected.
 
 By default it times only Willow and prints one line per benchmark, for
 comparing Willow with itself before and after a change. `--all` also times
-the other languages, which needs cc, go, and node on PATH. `--readme` times
-every language and replaces the results table in README.md.
+the other languages, which needs cc on PATH. `--readme` times every language
+and replaces the results table in README.md.
 
 Run it from anywhere after `make`.
 """
@@ -37,24 +37,19 @@ BENCHMARKS = [
     ("k_nucleotide", "k-nucleotide", 2_500_000),
 ]
 
-LANGUAGES = ["C", "Go", "Node", "LuaJIT", "Willow", "Python"]
+LANGUAGES = ["C", "LuaJIT", "Willow", "Python"]
 
 
 def build(name, languages):
     """Builds `name` in each of `languages` and returns the command that runs
     it, without the size argument, keyed by language."""
     c = BUILD / f"{name}_c"
-    go = BUILD / f"{name}_go"
     lua = BUILD / f"{name}.lua"
     if "C" in languages:
         subprocess.run(["cc", "-O2", "-o", c, HERE / "c" / f"{name}.c", "-lm"], check=True)
-    if "Go" in languages:
-        subprocess.run(["go", "build", "-o", go, HERE / "go" / f"{name}.go"], check=True)
     subprocess.run([ROOT / "willow", "compile", HERE / "willow" / f"{name}.wlo", "-o", lua], check=True)
     return {
         "C": [c],
-        "Go": [go],
-        "Node": ["node", HERE / "node" / f"{name}.js"],
         "LuaJIT": [LUAJIT, HERE / "lua" / f"{name}.lua"],
         "Willow": [LUAJIT, lua],
         "Python": [sys.executable, HERE / "python" / f"{name}.py"],
