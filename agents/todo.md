@@ -43,7 +43,7 @@ tests and `make test`. The design review and runtime prototype are in
 - [ ] Async TCP (spec §14, §15)
   - [x] Thread the wait function through the TCP runtime, so `aio` operations
     can suspend in place of `__wlo_wait_fd`
-  - [ ] `aio.listen`, `connect`, `accept`, `recv`, `sendall`, and
+  - [x] `aio.listen`, `connect`, `accept`, `recv`, `sendall`, and
     `local_port` with `net`'s semantics on nonblocking sockets; one
     unfinished operation per direction; close waking pending operations;
     the closed flag checked after every wake; wait ids so stale wakes are
