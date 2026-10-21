@@ -14,11 +14,15 @@ local __wlo_source = debug.getinfo(1, "S").source
 local __wlo_MAX_INT = 9007199254740991
 local __wlo_MAX_FRAMES = 20
 local __wlo_argv
+-- Where the running task was started, set by the event loop; nil outside a
+-- task group's tasks.
+local __wlo_task_location
 
 -- The Willow frames on the stack, innermost first. Only lines of translated
--- Willow code are in __wlo_lines, so runtime and wrapper frames drop out.
+-- Willow code are in __wlo_lines, so runtime and wrapper frames drop out. A
+-- task's frames end at its first frame, and `task` records where it started.
 local function __wlo_frames()
-  local frames = {}
+  local frames = { task = __wlo_task_location }
   local level = 1
   local info = debug.getinfo(level, "Sl")
   while info do
@@ -1341,6 +1345,9 @@ local function __wlo_report(err)
       break
     end
     lines[#lines + 1] = (i == 1 and "  in " or "  called from ") .. frame[4] .. " at " .. __wlo_where(frame)
+  end
+  if frames.task then
+    lines[#lines + 1] = "  in task started at " .. __wlo_where(frames.task)
   end
   return table.concat(lines, "\n")
 end
