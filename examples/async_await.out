@@ -1,0 +1,6 @@
+first ready
+created, not started
+second ready
+coroutine was already awaited or started
+3
+again ready, again ready

@@ -1,0 +1,29 @@
+# Type aliases: names for types, including generic and recursive aliases.
+
+type Score = int | None
+type Pair[K, V] = tuple[K, V]
+type Tree = int | list[Tree]
+
+def total(tree: Tree) -> int:
+    if isinstance(tree, int):
+        return tree
+    sum = 0
+    for child in tree:
+        sum = sum + total(child)
+    return sum
+
+def best(scores: dict[str, Score]) -> Pair[str, int] | None:
+    winner: Pair[str, int] | None = None
+    for name in scores:
+        score = scores[name]
+        if score is not None:
+            if winner is None or score > winner[1]:
+                winner = (name, score)
+    return winner
+
+def main() -> None:
+    print(total([1, [2, 3], [[4], 5]]))
+    result = best({"ada": 7, "alan": None, "grace": 9})
+    if result is not None:
+        name, score = result
+        print(f"{name} scored {score}")

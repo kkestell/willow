@@ -1,0 +1,22 @@
+import aio
+
+class Stock:
+    counts: dict[str, int]
+
+    def add(self, item: str, quantity: int) -> None:
+        if quantity <= 0:
+            raise ValueError("quantity must be positive")
+        current = self.counts.get(item)
+        if current is None:
+            current = 0
+        self.counts[item] = current + quantity
+
+    def count(self, item: str) -> int:
+        current = self.counts.get(item)
+        if current is None:
+            return 0
+        return current
+
+    async def restock(self, item: str, quantity: int, delay: float) -> None:
+        await aio.sleep(delay)
+        self.add(item, quantity)

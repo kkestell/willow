@@ -1,0 +1,29 @@
+# Tests: `willow test examples/testing` runs each `test_*` function in the
+# `test_*.wlo` files here, each in its own process. A test passes when it
+# returns and fails when an exception, such as a failed assert, escapes it.
+
+import aio
+import stock
+
+def test_add_counts_items() -> None:
+    shelf = stock.Stock({})
+    shelf.add("tea", 2)
+    shelf.add("tea", 3)
+    assert shelf.count("tea") == 5
+    assert shelf.count("cake") == 0, "an unknown item counts zero"
+
+def test_rejects_zero_quantity() -> None:
+    shelf = stock.Stock({})
+    try:
+        shelf.add("tea", 0)
+        assert False, "accepted a zero quantity"
+    except ValueError as error:
+        assert error.message == "quantity must be positive"
+
+# An async test runs in the event loop, like an async `main`.
+async def test_concurrent_restocks() -> None:
+    shelf = stock.Stock({})
+    async with aio.task_group() as group:
+        group.start(shelf.restock("tea", 2, 0.02))
+        group.start(shelf.restock("tea", 3, 0.01))
+    assert shelf.count("tea") == 5

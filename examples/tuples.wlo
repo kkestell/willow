@@ -1,0 +1,28 @@
+# Tuples: fixed-size groups with a type for each position, unpacked into
+# names and compared position by position.
+
+def divide(a: int, b: int) -> tuple[int, int]:
+    return (a // b, a % b)
+
+def main() -> None:
+    quotient, remainder = divide(17, 5)
+    print(f"{quotient} remainder {remainder}")
+
+    record = (3, "east", True)
+    print(record[1])
+    print(len(record))
+
+    (x, y), label = ((1, 2), "corner")
+    print(f"{label} at {x}, {y}")
+
+    a = 1
+    b = 2
+    a, b = (b, a)
+    print(f"{a} {b}")
+
+    scores = [("bob", 2), ("amy", 2), ("cat", 1)]
+    for name, score in sorted(scores, key=lambda entry: (entry[1], entry[0])):
+        print(f"{name} {score}")
+
+    print((1, "a") < (1, "b"))
+    print((2, 3) == (2, 3))

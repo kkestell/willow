@@ -1,0 +1,33 @@
+# Generators: a function that uses `yield` produces its values lazily, one for
+# each `next`, and `with` closes it early.
+
+def countdown(start: int) -> Iterator[int]:
+    n = start
+    while n > 0:
+        yield n
+        n = n - 1
+
+def fibonacci() -> Generator[int]:
+    a = 0
+    b = 1
+    try:
+        while True:
+            yield a
+            a, b = (b, a + b)
+    finally:
+        print("fibonacci closed")
+
+def main() -> None:
+    for n in countdown(3):
+        print(n)
+
+    # Calling a generator function runs none of its body until `next`.
+    lazy = countdown(2)
+    print(next(lazy))
+
+    # Leaving the `with` block closes the generator, which runs its `finally`.
+    with fibonacci() as numbers:
+        for n in numbers:
+            if n > 20:
+                break
+            print(n)

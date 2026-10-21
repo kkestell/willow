@@ -35,14 +35,18 @@ willow compile hello.wlo -o hello.lua # compile to a single Lua file
 luajit hello.lua                      # run with LuaJIT 2.1
 willow build hello.wlo -o hello       # build a standalone executable
 ./hello                              # run the executable
-willow test examples/projects/cart             # run tests
-willow test --check examples/projects/cart     # check tests without running
+willow test examples/testing          # run tests
+willow test --check examples/testing  # check tests without running
 ```
 
 Compiled Lua files and executables take their own command-line arguments, for
 example `luajit number.lua out.txt` or `./number out.txt`.
 
 `willow test` accepts a test file or a directory of `test_*.wlo` files.
+
+`examples/` has one program for each language feature, named after the feature,
+with its output in a matching `.out` file. `examples/rosettacode/` has
+solutions to Rosetta Code tasks.
 
 Error messages are written to stderr and program output to stdout. The exit
 status is 0 on success and 1 for usage errors, source errors, output failures,
@@ -56,21 +60,21 @@ packages.
 
 A project is a directory containing a `willow.json` file. The file names the
 entry module, the source root, any local dependency roots, and the test
-directory. `examples/projects/portcheck` is an example project. Its `willow.json` sets the
-entry to `portcheck/main.wlo` under the source root `src`, and lists `vendor` as
-a dependency root. The `textkit` modules in `vendor` are imported as
-`textkit.table`.
+directory. `examples/projects` is an example project. Its `willow.json` sets the
+entry to `vowels/main.wlo` under the source root `src`, and lists `vendor` as a
+dependency root. The `tabulate` module in `vendor` is imported as
+`tabulate.table`.
 
 In a project directory, the commands use `willow.json` when no source file is
 given:
 
 ```sh
 make
-cd examples/projects/portcheck
+cd examples/projects
 willow test
-willow run -- 127.0.0.1:22
-willow build -o portcheck
-./portcheck --help
+willow run -- banana kiwi
+willow build -o vowels
+./vowels banana kiwi
 ```
 
 `willow test` runs every `test_*.wlo` file under `tests/`. Arguments after `--`

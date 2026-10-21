@@ -1,0 +1,16 @@
+# f-strings insert expressions written in braces, with optional format
+# specifications for alignment, width, and precision.
+
+def main() -> None:
+    name = "Ada"
+    year = 1843
+    print(f"{name} wrote the first program in {year}.")
+    print(f"{name} has {len(name)} letters; {{braces}} are literal")
+
+    items = [("tea", 3, 2.5), ("cake", 1, 4.25), ("bread", 12, 0.8)]
+    print(f"{'item':<8s}{'qty':>5s}{'price':>8s}")
+    for label, quantity, price in items:
+        print(f"{label:<8s}{quantity:>5d}{price:>8.2f}")
+
+    print(f"[{'centered':^12}]")
+    print(f"{2.0 / 3.0:.3f}")

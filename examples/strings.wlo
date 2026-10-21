@@ -1,0 +1,30 @@
+# Strings: immutable UTF-8 text, indexed and sliced by code point, with
+# methods for searching, splitting, joining, and case.
+
+def main() -> None:
+    text = "Willow café"
+    print(len(text))
+    print(text[0])
+    print(text[-1])
+    print(text[7:])
+    print(text.upper())
+    print(text.find("café"))
+    print("low" in text)
+    print(text.startswith("Will") and text.endswith("é"))
+    print(text.replace("café", "tea"))
+
+    fields = "a,b,,c".split(",")
+    print(len(fields))
+    print(" | ".join(fields))
+
+    print("[" + "  padded  ".strip() + "]")
+    print("[" + "x".rjust(4) + "|" + "y".ljust(4) + "]")
+
+    print(ord("é"))
+    print(chr(9731))
+    print("tab:\there, quote: \"")
+
+    # Triple-quoted strings span lines.
+    poem = """roses are red,
+violets are blue"""
+    print(len(poem.split("\n")))

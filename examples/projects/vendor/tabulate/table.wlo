@@ -1,0 +1,21 @@
+# A dependency: vendor/ is a dependency root in willow.json, so this module is
+# imported as `tabulate.table`.
+
+def render(headers: list[str], rows: list[list[str]]) -> str:
+    widths: list[int] = []
+    for header in headers:
+        widths.append(len(header))
+    for row in rows:
+        for i in range(len(row)):
+            if len(row[i]) > widths[i]:
+                widths[i] = len(row[i])
+    lines = [_line(headers, widths)]
+    for row in rows:
+        lines.append(_line(row, widths))
+    return "\n".join(lines)
+
+def _line(cells: list[str], widths: list[int]) -> str:
+    padded: list[str] = []
+    for i in range(len(cells)):
+        padded.append(cells[i].ljust(widths[i]))
+    return "  ".join(padded).strip()

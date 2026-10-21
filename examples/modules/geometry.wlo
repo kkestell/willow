@@ -1,0 +1,12 @@
+# A module contains only declarations. Names that begin with `_` are private
+# to it.
+
+class Point:
+    x: float
+    y: float
+
+def distance_squared(a: Point, b: Point) -> float:
+    return _square(a.x - b.x) + _square(a.y - b.y)
+
+def _square(n: float) -> float:
+    return n * n

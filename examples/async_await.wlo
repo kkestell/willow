@@ -1,0 +1,49 @@
+# async/await: calling an async function produces a coroutine, which runs only
+# when it is awaited. Methods and protocol methods can be async too.
+
+import aio
+
+async def fetch(name: str, seconds: float) -> str:
+    await aio.sleep(seconds)
+    return f"{name} ready"
+
+protocol Loader:
+    async def load(self, key: str) -> int
+
+class Cache:
+    values: dict[str, int]
+
+    async def load(self, key: str) -> int:
+        await aio.sleep(0.0)
+        value = self.values.get(key)
+        if value is None:
+            return 0
+        return value
+
+async def total(loader: Loader, keys: list[str]) -> int:
+    sum = 0
+    for key in keys:
+        sum = sum + await loader.load(key)
+    return sum
+
+# A coroutine is a value of type `Coroutine[T]`.
+async def run_twice(make: () -> Coroutine[str]) -> str:
+    first = await make()
+    second = await make()
+    return first + ", " + second
+
+async def main() -> None:
+    print(await fetch("first", 0.01))
+
+    pending = fetch("second", 0.01)
+    print("created, not started")
+    print(await pending)
+
+    # A coroutine runs once.
+    try:
+        await pending
+    except RuntimeError as error:
+        print(error.message)
+
+    print(await total(Cache({"a": 1, "b": 2}), ["a", "b", "c"]))
+    print(await run_twice(lambda: fetch("again", 0.0)))

@@ -1,0 +1,38 @@
+# Lists: ordered, mutable sequences with indexing, slicing, appending,
+# popping, sorting, and membership tests.
+
+def main() -> None:
+    primes = [2, 3, 5, 7]
+    primes.append(11)
+    print(len(primes))
+    print(primes[-1])
+    print(len(primes[1:4]))
+    print(primes.pop())
+    print(5 in primes)
+
+    names = ["grace", "ada", "alan"]
+    names.sort()
+    print(", ".join(names))
+    names.sort(reverse=True)
+    print(", ".join(names))
+    print(", ".join(sorted(names, key=lambda name: len(name))))
+
+    # Assignment shares a list; a slice copies it.
+    alias = names
+    copy = names[:]
+    alias.append("linus")
+    print(len(names))
+    print(len(copy))
+
+    matrix = [[1, 2], [3, 4]]
+    total = 0
+    for row in matrix:
+        for n in row:
+            total = total + n
+    print(total)
+
+    empty: list[int] = []
+    try:
+        empty.pop()
+    except IndexError as error:
+        print(error.message)

@@ -1,0 +1,7 @@
+6
+line 2: not a number: two
+finally always runs
+division by zero
+5
+rejecting 'x'
+failed: cannot convert str to int

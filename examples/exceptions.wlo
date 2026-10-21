@@ -1,0 +1,46 @@
+# Exceptions: exception classes with extra fields, `raise`, `try` with
+# `except` and `finally`, and re-raising.
+
+class ParseError(Exception):
+    line: int
+
+def parse_line(text: str, line: int) -> int:
+    try:
+        return int(text)
+    except ValueError:
+        raise ParseError(f"not a number: {text}", line)
+
+def total(lines: list[str]) -> int:
+    sum = 0
+    for i in range(len(lines)):
+        sum = sum + parse_line(lines[i], i + 1)
+    return sum
+
+def checked(text: str) -> int:
+    try:
+        return int(text)
+    except ValueError:
+        print(f"rejecting '{text}'")
+        raise
+
+def main() -> None:
+    print(total(["1", "2", "3"]))
+
+    try:
+        print(total(["1", "two", "3"]))
+    except ParseError as error:
+        print(f"line {error.line}: {error.message}")
+    finally:
+        print("finally always runs")
+
+    try:
+        print(10 // 0)
+    except ZeroDivisionError as division:
+        print(division.message)
+
+    # `except Exception` handles every exception class.
+    for text in ["5", "x"]:
+        try:
+            print(checked(text))
+        except Exception as failure:
+            print("failed: " + failure.message)

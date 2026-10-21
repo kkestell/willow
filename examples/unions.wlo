@@ -1,0 +1,31 @@
+# Unions: a value that may have one of several types is narrowed with
+# `isinstance` before type-specific operations.
+
+class Circle:
+    radius: float
+
+class Rectangle:
+    width: float
+    height: float
+
+type Shape = Circle | Rectangle
+
+def area(shape: Shape) -> float:
+    if isinstance(shape, Circle):
+        return 3.14159 * shape.radius * shape.radius
+    return shape.width * shape.height
+
+def describe(value: int | str | list[int]) -> str:
+    if isinstance(value, int):
+        return f"the number {value}"
+    if isinstance(value, str):
+        return f"the text '{value}'"
+    return f"a list of {len(value)} numbers"
+
+def main() -> None:
+    shapes: list[Shape] = [Circle(1.0), Rectangle(2.0, 3.0)]
+    for shape in shapes:
+        print(area(shape))
+    print(describe(42))
+    print(describe("hi"))
+    print(describe([1, 2, 3]))

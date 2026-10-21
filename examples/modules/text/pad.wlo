@@ -1,0 +1,2 @@
+def boxed(word: str) -> str:
+    return "[ " + word + " ]"

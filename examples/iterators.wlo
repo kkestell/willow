@@ -1,0 +1,31 @@
+# Iterators: a class with `iter` and `next` methods works with `for`, `iter`,
+# `next`, and `sorted`, like the built-in collections.
+
+class Countdown:
+    current: int
+
+    def iter(self) -> Countdown:
+        return self
+
+    def next(self) -> int:
+        if self.current <= 0:
+            raise StopIteration("")
+        self.current = self.current - 1
+        return self.current + 1
+
+def main() -> None:
+    for n in Countdown(3):
+        print(n)
+
+    numbers = iter([10, 20])
+    print(next(numbers))
+    print(next(numbers))
+    try:
+        next(numbers)
+    except StopIteration:
+        print("exhausted")
+
+    ordered: list[str] = []
+    for n in sorted(Countdown(4)):
+        ordered.append(str(n))
+    print(" ".join(ordered))

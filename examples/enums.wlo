@@ -1,0 +1,39 @@
+# Enums: closed sets of named values, compared with `==`, used as dictionary
+# keys and defaults, and printed by name.
+
+enum Light:
+    RED
+    YELLOW
+    GREEN
+
+def next_light(light: Light) -> Light:
+    if light == Light.RED:
+        return Light.GREEN
+    if light == Light.GREEN:
+        return Light.YELLOW
+    return Light.RED
+
+def parse(text: str) -> Light | None:
+    for light in [Light.RED, Light.YELLOW, Light.GREEN]:
+        if str(light) == "Light." + text.upper():
+            return light
+    return None
+
+def is_stop(light: Light = Light.RED) -> bool:
+    return light == Light.RED
+
+def main() -> None:
+    light = Light.RED
+    for i in range(4):
+        print(light)
+        light = next_light(light)
+
+    seconds = {Light.RED: 30, Light.YELLOW: 5, Light.GREEN: 25}
+    total = 0
+    for color in seconds:
+        total = total + seconds[color]
+    print(f"one cycle takes {total} seconds")
+
+    print(parse("green"))
+    print(parse("blue"))
+    print(is_stop())

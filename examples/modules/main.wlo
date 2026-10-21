@@ -1,0 +1,13 @@
+# Modules: `import geometry` loads geometry.wlo next to this file, and
+# `import text.pad` loads text/pad.wlo. Their declarations are used through the
+# module name.
+#   willow run examples/modules/main.wlo
+
+import geometry
+import text.pad
+
+def main() -> None:
+    origin = geometry.Point(0.0, 0.0)
+    corner = geometry.Point(3.0, 4.0)
+    print(geometry.distance_squared(origin, corner))
+    print(text.pad.boxed("modules"))

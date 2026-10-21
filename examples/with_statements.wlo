@@ -1,0 +1,35 @@
+# `with` statements: a value with `enter` and `exit` methods is a context
+# manager, and `exit` runs however the block is left.
+
+class Transaction:
+    name: str
+    log: list[str]
+
+    def enter(self) -> Transaction:
+        self.log.append(f"begin {self.name}")
+        return self
+
+    def exit(self, error: Exception | None) -> None:
+        if error is None:
+            self.log.append(f"commit {self.name}")
+        else:
+            self.log.append(f"roll back {self.name}: {error.message}")
+
+def main() -> None:
+    log: list[str] = []
+
+    with Transaction("first", log) as transaction:
+        log.append(f"work in {transaction.name}")
+
+    try:
+        with Transaction("second", log):
+            raise ValueError("bad input")
+    except ValueError:
+        log.append("handled the error")
+
+    # Several managers enter left to right and exit right to left.
+    with Transaction("outer", log), Transaction("inner", log):
+        log.append("work in both")
+
+    for line in log:
+        print(line)

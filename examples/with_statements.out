@@ -1,0 +1,11 @@
+begin first
+work in first
+commit first
+begin second
+roll back second: bad input
+handled the error
+begin outer
+begin inner
+work in both
+commit inner
+commit outer

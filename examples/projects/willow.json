@@ -1,0 +1,6 @@
+{
+  "entry": "vowels/main.wlo",
+  "source": "src",
+  "dependencies": ["vendor"],
+  "tests": "tests"
+}

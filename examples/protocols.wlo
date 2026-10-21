@@ -1,0 +1,53 @@
+# Protocols: structural interfaces. A class satisfies a protocol by having its
+# methods; it does not declare that it implements it.
+
+protocol Shape:
+    def area(self) -> float
+    def name(self) -> str
+
+class Square:
+    side: float
+
+    def area(self) -> float:
+        return self.side * self.side
+
+    def name(self) -> str:
+        return "square"
+
+class Circle:
+    radius: float
+
+    def area(self) -> float:
+        return 3.14159 * self.radius * self.radius
+
+    def name(self) -> str:
+        return "circle"
+
+def report(shapes: list[Shape]) -> None:
+    for shape in shapes:
+        print(f"{shape.name():<8s}{shape.area():>8.2f}")
+
+# A protocol can take type parameters.
+protocol Source[T]:
+    def read(self) -> T | None
+
+class Countdown:
+    current: int
+
+    def read(self) -> int | None:
+        if self.current == 0:
+            return None
+        self.current = self.current - 1
+        return self.current + 1
+
+def drain[T](source: Source[T]) -> list[T]:
+    items: list[T] = []
+    item = source.read()
+    while item is not None:
+        items.append(item)
+        item = source.read()
+    return items
+
+def main() -> None:
+    report([Square(2.0), Circle(1.0)])
+    print(len(drain[int](Countdown(3))))

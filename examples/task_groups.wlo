@@ -1,0 +1,46 @@
+# Task groups run coroutines concurrently. `start` schedules a task and returns
+# its handle, and the group waits for all its tasks before the block ends.
+
+import aio
+import time
+
+async def download(name: str, seconds: float) -> int:
+    await aio.sleep(seconds)
+    print(f"  finished {name}")
+    return len(name) * 100
+
+# Awaiting a task waits for its result; it does not run the task again.
+async def verify(transfer: aio.Task[int]) -> str:
+    size = await transfer
+    return f"verified {size} bytes"
+
+async def upload() -> None:
+    try:
+        await aio.sleep(1.0)
+    finally:
+        print("  upload cleaned up")
+
+async def fail_soon() -> None:
+    await aio.sleep(0.05)
+    raise ValueError("disk full")
+
+async def main() -> None:
+    start = time.monotonic()
+    async with aio.task_group() as group:
+        big = group.start(download("big.iso", 0.3))
+        small = group.start(download("small.txt", 0.1))
+        medium = group.start(download("medium.zip", 0.2))
+        check = group.start(verify(big))
+    # The tasks have finished, so their results are ready.
+    print(f"sizes {big.result()}, {small.result()}, {medium.result()}")
+    print(check.result())
+    print(f"took {time.monotonic() - start:.1f} seconds instead of 0.6")
+
+    # A failing task cancels the others, and its exception leaves the group
+    # after their cleanup has run.
+    try:
+        async with aio.task_group() as group:
+            group.start(upload())
+            group.start(fail_soon())
+    except ValueError as error:
+        print(f"group failed: {error.message}")

@@ -1,0 +1,15 @@
+# Projects: willow.json names the entry module, the source root, dependency
+# roots, and the test directory. From this directory:
+#   willow run -- banana kiwi
+#   willow test
+#   willow build -o vowels
+
+import sys
+import tabulate.table
+import vowels.count
+
+def main() -> None:
+    rows: list[list[str]] = []
+    for word in sys.args():
+        rows.append([word, str(vowels.count.vowels(word))])
+    print(tabulate.table.render(["word", "vowels"], rows))

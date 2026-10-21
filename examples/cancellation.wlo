@@ -1,0 +1,57 @@
+# Cancellation: `group.cancel()` stops a group's tasks at their next await.
+# It skips `except` handlers but runs `finally` and `with` cleanup, and the
+# group then ends normally.
+
+import aio
+
+async def worker(name: str, seconds: float) -> str:
+    try:
+        await aio.sleep(seconds)
+        return name
+    finally:
+        # Cleanup may await, even while its task is being cancelled.
+        await aio.sleep(0.0)
+        print(f"  {name} cleaned up")
+
+# Awaits `work`, then cancels the rest of `group`.
+async def finish(group: aio.TaskGroup, work: Coroutine[str]) -> str:
+    value = await work
+    group.cancel()
+    return value
+
+async def first_of(names: list[str]) -> str:
+    tasks: list[aio.Task[str]] = []
+    async with aio.task_group() as group:
+        for i in range(len(names)):
+            tasks.append(group.start(finish(group, worker(names[i], 0.1 * float(i + 1)))))
+    for task in tasks:
+        try:
+            return task.result()
+        except RuntimeError as error:
+            print(f"  {error.message}")
+    return ""
+
+async def watchdog(group: aio.TaskGroup, seconds: float) -> None:
+    await aio.sleep(seconds)
+    group.cancel()
+
+# Returns the result of `work`, or None if it takes longer than `seconds`.
+async def with_deadline(seconds: float, work: Coroutine[str]) -> str | None:
+    async with aio.task_group() as group:
+        task = group.start(finish(group, work))
+        group.start(watchdog(group, seconds))
+    try:
+        return task.result()
+    except RuntimeError:
+        return None
+
+async def main() -> None:
+    print("first of three:")
+    winner = await first_of(["fast", "medium", "slow"])
+    print(f"  winner {winner}")
+
+    print("deadline met:")
+    print(f"  {await with_deadline(0.5, worker('quick', 0.05))}")
+
+    print("deadline missed:")
+    print(f"  {await with_deadline(0.05, worker('sluggish', 1.0))}")

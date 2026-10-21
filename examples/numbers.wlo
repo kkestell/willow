@@ -1,0 +1,25 @@
+# Numbers: exact integers, IEEE 754 floats, the three division operators, and
+# explicit conversions. An `int` never converts to `float` implicitly.
+
+def main() -> None:
+    print(7 / 2)
+    print(7 // 2)
+    print(-7 // 2)
+    print(7 % -2)
+    print(7.5 // 2.0)
+    print(0.1 + 0.2)
+
+    print(float(3) + 0.5)
+    print(int(2.9))
+    print(int("-42") + 1)
+    print(float("1e3"))
+    print(1e300 * 1e300)
+
+    try:
+        print(9007199254740991 + 1)
+    except OverflowError as overflow:
+        print(overflow.message)
+    try:
+        print(int("12abc"))
+    except ValueError as invalid:
+        print(invalid.message)

@@ -1,0 +1,58 @@
+# Classes: fields with defaults, constructors with keyword arguments, methods,
+# and shared references.
+
+class Point:
+    x: float
+    y: float
+
+    def moved(self, dx: float, dy: float) -> Point:
+        return Point(self.x + dx, self.y + dy)
+
+    def text(self) -> str:
+        return f"({self.x}, {self.y})"
+
+class Account:
+    owner: str
+    balance: int = 0
+
+    def deposit(self, amount: int) -> int:
+        self.balance = self.balance + amount
+        return self.balance
+
+    def withdraw(self, amount: int) -> bool:
+        if amount > self.balance:
+            return False
+        self.balance = self.balance - amount
+        return True
+
+# A field may refer to the class being declared.
+class Node:
+    value: int
+    next: Node | None = None
+
+def length(node: Node | None) -> int:
+    count = 0
+    while node is not None:
+        count = count + 1
+        node = node.next
+    return count
+
+def main() -> None:
+    origin = Point(0.0, 0.0)
+    print(origin.moved(1.5, -2.0).text())
+
+    account = Account("ada")
+    account.deposit(100)
+    print(account.withdraw(30))
+    print(account.withdraw(500))
+    print(account.balance)
+
+    # Assignment shares a class value instead of copying it.
+    same = account
+    same.deposit(5)
+    print(account.balance)
+
+    savings = Account(owner="alan", balance=50)
+    print(f"{savings.owner}: {savings.balance}")
+
+    print(length(Node(1, Node(2, Node(3)))))

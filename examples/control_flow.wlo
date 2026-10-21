@@ -1,0 +1,39 @@
+# Control flow: `if`/`elif`/`else`, `while`, `for` over ranges and lists,
+# `break`, `continue`, and `assert`.
+
+def classify(n: int) -> str:
+    if n < 0:
+        return "negative"
+    elif n == 0:
+        return "zero"
+    else:
+        return "positive"
+
+def main() -> None:
+    for n in [-5, 0, 5]:
+        print(f"{n} is {classify(n)}")
+
+    evens: list[str] = []
+    for n in range(0, 10, 2):
+        evens.append(str(n))
+    print(" ".join(evens))
+
+    for n in range(1, 20):
+        if n % 3 != 0:
+            continue
+        if n > 10:
+            break
+        print(n)
+
+    n = 27
+    steps = 0
+    while n != 1:
+        if n % 2 == 0:
+            n = n // 2
+        else:
+            n = 3 * n + 1
+        steps = steps + 1
+    print(f"27 reaches 1 in {steps} steps")
+
+    # A failed assert raises AssertionError with its message.
+    assert steps == 111, "unexpected step count"

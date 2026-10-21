@@ -1,4 +1,4 @@
-# Prints a receipt. Run the tests with `willow test examples/projects/cart`.
+# Prints a receipt. Run the tests with `willow test tests/fixtures/cart`.
 
 import cart
 
