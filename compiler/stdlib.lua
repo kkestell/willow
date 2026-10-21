@@ -253,7 +253,7 @@ local aio = provided("aio", {
     params = { types.float }, names = { "seconds" }, result = types.generic(M.coroutine, { types.None }),
     helper = "aio_sleep_coroutine",
   },
-  task_group = { params = {}, result = task_group.type },
+  task_group = { params = {}, result = task_group.type, helper = "aio_task_group" },
 }, { Task = task, TaskGroup = task_group })
 
 local time = provided("time", {

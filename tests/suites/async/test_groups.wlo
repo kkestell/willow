@@ -1,0 +1,19 @@
+import aio
+
+async def double(x: int) -> int:
+    await aio.sleep(0.0)
+    return x * 2
+
+async def halve(x: int) -> int:
+    if x % 2 == 1:
+        raise ValueError("odd")
+    return x // 2
+
+async def test_double() -> None:
+    async with aio.task_group() as group:
+        task = group.start(double(2))
+    assert task.result() == 4
+
+async def test_halve_odd() -> None:
+    async with aio.task_group() as group:
+        group.start(halve(3))

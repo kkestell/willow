@@ -1,6 +1,5 @@
 -- Lowers the checked tree into explicit evaluation order and control flow.
 local bind = require("compiler.bind")
-local diag = require("compiler.diag")
 local stdlib = require("compiler.stdlib")
 local types = require("compiler.types")
 
@@ -491,10 +490,7 @@ local function lower_function(fn, sites, helpers, protocols)
         }
       elseif node.target.kind == "Builtin" then
         local name = node.target.helper or node.target.name
-        if name == "aio_task_group" then
-          -- Without a group, no task or group operation can run either.
-          diag.error(node.span, "task groups are not implemented yet")
-        elseif name == "str" then
+        if name == "str" then
           return text(args[1], node.args[1].type)
         elseif (name == "print" or name == "eprint") and is_float(node.args[1].type) then
           name = name .. "_float"
@@ -678,7 +674,7 @@ local function lower_function(fn, sites, helpers, protocols)
     end
   end
 
-  local lower_statement
+  local lower_statement, lower_group
 
   -- Emits what leaves Try node `node`'s protected blocks, resumed in the try's
   -- own context.
@@ -729,6 +725,30 @@ local function lower_function(fn, sites, helpers, protocols)
       depth = 0
       emit({ kind = "Eval", value = lower_node(item.exit_call), span = statement.span })
     end)
+    resume(node)
+    emit(node)
+    active = active - 1
+  end
+
+  -- Enters a task group and runs the body under a Try whose departure the
+  -- group's exit joins and may replace: its failure, an outer request, or
+  -- nothing once it absorbs its own stop.
+  lower_group = function(statement)
+    depth = 0
+    active = active + 1
+    managers = math.max(managers, active)
+    local group = { kind = "Manager", index = active }
+    set(group, lower_value(statement.manager), statement.manager.span)
+    emit({ kind = "Eval", value = helper("aio_group_enter", { group }, statement.span), span = statement.span })
+    if statement.target then
+      set({ kind = "Local", symbol = statement.target.symbol }, group, statement.span)
+    end
+    labels = labels + 1
+    local node = { kind = "Try", index = labels, span = statement.span, handlers = {} }
+    node.body = protect(statement.body, node)
+    node.exit = helper("aio_group_exit", {
+      group, { kind = "TryCode", index = node.index }, { kind = "TryValue", index = node.index },
+    }, statement.span)
     resume(node)
     emit(node)
     active = active - 1
@@ -835,7 +855,7 @@ local function lower_function(fn, sites, helpers, protocols)
     elseif kind == "Try" then
       labels = labels + 1
       try_indexes[statement] = labels
-      local node = { kind = "Try", index = labels, span = statement.span }
+      local node = { kind = "Try", index = labels, span = statement.span, protect = fn.async }
       node.body = protect(statement.body, node)
       node.handlers = {}
       for i, handler in ipairs(statement.handlers) do
@@ -852,7 +872,7 @@ local function lower_function(fn, sites, helpers, protocols)
     elseif kind == "With" then
       lower_with(statement, 1)
     elseif kind == "AsyncWith" then
-      diag.error(statement.span, "task groups are not implemented yet")
+      lower_group(statement)
     end
   end
 
@@ -864,6 +884,10 @@ local function lower_function(fn, sites, helpers, protocols)
     end))
   end
 
+  if fn.async then
+    -- Protected blocks in async functions save and restore the task's scope.
+    helpers.aio_scope, helpers.aio_set_scope = true, true
+  end
   local params = {}
   for i, param in ipairs(fn.params) do
     params[i] = param.symbol

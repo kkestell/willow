@@ -1,0 +1,133 @@
+import aio
+
+class Log:
+    lines: list[str]
+
+async def square(value: int) -> int:
+    return value * value
+
+async def sleeper(log: Log, name: str, seconds: float) -> int:
+    try:
+        await aio.sleep(seconds)
+        log.lines.append(name + " woke")
+        return 1
+    finally:
+        # Cleanup may await despite the stop that interrupted the body.
+        await aio.sleep(0.0)
+        log.lines.append(name + " cleanup")
+
+async def stopper(group: aio.TaskGroup, seconds: float) -> None:
+    await aio.sleep(seconds)
+    group.cancel()
+
+async def failing(seconds: float) -> None:
+    await aio.sleep(seconds)
+    raise ValueError("child failed")
+
+# The body returns while a child is running; the child's stop during the join
+# keeps the pending return.
+async def pending_return(log: Log) -> str:
+    async with aio.task_group() as group:
+        group.start(stopper(group, 0.01))
+        group.start(sleeper(log, "joined", 10.0))
+        return "returned"
+
+# An outer request reaches the inner group's body, which cannot absorb it.
+async def nested(log: Log) -> None:
+    async with aio.task_group() as outer:
+        outer.start(stopper(outer, 0.01))
+        async with aio.task_group() as inner:
+            inner.start(sleeper(log, "inner child", 10.0))
+            await aio.sleep(10.0)
+            log.lines.append("inner body finished")
+        log.lines.append("after inner")
+    log.lines.append("after outer")
+
+# The inner child fails, and the outer request arrives while the inner body's
+# cleanup runs. The inner failure beats the request and leaves the outer group
+# as an exception unless caught first.
+async def precedence(catch: bool) -> str:
+    async with aio.task_group() as outer:
+        outer.start(stopper(outer, 0.02))
+        try:
+            async with aio.task_group() as inner:
+                inner.start(failing(0.01))
+                try:
+                    await aio.sleep(10.0)
+                finally:
+                    # Protected cleanup waits past the outer request.
+                    await aio.sleep(0.03)
+        except ValueError as error:
+            if not catch:
+                raise
+            return "caught " + error.message
+    return "absorbed"
+
+async def main() -> None:
+    # The §15 example.
+    async with aio.task_group() as group:
+        first = group.start(square(3))
+        second = group.start(square(4))
+    print(first.result() + second.result())
+    print(await first)
+
+    # Tasks run in the order they became ready, and children may start in a
+    # group passed to them.
+    log = Log([])
+    async with aio.task_group() as group:
+        group.start(sleeper(log, "slow", 0.02))
+        group.start(sleeper(log, "fast", 0.01))
+        log.lines.append("body")
+    print(", ".join(log.lines))
+
+    # cancel() stops the body and children; the group absorbs its own stop.
+    log = Log([])
+    async with aio.task_group() as group:
+        handle = group.start(sleeper(log, "child", 10.0))
+        group.start(stopper(group, 0.01))
+        await aio.sleep(10.0)
+        log.lines.append("unreachable")
+    print(", ".join(log.lines))
+    try:
+        handle.result()
+    except RuntimeError as cancelled:
+        print(cancelled.message)
+    try:
+        group.cancel()
+    except RuntimeError as inactive:
+        print(inactive.message)
+
+    log = Log([])
+    print(await pending_return(log))
+    print(", ".join(log.lines))
+
+    log = Log([])
+    await nested(log)
+    print(", ".join(log.lines))
+
+    print(await precedence(True))
+    try:
+        await precedence(False)
+    except ValueError as error:
+        print("propagated " + error.message)
+
+    # A group is single-use, and a closed group admits no tasks.
+    try:
+        async with group:
+            pass
+    except RuntimeError as entered:
+        print(entered.message)
+    pending = square(5)
+    try:
+        group.start(pending)
+    except RuntimeError as closed:
+        print(closed.message)
+    print(await pending)
+
+    # result() does not wait.
+    async with aio.task_group() as group:
+        unfinished = group.start(sleeper(Log([]), "later", 0.01))
+        try:
+            unfinished.result()
+        except RuntimeError as early:
+            print(early.message)

@@ -322,7 +322,8 @@ function __wlo_aio_await_task(task, site)
 end
 
 -- The current task's scope, saved before a protected block and restored
--- after it. Setting it to nil protects a `finally` or resource exit.
+-- after it. Setting it to nil protects a `finally` clause. Resource exits are
+-- synchronous and reach no checkpoint, so they need no scope change.
 function __wlo_aio_scope()
   return __wlo_aio_current.scope
 end

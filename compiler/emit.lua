@@ -197,6 +197,8 @@ function M.emit(lowered)
       return M.mangle(e.symbol.name)
     elseif kind == "Temp" then
       return "__wlo_t" .. e.index
+    elseif kind == "TryCode" then
+      return "__wlo_code" .. e.index
     elseif kind == "TryValue" then
       return "__wlo_value" .. e.index
     elseif kind == "Not" then
@@ -386,9 +388,24 @@ function M.emit(lowered)
     elseif kind == "Continue" then
       line(depth, s.exits and 'return "continue"' or "goto __wlo_continue_" .. s.label, s.span)
     elseif kind == "Try" then
+      -- In an async function, a `finally` clause runs protected from
+      -- cancellation, with the task's scope cleared. A `finally` that raises
+      -- skips its restore, so a Try with handlers also restores the scope
+      -- after its body.
       local code, value = "__wlo_code" .. s.index, "__wlo_value" .. s.index
+      local scope = "__wlo_scope" .. s.index
+      local set_scope = runtime.reference("aio_set_scope")
       line(depth, "do")
+      if s.protect then
+        line(depth + 1, "local " .. scope .. " = " .. runtime.reference("aio_scope") .. "()")
+      end
       protected("local " .. code .. ", " .. value, s.body, depth + 1)
+      if s.protect and #s.handlers > 0 then
+        line(depth + 1, set_scope .. "(" .. scope .. ")")
+      end
+      if s.exit then
+        line(depth + 1, code .. ", " .. value .. " = " .. expr(s.exit), s.span)
+      end
       if #s.handlers > 0 then
         line(depth + 1, "if " .. code .. ' == "raise" then')
         for i, handler in ipairs(s.handlers) do
@@ -406,7 +423,11 @@ function M.emit(lowered)
         line(depth + 2, "end")
         line(depth + 1, "end")
       end
-      if s.finally_body then
+      if s.finally_body and s.protect then
+        line(depth + 1, set_scope .. "(nil)")
+        block(s.finally_body, depth + 1)
+        line(depth + 1, set_scope .. "(" .. scope .. ")")
+      elseif s.finally_body then
         block(s.finally_body, depth + 1)
       end
       line(depth + 1, "if " .. code .. ' == "raise" or ' .. code .. ' == "cancel" then')
