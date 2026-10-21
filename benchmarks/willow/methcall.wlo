@@ -1,0 +1,49 @@
+# methcall: call methods through an interface that two classes implement, from
+# the Computer Language Benchmarks Game. Toggle and NthToggle satisfy a common
+# protocol rather than one subclassing the other.
+
+import sys
+
+protocol Switch:
+    def activate(self) -> Switch
+    def value(self) -> bool
+
+class Toggle:
+    state: bool
+
+    def activate(self) -> Toggle:
+        self.state = not self.state
+        return self
+
+    def value(self) -> bool:
+        return self.state
+
+# A toggle that changes state on every count_max-th activation.
+class NthToggle:
+    state: bool
+    count_max: int
+    counter: int = 0
+
+    def activate(self) -> NthToggle:
+        self.counter = self.counter + 1
+        if self.counter >= self.count_max:
+            self.state = not self.state
+            self.counter = 0
+        return self
+
+    def value(self) -> bool:
+        return self.state
+
+def run(switch: Switch, n: int) -> None:
+    value = True
+    for _ in range(n):
+        value = switch.activate().value()
+    if value:
+        print("true")
+    else:
+        print("false")
+
+def main() -> None:
+    n = int(sys.args()[0])
+    run(Toggle(True), n)
+    run(NthToggle(True, 3), n)

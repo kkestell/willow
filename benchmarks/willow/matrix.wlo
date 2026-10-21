@@ -1,0 +1,38 @@
+# matrix: multiply two 30-by-30 integer matrices many times, from the Computer
+# Language Benchmarks Game.
+
+import sys
+
+def make_matrix(rows: int, columns: int) -> list[list[int]]:
+    matrix: list[list[int]] = []
+    count = 1
+    for _ in range(rows):
+        row: list[int] = []
+        for _ in range(columns):
+            row.append(count)
+            count = count + 1
+        matrix.append(row)
+    return matrix
+
+def multiply(rows: int, columns: int, a: list[list[int]], b: list[list[int]]) -> list[list[int]]:
+    product: list[list[int]] = []
+    for i in range(rows):
+        a_row = a[i]
+        row: list[int] = []
+        for j in range(columns):
+            total = 0
+            for k in range(columns):
+                total = total + a_row[k] * b[k][j]
+            row.append(total)
+        product.append(row)
+    return product
+
+def main() -> None:
+    n = int(sys.args()[0])
+    size = 30
+    a = make_matrix(size, size)
+    b = make_matrix(size, size)
+    product = multiply(size, size, a, b)
+    for _ in range(n - 1):
+        product = multiply(size, size, a, b)
+    print(f"{product[0][0]} {product[2][3]} {product[3][2]} {product[4][4]}")

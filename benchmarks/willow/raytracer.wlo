@@ -1,0 +1,136 @@
+# raytracer: render a fractal pyramid of spheres lit by one directional light,
+# with shadows and 4-by-4 supersampling, from the Computer Language Benchmarks
+# Game. It writes the image as a binary PGM.
+
+import io
+import math
+import sys
+
+class Vec:
+    x: float
+    y: float
+    z: float
+
+class Sphere:
+    center: Vec
+    radius: float
+
+# A bounding sphere around a sphere and four smaller pyramids.
+class Group:
+    bound: Sphere
+    children: list[Scene]
+
+type Scene = Sphere | Group
+
+# The nearest intersection found so far.
+class Hit:
+    distance: float
+    normal: Vec
+
+def add(a: Vec, b: Vec) -> Vec:
+    return Vec(a.x + b.x, a.y + b.y, a.z + b.z)
+
+def sub(a: Vec, b: Vec) -> Vec:
+    return Vec(a.x - b.x, a.y - b.y, a.z - b.z)
+
+def scale(s: float, v: Vec) -> Vec:
+    return Vec(s * v.x, s * v.y, s * v.z)
+
+def dot(a: Vec, b: Vec) -> float:
+    return a.x * b.x + a.y * b.y + a.z * b.z
+
+def unitise(v: Vec) -> Vec:
+    return scale(1.0 / math.sqrt(dot(v, v)), v)
+
+def infinity() -> float:
+    return 1e308 * 10.0
+
+# The distance along the ray to the sphere, or infinity if the ray misses it.
+def ray_sphere(sphere: Sphere, origin: Vec, direction: Vec) -> float:
+    v = sub(sphere.center, origin)
+    b = dot(v, direction)
+    disc = b * b - dot(v, v) + sphere.radius * sphere.radius
+    if disc < 0.0:
+        return infinity()
+    d = math.sqrt(disc)
+    t2 = b + d
+    if t2 < 0.0:
+        return infinity()
+    t1 = b - d
+    if t1 > 0.0:
+        return t1
+    return t2
+
+def intersect(scene: Scene, origin: Vec, direction: Vec, hit: Hit) -> None:
+    if isinstance(scene, Sphere):
+        distance = ray_sphere(scene, origin, direction)
+        if distance >= hit.distance:
+            return
+        hit.distance = distance
+        hit.normal = unitise(sub(add(origin, scale(distance, direction)), scene.center))
+        return
+    if ray_sphere(scene.bound, origin, direction) >= hit.distance:
+        return
+    for child in scene.children:
+        intersect(child, origin, direction, hit)
+
+# Whether the ray hits anything in the scene.
+def shadowed(scene: Scene, origin: Vec, direction: Vec) -> bool:
+    if isinstance(scene, Sphere):
+        return ray_sphere(scene, origin, direction) < infinity()
+    if not ray_sphere(scene.bound, origin, direction) < infinity():
+        return False
+    for child in scene.children:
+        if shadowed(child, origin, direction):
+            return True
+    return False
+
+def ray_trace(light: Vec, origin: Vec, direction: Vec, scene: Scene) -> float:
+    hit = Hit(infinity(), Vec(0.0, 0.0, 0.0))
+    intersect(scene, origin, direction, hit)
+    if hit.distance == infinity():
+        return 0.0
+    g = dot(hit.normal, light)
+    if g >= 0.0:
+        return 0.0
+    # Start the shadow ray just off the surface, by the square root of the
+    # float epsilon, so that it does not hit the sphere it leaves.
+    point = add(add(origin, scale(hit.distance, direction)), scale(1.4901161193847656e-08, hit.normal))
+    if shadowed(scene, point, scale(-1.0, light)):
+        return 0.0
+    return -g
+
+def create(level: int, center: Vec, radius: float) -> Scene:
+    sphere = Sphere(center, radius)
+    if level == 1:
+        return sphere
+    children: list[Scene] = [sphere]
+    offset = 3.0 * radius / math.sqrt(12.0)
+    for dz in [-1.0, 1.0]:
+        for dx in [-1.0, 1.0]:
+            children.append(create(level - 1, add(center, scale(offset, Vec(dx, 1.0, dz))), 0.5 * radius))
+    return Group(Sphere(center, 3.0 * radius), children)
+
+def main() -> None:
+    n = int(sys.args()[0])
+    samples = 4
+    size = float(n)
+    light = unitise(Vec(-1.0, -3.0, 2.0))
+    scene = create(6, Vec(0.0, -1.0, 0.0), 1.0)
+    eye = Vec(0.0, 0.0, -4.0)
+    out = io.stdout()
+    out.write_text(f"P5\n{n} {n}\n255\n")
+    for y in range(n - 1, -1, -1):
+        row: list[int] = []
+        for x in range(n):
+            g = 0.0
+            for dx in range(samples):
+                for dy in range(samples):
+                    direction = unitise(Vec(
+                        float(x) + float(dx) / float(samples) - size / 2.0,
+                        float(y) + float(dy) / float(samples) - size / 2.0,
+                        size,
+                    ))
+                    g = g + ray_trace(light, eye, direction, scene)
+            row.append(int(0.5 + 255.0 * g / float(samples * samples)))
+        out.write(bytes(row))

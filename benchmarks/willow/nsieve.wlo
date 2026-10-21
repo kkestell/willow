@@ -1,0 +1,28 @@
+# nsieve: count the primes below three limits with the sieve of Eratosthenes,
+# from the Computer Language Benchmarks Game.
+
+import sys
+
+def count_primes(limit: int) -> int:
+    flags: list[bool] = []
+    for _ in range(limit):
+        flags.append(True)
+    count = 0
+    for i in range(2, limit):
+        if flags[i]:
+            count = count + 1
+            for j in range(i + i, limit, i):
+                flags[j] = False
+    return count
+
+def power_of_two(exponent: int) -> int:
+    result = 1
+    for _ in range(exponent):
+        result = result * 2
+    return result
+
+def main() -> None:
+    n = int(sys.args()[0])
+    for i in range(3):
+        limit = 10000 * power_of_two(n - i)
+        print(f"Primes up to {limit:8d} {count_primes(limit):8d}")

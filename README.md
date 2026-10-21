@@ -83,14 +83,16 @@ into one executable.
 
 ## Benchmarks
 
-`benchmarks/` has seven programs from the Computer Language Benchmarks Game,
-written in Willow and, for comparison, in C, Lua for LuaJIT, and Python. Each
-language uses the same single-threaded algorithm, and the problem sizes are
+`benchmarks/` has seventeen programs from the Computer Language Benchmarks
+Game, written in Willow and, for comparison, in C, Lua for LuaJIT, and Python.
+Each language uses the same single-threaded algorithm, and the problem sizes are
 smaller than the official ones so that Python finishes in reasonable time. Two
 programs differ from the official ones: mandelbrot prints a checksum of the
 image instead of the image, and k-nucleotide generates its sequence instead of
-reading one from a file. Willow runs as the Lua it compiles to, on the same
-LuaJIT as the hand-written Lua. To time the Willow programs, run:
+reading one from a file. reverse-complement reads the output of fasta for its
+size, and sumcol reads its size in lines of random integers; the runner writes
+both inputs. Willow runs as the Lua it compiles to, on the same LuaJIT as the
+hand-written Lua. To time the Willow programs, run:
 
 ```sh
 make

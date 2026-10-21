@@ -1,0 +1,10 @@
+# sumcol: sum the integers on the lines of standard input, from the Computer
+# Language Benchmarks Game.
+
+def main() -> None:
+    total = 0
+    line = input()
+    while line is not None:
+        total = total + int(line)
+        line = input()
+    print(total)

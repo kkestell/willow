@@ -1,0 +1,49 @@
+# heapsort: sort random floats in place with heapsort, from the Computer
+# Language Benchmarks Game.
+
+import sys
+
+class Random:
+    last: int = 42
+
+    # A float in [0, maximum) from the benchmark's generator.
+    def next(self, maximum: float) -> float:
+        self.last = (self.last * 3877 + 29573) % 139968
+        return maximum * float(self.last) / 139968.0
+
+# Sorts items[1] through items[n]. items[0] is unused.
+def heapsort(n: int, items: list[float]) -> None:
+    ir = n
+    l = n // 2 + 1
+    while True:
+        if l > 1:
+            l = l - 1
+            rra = items[l]
+        else:
+            rra = items[ir]
+            items[ir] = items[1]
+            ir = ir - 1
+            if ir == 1:
+                items[1] = rra
+                return
+        i = l
+        j = l * 2
+        while j <= ir:
+            if j < ir and items[j] < items[j + 1]:
+                j = j + 1
+            if rra < items[j]:
+                items[i] = items[j]
+                i = j
+                j = j + i
+            else:
+                j = ir + 1
+        items[i] = rra
+
+def main() -> None:
+    n = int(sys.args()[0])
+    random = Random()
+    items = [0.0]
+    for _ in range(n):
+        items.append(random.next(1.0))
+    heapsort(n, items)
+    print(f"{items[n]:.10f}")

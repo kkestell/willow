@@ -35,9 +35,40 @@ BENCHMARKS = [
     ("fasta", "fasta", 2_500_000),
     ("mandelbrot", "mandelbrot", 2_500),
     ("k_nucleotide", "k-nucleotide", 2_500_000),
+    ("reverse_complement", "reverse-complement", 5_000_000),
+    ("recursive", "recursive", 9),
+    ("nsieve", "nsieve", 11),
+    ("matrix", "matrix", 10_000),
+    ("methcall", "methcall", 50_000_000),
+    ("except", "except", 1_000_000),
+    ("heapsort", "heapsort", 2_000_000),
+    ("hash2", "hash2", 5_000),
+    ("sumcol", "sumcol", 10_000_000),
+    ("raytracer", "raytracer", 200),
 ]
 
 LANGUAGES = ["C", "LuaJIT", "Python", "Willow"]
+
+
+def fasta_input(size, path):
+    """Writes the output of fasta for `size`."""
+    with path.open("wb") as out:
+        subprocess.run([ROOT / "willow", "run", HERE / "willow" / "fasta.wlo", str(size)], stdout=out, check=True)
+
+
+def sumcol_input(size, path):
+    """Writes `size` lines of integers from -1000 through 1000, chosen with
+    fasta's random number generator."""
+    lines, last = [], 42
+    for _ in range(size):
+        last = (last * 3877 + 29573) % 139968
+        lines.append(f"{last % 2001 - 1000}\n")
+    path.write_text("".join(lines))
+
+
+# Benchmarks that read standard input instead of taking the size as an
+# argument, with the function that writes their input for a size.
+INPUTS = {"reverse_complement": fasta_input, "sumcol": sumcol_input}
 
 
 def build(name, languages):
@@ -56,13 +87,15 @@ def build(name, languages):
     }
 
 
-def best_time(command):
-    """Returns the fastest of RUNS wall-clock times and the output's digest."""
+def best_time(command, stdin):
+    """Returns the fastest of RUNS wall-clock times and the output's digest.
+    `stdin` is the path of the program's input, or None."""
     best = None
     for _ in range(RUNS):
-        start = time.perf_counter()
-        output = subprocess.run(command, check=True, capture_output=True).stdout
-        elapsed = time.perf_counter() - start
+        with open(stdin or "/dev/null", "rb") as source:
+            start = time.perf_counter()
+            output = subprocess.run(command, stdin=source, check=True, capture_output=True).stdout
+            elapsed = time.perf_counter() - start
         best = elapsed if best is None else min(best, elapsed)
     return best, hashlib.sha256(output).hexdigest()
 
@@ -116,10 +149,16 @@ def main():
         if args.names and title not in args.names:
             continue
         commands = build(name, languages)
+        stdin = None
+        arguments = [str(size)]
+        if name in INPUTS:
+            stdin = BUILD / f"{name}_input"
+            INPUTS[name](size, stdin)
+            arguments = []
         expected = (HERE / "expected" / f"{name}.sha256").read_text().strip()
         results[title] = {}
         for language in languages:
-            elapsed, digest = best_time(commands[language] + [str(size)])
+            elapsed, digest = best_time(commands[language] + arguments, stdin)
             results[title][language] = elapsed
             prefix = title if languages == ["Willow"] else f"{title} {language}"
             print(f"{prefix} {elapsed:.3f}s", flush=True)

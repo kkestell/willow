@@ -1,0 +1,39 @@
+# reverse-complement: read DNA sequences in FASTA format from standard input and
+# write the reverse complement of each, from the Computer Language Benchmarks
+# Game.
+
+import io
+
+def complements() -> dict[str, str]:
+    codes = "ACBDGHKMNSRUTWVYacbdghkmnsrutwvy"
+    paired = "TGVHCDMKNSYAAWBRTGVHCDMKNSYAAWBR"
+    table: dict[str, str] = {}
+    for i in range(len(codes)):
+        table[codes[i]] = paired[i]
+    return table
+
+# Writes the complemented sequence back to front in lines of 60.
+def write_reversed(sequence: list[str]) -> None:
+    end = len(sequence)
+    while end > 0:
+        start = end - 60
+        if start < 0:
+            start = 0
+        line: list[str] = []
+        for i in range(end - 1, start - 1, -1):
+            line.append(sequence[i])
+        print("".join(line))
+        end = start
+
+def main() -> None:
+    table = complements()
+    sequence: list[str] = []
+    for line in io.stdin():
+        if line.startswith(">"):
+            write_reversed(sequence)
+            sequence = []
+            print(line)
+        else:
+            for code in line:
+                sequence.append(table[code])
+    write_reversed(sequence)
