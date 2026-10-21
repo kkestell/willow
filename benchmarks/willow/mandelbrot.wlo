@@ -1,0 +1,42 @@
+# mandelbrot: plot the Mandelbrot set on an n-by-n grid with one bit per pixel,
+# from the Computer Language Benchmarks Game. Instead of writing the bitmap as a
+# PBM image, it prints a checksum of the image's bytes.
+
+import sys
+
+def main() -> None:
+    n = int(sys.args()[0])
+    size = float(n)
+    checksum = 0
+    for y in range(n):
+        ci = 2.0 * float(y) / size - 1.0
+        byte = 0
+        bits = 0
+        for x in range(n):
+            cr = 2.0 * float(x) / size - 1.5
+            zr = 0.0
+            zi = 0.0
+            zr2 = 0.0
+            zi2 = 0.0
+            i = 0
+            while i < 50 and zr2 + zi2 <= 4.0:
+                zi = 2.0 * zr * zi + ci
+                zr = zr2 - zi2 + cr
+                zr2 = zr * zr
+                zi2 = zi * zi
+                i = i + 1
+            byte = byte * 2
+            if zr2 + zi2 <= 4.0:
+                byte = byte + 1
+            bits = bits + 1
+            if bits == 8:
+                checksum = (checksum * 31 + byte) % 1000000007
+                byte = 0
+                bits = 0
+        # A row that is not a multiple of 8 pixels wide ends with a padded byte.
+        if bits != 0:
+            while bits < 8:
+                byte = byte * 2
+                bits = bits + 1
+            checksum = (checksum * 31 + byte) % 1000000007
+    print(checksum)

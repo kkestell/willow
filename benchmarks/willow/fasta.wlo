@@ -1,0 +1,81 @@
+# fasta: write three DNA sequences in FASTA format, one by repeating a fixed
+# sequence and two by choosing nucleotides at random with a linear congruential
+# generator, from the Computer Language Benchmarks Game.
+
+import sys
+
+class Random:
+    last: int = 42
+
+    # A float in [0, 1) from the benchmark's generator.
+    def next(self) -> float:
+        self.last = (self.last * 3877 + 29573) % 139968
+        return float(self.last) / 139968.0
+
+def alu() -> str:
+    return (
+        "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG"
+        + "GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA"
+        + "CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT"
+        + "ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA"
+        + "GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG"
+        + "AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC"
+        + "AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA"
+    )
+
+def iub() -> list[tuple[str, float]]:
+    return [
+        ("a", 0.27), ("c", 0.12), ("g", 0.12), ("t", 0.27),
+        ("B", 0.02), ("D", 0.02), ("H", 0.02), ("K", 0.02), ("M", 0.02), ("N", 0.02),
+        ("R", 0.02), ("S", 0.02), ("V", 0.02), ("W", 0.02), ("Y", 0.02),
+    ]
+
+def homo_sapiens() -> list[tuple[str, float]]:
+    return [("a", 0.3029549426680), ("c", 0.1979883004921), ("g", 0.1975473066391), ("t", 0.3015094502008)]
+
+# The table with each probability replaced by the sum of it and the ones before it.
+def cumulative(table: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    result: list[tuple[str, float]] = []
+    total = 0.0
+    for symbol, probability in table:
+        total = total + probability
+        result.append((symbol, total))
+    return result
+
+def repeat_fasta(header: str, sequence: str, count: int) -> None:
+    print(header)
+    doubled = sequence + sequence
+    length = len(sequence)
+    position = 0
+    while count > 0:
+        width = 60
+        if count < width:
+            width = count
+        print(doubled[position:position + width])
+        position = (position + width) % length
+        count = count - width
+
+def random_fasta(header: str, table: list[tuple[str, float]], count: int, random: Random) -> None:
+    print(header)
+    while count > 0:
+        width = 60
+        if count < width:
+            width = count
+        line: list[str] = []
+        for _ in range(width):
+            r = random.next()
+            choice = table[-1][0]
+            for symbol, probability in table:
+                if r < probability:
+                    choice = symbol
+                    break
+            line.append(choice)
+        print("".join(line))
+        count = count - width
+
+def main() -> None:
+    n = int(sys.args()[0])
+    random = Random()
+    repeat_fasta(">ONE Homo sapiens alu", alu(), 2 * n)
+    random_fasta(">TWO IUB ambiguity codes", cumulative(iub()), 3 * n, random)
+    random_fasta(">THREE Homo sapiens frequency", cumulative(homo_sapiens()), 5 * n, random)

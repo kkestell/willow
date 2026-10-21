@@ -1,0 +1,38 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - compiler/**
+      - runtime/**
+      - benchmarks/**
+      - Makefile
+      - willow
+      - .github/workflows/benchmarks.yml
+
+permissions:
+  contents: write
+
+# A newer push supersedes a run in progress, and the run checks out the branch
+# tip so that the README commit it pushes is a fast-forward.
+concurrency:
+  group: benchmarks
+  cancel-in-progress: true
+
+jobs:
+  benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - run: make
+      - run: python3 benchmarks/run.py --readme
+      - if: github.ref_name == 'main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --cached --quiet || (git commit -m "Update benchmark results" && git push)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Builds and times the benchmarks and checks each program's output against
-benchmarks/expected.
+"""Builds and times the benchmarks and checks the SHA-256 digest of each
+program's output against benchmarks/expected.
 
 By default it times only Willow and prints one line per benchmark, for
 comparing Willow with itself before and after a change. `--all` also times
@@ -11,6 +11,7 @@ Run it from anywhere after `make`.
 """
 
 import argparse
+import hashlib
 import platform
 import subprocess
 import sys
@@ -31,6 +32,9 @@ BENCHMARKS = [
     ("spectral_norm", "spectral-norm", 2_000),
     ("fannkuch_redux", "fannkuch-redux", 10),
     ("binary_trees", "binary-trees", 18),
+    ("fasta", "fasta", 500_000),
+    ("mandelbrot", "mandelbrot", 1_000),
+    ("k_nucleotide", "k-nucleotide", 1_000_000),
 ]
 
 LANGUAGES = ["C", "Go", "Node", "LuaJIT", "Willow", "Python"]
@@ -58,14 +62,14 @@ def build(name, languages):
 
 
 def best_time(command):
-    """Returns the fastest of RUNS wall-clock times and the output."""
+    """Returns the fastest of RUNS wall-clock times and the output's digest."""
     best = None
     for _ in range(RUNS):
         start = time.perf_counter()
-        output = subprocess.run(command, check=True, capture_output=True, text=True).stdout
+        output = subprocess.run(command, check=True, capture_output=True).stdout
         elapsed = time.perf_counter() - start
         best = elapsed if best is None else min(best, elapsed)
-    return best, output
+    return best, hashlib.sha256(output).hexdigest()
 
 
 def machine():
@@ -112,15 +116,15 @@ def main():
         if args.names and title not in args.names:
             continue
         commands = build(name, languages)
-        expected = (HERE / "expected" / f"{name}.txt").read_text()
+        expected = (HERE / "expected" / f"{name}.sha256").read_text().strip()
         results[title] = {}
         for language in languages:
-            elapsed, output = best_time(commands[language] + [str(size)])
+            elapsed, digest = best_time(commands[language] + [str(size)])
             results[title][language] = elapsed
             prefix = title if languages == ["Willow"] else f"{title} {language}"
             print(f"{prefix} {elapsed:.3f}s", flush=True)
-            if output != expected:
-                print(f"{title}: {language} output differs from benchmarks/expected/{name}.txt", file=sys.stderr)
+            if digest != expected:
+                print(f"{title}: {language} output digest {digest} differs from benchmarks/expected/{name}.sha256", file=sys.stderr)
                 failed = True
     if failed:
         sys.exit(1)

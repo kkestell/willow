@@ -83,12 +83,15 @@ into one executable.
 
 ## Benchmarks
 
-`benchmarks/` has four programs from the Computer Language Benchmarks Game,
+`benchmarks/` has seven programs from the Computer Language Benchmarks Game,
 written in Willow and, for comparison, in C, Go, JavaScript for Node, Lua for
 LuaJIT, and Python. Each language uses the same single-threaded algorithm, and
 the problem sizes are smaller than the official ones so that Python finishes in
-reasonable time. Willow runs as the Lua it compiles to, on the same LuaJIT as
-the hand-written Lua. To time the Willow programs, run:
+reasonable time. Two programs differ from the official ones: mandelbrot prints
+a checksum of the image instead of the image, and k-nucleotide generates its
+sequence instead of reading one from a file. Willow runs as the Lua it compiles
+to, on the same LuaJIT as the hand-written Lua. To time the Willow programs,
+run:
 
 ```sh
 make
@@ -97,7 +100,13 @@ python3 benchmarks/run.py
 
 Name benchmarks, such as `n-body`, to run only those. `--all` also times the
 other languages, and `--readme` times every language and updates the table
-below. Both need `cc`, `go`, and `node` on the `PATH`.
+below. Both need `cc`, `go`, and `node` on the `PATH`. The runner checks the
+SHA-256 digest of each program's output against `benchmarks/expected`.
+
+The table below comes from the Benchmarks workflow in `.github/workflows`,
+which runs on a GitHub-hosted runner and commits the result. It runs when a
+push to `main` changes the compiler, the runtime, or the benchmarks, and it can
+be started by hand from the Actions tab.
 
 <!-- benchmarks:start -->
 Seconds of wall-clock time, best of 3 runs, on Apple M4 Max, Darwin.
