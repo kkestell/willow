@@ -108,18 +108,18 @@ push to `main` changes the compiler, the runtime, or the benchmarks, and it can
 be started by hand from the Actions tab.
 
 <!-- benchmarks:start -->
-Seconds of wall-clock time, best of 3 runs, on AMD EPYC 7763 64-Core Processor, Linux. In
+Seconds of wall-clock time, best of 3 runs, on AMD EPYC 9V74 80-Core Processor, Linux. In
 parentheses is how many times faster Willow is than Python.
 
 | Benchmark (size) | C | LuaJIT | Python | Willow (vs Python) |
 |---|---:|---:|---:|---:|
-| n-body (5,000,000) | 0.34 | 0.81 | 27.27 | 1.29 (21.1x) |
-| spectral-norm (2,000) | 0.23 | 0.26 | 28.10 | 1.00 (28.1x) |
-| fannkuch-redux (10) | 0.22 | 0.51 | 6.51 | 0.73 (8.9x) |
-| binary-trees (18) | 1.38 | 5.86 | 33.12 | 6.79 (4.9x) |
-| fasta (2,500,000) | 0.43 | 1.03 | 5.62 | 4.21 (1.3x) |
-| mandelbrot (2,500) | 0.45 | 0.48 | 18.95 | 0.70 (27.1x) |
-| k-nucleotide (2,500,000) | 0.34 | 0.55 | 3.63 | 8.43 (0.4x) |
+| n-body (5,000,000) | 0.29 | 0.66 | 20.90 | 1.08 (19.4x) |
+| spectral-norm (2,000) | 0.20 | 0.21 | 23.64 | 0.88 (26.9x) |
+| fannkuch-redux (10) | 0.20 | 0.45 | 5.58 | 0.61 (9.1x) |
+| binary-trees (18) | 1.03 | 4.70 | 28.44 | 5.26 (5.4x) |
+| fasta (2,500,000) | 0.37 | 0.91 | 4.31 | 3.35 (1.3x) |
+| mandelbrot (2,500) | 0.39 | 0.42 | 17.72 | 0.61 (29.2x) |
+| k-nucleotide (2,500,000) | 0.25 | 0.44 | 2.89 | 1.16 (2.5x) |
 <!-- benchmarks:end -->
 
 ## Editor support
