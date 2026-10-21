@@ -1,0 +1,47 @@
+import aio
+
+async def failing() -> None:
+    await aio.sleep(0.01)
+    raise ValueError("child failed")
+
+async def serve(connection: aio.Connection) -> None:
+    with connection:
+        print("serving")
+        await connection.sendall("hello".encode())
+
+async def main() -> None:
+    # A child's failure wakes the body suspended in accept, and the listener's
+    # cleanup runs as the body unwinds.
+    listener = aio.listen("127.0.0.1", 0)
+    try:
+        async with aio.task_group() as group:
+            group.start(failing())
+            with listener:
+                try:
+                    await listener.accept(timeout=1.0)
+                except TimeoutError:
+                    print("accept was not woken")
+                print("unreachable")
+    except ValueError as error:
+        print("caught " + error.message)
+    try:
+        await listener.accept(timeout=1.0)
+    except ValueError as closed:
+        print(closed.message)
+
+    # A connection handed to a task is scoped before the task's first await, so
+    # it is closed even when the group stops before the task's first turn.
+    with aio.listen("127.0.0.1", 0) as listener:
+        client = await aio.connect("127.0.0.1", listener.local_port())
+        async with aio.task_group() as group:
+            group.start(serve(await listener.accept()))
+            group.cancel()
+        print(len(await client.recv(10, timeout=5.0)))
+        client.close()
+
+        client = await aio.connect("127.0.0.1", listener.local_port())
+        async with aio.task_group() as group:
+            group.start(serve(await listener.accept()))
+        print((await client.recv(10, timeout=5.0)).decode())
+        print(len(await client.recv(10, timeout=5.0)))
+        client.close()

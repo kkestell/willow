@@ -48,9 +48,10 @@ tests and `make test`. The design review and runtime prototype are in
     unfinished operation per direction; close waking pending operations;
     the closed flag checked after every wake; wait ids so stale wakes are
     ignored; partial cancelled sends marking the connection unusable
-  - [ ] An echo server example with graceful shutdown and an async test that
-    drives it; tests for a failure waking an accepting body, nested cleanup,
+  - [x] Tests for a failure waking an accepting body, nested cleanup,
     resource handoff, and failure precedence
+  - [ ] An echo server example with graceful shutdown and an async test that
+    drives it
 
 ## First slice
 
