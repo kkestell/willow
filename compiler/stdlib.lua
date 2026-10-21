@@ -300,6 +300,10 @@ local aio = provided("aio", {
   },
 }, { Task = task, TaskGroup = task_group, Connection = aio_connection, Listener = aio_listener })
 
+local math = provided("math", {
+  sqrt = { params = { types.float }, names = { "x" }, result = types.float },
+})
+
 local time = provided("time", {
   time = { params = {}, result = types.float },
   monotonic = { params = {}, result = types.float },
@@ -577,6 +581,7 @@ M.modules = {
   http = http,
   io = io,
   json = json,
+  math = math,
   net = net,
   subprocess = subprocess,
   sys = sys,

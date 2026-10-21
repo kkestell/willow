@@ -220,6 +220,10 @@ local function __wlo_int_mod(a, b, site)
   return mod
 end
 
+local function __wlo_sqrt(x, site)
+  return math.sqrt(x)
+end
+
 -- Truncates toward zero.
 local function __wlo_int(x, site)
   local value = x < 0 and math.ceil(x) or math.floor(x)

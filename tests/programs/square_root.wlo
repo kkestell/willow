@@ -1,0 +1,6 @@
+import math
+
+def main() -> None:
+    print(math.sqrt(2.0))
+    print(math.sqrt(-0.0))
+    print(math.sqrt(-1.0))

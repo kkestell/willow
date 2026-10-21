@@ -2013,6 +2013,15 @@ Strings escape `"`, `\`, and control characters. Control characters use `\b`,
 other characters are written unchanged. NaN and infinities raise `JsonError` with
 the message `cannot encode <value>`, as in `cannot encode inf`.
 
+### `math`
+
+| Function | Meaning |
+| --- | --- |
+| `sqrt(x: float) -> float` | The square root of `x`, correctly rounded |
+
+`sqrt` follows IEEE 754: `sqrt(-0.0)` is `-0.0`, and the square root of a
+negative number or NaN is NaN.
+
 ### `net`
 
 ```python
