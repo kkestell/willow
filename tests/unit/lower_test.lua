@@ -90,7 +90,15 @@ local function show_statement(s)
   elseif kind == "While" then
     return "while#" .. s.label .. " " .. show_block(s.setup) .. " " .. show_expr(s.condition) .. " " .. show_block(s.body)
   elseif kind == "For" then
-    return "for#" .. s.label .. " " .. show_expr(s.target) .. " " .. show_expr(s.iterator) .. " " .. show_block(s.body)
+    local iterated
+    if s.range then
+      iterated = "range(" .. show_list(s.range, show_expr, ", ") .. ")"
+    elseif s.list then
+      iterated = "list(" .. show_expr(s.list) .. ")"
+    else
+      iterated = show_expr(s.iterator)
+    end
+    return "for#" .. s.label .. " " .. show_expr(s.target) .. " " .. iterated .. " " .. show_block(s.body)
   elseif kind == "Break" then
     return "break"
   elseif kind == "Continue" then
@@ -208,8 +216,10 @@ return {
   end,
 
   for_loops = function()
-    eq("t1 = f(3); for#1 i range(0, t1, 1)#1 { print(i)#2 }", lower_main("for i in range(f(3)):\n    print(i)", INT_HELPERS))
-    eq("xs = [1]; for#1 x list_items(xs)#1 { continue#1 }", lower_main("xs = [1]\nfor x in xs:\n    continue"))
+    eq("t1 = f(3); for#1 i range(0, t1, 1) { print(i)#1 }", lower_main("for i in range(f(3)):\n    print(i)", INT_HELPERS))
+    eq("s = 1; range_step(s)#1; for#1 i range(0, 3, s) { print(i)#2 }",
+      lower_main("s = 1\nfor i in range(0, 3, s):\n    print(i)"))
+    eq("xs = [1]; for#1 x list(xs) { continue#1 }", lower_main("xs = [1]\nfor x in xs:\n    continue"))
   end,
 
   records = function()

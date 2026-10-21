@@ -316,6 +316,13 @@ function M.emit(lowered)
     line(depth, "end)")
   end
 
+  -- Sets the loop's targets from the item the loop is running on.
+  local function for_target(s, depth)
+    if s.target then
+      line(depth, expr(s.target) .. " = " .. expr(s.value), s.span)
+    end
+  end
+
   local function loop_body(s, depth)
     if s.continues then
       -- The body may end in return or break, which Lua requires to close a
@@ -465,12 +472,38 @@ function M.emit(lowered)
       loop_body(s, depth + 1)
       line(depth, "end")
     elseif kind == "For" then
-      line(depth, "for _, __wlo_item in " .. expr(s.iterator) .. " do", s.iterator.span)
-      if s.target then
-        line(depth + 1, expr(s.target) .. " = " .. expr(s.value), s.span)
+      if s.range then
+        -- The limit ends the loop where the runtime range does: the numbers
+        -- run while they stay below a positive stop, or above a negative one.
+        local step = s.range[3]
+        local limit
+        if step.kind == "Literal" then
+          limit = expr(s.range[2], true) .. (step.value > 0 and " - 1" or " + 1")
+        else
+          limit = expr(s.range[2], true) .. " - (" .. expr(step) .. " > 0 and 1 or -1)"
+        end
+        line(depth, "for __wlo_item = " .. expr(s.range[1]) .. ", " .. limit .. ", " .. expr(step) .. " do", s.span)
+        for_target(s, depth + 1)
+        loop_body(s, depth + 1)
+        line(depth, "end")
+      elseif s.list then
+        local list, index = "__wlo_list_" .. s.label, "__wlo_index_" .. s.label
+        line(depth, "do")
+        line(depth + 1, "local " .. list .. " = " .. expr(s.list), s.span)
+        line(depth + 1, "local " .. index .. " = 0")
+        line(depth + 1, "while " .. index .. " < " .. list .. ".n do")
+        line(depth + 2, index .. " = " .. index .. " + 1")
+        line(depth + 2, "local __wlo_item = " .. list .. "[" .. index .. "]")
+        for_target(s, depth + 2)
+        loop_body(s, depth + 2)
+        line(depth + 1, "end")
+        line(depth, "end")
+      else
+        line(depth, "for _, __wlo_item in " .. expr(s.iterator) .. " do", s.iterator.span)
+        for_target(s, depth + 1)
+        loop_body(s, depth + 1)
+        line(depth, "end")
       end
-      loop_body(s, depth + 1)
-      line(depth, "end")
     end
   end
 

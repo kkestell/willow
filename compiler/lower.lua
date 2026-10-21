@@ -815,7 +815,17 @@ local function lower_function(fn, sites, helpers, protocols)
       -- The iterator is created once, after its operands are evaluated here.
       local iterable = statement.iterable
       if iterable.kind == "Call" and iterable.target.kind == "Builtin" and iterable.name == "range" then
-        node.iterator = helper("range", range_args(iterable), iterable.span)
+        -- A range runs its numbers directly, so no iterator closure is made.
+        -- The step is checked first, where the range is written.
+        local start, stop, step = unpack(range_args(iterable))
+        if step.kind ~= "Literal" or step.value == 0 then
+          emit({ kind = "Eval", value = helper("range_step", { step }, iterable.span), span = iterable.span })
+        end
+        node.range = { start, stop, step }
+      elseif iterable.type.kind == "list" then
+        -- A list is read by index, which reads its length at each step, so
+        -- items appended by the body are visited.
+        node.list = lower_operand(iterable)
       else
         node.iterator = items_iterator(statement, iterable, statement.span)
       end

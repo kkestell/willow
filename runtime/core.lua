@@ -164,8 +164,7 @@ local function __wlo_div(a, b, site)
   return a / b
 end
 
--- Floor quotient and remainder by CPython's float_divmod. For integers in range
--- fmod and the subtraction are exact, so the results are too.
+-- Floor quotient and remainder by CPython's float_divmod.
 local function __wlo_divmod(a, b, site)
   if b == 0 then
     __wlo_fail("ZeroDivisionError", "division by zero", site)
@@ -194,6 +193,13 @@ local function __wlo_divmod(a, b, site)
   return div, mod
 end
 
+-- Integer `//` and `%` skip __wlo_divmod in the common case: LuaJIT's compiler
+-- cannot trace math.fmod, so it would break the trace at every division. When
+-- |div * b| <= 2^52, a / b cannot round past an integer and div * b is exact,
+-- so math.floor(a / b) and a - div * b are exactly CPython's results; larger
+-- magnitudes, where that can fail, take __wlo_divmod.
+local __wlo_LIMIT = 4503599627370496
+
 local function __wlo_floordiv(a, b, site)
   local div = __wlo_divmod(a, b, site)
   return div
@@ -205,7 +211,14 @@ local function __wlo_mod(a, b, site)
 end
 
 local function __wlo_int_floordiv(a, b, site)
-  local div = __wlo_divmod(a, b, site)
+  if b == 0 then
+    __wlo_fail("ZeroDivisionError", "division by zero", site)
+  end
+  local div = math.floor(a / b)
+  local p = div * b
+  if p > __wlo_LIMIT or p < -__wlo_LIMIT then
+    div = __wlo_divmod(a, b, site)
+  end
   if div == 0 then
     return 0
   end
@@ -213,7 +226,17 @@ local function __wlo_int_floordiv(a, b, site)
 end
 
 local function __wlo_int_mod(a, b, site)
-  local _, mod = __wlo_divmod(a, b, site)
+  if b == 0 then
+    __wlo_fail("ZeroDivisionError", "division by zero", site)
+  end
+  local div = math.floor(a / b)
+  local p = div * b
+  local mod
+  if p > __wlo_LIMIT or p < -__wlo_LIMIT then
+    _, mod = __wlo_divmod(a, b, site)
+  else
+    mod = a - p
+  end
   if mod == 0 then
     return 0
   end
@@ -1190,10 +1213,16 @@ local function __wlo_chr(n, site)
   return string.char(240 + math.floor(n / 262144), 128 + math.floor(n / 4096) % 64, 128 + math.floor(n / 64) % 64, 128 + n % 64)
 end
 
-local function __wlo_range(start, stop, step, site)
+-- A range's step is checked once, before a `for` over the range runs its
+-- numbers directly rather than through an iterator.
+local function __wlo_range_step(step, site)
   if step == 0 then
     __wlo_fail("ValueError", "range step must not be zero", site)
   end
+end
+
+local function __wlo_range(start, stop, step, site)
+  __wlo_range_step(step, site)
   local value, started = start, false
   return function()
     if started then
