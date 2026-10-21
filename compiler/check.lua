@@ -599,7 +599,7 @@ local function check_function(fn, entry)
     diag.error(node.span, "class " .. object.name .. " has no field '" .. node.name .. "'")
   end
 
-  local return_type = fn.return_type
+  local return_type = bind.result_type(fn)
   -- A generator function's yielded values have the type its annotation's
   -- protocol iterates.
   local yield_type
@@ -1183,6 +1183,13 @@ local function check_function(fn, entry)
       type = object
     elseif kind == "MethodCall" then
       type = check_method(node, check_expression(node.object, state), state, expected)
+    elseif kind == "Await" then
+      local coroutine = expected and types.generic(stdlib.coroutine, { expected })
+      local operand = check_expression(node.operand, state, coroutine)
+      if not (operand.kind == "record" and operand.record == stdlib.coroutine) then
+        diag.error(node.span, "cannot await a value of type " .. operand.name)
+      end
+      type = operand.args[1]
     elseif kind == "ListDisplay" then
       type = display_member(expected, "list")
       local element = type and list_element(type)
@@ -1239,7 +1246,7 @@ local function check_function(fn, entry)
         check_against(entries[i].value, state, value)
       end
     end
-    if kind == "Call" or kind == "CallValue" or kind == "MethodCall" then
+    if kind == "Call" or kind == "CallValue" or kind == "MethodCall" or kind == "Await" then
       calls = calls + 1
       forget_captured(state)
     end
@@ -1408,7 +1415,10 @@ local function check_function(fn, entry)
       check_against(statement.value, state, item)
     elseif kind == "CallStmt" then
       local call = statement.call
-      check_expression(call, state)
+      local type = check_expression(call, state)
+      if stdlib.has_coroutine(type) then
+        diag.error(call.span, "cannot discard a value of type " .. type.name .. "; a discarded coroutine never runs")
+      end
       -- exit never returns, so it transfers control like raise.
       if call.kind == "Call" and call.target.kind == "Builtin" and call.target.name == "exit" then
         return true

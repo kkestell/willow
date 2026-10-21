@@ -181,7 +181,7 @@ local function is_pure(node)
       end
     end
   elseif kind == "Call" or kind == "CallValue" or kind == "Index" or kind == "Slice" or kind == "MethodCall"
-    or kind == "Field" then
+    or kind == "Field" or kind == "Await" then
     return false
   elseif kind == "Unary" then
     return not (node.op == "-" and node.type == types.int) and is_pure(node.operand)
@@ -580,6 +580,8 @@ local function lower_function(fn, sites, helpers, protocols)
         return { kind = "Call", target = node.method, args = args, span = node.span }
       end
       return helper(prefix(node.receiver or node.object.type) .. node.name, args, node.span)
+    elseif kind == "Await" then
+      return helper("await", { lower_operand(node.operand) }, node.span)
     elseif kind == "ListDisplay" then
       local elements = {}
       for i, element in ipairs(node.elements) do
@@ -871,6 +873,7 @@ local function lower_function(fn, sites, helpers, protocols)
     managers = managers,
     body = body,
     generator = fn.generator,
+    async = fn.async,
   }
 end
 

@@ -1298,6 +1298,41 @@ local function __wlo_generator_exit(generator, exception, site)
   __wlo_generator_close(generator, site)
 end
 
+-- A coroutine holds an async function's body until it is consumed, by an
+-- await or by starting a task. Its body runs in the consuming task's Lua
+-- coroutine, so a suspension inside it suspends the whole task.
+local function __wlo_coroutine(body)
+  return { __wlo_record = "<coroutine>", body = body }
+end
+
+-- Returns the body of coroutine `c` and marks `c` consumed.
+local function __wlo_consume(c, site)
+  local body = c.body
+  if not body then
+    __wlo_fail("RuntimeError", "coroutine was already awaited or started", site)
+  end
+  c.body = nil
+  return body
+end
+
+-- Runs coroutine `c` inline, returning its result or raising its exception.
+local function __wlo_await(c, site)
+  return __wlo_consume(c, site)()
+end
+
+-- Drives coroutine `c` of async `main` or an async test as the root task, in a
+-- Lua coroutine of its own whose frames end at the task's body. Nothing
+-- suspends yet, so one resume runs it to completion.
+local function __wlo_root(c)
+  local task = coroutine.create(function()
+    return xpcall(__wlo_consume(c), __wlo_catch)
+  end)
+  local _, ok, err = coroutine.resume(task)
+  if not ok then
+    error(err, 0)
+  end
+end
+
 local function __wlo_where(location)
   return __wlo_paths[location[3]] .. ":" .. location[1] .. ":" .. location[2]
 end

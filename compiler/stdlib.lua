@@ -110,6 +110,24 @@ M.protocols = {
   end),
 }
 
+-- `Coroutine[T]`, an opaque generic type with no methods. Values are created
+-- only by calling async functions.
+local coroutine_T = types.typevar("T")
+M.coroutine = {
+  kind = "Record", name = "Coroutine", type_name = "Coroutine", fields = {}, methods = {},
+  native = true, native_methods = {}, type_params = { { name = "T" } }, typevars = { coroutine_T },
+}
+
+-- Whether `t` is a coroutine type or a union with a coroutine member.
+function M.has_coroutine(t)
+  for _, m in ipairs(types.members(t)) do
+    if m.kind == "record" and m.record == M.coroutine then
+      return true
+    end
+  end
+  return false
+end
+
 -- An ordinary record of a provided module with `fields` as { name, type }.
 local function provided_record(module, name, fields)
   local record = { kind = "Record", name = name, type_name = module .. "." .. name, fields = {}, methods = {} }

@@ -116,8 +116,10 @@ show = function(node)
   elseif kind == "Param" then
     return (node.keyword_only and "*" or "") .. node.name .. ": " .. show(node.type)
       .. (node.default and " = " .. show(node.default) or "")
+  elseif kind == "Await" then
+    return "(await " .. show(node.operand) .. ")"
   elseif kind == "Function" then
-    return "def " .. node.name .. "(" .. show_list(node.params, ", ") .. ") -> "
+    return (node.async and "async " or "") .. "def " .. node.name .. "(" .. show_list(node.params, ", ") .. ") -> "
       .. show(node.return_type) .. " " .. show_block(node.body)
   elseif kind == "Lambda" then
     local names = {}
@@ -243,9 +245,9 @@ return {
   end,
 
   non_call_expression_statements_rejected = function()
-    eq("2:7: only calls can be used as statements", body_error("x + 1"))
-    eq("2:5: only calls can be used as statements", body_error("x"))
-    eq("2:9: only calls can be used as statements", body_error("f() == 1"))
+    eq("2:7: only calls and await expressions can be used as statements", body_error("x + 1"))
+    eq("2:5: only calls and await expressions can be used as statements", body_error("x"))
+    eq("2:9: only calls and await expressions can be used as statements", body_error("f() == 1"))
   end,
 
   assignment_forms_rejected = function()
@@ -385,7 +387,7 @@ return {
     eq("(items[0])(1)", expr("items[0](1)"))
     eq("(xs.f(1))(2)", expr("xs.f(1)(2)"))
     eq("2:10: only a name can have an annotation", body_error("xs[0]: int = 1"))
-    eq("2:7: only calls can be used as statements", body_error("xs[0]"))
+    eq("2:7: only calls and await expressions can be used as statements", body_error("xs[0]"))
   end,
 
   imports = function()
@@ -637,6 +639,22 @@ return {
   yield_statements = function()
     eq("{ yield (x + 1) }", body("yield x + 1"))
     eq("2:10: expected an expression, found end of line", body_error("yield"))
+  end,
+
+  async_functions_and_await = function()
+    local program = parse("async def f() -> int:\n    return 1\n\nclass C:\n    async def m(self) -> None:\n"
+      .. "        pass\n\nprotocol P:\n    async def m(self) -> Coroutine[int]\n")
+    eq("async def f() -> int { return 1 }", show(program.functions[1]))
+    eq(true, program.records[1].methods[1].async)
+    eq("Coroutine[int]", show(program.protocols[1].methods[1].return_type))
+    eq("{ async def g() -> None { pass } }", body("async def g() -> None:\n    pass"))
+    -- `await` binds tighter than unary minus and looser than postfix operations.
+    eq("(- (await c.m(1)))", expr("-await c.m(1)"))
+    eq("((await f()) + 1)", expr("await f() + 1"))
+    eq("{ (await f()) }", body("await f()"))
+    eq("2:15: expected an expression, found '-'", body_error("x = await -c"))
+    eq("2:15: expected an expression, found 'await'", body_error("x = await await c"))
+    eq("2:11: expected 'def', found 'with'", body_error("async with g:\n    pass"))
   end,
 
   enums = function()

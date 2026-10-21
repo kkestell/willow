@@ -96,6 +96,7 @@ local function resolve_named(ref, module)
     declaration = lookup(module, imported, ref.name, ref.span)
   else
     declaration = module.declarations[ref.name] or exceptions[ref.name] or stdlib.protocols[ref.name]
+      or ref.name == "Coroutine" and stdlib.coroutine
   end
   local kind = declaration and declaration.kind
   if not (kind == "Record" or kind == "Protocol" or kind == "Enum" or kind == "Alias") then
@@ -489,6 +490,10 @@ local function resolve_signature(fn, module)
     param.type = fn.class and i == 1 and fn.class.self_type or resolve_type(param.type, module)
   end
   fn.return_type = resolve_type(fn.return_type, module)
+  if fn.async then
+    -- An async function's call produces a coroutine of its annotated result.
+    fn.return_type = types.generic(stdlib.coroutine, { fn.return_type })
+  end
   type_scope = outer
 end
 
@@ -702,6 +707,8 @@ local function resolve_function(fn, scope, module)
           diag.error(class.span, "alias '" .. class.name .. "' cannot be used in isinstance")
         elseif declaration.kind == "Protocol" then
           diag.error(class.span, "protocol '" .. class.name .. "' cannot be used in isinstance")
+        elseif declaration == stdlib.coroutine then
+          diag.error(class.span, "'Coroutine' cannot be used in isinstance")
         end
         class.record = declaration
       end
@@ -719,6 +726,13 @@ local function resolve_function(fn, scope, module)
       if node.stop then
         resolve_expression(node.stop)
       end
+    elseif kind == "Await" then
+      if not fn.async then
+        diag.error(node.span, "'await' is only allowed in an async function")
+      end
+      -- An await may suspend the body, letting other code run, like a call.
+      resolve_expression(node.operand)
+      calls = calls + 1
     elseif kind == "Keyword" then
       resolve_expression(node.value)
     elseif kind == "Field" and enum_named(node.object, module, scope) then
@@ -836,6 +850,9 @@ local function resolve_function(fn, scope, module)
           resolve_expression(statement.message)
         end
       elseif kind == "Yield" then
+        if fn.async then
+          diag.error(statement.span, "'yield' cannot be used in an async function")
+        end
         -- A yield suspends the body, letting other code run, like a call.
         resolve_expression(statement.value)
         fn.generator = true
@@ -982,6 +999,13 @@ local function declare(module, modules_by_name, entry)
   end
 end
 
+-- The result an async function's coroutine produces, or another function's
+-- return type.
+local function result_type(fn)
+  return fn.async and fn.return_type.args[1] or fn.return_type
+end
+M.result_type = result_type
+
 -- Binds `modules`, the entry module first. A test entry needs no `main`;
 -- instead `entry.tests` lists its `test_*` functions by name.
 function M.bind(modules, test)
@@ -1075,7 +1099,7 @@ function M.bind(modules, test)
     entry.tests = {}
     for _, fn in ipairs(entry.functions) do
       if fn.name:sub(1, 5) == "test_" then
-        if #fn.params > 0 or fn.return_type ~= types.None then
+        if #fn.params > 0 or result_type(fn) ~= types.None then
           diag.error(fn.span, "test function '" .. fn.name .. "' must take no parameters and return None")
         end
         entry.tests[#entry.tests + 1] = fn
@@ -1089,7 +1113,7 @@ function M.bind(modules, test)
     if not (main and main.kind == "Function") then
       diag.error(entry.span, "program has no main function")
     end
-    if #main.params > 0 or main.return_type ~= types.None then
+    if #main.params > 0 or result_type(main) ~= types.None then
       diag.error(main.span, "main must take no parameters and return None")
     end
   end

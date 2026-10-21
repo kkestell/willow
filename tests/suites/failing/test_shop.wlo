@@ -20,3 +20,12 @@ def test_output_of_passing_tests_is_hidden() -> None:
 def test_isolated_process() -> None:
     assert input() is None
     assert len(sys.args()) == 0
+
+async def priced(item: str) -> int:
+    return shop.price(item)
+
+async def test_async_known_price() -> None:
+    assert await priced("tea") == 450
+
+async def test_async_unknown_item() -> None:
+    await priced("cake")
