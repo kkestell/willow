@@ -1,0 +1,26 @@
+# Drives the echo server in this process:
+# willow test examples/stdlib/echo
+
+import aio
+import server
+
+async def ask(port: int, message: str) -> str:
+    with await aio.connect("127.0.0.1", port) as connection:
+        await connection.sendall(message.encode())
+        return (await connection.recv(1024, timeout=5.0)).decode()
+
+async def test_echo_and_shutdown() -> None:
+    with aio.listen("127.0.0.1", 0) as listener:
+        port = listener.local_port()
+        async with aio.task_group() as group:
+            running = group.start(server.serve(listener))
+            await aio.sleep(0.0)  # let the server reach its first accept
+            async with aio.task_group() as clients:
+                first = clients.start(ask(port, "first\n"))
+                second = clients.start(ask(port, "second\n"))
+            assert first.result() == "first\n"
+            assert second.result() == "second\n"
+            with await aio.connect("127.0.0.1", port) as connection:
+                await connection.sendall("quit\n".encode())
+                assert len(await connection.recv(1024, timeout=5.0)) == 0, "the server did not close the connection"
+        assert running.result() == None, "the server did not exit cleanly"

@@ -40,7 +40,7 @@ tests and `make test`. The design review and runtime prototype are in
   - [x] Static checking: each `await` and nested group exit as a possible
     transfer to the end of enclosing groups, carrying intervening `finally`
     effects; narrowing removed at awaits and joins
-- [ ] Async TCP (spec §14, §15)
+- [x] Async TCP (spec §14, §15)
   - [x] Thread the wait function through the TCP runtime, so `aio` operations
     can suspend in place of `__wlo_wait_fd`
   - [x] `aio.listen`, `connect`, `accept`, `recv`, `sendall`, and
@@ -50,7 +50,7 @@ tests and `make test`. The design review and runtime prototype are in
     ignored; partial cancelled sends marking the connection unusable
   - [x] Tests for a failure waking an accepting body, nested cleanup,
     resource handoff, and failure precedence
-  - [ ] An echo server example with graceful shutdown and an async test that
+  - [x] An echo server example with graceful shutdown and an async test that
     drives it
 
 ## First slice
