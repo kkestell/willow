@@ -113,7 +113,8 @@ local STRING_METHODS = {
 local FORMAT_TYPES = { s = types.str, d = types.int, f = types.float }
 
 -- Parameter types, result type, and, for methods that accept keywords, the
--- parameter names and defaults of method `name` on `type`, or nil.
+-- parameter names and defaults of method `name` on `type`, or nil. A native
+-- method's own type parameters come last.
 local function method_signature(type, name)
   local iter = name == "iter" and types.method(type, name)
   if iter then
@@ -139,8 +140,13 @@ local function method_signature(type, name)
   elseif type == types.bytes and name == "decode" then
     return {}, types.str
   elseif type.kind == "record" and type.record.native and type.record.native_methods[name] then
-    local method = type.record.native_methods[name]
-    return method.params, method.result, method.names, method.defaults
+    -- A generic native type's methods see its type arguments.
+    local method, map = type.record.native_methods[name], types.record_map(type)
+    local params = {}
+    for i, param in ipairs(method.params) do
+      params[i] = types.substitute(param, map)
+    end
+    return params, types.substitute(method.result, map), method.names, method.defaults, method.typevars
   end
 end
 
@@ -614,6 +620,74 @@ local function check_function(fn, entry)
   -- The number of `finally` clauses enclosing the statement being checked.
   -- `in_loop` is this count at the innermost loop, or false outside loops.
   local finally_depth = 0
+  -- The number of loops enclosing the statement being checked.
+  local loops = 0
+
+  -- The `async with` statements enclosing the statement being checked,
+  -- innermost last. A graceful stop can leave a group's body at an await or a
+  -- nested group's exit, so each group collects the states at those points
+  -- in `exits`, and the states at returns, breaks, and continues leaving it in
+  -- `departures`. A state recorded inside a `try` or `with` is updated as it
+  -- passes that statement's cleanup.
+  local groups = {}
+
+  -- Records `state` as a possible transfer to the end of each enclosing group
+  -- that no `finally` clause separates from it.
+  local function graceful_exit(state)
+    for i = #groups, 1, -1 do
+      local group = groups[i]
+      if group.finally_depth ~= finally_depth then
+        break
+      end
+      group.exits[#group.exits + 1] = copy(state)
+    end
+  end
+
+  -- Records `state` at a return, or at a break or continue, in the groups it
+  -- leaves.
+  local function departure(state, returning)
+    for i = #groups, 1, -1 do
+      local group = groups[i]
+      if not returning and group.loops ~= loops then
+        break
+      end
+      group.departures[#group.departures + 1] = copy(state)
+    end
+  end
+
+  -- How many states each enclosing group has recorded.
+  local function mark()
+    local marks = {}
+    for i, group in ipairs(groups) do
+      marks[i] = { #group.exits, #group.departures }
+    end
+    return marks
+  end
+
+  -- Calls `update` on each state recorded since `marks`, or drops those states
+  -- when `update` is nil.
+  local function since(marks, update)
+    for i, m in ipairs(marks) do
+      local group = groups[i]
+      for j, list in ipairs({ group.exits, group.departures }) do
+        for k = #list, m[j] + 1, -1 do
+          if update then
+            update(list[k])
+          else
+            list[k] = nil
+          end
+        end
+      end
+    end
+  end
+
+  local function join_all(states)
+    local result = states[1]
+    for i = 2, #states do
+      result = join(result, states[i])
+    end
+    return result
+  end
 
   local check_expression, check_method
   -- The number of calls checked so far.
@@ -789,7 +863,8 @@ local function check_function(fn, entry)
       end
       node.method = method
     else
-      params, result, names, defaults = method_signature(object, node.name)
+      local typevars
+      params, result, names, defaults, typevars = method_signature(object, node.name)
       if not params then
         diag.error(node.span, "type " .. object.name .. " has no method '" .. node.name .. "'")
       end
@@ -798,6 +873,18 @@ local function check_function(fn, entry)
       else
         local signature = { params = params, names = names, defaults = defaults }
         bind_args(node, node.name, builtin_params(signature), names and "parameter")
+      end
+      inferred = typevars ~= nil
+      if inferred then
+        local typed = {}
+        for i, param in ipairs(params) do
+          typed[i] = { type = param }
+        end
+        local map = infer_call(node, node.name, typed, { typevars = typevars, return_type = result }, state, expected)
+        for i, param in ipairs(params) do
+          params[i] = types.substitute(param, map)
+        end
+        result = types.substitute(result, map)
       end
     end
     for _, i in ipairs(evaluation_order(node)) do
@@ -1186,7 +1273,7 @@ local function check_function(fn, entry)
     elseif kind == "Await" then
       local coroutine = expected and types.generic(stdlib.coroutine, { expected })
       local operand = check_expression(node.operand, state, coroutine)
-      if not (operand.kind == "record" and operand.record == stdlib.coroutine) then
+      if not (operand.kind == "record" and (operand.record == stdlib.coroutine or operand.record == stdlib.task)) then
         diag.error(node.span, "cannot await a value of type " .. operand.name)
       end
       type = operand.args[1]
@@ -1250,6 +1337,9 @@ local function check_function(fn, entry)
       calls = calls + 1
       forget_captured(state)
     end
+    if kind == "Await" then
+      graceful_exit(state)
+    end
     node.type = type
     return type, true_facts, false_facts
   end
@@ -1270,6 +1360,7 @@ local function check_function(fn, entry)
     forget_narrowing(handler_entry, statement.body)
     local finally_entry = copy(handler_entry)
     local before = calls
+    local marks = mark()
     local body_state, transfers = check_block(statement.body, state, in_loop)
     -- A clause may start after any call in the parts before it.
     if calls ~= before then
@@ -1321,27 +1412,34 @@ local function check_function(fn, entry)
       local finally_state, finally_transfers = check_block(statement.finally_body, finally_entry, in_loop)
       finally_depth = finally_depth - 1
       if finally_transfers then
+        since(marks, nil)
         return true
       end
-      -- The finally clause runs after whichever part fell through.
-      if result then
-        if calls ~= before then
-          forget_captured(result)
+      local finally_calls = calls ~= before
+      local assigned = assigned_symbols(statement.finally_body, {})
+      -- The finally clause runs after whichever part fell through, and on the
+      -- way to the end of an enclosing group.
+      local function run_finally(exit)
+        if finally_calls then
+          forget_captured(exit)
         end
-        local assigned = assigned_symbols(statement.finally_body, {})
         -- A local the finally clause assigns on some paths only is missing
         -- from its exit state but may no longer hold the narrowed type.
         for symbol in pairs(assigned) do
-          if result[symbol] then
-            result[symbol] = symbol.type
+          if exit[symbol] then
+            exit[symbol] = symbol.type
           end
         end
         for symbol, type in pairs(finally_state) do
           if assigned[symbol] or type ~= symbol.type then
-            result[symbol] = type
+            exit[symbol] = type
           end
         end
       end
+      if result then
+        run_finally(result)
+      end
+      since(marks, run_finally)
     end
     if transfers then
       return true
@@ -1434,6 +1532,7 @@ local function check_function(fn, entry)
       elseif not yield_type then
         expect_type(statement, return_type, types.None)
       end
+      departure(state, true)
       return true
     elseif kind == "Yield" then
       if finally_depth > 0 then
@@ -1449,6 +1548,7 @@ local function check_function(fn, entry)
       elseif in_loop < finally_depth then
         diag.error(statement.span, "'" .. kind:lower() .. "' cannot leave a 'finally' clause")
       end
+      departure(state, false)
       return true
     elseif kind == "Assert" then
       -- The message runs only when the condition is false; later statements
@@ -1488,11 +1588,50 @@ local function check_function(fn, entry)
           check_pattern(item.target, item.enter_call.type, state)
         end
       end
+      local marks = mark()
       local body_state, transfers = check_block(statement.body, state, in_loop)
       replace(state, body_state)
       calls = calls + 1
       forget_captured(state)
+      since(marks, forget_captured)
       return transfers
+    elseif kind == "AsyncWith" then
+      local group = check_expression(statement.manager, state)
+      expect_type(statement.manager, stdlib.task_group.type, group)
+      if statement.target then
+        check_pattern(statement.target, group, state)
+      end
+      local marks = mark()
+      groups[#groups + 1] = { finally_depth = finally_depth, loops = loops, exits = {}, departures = {} }
+      local body_state, transfers = check_block(statement.body, state, in_loop)
+      local frame = table.remove(groups)
+      local exits, departures = frame.exits, frame.departures
+      -- The join lets other code run, and its boundary is a possible exit
+      -- from enclosing groups for every way of reaching it.
+      calls = calls + 1
+      since(marks, forget_captured)
+      local ends = {}
+      if not transfers then
+        ends[1] = body_state
+      end
+      for _, exit in ipairs(exits) do
+        ends[#ends + 1] = exit
+      end
+      local reached = { unpack(ends) }
+      for _, exit in ipairs(departures) do
+        reached[#reached + 1] = exit
+      end
+      if #reached > 0 then
+        local boundary = join_all(reached)
+        forget_captured(boundary)
+        graceful_exit(boundary)
+      end
+      if #ends == 0 then
+        return true
+      end
+      local after = join_all(ends)
+      forget_captured(after)
+      replace(state, after)
     elseif kind == "If" then
       local true_facts, false_facts = check_condition(statement.condition, state)
       local body_state, body_transfers = check_block(statement.body, narrow(state, true_facts), in_loop)
@@ -1516,7 +1655,9 @@ local function check_function(fn, entry)
       end
       local true_facts = check_condition(statement.condition, state)
       -- The body may run zero times, so its assignments are not definite after the loop.
+      loops = loops + 1
       check_block(statement.body, narrow(state, true_facts), finally_depth)
+      loops = loops - 1
     elseif kind == "For" then
       -- The iterable is evaluated once, before the loop.
       local iterable = statement.iterable
@@ -1545,7 +1686,9 @@ local function check_function(fn, entry)
         assign(body_state, symbol, item)
       end
       -- As with `while`, the loop name and body assignments are not definite after the loop.
+      loops = loops + 1
       check_block(statement.body, body_state, finally_depth)
+      loops = loops - 1
     end
     return false
   end

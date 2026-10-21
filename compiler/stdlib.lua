@@ -117,6 +117,7 @@ M.coroutine = {
   kind = "Record", name = "Coroutine", type_name = "Coroutine", fields = {}, methods = {},
   native = true, native_methods = {}, type_params = { { name = "T" } }, typevars = { coroutine_T },
 }
+M.coroutine.self_type = types.generic(M.coroutine, { coroutine_T })
 
 -- Whether `t` is a coroutine type or a union with a coroutine member.
 function M.has_coroutine(t)
@@ -227,12 +228,33 @@ local fs = provided("fs", {
   rename = { params = { types.str, types.str }, names = { "source", "destination" }, result = types.None },
 }, { Stat = stat })
 
+-- `aio.Task[T]`, an opaque generic handle like `Coroutine[T]`. A native
+-- method with `typevars` is generic in them.
+local task_T = types.typevar("T")
+local task = {
+  kind = "Record", name = "Task", type_name = "aio.Task", fields = {}, methods = {},
+  native = true, prefix = "aio_task", type_params = { { name = "T" } }, typevars = { task_T },
+  native_methods = { result = { params = {}, result = task_T } },
+}
+task.self_type = types.generic(task, { task_T })
+M.task = task
+local start_T = types.typevar("T")
+local task_group = native_record("aio", "TaskGroup", "aio_group", {
+  start = {
+    params = { types.generic(M.coroutine, { start_T }) }, names = { "coro" },
+    result = types.generic(task, { start_T }), typevars = { start_T },
+  },
+  cancel = { params = {}, result = types.None },
+})
+M.task_group = task_group
+
 local aio = provided("aio", {
   sleep = {
     params = { types.float }, names = { "seconds" }, result = types.generic(M.coroutine, { types.None }),
     helper = "aio_sleep_coroutine",
   },
-})
+  task_group = { params = {}, result = task_group.type },
+}, { Task = task, TaskGroup = task_group })
 
 local time = provided("time", {
   time = { params = {}, result = types.float },

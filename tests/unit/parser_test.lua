@@ -116,6 +116,9 @@ show = function(node)
   elseif kind == "Param" then
     return (node.keyword_only and "*" or "") .. node.name .. ": " .. show(node.type)
       .. (node.default and " = " .. show(node.default) or "")
+  elseif kind == "AsyncWith" then
+    return "async with " .. show(node.manager) .. (node.target and " as " .. show(node.target) or "") .. " "
+      .. show_block(node.body)
   elseif kind == "Await" then
     return "(await " .. show(node.operand) .. ")"
   elseif kind == "Function" then
@@ -654,7 +657,9 @@ return {
     eq("{ (await f()) }", body("await f()"))
     eq("2:15: expected an expression, found '-'", body_error("x = await -c"))
     eq("2:15: expected an expression, found 'await'", body_error("x = await await c"))
-    eq("2:11: expected 'def', found 'with'", body_error("async with g:\n    pass"))
+    eq("{ async with aio.task_group() as g { pass } }", body("async with aio.task_group() as g:\n    pass"))
+    eq("{ async with g { pass } }", body("async with g:\n    pass"))
+    eq("2:21: expected a name, found '('", body_error("async with g as (a, b):\n    pass"))
   end,
 
   enums = function()
