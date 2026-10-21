@@ -1,0 +1,32 @@
+# Fetch several things concurrently with an overall 5 s deadline.
+import aio
+
+class Flag:
+    fired: bool
+
+async def fetch(host: str, port: int) -> bytes:
+    with await aio.connect(host, port) as conn:
+        await conn.sendall("GET\n".encode())
+        return await conn.recv(65536)
+
+async def deadline(group: aio.TaskGroup, seconds: float, flag: Flag) -> None:
+    await aio.sleep(seconds)
+    flag.fired = True
+    group.cancel()
+
+async def main() -> None:
+    hosts = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    tasks: list[Task[bytes]] = []
+    flag = Flag(False)
+    async with aio.task_group() as group:
+        for host in hosts:
+            tasks.append(group.start(fetch(host, 80)))
+        group.start(deadline(group, 5.0, flag))
+        for task in tasks:
+            await task
+        group.cancel()                 # else the join waits the full 5 s for `deadline`
+    for task in tasks:
+        try:
+            print(len(task.result()))
+        except RuntimeError:           # cancelled? unfinished? or fetch's own RuntimeError?
+            print("timed out")

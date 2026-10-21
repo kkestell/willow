@@ -1,0 +1,18 @@
+import aio
+
+async def flusher() -> None:
+    while True:
+        await aio.sleep(1.0)
+
+async def serve(group: aio.TaskGroup) -> None:
+    await aio.sleep(5.0)
+    group.cancel()
+
+async def main() -> None:
+    async with aio.task_group() as group:
+        background = group.start(flusher())
+        try:
+            await serve(group)          # wait: serve is run inline; cancel() interrupts body here
+        finally:
+            await background            # background was cancelled by the same stop -> RuntimeError (l.2230)
+    print("clean shutdown")             # never reached; graceful stop became a crash

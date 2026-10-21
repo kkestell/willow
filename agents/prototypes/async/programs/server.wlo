@@ -1,0 +1,36 @@
+# Echo server: per-connection tasks, "shutdown" command drains connections.
+# Assumed API (not in spec): aio.listen, aio.Listener.accept, aio.Connection.recv/sendall, aio.sleep
+import aio
+import sys
+
+async def handle(conn: aio.Connection, acceptor: aio.TaskGroup) -> None:
+    with conn:                                   # §15 l.2367: scope before first await
+        try:
+            while True:
+                data = await conn.recv(1024, timeout=60.0)
+                if len(data) == 0:
+                    return
+                if data == "shutdown\n".encode():
+                    acceptor.cancel()            # stop accepting; others drain
+                    return
+                await conn.sendall(data)
+        except Exception as error:               # MUST catch, else one reset peer kills server (l.2272)
+            sys.eprint(error.message)
+
+async def accept_loop(listener: aio.Listener, conns: aio.TaskGroup, acceptor: aio.TaskGroup) -> None:
+    while True:
+        conn = await listener.accept()
+        conns.start(handle(conn, acceptor))      # hand off before next await (l.2367)
+
+async def main() -> None:
+    with aio.listen("127.0.0.1", 7000) as listener:
+        async with aio.task_group() as conns:
+            async with aio.task_group() as acceptor:
+                acceptor.start(accept_loop(listener, conns, acceptor))
+            # drain deadline: needs a watchdog child; nothing else bounds the join
+            conns.start(cancel_after(conns, 10.0))
+    print("bye")
+
+async def cancel_after(group: aio.TaskGroup, seconds: float) -> None:
+    await aio.sleep(seconds)
+    group.cancel()

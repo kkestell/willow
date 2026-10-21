@@ -3,8 +3,8 @@
 Willow is a small, statically typed language with Python-like syntax. It compiles
 to Lua and runs on LuaJIT. Source files use the `.wlo` extension.
 
-Async support (§15) is specified but not yet implemented. Its open design and
-implementation questions are tracked in
+Async support (§15 and `aio` in §14) is specified but not yet implemented. Its
+implementation is tracked in
 [the async milestone](../agents/todo.md#async-support).
 
 ## 1. Programs
@@ -90,8 +90,8 @@ not or pass protocol raise return try type while with yield
 ```
 
 The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, `dict`, `tuple`,
-`Iterable`, `Iterator`, `ContextManager`, `Generator`, `Coroutine`, and `Task`
-are also reserved. Using a reserved word that does not begin one of the
+`Iterable`, `Iterator`, `ContextManager`, `Generator`, and `Coroutine` are also
+reserved. Using a reserved word that does not begin one of the
 constructs in this specification is an error.
 
 ### Numeric literals
@@ -290,6 +290,10 @@ require additional arguments. Defaults need not have the same values. Extra
 methods are allowed. Method matching uses the signatures after substituting type
 arguments, including when one protocol satisfies another.
 
+A protocol method may be declared `async def`. A signature
+`async def m(self) -> T` means exactly `def m(self) -> Coroutine[T]`, so either
+form satisfies the other (§15).
+
 Protocols may have type parameters, as in `protocol Source[T]:`, and may refer to
 themselves in signatures. Their methods have no type parameters of their own.
 Protocols declare no fields or constructors and cannot be instantiated. A
@@ -368,7 +372,7 @@ The forms of type annotations are:
 ```text
 int  float  bool  str  None
 list[T]  dict[K, V]  tuple[A, B, ...]  tuple[()]
-Coroutine[T]  Task[T]
+Coroutine[T]
 Class  module.Class  Class[T, ...]
 Alias  module.Alias  Alias[T, ...]
 Enum  module.Enum  Protocol  module.Protocol  Protocol[T, ...]
@@ -399,14 +403,12 @@ Generic declarations and applications have fixed arity.
 | Enums | Named values of a declared enum |
 | `(A, B, ...) -> R` | Functions taking the listed positional arguments and returning `R` |
 | `Coroutine[T]` | Unstarted async computations producing `T` (§15) |
-| `Task[T]` | Handles to scheduled computations producing `T` (§15) |
 | Protocols | Values satisfying the protocol's method signatures |
 | Classes | Values of a declared class, including exception classes |
 | Native types | Library values such as `io.File` (§14) |
 
 Primitive and collection types other than `None` have lowercase names. Classes,
-protocols, enums, and the async types `Coroutine` and `Task` have capitalized
-names.
+protocols, enums, and `Coroutine` have capitalized names.
 
 The scalar types are `int`, `float`, `bool`, `str`, `bytes`, enums, and `None`.
 A type is printable if it is a scalar type other than `bytes`, or a union of
@@ -510,7 +512,9 @@ Binary operators are left-associative. Postfix operations are applied from left
 to right, as in `text.strip().split(",")`. The operands of a level 4 operator
 must be expressions at level 5 or higher. As a result, `not a == b` means
 `not (a == b)`, and `a == not b` is a syntax error. Chained comparisons such as
-`0 <= x < 10` are errors.
+`0 <= x < 10` are errors. The operand of `await` must be an expression at
+level 9 or higher, so `await -x` is a syntax error and nested awaits are
+written `await (await c)`.
 
 ### Calls
 
@@ -973,7 +977,9 @@ nonlocal name
 
 A block must contain at least one statement. Use `pass` for an empty block.
 Calls and `await` expressions may be used as statements. An expression statement
-cannot discard a `Coroutine[T]`; its body would not run (§15). An assignment
+cannot discard a value whose static type is `Coroutine[T]` or a union with a
+`Coroutine` member; its body would not run (§15). A value whose type is a type
+parameter may be discarded. An assignment
 has one target, which may be a tuple pattern (§7), and one value. Chained
 assignment, augmented assignment such as `+=`, and assignment expressions are
 not supported. Nested `def` and `async def` statements bind function values as
@@ -1082,7 +1088,9 @@ are not supported; these generators provide pull iteration, not coroutines.
 the body, including through `return`, `break`, `continue`, or an exception.
 `error` is the pending exception, or `None` for normal completion and control
 transfers. This lets a manager distinguish successful use from failure, such as
-when committing or discarding a temporary output. If entry fails, the body does
+when committing or discarding a temporary output. Closing a suspended generator
+and async cancellation (§15) are also control transfers, so `None` can mean the
+body was interrupted before it finished. If entry fails, the body does
 not run and that manager's exit is not called.
 
 Exit has the same exception behavior as `finally`: it cannot suppress a body
@@ -1368,6 +1376,9 @@ to write to stdout or stderr through `print`, `sys.eprint`, or the final flush
 (§14), and failing to read stdin through `input`. Writing to a closed pipe is
 one of these failures; it does not deliver a signal to the program.
 
+In an async program, if no task can run and no I/O operation or timer is pending,
+the program reports `deadlock: all tasks are waiting` and exits with status 1.
+
 ## 11. Built-in functions
 
 | Function | Meaning |
@@ -1511,8 +1522,8 @@ A test file does not need a `main` function. Its functions whose names begin
 with `test_` are its tests. Each test function must take no parameters and
 return `None`.
 
-Async test entry points remain an [open question](../agents/todo.md#async-support);
-§15 specifies the async program entry point.
+A test function may be declared `async def`. It runs as the root task, as
+an async `main` does (§15), and it passes when its body completes.
 
 All test files and the modules they import are checked before any test runs.
 Tests run in order of file path and then function name. Each test runs in a new
@@ -1555,6 +1566,20 @@ main.wlo:7:9: error: ParseError: not a digit: x
   called from main at main.wlo:13:15
 ```
 
+The frames of an exception raised in a task end at that task's first frame.
+For a task started by a task group, a final line gives the location of the
+`start` call:
+
+```text
+server.wlo:12:9: error: ValueError: bad request
+  in handle at server.wlo:12:9
+  called from serve at server.wlo:20:13
+  in task started at server.wlo:31:17
+```
+
+An exception observed again through `await`, `result()`, or a group keeps its
+original location and frames.
+
 Each location includes the name of its file. Diagnostics are written to stderr.
 
 ## 14. Standard library
@@ -1564,13 +1589,66 @@ imported in the same way as a program's own modules (§12).
 
 ### `aio`
 
+```python
+import aio
+
+async def echo(listener: aio.Listener) -> None:
+    with await listener.accept(timeout=5.0) as connection:
+        await connection.sendall(await connection.recv(1024))
+
+async def main() -> None:
+    with aio.listen("127.0.0.1", 0) as listener:
+        async with aio.task_group() as group:
+            group.start(echo(listener))
+            with await aio.connect("127.0.0.1", listener.local_port()) as client:
+                await client.sendall("ping\n".encode())
+                print((await client.recv(1024)).decode())    # ping
+```
+
 | Declaration | Meaning |
 | --- | --- |
+| `sleep(seconds: float) -> Coroutine[None]` | Wait for at least `seconds` seconds |
 | `task_group() -> TaskGroup` | Create an inactive, single-use task group |
+| `connect(host: str, port: int, timeout: float \| None = 30.0) -> Coroutine[Connection]` | Open a TCP connection |
+| `listen(host: str, port: int, backlog: int = 16) -> Listener` | Listen for TCP connections on `host` |
+| `class Task[T]` | A handle to a scheduled task (§15) |
 | `class TaskGroup` | A scope owning concurrent tasks, entered with `async with` (§15) |
+| `class Connection` | A native type with the methods below |
+| `class Listener` | A native type with the methods below |
 
-The task-group and task-handle operations are specified in §15. The initial
-async I/O APIs are still an [open question](../agents/todo.md#async-support).
+| Method | Meaning |
+| --- | --- |
+| `Connection.recv(size: int, timeout: float \| None = None) -> Coroutine[bytes]` | Return up to `size` bytes as soon as any arrive, or empty bytes when the peer has closed its side |
+| `Connection.sendall(data: bytes, timeout: float \| None = None) -> Coroutine[None]` | Send all of `data` |
+| `Connection.close() -> None` | Close the connection |
+| `Listener.accept(timeout: float \| None = None) -> Coroutine[Connection]` | Wait for the next connection |
+| `Listener.local_port() -> int` | The port the listener is bound to |
+| `Listener.close() -> None` | Stop listening |
+| `Connection.enter() -> Connection` | Return this open connection for scoped use |
+| `Connection.exit(error: Exception \| None) -> None` | Close the connection |
+| `Listener.enter() -> Listener` | Return this open listener for scoped use |
+| `Listener.exit(error: Exception \| None) -> None` | Close the listener |
+
+`sleep` validates its argument as `time.sleep` does. `await aio.sleep(0)`
+always suspends the current task, so other ready tasks run before it continues.
+The task and task-group operations are specified in §15.
+
+Hosts, ports, timeouts, validation, error messages, the unusable state after a
+failed send, and the behavior of `close`, `enter`, and `exit` are the same as
+for `net`. Host name lookup is synchronous: it happens before a timeout starts
+and blocks every task while it runs.
+
+A handle allows one unfinished operation in each direction: `recv` or `accept`
+for receiving, and `sendall` for sending. Starting a second operation in the
+same direction raises `RuntimeError` with the message
+`recv is already in progress`, `accept is already in progress`, or
+`sendall is already in progress` before performing any I/O. The first
+operation and the handle remain usable. A `recv` and a `sendall` on one
+connection may run at the same time.
+
+Closing a handle wakes its pending operations, which raise `ValueError` with
+that handle's closed-handle message. An operation never acts on a handle other
+than its own.
 
 ### `cli`
 
@@ -2172,9 +2250,9 @@ Timestamps outside that range raise `ValueError` with the message
 ## 15. Asynchronous execution
 
 Async functions run cooperatively on one thread. A task runs until it suspends
-or finishes; other tasks can make progress while it waits. An `await` is a
-cancellation checkpoint, but need not suspend if its result is ready. Ordinary
-synchronous calls keep their behavior, including blocking the entire event loop.
+or finishes; other tasks can make progress while it waits. Ready tasks run in
+the order they became ready. Ordinary synchronous calls keep their behavior,
+including blocking the entire event loop.
 
 ```python
 import aio
@@ -2197,7 +2275,7 @@ function's return annotation. Thus a function declared
 `async def f(value: int) -> str` has callable type `(int) -> Coroutine[str]`.
 Its body must return values assignable to `str`, following §9's return rules.
 
-`Coroutine[T]` and `Task[T]` are opaque nominal types. They are invariant in
+`Coroutine[T]` and `aio.Task[T]` are opaque nominal types. They are invariant in
 `T`, and the restriction on unions containing different specializations of one
 generic class also applies to each of them. They cannot be constructed directly.
 They are not structural protocols; user-defined values cannot make themselves
@@ -2205,31 +2283,36 @@ awaitable.
 
 A coroutine may be stored, passed, or returned. It may be consumed only once,
 either by `await` or by a group's `start` method. Attempting either operation
-on a coroutine that has already been consumed raises `RuntimeError`. Aliases
-share that consumed state. An unused coroutine never starts, and discarding it
-does not run its body or cleanup. Expression statements follow §8's restriction
-on discarding coroutines; storing one does not prove that it will eventually run.
+on a coroutine that has already been consumed raises `RuntimeError` with the
+message `coroutine was already awaited or started`. Aliases share that consumed
+state. An unused coroutine never starts, and discarding it does not run its body
+or cleanup. Expression statements follow §8's restriction on discarding
+coroutines; storing one does not prove that it will eventually run.
 
-A `Task[T]` is a handle to a scheduled computation. It may be awaited repeatedly
-and has one method:
+An `aio.Task[T]` is a handle to a scheduled computation. It may be awaited
+repeatedly and has one method:
 
 | Method | Meaning |
 | --- | --- |
 | `result() -> T` | Return the completed task's value, or raise its final exception |
 
-`result` does not wait. It raises `RuntimeError` if the task is unfinished or
-was cancelled. Handles may outlive the group and continue to expose the task's
-outcome; the task's execution cannot outlive that group.
+`result` does not wait. It raises `RuntimeError` with the message
+`task is not finished` if the task is unfinished, or `task was cancelled` if
+cancellation unwound its body. Handles may outlive the group and continue to
+expose the task's outcome; the task's execution cannot outlive that group.
 
 ### `await`
 
-`await expression` requires a `Coroutine[T]` or `Task[T]` and produces `T`.
+`await expression` requires a `Coroutine[T]` or `aio.Task[T]` and produces `T`.
 Its operand is evaluated once. Awaiting a coroutine consumes it and runs its
 body as part of the current task, without starting a separate task. Awaiting
 a task waits for that task's final outcome. Both forms return the resulting
 value or raise the resulting exception. Awaiting a cancelled task raises
-`RuntimeError`; pending cancellation of the current task may instead interrupt
-the await.
+`RuntimeError` with the message `task was cancelled`. A group's join already
+waits for every child, so cleanup in the group's body need not await them.
+
+An await whose result is ready need not suspend. `await aio.sleep(0)` always
+suspends, letting other ready tasks run first (§14).
 
 `await` is allowed only inside an async function or method, including its
 `finally` clauses. It is not allowed in a synchronous nested function, lambda,
@@ -2245,8 +2328,7 @@ which their handles are awaited.
 `async with expression as name:` is allowed only in an async function or method.
 It evaluates the expression once and enters its `aio.TaskGroup`. The optional
 `as name` binds that group as a local variable; the statement introduces no new
-variable scope. A group may be entered only once. Entering an active or
-previously exited group raises `RuntimeError`.
+variable scope.
 
 This is a built-in task-group scope. It accepts only `aio.TaskGroup`, which
 does not satisfy `ContextManager`. General async context managers are not
@@ -2257,31 +2339,43 @@ supported.
 | `start[T](coro: Coroutine[T]) -> Task[T]` | Consume `coro` and schedule a child task |
 | `cancel() -> None` | Request a graceful stop of this group's body and children |
 
+A group is inactive until it is entered, active from entry until its boundary
+completes, including the join, and exited afterwards. An active group is
+stopping once its own stop has been requested or it has recorded a failure.
+Entering a group that is not inactive raises `RuntimeError` with the message
+`task group was already entered`.
+
 `start` neither suspends its caller nor executes the child inline. Every
-scheduled task belongs to a group except the root task running async `main`.
-A group may be passed to its children so they can start further children in
-the same group. There is no operation to start a detached task or cancel an
-individual task through its handle.
+scheduled task belongs to a group except the root task running async `main` or
+an async test. A group may be passed to its children so they can start further
+children in the same group. There is no operation to start a detached task or
+cancel an individual task through its handle.
+
+`start` succeeds only while its group is active and not stopping. Otherwise it
+raises `RuntimeError` with the message `task group is not accepting tasks` and
+does not consume its coroutine. Admission depends only on the group's own
+state: a pending request from an outer group does not stop it, and a task
+admitted then receives that request at its first checkpoint.
 
 When the body completes normally, returns, breaks, or continues, the group
 waits for all its children before continuing that departure. This wait is
 called joining. During a normal join, running children may still start children
-in the group. Failure or cancellation stops admission of new children.
-Starting on an inactive, stopping, or exited group raises `RuntimeError`.
+in the group.
 
 A final exception from the body or a child stops admission, requests
 cancellation of the remaining children, and interrupts a still-active body at
-a cancellation checkpoint. The group joins its children, including their
-cleanup, before propagating its failure. Catching an exception obtained from
-a task handle does not clear its group's failure; a child must handle an
-expected error within its own body to complete successfully.
+a checkpoint. The group joins its children, including their cleanup, before
+propagating its failure. Catching an exception obtained from a task handle does
+not clear its group's failure; a child must handle an expected error within its
+own body to complete successfully.
 
-`cancel` is idempotent while the group is active, including while it is joining.
-Calling it on an inactive or exited group raises `RuntimeError`. If the request
+`cancel` is idempotent while the group is active, including while it is
+stopping or joining. Calling it on an inactive or exited group raises
+`RuntimeError` with the message `task group is not active`. If the request
 interrupts the active body, the rest of that body is skipped. At its boundary,
-the group absorbs its own graceful stop and completes normally after joining,
-unless it has recorded a failure or cancellation from an outer group remains
-pending. An inner group cannot absorb an outer group's request.
+after joining, the group absorbs its own graceful stop and completes normally
+unless it has recorded a failure or a request from an outer group is pending.
+An inner group cannot absorb an outer group's request.
 
 A stop requested during a join preserves any return, break, or continue already
 pending. After absorbing its own stop, the boundary continues that departure.
@@ -2295,13 +2389,27 @@ Cancellation is control flow outside the `Exception` hierarchy. It bypasses
 context manager's `exit` receives `None`, as for other control transfers.
 Suspension at an await does not exit active scopes.
 
-Requests retain the identity of their originating group. Delivery occurs at a
-suspended await, a later cancellation checkpoint, or the relevant group-exit
-boundary. An admitted task enters its body even if cancellation was requested
-before its first scheduled turn. Its initial synchronous setup runs before
-cancellation is delivered at its first await or group-exit checkpoint. A task
-that finishes without another checkpoint may complete normally despite the
-request.
+Requests retain the identity of their originating group. A request is delivered
+only at a checkpoint:
+
+- an async library operation, before it acts and again each time it wakes;
+- an await of a task, before the task's outcome is used, even when that outcome
+  is already available;
+- a group boundary.
+
+A task suspended at a checkpoint is woken when a request reaches it. Awaiting a
+coroutine is not itself a checkpoint: it always enters the coroutine's body,
+and checkpoints inside the body deliver requests. Leaving a `finally` clause or
+a resource exit is not a checkpoint.
+
+A request stays in effect for every task inside the requesting group until that
+group exits, and every unprotected checkpoint delivers it again. Raising and
+catching an exception during cleanup therefore does not clear a request.
+
+An admitted task enters its body even if cancellation was requested before its
+first scheduled turn. Its initial synchronous setup runs before cancellation is
+delivered at its first checkpoint. A task that finishes without reaching a
+checkpoint may complete normally despite the request.
 
 In async code, `finally` bodies and resource exits are protected from
 cancellation originating in enclosing scopes. This includes a first request
@@ -2309,8 +2417,8 @@ arriving during cleanup entered by an ordinary return or exception. Cleanup
 may await. A group entered inside that protected cleanup can still interrupt
 its own body for its own failure or stop; outer cancellation does not cancel
 that protected group's children. Groups outside that protection still receive
-cancellation. Pending outer requests survive inner boundaries and resume
-propagation when protection is left.
+cancellation. Pending outer requests survive inner boundaries and are delivered
+at the first checkpoint after protection is left.
 
 A join of a group not protected from an outer request stops its children and
 waits for their cleanup. A protected group's join waits for its children
@@ -2334,35 +2442,49 @@ includes later failures from another child's cleanup. Observation order depends
 on scheduling and I/O; it is not promised to be the same across runs. A
 `finally` outside the group may replace its propagated failure as usual.
 
-An outer cancellation request remains pending if an inner group also fails.
-The exact delivery order in that case is an
-[open design question](../agents/todo.md#async-support); all children must be
-joined, and failure reporting must not erase the outer request.
+When a group has recorded a failure and a request from an outer group is also
+pending, the group joins all its children and then propagates its failure; the
+failure takes precedence over delivering the request at that boundary. The
+request stays in effect and is delivered at the next unprotected checkpoint. If
+the exception reaches the requesting group's boundary, it is that body's final
+exception, so the requesting group propagates a failure instead of absorbing
+its stop. If the program catches the exception first, the requesting group
+absorbs its stop at its boundary.
 
 ### Static checking across a group
 
-A graceful stop can exit a group's body normally at a cancellation checkpoint.
-Definite assignment, narrowing, and control-transfer checking merge these
-possible exits with ordinary completion. Assignments before the first
-checkpoint remain definite, but an assignment or return only after a possible
-graceful exit is not guaranteed to run. A nested group's implicit join can
-also be a checkpoint for an enclosing group.
+A graceful stop can leave a group's body at a checkpoint. For static checking,
+each `await` in the body, and each exit from a nested `async with`, is a
+possible transfer to the end of every enclosing `async with` in the same
+function that is not separated from it by a `finally` clause. Like `break`, the
+transfer runs the intervening `finally` and `with` cleanup, and the state it
+carries includes the effects of those `finally` clauses. Definite assignment,
+narrowing, and control-transfer checking merge these transfers with the body's
+ordinary completion. Every `await` counts, including one whose operand reaches
+no checkpoint at run time.
 
-For example, a value assigned only after an await in the body cannot be assumed
-assigned after the group. Likewise, a return after that await does not by
-itself satisfy the enclosing function's requirement to return on every path.
-A return whose expression has finished and is already pending during the join
-is preserved. Interruption for a failure leaves by exception, rather than
-creating a normal exit.
+Assignments before the first such transfer remain definite after the group. A
+value assigned only after an await in the body cannot be assumed assigned after
+the group, and a return after that await does not by itself satisfy the
+enclosing function's requirement to return on every path. A return whose
+expression has finished and is already pending during the join is preserved.
+Interruption for a failure leaves by exception, rather than creating a normal
+exit.
+
+To use the results of concurrent work, start the tasks in the group and read
+their results after it, as in the example at the start of this section. Their
+handles are assigned before the first await, and a group whose stop was never
+requested has no cancelled children. To run work sequentially, await its
+coroutine directly without a group.
 
 Captured-variable narrowing is removed at every await and implicit join (§9).
 
 ### Async I/O boundaries
 
-Async I/O uses explicit async APIs and handle types. Calling a synchronous
-library operation from an async function never makes that operation suspend
-cooperatively. Plain `with` remains suitable for handles whose closing is
-synchronous.
+Async I/O uses explicit async APIs and handle types (`aio` in §14). Calling a
+synchronous library operation from an async function never makes that operation
+suspend cooperatively. Plain `with` remains suitable for handles whose closing
+is synchronous.
 
 A caller must scope or hand off an acquired resource before its next await.
 For example, after accepting a connection it may immediately pass it to
@@ -2371,15 +2493,10 @@ before its first await. The admitted-task startup rule lets that cleanup scope
 be established even under a pending cancellation request. Starting a task does
 not automatically manage resources passed as its arguments.
 
-Async native operations must either deliver an acquired resource to the caller
-or release it on interruption. Cancellation removes pending I/O waits. A
-cancelled send that may have sent partial data makes the connection unusable,
-as a failed `sendall` does in §14. Closing an async handle wakes pending
-operations, which raise `ValueError` with that handle's closed-handle message.
-Closing must not leave a wait attached to a reused file descriptor.
-
-The first async I/O APIs and their nonblocking implementations remain
-[open questions](../agents/todo.md#async-support).
+Async library operations either deliver an acquired resource to the caller or
+release it on interruption. Cancellation removes pending I/O waits. A cancelled
+send that may have sent partial data makes the connection unusable, as a failed
+`sendall` does in §14.
 
 ## References
 

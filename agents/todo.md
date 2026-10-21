@@ -6,54 +6,44 @@ owns language and library semantics.
 
 ## Async support
 
-- [ ] Implement the agreed async model in [spec §15](../docs/spec.md#15-asynchronous-execution).
-  The specification records the language contract; the questions below remain
-  open before choosing implementation slices.
+Implement [spec §15](../docs/spec.md#15-asynchronous-execution) and `aio` (§14)
+in these slices, in order. Each task is one plan and one commit with focused
+tests and `make test`. The design review and runtime prototype are in
+`agents/reviews/2026-10-20-009-async-spec.md` and `agents/prototypes/async/`.
 
-### Open design decisions
-
-- **Outer cancellation and inner failure.** If an inner group finishes with an
-  exception while its owner has a pending outer cancellation request, what is
-  delivered first, and where is the exception observed? Preserve the outer
-  request and join all children. Specify this without introducing exception
-  aggregation or accidentally swallowing cancellation.
-- **First useful workload and library surface.** Choose a concrete server,
-  network client, or subprocess workload and the async operations it needs.
-  Timers and TCP are a candidate starting point, not a settled scope. Define
-  the async API names, handle operations, and timeout behavior together.
-- **Scheduling and progress.** Decide the ready-task policy and whether an
-  explicit operation to yield is needed. The spec makes await a cancellation
-  checkpoint without promising that awaiting a ready result suspends.
-- **Async tests and diagnostics.** Decide how `willow test` discovers and drives
-  async tests. Define traceback frames across task and await boundaries,
-  including repeatedly observing a failed task's outcome.
-
-### Implementation questions
-
-- **Cancellation and cleanup.** Design the runtime representation of request
-  origins and cleanup protection. A single undifferentiated cancel flag does
-  not express the agreed nested behavior. Prototype simultaneous inner/outer
-  cancellation, a first request during ordinary `finally`, and a group created
-  inside protected cleanup. Neither the representation nor its cost has been
-  validated.
-- **Compiler control flow.** Work out how graceful exits at checkpoints join
-  definite-assignment, narrowing, and return states. Preserve assignments
-  before the first checkpoint and transfers already pending during a join.
-  Keep task-group lowering distinct from the current non-suppressing `with`.
-- **Event loop and host integration.** Choose how shared readiness waits and
-  timers drive the Lua coroutines. Existing TCP descriptors are nonblocking,
-  but their operation-level waits block; host-name resolution uses blocking
-  `getaddrinfo`, HTTP uses `curl_easy_perform`, and file/process operations
-  need their own integration. Async wrappers alone do not solve those waits.
-- **Resource ownership.** Validate cancellation before an admitted handler's
-  first turn, interrupted acquisition and partial sends, and close during a
-  pending wait. A long-running group should retain unfinished children, not
-  every completed task and its result.
-
-Use a few representative compiler/runtime tests when implementing these
-decisions: a server failure that wakes an accepting group body, graceful
-shutdown, nested cleanup, resource handoff, failure precedence, and static
-rejection of assignments or returns skipped by graceful cancellation.
+- [ ] Coroutines and `await` (spec §1, §3, §5, §8, §15)
+  - [ ] `async def` for file-level, nested, and method declarations;
+    `Coroutine[T]` annotations; `async def` protocol methods as sugar for
+    `-> Coroutine[T]`; `await` at its precedence level, only in async bodies,
+    and no `yield` in them; the discard rule for coroutine types and unions,
+    exempting type parameters
+  - [ ] Each coroutine a Lua coroutine emitted like a generator body; `await`
+    of a coroutine as a helper call that consumes it and runs it inline;
+    `coroutine was already awaited or started`; async `main` and async
+    `test_*` functions driven as the root task
+- [ ] Task groups, the event loop, and cancellation (spec §10, §13, §15)
+  - [ ] A `poll` loop with a FIFO ready queue and a timer heap; `aio.sleep`,
+    with `sleep(0)` always suspending; the fatal deadlock report
+  - [ ] `aio.task_group`, `aio.Task`, `start`, `cancel`, and `result`; group
+    states and their messages; joining, admission, first-failure recording,
+    and task traceback frames ending in `in task started at`
+  - [ ] Cancellation: the generator cancel sentinel; a `cancelled` flag and
+    parent pointer per group and a scope per task, saved and cleared around
+    `finally` and resource exits; checkpoints and persistent requests;
+    failure precedence over an outer request; group exits lowered through
+    `lower_with`'s `Try` with an exit that absorbs or converts the departure
+  - [ ] Static checking: each `await` and nested group exit as a possible
+    transfer to the end of enclosing groups, carrying intervening `finally`
+    effects; narrowing removed at awaits and joins
+- [ ] Async TCP (spec §14, §15)
+  - [ ] `aio.listen`, `connect`, `accept`, `recv`, `sendall`, and
+    `local_port` with `net`'s semantics on nonblocking sockets; one
+    unfinished operation per direction; close waking pending operations;
+    the closed flag checked after every wake; wait ids so stale wakes are
+    ignored; partial cancelled sends marking the connection unusable
+  - [ ] An echo server example with graceful shutdown and an async test that
+    drives it; tests for a failure waking an accepting body, nested cleanup,
+    resource handoff, and failure precedence
 
 ## First slice
 

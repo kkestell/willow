@@ -1,0 +1,11 @@
+import aio
+
+async def fetch(host: str) -> bytes:
+    return "x".encode()
+
+async def first(host: str) -> bytes:
+    async with aio.task_group() as group:       # `group` never escapes, never cancelled
+        task = group.start(fetch(host))
+        data = await task
+        return data                             # l.2352: does not satisfy return-on-every-path
+    # error: missing return; and `data` is possibly unassigned here (l.2351)
