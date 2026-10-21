@@ -37,7 +37,7 @@ BENCHMARKS = [
     ("k_nucleotide", "k-nucleotide", 2_500_000),
 ]
 
-LANGUAGES = ["C", "LuaJIT", "Willow", "Python"]
+LANGUAGES = ["C", "LuaJIT", "Python", "Willow"]
 
 
 def build(name, languages):
@@ -78,14 +78,19 @@ def machine():
 
 def table(results):
     lines = [
-        f"Seconds of wall-clock time, best of {RUNS} runs, on {machine()}.",
+        f"Seconds of wall-clock time, best of {RUNS} runs, on {machine()}. In",
+        "parentheses is how many times faster Willow is than Python.",
         "",
-        "| Benchmark (size) | " + " | ".join(LANGUAGES) + " |",
-        "|---|" + "---:|" * len(LANGUAGES),
+        "| Benchmark (size) | C | LuaJIT | Python | Willow (vs Python) |",
+        "|---|---:|---:|---:|---:|",
     ]
     for _, title, size in BENCHMARKS:
-        times = " | ".join(f"{results[title][language]:.2f}" for language in LANGUAGES)
-        lines.append(f"| {title} ({size:,}) | {times} |")
+        times = results[title]
+        speedup = times["Python"] / times["Willow"]
+        lines.append(
+            f"| {title} ({size:,}) | {times['C']:.2f} | {times['LuaJIT']:.2f} | {times['Python']:.2f}"
+            f" | {times['Willow']:.2f} ({speedup:.1f}x) |"
+        )
     return "\n".join(lines)
 
 
