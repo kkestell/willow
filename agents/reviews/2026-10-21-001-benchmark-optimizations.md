@@ -47,7 +47,7 @@ The README's hand-written LuaJIT baselines are 0.32, 0.12, 0.22, and 2.72 s.
 | H2 | Confirmed | `math.fmod` in integer `//` and `%` breaks traces             |
 | H3 | Refuted   | Top-level functions are globals                               |
 | H4 | Open      | The `__wlo_record` tag makes binary-trees' nodes expensive    |
-| F1 | Bug       | `__wlo_int_mod` assigns the global `_`                        |
+| F1 | Fixed     | `__wlo_int_mod` assigns the global `_`                        |
 
 ## H1. Loop iterator closures keep LuaJIT from compiling loops
 
@@ -120,11 +120,11 @@ representation that keeps the tag out of the instance without calling
 
 ## F1. `__wlo_int_mod` assigns the global `_`
 
-Bug · `runtime/core.lua` (glm's change)
+Bug · Fixed · `runtime/core.lua` (glm's change)
 
-The fallback branch reads `_, mod = __wlo_divmod(a, b, site)` without a local
-`_`, so it writes a global. It only runs above 2^52, but it should declare `_`
-as a local or call `select(2, ...)`.
+The fallback branch read `_, mod = __wlo_divmod(a, b, site)` without a local
+`_`, so it wrote a global. It only ran above 2^52. `_` is now declared local
+with `mod`.
 
 ## Next hypotheses
 

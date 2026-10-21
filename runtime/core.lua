@@ -231,7 +231,7 @@ local function __wlo_int_mod(a, b, site)
   end
   local div = math.floor(a / b)
   local p = div * b
-  local mod
+  local _, mod
   if p > __wlo_LIMIT or p < -__wlo_LIMIT then
     _, mod = __wlo_divmod(a, b, site)
   else
