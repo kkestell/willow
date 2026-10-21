@@ -872,7 +872,10 @@ local function __wlo_connection(fd)
   return { __wlo_record = "net.Connection", fd = fd, closed = false, broken = false }
 end
 
-function __wlo_net_connect(host, port, timeout, site)
+-- The TCP operations below take the function they wait with, which blocks
+-- until the socket is ready and reports timeout by returning false. The `net`
+-- helpers pass `__wlo_wait_fd`; async `aio` ones will pass a suspending wait.
+function __wlo_socket_connect(wait, host, port, timeout, site)
   __wlo_check_host(host, port, 1, site)
   __wlo_check_timeout(timeout, site)
   local addresses = __wlo_resolve(host, port, site)
@@ -885,7 +888,7 @@ function __wlo_net_connect(host, port, timeout, site)
     else
       local started = __wlo_C.__wlo_c_connect(fd, address[1], address[2])
       if started ~= 0 and __wlo_ffi.errno() == __wlo_EINPROGRESS then
-        if not __wlo_wait_fd(fd, 4, deadline) then -- POLLOUT
+        if not wait(fd, 4, deadline) then -- POLLOUT
           __wlo_C.__wlo_c_close(fd)
           __wlo_timed_out("connect", timeout, site)
         end
@@ -902,6 +905,10 @@ function __wlo_net_connect(host, port, timeout, site)
     end
   end
   __wlo_fail("OSError", "cannot connect to " .. host .. ":" .. port .. ": " .. reason, site)
+end
+
+function __wlo_net_connect(host, port, timeout, site)
+  return __wlo_socket_connect(__wlo_wait_fd, host, port, timeout, site)
 end
 
 function __wlo_net_listen(host, port, backlog, site)
@@ -934,7 +941,7 @@ local function __wlo_usable_socket(handle, what, site)
   end
 end
 
-function __wlo_net_connection_recv(connection, size, timeout, site)
+function __wlo_socket_recv(wait, connection, size, timeout, site)
   __wlo_usable_socket(connection, "connection", site)
   if size < 1 then
     __wlo_fail("ValueError", "size must be positive", site)
@@ -950,13 +957,17 @@ function __wlo_net_connection_recv(connection, size, timeout, site)
     local err = __wlo_ffi.errno()
     if err ~= __wlo_EAGAIN and err ~= __wlo_EINTR then
       __wlo_fail("OSError", "cannot receive: " .. __wlo_reason(), site)
-    elseif err == __wlo_EAGAIN and not __wlo_wait_fd(connection.fd, 1, deadline) then -- POLLIN
+    elseif err == __wlo_EAGAIN and not wait(connection.fd, 1, deadline) then -- POLLIN
       __wlo_timed_out("recv", timeout, site)
     end
   end
 end
 
-function __wlo_net_connection_sendall(connection, data, timeout, site)
+function __wlo_net_connection_recv(connection, size, timeout, site)
+  return __wlo_socket_recv(__wlo_wait_fd, connection, size, timeout, site)
+end
+
+function __wlo_socket_sendall(wait, connection, data, timeout, site)
   __wlo_usable_socket(connection, "connection", site)
   __wlo_check_timeout(timeout, site)
   local octets, sent = data.__wlo_octets, 0
@@ -970,12 +981,16 @@ function __wlo_net_connection_sendall(connection, data, timeout, site)
       if err ~= __wlo_EAGAIN and err ~= __wlo_EINTR then
         connection.broken = true
         __wlo_fail("OSError", "cannot send: " .. __wlo_reason(), site)
-      elseif err == __wlo_EAGAIN and not __wlo_wait_fd(connection.fd, 4, deadline) then
+      elseif err == __wlo_EAGAIN and not wait(connection.fd, 4, deadline) then
         connection.broken = true
         __wlo_timed_out("send", timeout, site)
       end
     end
   end
+end
+
+function __wlo_net_connection_sendall(connection, data, timeout, site)
+  return __wlo_socket_sendall(__wlo_wait_fd, connection, data, timeout, site)
 end
 
 function __wlo_net_connection_close(connection, site)
@@ -994,7 +1009,7 @@ function __wlo_net_connection_exit(connection, error, site)
   __wlo_net_connection_close(connection, site)
 end
 
-function __wlo_net_listener_accept(listener, timeout, site)
+function __wlo_socket_accept(wait, listener, timeout, site)
   __wlo_usable_socket(listener, "listener", site)
   __wlo_check_timeout(timeout, site)
   local deadline = __wlo_deadline(timeout)
@@ -1008,10 +1023,14 @@ function __wlo_net_listener_accept(listener, timeout, site)
     local err = __wlo_ffi.errno()
     if err ~= __wlo_EAGAIN and err ~= __wlo_EINTR then
       __wlo_fail("OSError", "cannot accept: " .. __wlo_reason(), site)
-    elseif err == __wlo_EAGAIN and not __wlo_wait_fd(listener.fd, 1, deadline) then
+    elseif err == __wlo_EAGAIN and not wait(listener.fd, 1, deadline) then
       __wlo_timed_out("accept", timeout, site)
     end
   end
+end
+
+function __wlo_net_listener_accept(listener, timeout, site)
+  return __wlo_socket_accept(__wlo_wait_fd, listener, timeout, site)
 end
 
 -- The port sits at the same offset in IPv4 and IPv6 socket addresses.
