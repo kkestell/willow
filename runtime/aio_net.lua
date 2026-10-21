@@ -5,7 +5,7 @@
 
 -- host.lua's connection, tagged as `aio.Connection`.
 local function __wlo_aio_connection(connection)
-  connection.__wlo_record = "aio.Connection"
+  connection[1] = "aio.Connection"
   return connection
 end
 
@@ -47,7 +47,7 @@ end
 -- `aio.listen`: `net.listen` with the tag of `aio.Listener`.
 function __wlo_aio_listen(host, port, backlog, site)
   local listener = __wlo_runtime.net_listen(host, port, backlog, site)
-  listener.__wlo_record = "aio.Listener"
+  listener[1] = "aio.Listener"
   return listener
 end
 

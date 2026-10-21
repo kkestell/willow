@@ -107,14 +107,29 @@ return {
       "    x = f(f(1, 2) + f(3, 4), f(5, f(6, 7)))",
       "    print(f(x, 1) == 2 and f(1, 1) < 3)",
     }, "\n"))
-    local section = text:match("\nlocal f, main\n(.-)\n__wlo_sites = ")
+    local section = text:match("\n(local function f.-)\n__wlo_sites = ")
     assert(section, "function section not found")
     for line in section:gmatch("[^\n]+") do
-      if not line:match("^function ") then
+      if not line:match("^local function ") then
         local _, calls = line:gsub("[%w_]+%(", "")
         assert(calls <= 1, "more than one call on line: " .. line)
       end
     end
+  end,
+
+  forward_declares_only_functions_named_earlier = function()
+    local text = emit_source(table.concat({
+      "def even(n: int) -> bool:",
+      "    return n == 0 or odd(n - 1)",
+      "def odd(n: int) -> bool:",
+      "    return n != 0 and even(n - 1)",
+      "def main() -> None:",
+      "    print(even(10))",
+    }, "\n"))
+    assert(text:find("\nlocal odd\n", 1, true), "odd is forward declared")
+    assert(text:find("\nfunction odd(", 1, true), "odd is assigned")
+    assert(text:find("\nlocal function even(", 1, true), "even is a local function")
+    assert(text:find("\nlocal function main(", 1, true), "main is a local function")
   end,
 
   write_failures_are_runtime_errors = function()

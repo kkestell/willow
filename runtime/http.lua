@@ -128,7 +128,7 @@ end
 local function __wlo_header_list(pairs_list)
   local items = {}
   for i, pair in ipairs(pairs_list) do
-    items[i] = { __wlo_record = "http.Header", name = pair[1], value = pair[2] }
+    items[i] = { "http.Header", name = pair[1], value = pair[2] }
   end
   return __wlo_list(items, #items)
 end
@@ -304,7 +304,7 @@ function __wlo_http_request(method, url, headers, body, timeout, follow_redirect
       parts[#parts + 1] = chunk
     end, site)
   return {
-    __wlo_record = "http.Response",
+    "http.Response",
     status = status,
     headers = __wlo_header_list(response_headers),
     body = { __wlo_octets = table.concat(parts) },
@@ -355,7 +355,7 @@ function __wlo_http_download(url, path, headers, timeout, follow_redirects, ca_f
     error(status, 0)
   end
   return {
-    __wlo_record = "http.Download",
+    "http.Download",
     status = status,
     headers = __wlo_header_list(response_headers),
     url = final,

@@ -3,6 +3,11 @@
 -- and assigns them before calling __wlo_run.
 
 local __wlo_ffi = require("ffi")
+local __wlo_tobit = require("bit").tobit
+-- Library functions the hot helpers call, bound once so a trace needs no guards
+-- on the global and library tables. The sqrt helper ignores its site argument.
+local __wlo_floor, __wlo_ceil, __wlo_sqrt = math.floor, math.ceil, math.sqrt
+local __wlo_min, __wlo_max, __wlo_type = math.min, math.max, type
 __wlo_ffi.cdef([[
 typedef struct { int64_t sec; long nsec; } __wlo_timespec_t;
 int snprintf(char *, size_t, const char *, ...);
@@ -119,17 +124,18 @@ local function __wlo_try(body)
   return "raise", code
 end
 
--- Rejects results outside the integer range and normalizes -0.0 to 0.
+-- Rejects results outside the integer range. tobit(value) == value holds for
+-- every int32 value, which LuaJIT's JIT folds away, so only larger results
+-- reach the range test. The caller normalizes -0.0: tobit passes it through.
 local function __wlo_check(value, site)
-  if value ~= value or value > __wlo_MAX_INT or value < -__wlo_MAX_INT then
+  if __wlo_tobit(value) ~= value
+    and (value ~= value or value > __wlo_MAX_INT or value < -__wlo_MAX_INT) then
     __wlo_fail("OverflowError", "integer overflow", site)
-  end
-  if value == 0 then
-    return 0
   end
   return value
 end
 
+-- a + b and a - b of integers are never -0.0.
 local function __wlo_add(a, b, site)
   return __wlo_check(a + b, site)
 end
@@ -138,22 +144,29 @@ local function __wlo_sub(a, b, site)
   return __wlo_check(a - b, site)
 end
 
+-- Products and negations of zero can be -0.0, which becomes 0.
 local function __wlo_mul(a, b, site)
-  return __wlo_check(a * b, site)
+  local value = a * b
+  if value == 0 then
+    return 0
+  end
+  return __wlo_check(value, site)
 end
 
 local function __wlo_neg(a, site)
-  return __wlo_check(-a, site)
+  local value = -a
+  if value == 0 then
+    return 0
+  end
+  return __wlo_check(value, site)
 end
 
--- LuaJIT's dual-number mode multiplies integer-valued operands as integers,
--- so a zero product of opposite signs needs its sign restored.
+-- LuaJIT's dual-number mode multiplies integer-valued operands as integers, so
+-- `0 * -5` would give 0 instead of -0.0. Adding -0.0 first makes each operand a
+-- double with the same value and sign (an integer 0 becomes +0.0), so the
+-- multiply is IEEE's.
 local function __wlo_float_mul(a, b, site)
-  local value = a * b
-  if value == 0 and (a < 0 or 1 / a < 0) ~= (b < 0 or 1 / b < 0) then
-    return -0.0
-  end
-  return value
+  return (a + -0.0) * (b + -0.0)
 end
 
 -- Fails on a zero divisor, including -0.0.
@@ -180,7 +193,7 @@ local function __wlo_divmod(a, b, site)
     mod = b < 0 and -0.0 or 0.0
   end
   if div ~= 0 then
-    local floor = math.floor(div)
+    local floor = __wlo_floor(div)
     if div - floor > 0.5 then
       floor = floor + 1
     end
@@ -197,7 +210,9 @@ end
 -- cannot trace math.fmod, so it would break the trace at every division. When
 -- |div * b| <= 2^52, a / b cannot round past an integer and div * b is exact,
 -- so math.floor(a / b) and a - div * b are exactly CPython's results; larger
--- magnitudes, where that can fail, take __wlo_divmod.
+-- magnitudes, where that can fail, take __wlo_divmod. An int32 `a` never needs
+-- it: |div * b| <= |a| + |b|, and for |b| >= 2^31 the quotient is within 1 of
+-- zero, so the floor is exact and a - div * b is an exact result below |b|.
 local __wlo_LIMIT = 4503599627370496
 
 local function __wlo_floordiv(a, b, site)
@@ -214,10 +229,12 @@ local function __wlo_int_floordiv(a, b, site)
   if b == 0 then
     __wlo_fail("ZeroDivisionError", "division by zero", site)
   end
-  local div = math.floor(a / b)
-  local p = div * b
-  if p > __wlo_LIMIT or p < -__wlo_LIMIT then
-    div = __wlo_divmod(a, b, site)
+  local div = __wlo_floor(a / b)
+  if __wlo_tobit(a) ~= a then
+    local p = div * b
+    if p > __wlo_LIMIT or p < -__wlo_LIMIT then
+      div = __wlo_divmod(a, b, site)
+    end
   end
   if div == 0 then
     return 0
@@ -229,10 +246,10 @@ local function __wlo_int_mod(a, b, site)
   if b == 0 then
     __wlo_fail("ZeroDivisionError", "division by zero", site)
   end
-  local div = math.floor(a / b)
+  local div = __wlo_floor(a / b)
   local p = div * b
   local _, mod
-  if p > __wlo_LIMIT or p < -__wlo_LIMIT then
+  if __wlo_tobit(a) ~= a and (p > __wlo_LIMIT or p < -__wlo_LIMIT) then
     _, mod = __wlo_divmod(a, b, site)
   else
     mod = a - p
@@ -243,13 +260,9 @@ local function __wlo_int_mod(a, b, site)
   return mod
 end
 
-local function __wlo_sqrt(x, site)
-  return math.sqrt(x)
-end
-
 -- Truncates toward zero.
 local function __wlo_int(x, site)
-  local value = x < 0 and math.ceil(x) or math.floor(x)
+  local value = x < 0 and __wlo_ceil(x) or __wlo_floor(x)
   if value ~= value or value > __wlo_MAX_INT or value < -__wlo_MAX_INT then
     __wlo_fail("ValueError", "cannot convert float to int", site)
   end
@@ -374,14 +387,14 @@ end
 -- In a union with both int and float members, a float is boxed so that it
 -- differs from an int. Elsewhere floats are plain numbers.
 local function __wlo_box(value)
-  if type(value) == "number" then
+  if __wlo_type(value) == "number" then
     return { __wlo_float = value }
   end
   return value
 end
 
 local function __wlo_unbox(value)
-  if type(value) == "table" and value.__wlo_float ~= nil then
+  if __wlo_type(value) == "table" and value.__wlo_float ~= nil then
     return value.__wlo_float
   end
   return value
@@ -391,7 +404,7 @@ end
 -- the only other tables are enum members, which are equal only to themselves.
 -- Two tuples have the same arity, which their static types guarantee.
 local function __wlo_equal(a, b)
-  if type(a) == "table" and type(b) == "table" then
+  if __wlo_type(a) == "table" and __wlo_type(b) == "table" then
     if a.__wlo_octets ~= nil or b.__wlo_octets ~= nil then
       return a.__wlo_octets == b.__wlo_octets
     elseif a.__wlo_float ~= nil or b.__wlo_float ~= nil then
@@ -413,7 +426,7 @@ end
 local function __wlo_tuple_order(a, b, op)
   for i = 1, a.__wlo_tuple do
     local x, y = a[i], b[i]
-    if type(x) == "table" then
+    if __wlo_type(x) == "table" then
       if not __wlo_equal(x, y) then
         return __wlo_tuple_order(x, y, op)
       end
@@ -443,7 +456,7 @@ end
 -- position `i`, and `adapt(f, ...)` calls a function `f` for a callable type.
 -- A converted tuple is a copy.
 local function __wlo_convert(value, step)
-  if type(value) == "function" then
+  if __wlo_type(value) == "function" then
     local adapt = step.adapt
     if adapt then
       return function(...)
@@ -451,7 +464,7 @@ local function __wlo_convert(value, step)
       end
     end
     return value
-  elseif type(value) == "table" and value.__wlo_tuple then
+  elseif __wlo_type(value) == "table" and value.__wlo_tuple then
     local result = { __wlo_tuple = value.__wlo_tuple }
     for i = 1, value.__wlo_tuple do
       result[i] = value[i]
@@ -492,7 +505,7 @@ end
 local function __wlo_isinstance(value, kind)
   if type(value) ~= "table" then
     return type(value) == kind
-  elseif value.__wlo_class or value.__wlo_record or value.__wlo_enum then
+  elseif value.__wlo_class or value.__wlo_enum then
     return false
   elseif value.__wlo_float ~= nil then
     return kind == "box"
@@ -500,8 +513,11 @@ local function __wlo_isinstance(value, kind)
     return kind == "bytes"
   elseif value.__wlo_tuple then
     return kind == "tuple"
+  elseif value.n then
+    return kind == "list"
   end
-  return kind == (value.n and "list" or "dict")
+  -- A record has its class at [1]; a dict has no array part.
+  return value[1] == nil and kind == "dict"
 end
 
 -- `name` is a class, an enum, or "Exception". Declared names are tested apart
@@ -510,7 +526,10 @@ local function __wlo_isinstance_type(value, name)
   if type(value) ~= "table" then
     return false
   end
-  local class = value.__wlo_class or value.__wlo_record or value.__wlo_enum
+  local class = value.__wlo_class or value.__wlo_enum
+  if class == nil and not value.__wlo_tuple and not value.n then
+    class = value[1]
+  end
   return class == name or name == "Exception" and value.__wlo_class ~= nil
 end
 
@@ -728,7 +747,7 @@ local function __wlo_code_points(text)
 end
 
 local function __wlo_len(value, site)
-  if type(value) == "string" then
+  if __wlo_type(value) == "string" then
     return __wlo_code_points(value)
   elseif value.__wlo_octets then
     return #value.__wlo_octets
@@ -756,7 +775,7 @@ local function __wlo_slice_bounds(start, stop, n)
   if stop < 0 then
     stop = stop + n
   end
-  return math.min(math.max(start, 0), n), math.min(math.max(stop, 0), n)
+  return __wlo_min(__wlo_max(start, 0), n), __wlo_min(__wlo_max(stop, 0), n)
 end
 
 local function __wlo_list_index(list, i, site)
@@ -782,7 +801,7 @@ local function __wlo_list_slice(list, start, stop, site)
   for i = start + 1, stop do
     items[i - start] = list[i]
   end
-  return __wlo_list(items, math.max(stop - start, 0))
+  return __wlo_list(items, __wlo_max(stop - start, 0))
 end
 
 -- Whether `value`, an int, float, str, or comparable tuple, holds NaN.
@@ -1000,7 +1019,7 @@ end
 -- A built-in iterator advances one of the step functions above and stays
 -- exhausted once it ends.
 local function __wlo_iterator(step)
-  return { __wlo_record = "<iterator>", step = step }
+  return { "<iterator>", step = step }
 end
 
 local function __wlo_iterator_iter(iterator, site)
@@ -1240,7 +1259,7 @@ local function __wlo_range_value(start, stop, step, site)
   if step == 0 then
     __wlo_fail("ValueError", "range step must not be zero", site)
   end
-  return { __wlo_record = "range", start = start, stop = stop, step = step }
+  return { "range", start = start, stop = stop, step = step }
 end
 
 local function __wlo_range_iter(range, site)
@@ -1253,8 +1272,8 @@ local function __wlo_tag(value)
   if type(value) == "string" then
     return "str"
   end
-  return value.__wlo_record or value.__wlo_class or value.__wlo_tuple and "tuple"
-    or value.__wlo_octets and "bytes" or value.n and "list" or "dict"
+  return value.__wlo_class or value.__wlo_tuple and "tuple"
+    or value.__wlo_octets and "bytes" or value.n and "list" or value[1] or "dict"
 end
 
 -- A generator runs `body` in a coroutine, from the first `next`. Its state is
@@ -1264,7 +1283,7 @@ local function __wlo_generator(body)
   local co = coroutine.create(function()
     return xpcall(body, __wlo_catch)
   end)
-  return { __wlo_record = "<generator>", state = "unstarted", co = co }
+  return { "<generator>", state = "unstarted", co = co }
 end
 
 local function __wlo_yield(value)
@@ -1339,7 +1358,7 @@ end
 -- await or by starting a task. Its body runs in the consuming task's Lua
 -- coroutine, so a suspension inside it suspends the whole task.
 local function __wlo_coroutine(body)
-  return { __wlo_record = "<coroutine>", body = body }
+  return { "<coroutine>", body = body }
 end
 
 -- Returns the body of coroutine `c` and marks `c` consumed.

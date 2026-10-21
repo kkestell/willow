@@ -104,10 +104,10 @@ Seconds of wall-clock time, best of 3 runs, on Apple M4 Max, Darwin.
 
 | Benchmark (size) | C | Go | Node | LuaJIT | Willow | Python |
 |---|---:|---:|---:|---:|---:|---:|
-| n-body (5,000,000) | 0.16 | 0.28 | 0.24 | 0.32 | 0.42 | 12.94 |
-| spectral-norm (2,000) | 0.12 | 0.14 | 0.35 | 0.12 | 0.77 | 12.93 |
-| fannkuch-redux (10) | 0.14 | 0.14 | 0.22 | 0.22 | 0.31 | 2.85 |
-| binary-trees (18) | 0.85 | 0.82 | 0.48 | 2.72 | 3.33 | 11.64 |
+| n-body (5,000,000) | 0.16 | 0.28 | 0.24 | 0.32 | 0.37 | 12.94 |
+| spectral-norm (2,000) | 0.12 | 0.14 | 0.35 | 0.12 | 0.50 | 12.93 |
+| fannkuch-redux (10) | 0.14 | 0.14 | 0.22 | 0.22 | 0.28 | 2.85 |
+| binary-trees (18) | 0.85 | 0.82 | 0.48 | 2.72 | 2.21 | 11.64 |
 <!-- benchmarks:end -->
 
 ## Editor support

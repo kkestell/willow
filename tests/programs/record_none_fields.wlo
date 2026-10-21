@@ -1,0 +1,29 @@
+class Node:
+    value: int
+    left: Node | None
+    right: Node | None = None
+
+def note(label: str) -> int:
+    print(label)
+    return 1
+
+def nothing() -> Node | None:
+    print("nothing")
+    return None
+
+def main() -> None:
+    # None fields, passed explicitly or taken from a default, read as None.
+    a = Node(1, None, None)
+    b = Node(2, None)
+    print(a.left is None and a.right is None and b.left is None and b.right is None)
+    # Assigning an omitted field stores it; the other stays None.
+    b.left = a
+    b.right = Node(3, None)
+    left = b.left
+    right = b.right
+    if left is not None and right is not None:
+        print(left.value + right.value)
+    print(a.left is None)
+    # Only a literal None is omitted; other arguments are still evaluated in order.
+    c = Node(note("value"), nothing())
+    print(c.left is None)

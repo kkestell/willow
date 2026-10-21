@@ -159,7 +159,7 @@ function __wlo_stat(path, follow_symlinks, site)
     __wlo_fail("OverflowError", "file size out of range", site)
   end
   return {
-    __wlo_record = "fs.Stat",
+    "fs.Stat",
     kind = __wlo_KINDS[bit.band(buf.mode, 0xF000)] or "other",
     size = tonumber(buf.size),
     modified = tonumber(buf.mtime_sec) + tonumber(buf.mtime_nsec) / 1e9,
@@ -625,7 +625,7 @@ function __wlo_process_run(args, input, capture_output, cwd, env, timeout, site)
     captured[fd] = { __wlo_octets = table.concat(parts) }
   end
   return {
-    __wlo_record = "subprocess.Result",
+    "subprocess.Result",
     returncode = code,
     stdout = capture_output and captured[stdout[1]] or nil,
     stderr = capture_output and captured[stderr[1]] or nil,
@@ -659,7 +659,7 @@ function __wlo_process_spawn(args, cwd, env, stdin, stdout, stderr, site)
   redirects[0] = stdin and __wlo_child_stream(stdin, "stdin", true, site)
   redirects[1] = stdout and __wlo_child_stream(stdout, "stdout", false, site)
   redirects[2] = stderr and __wlo_child_stream(stderr, "stderr", false, site)
-  return { __wlo_record = "subprocess.Process", pid = __wlo_launch(args, cwd, env, redirects, site) }
+  return { "subprocess.Process", pid = __wlo_launch(args, cwd, env, redirects, site) }
 end
 
 function __wlo_process_poll(process, site)
@@ -869,7 +869,7 @@ local function __wlo_timed_out(what, timeout, site)
 end
 
 local function __wlo_connection(fd)
-  return { __wlo_record = "net.Connection", fd = fd, closed = false, broken = false }
+  return { "net.Connection", fd = fd, closed = false, broken = false }
 end
 
 -- The TCP operations below take the function they wait with, which waits until
@@ -929,7 +929,7 @@ function __wlo_net_listen(host, port, backlog, site)
     else
       __wlo_C.__wlo_c_setsockopt(fd, __wlo_SOL_SOCKET, __wlo_SO_REUSEADDR, __wlo_ffi.new("int[1]", 1), 4)
       if __wlo_C.__wlo_c_bind(fd, address[1], address[2]) == 0 and __wlo_C.__wlo_c_listen(fd, backlog) == 0 then
-        return { __wlo_record = "net.Listener", fd = fd, closed = false }
+        return { "net.Listener", fd = fd, closed = false }
       end
       reason = __wlo_reason()
       __wlo_C.__wlo_c_close(fd)

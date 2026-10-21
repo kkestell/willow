@@ -47,6 +47,12 @@ function M.mangle(name)
   return name
 end
 
+-- Record fields also avoid `n`, the field that marks a list, so that a record,
+-- whose class tag is at [1] like the first element of a list, is never taken for one.
+local function field(name)
+  return name == "n" and "n_" or M.mangle(name)
+end
+
 -- Integers print as integers; other numbers use the fewest significant digits
 -- that read back as the same value.
 local function number(value)
@@ -128,10 +134,17 @@ function M.emit(lowered)
     end
   end
 
+  -- Names of entry-module functions used so far; calls target the declaration
+  -- rather than the lowered function, so they match by name. A function that
+  -- nothing before its definition names needs no forward declaration, so it is
+  -- `local function`, whose binding LuaJIT treats as constant.
+  local referenced = {}
+
   local function function_name(fn, qualified)
     if fn.class then
       return class_table(fn.class) .. "." .. M.mangle(fn.name)
     elseif fn.module == entry and fn_module == entry and not qualified then
+      referenced[fn.name] = true
       return M.mangle(fn.name)
     end
     return module_table(fn.module) .. "." .. M.mangle(fn.name)
@@ -274,13 +287,19 @@ function M.emit(lowered)
     elseif kind == "EnumMember" then
       return enum_table(e.enum) .. "." .. M.mangle(e.name)
     elseif kind == "Field" then
-      return expr(e.object) .. "." .. M.mangle(e.name)
+      return expr(e.object) .. "." .. field(e.name)
     elseif kind == "Construct" then
-      -- Exceptions carry their class in __wlo_class and other records in
-      -- __wlo_record, so that `isinstance(e, Exception)` tests one field.
-      local parts = { (e.exception and "__wlo_class = " or "__wlo_record = ") .. M.quote(e.class) }
+      -- Exceptions carry their class in __wlo_class, so that
+      -- `isinstance(e, Exception)` tests one field. Other records carry it at
+      -- [1]: an array slot costs less than a hash entry.
+      local parts = { e.exception and "__wlo_class = " .. M.quote(e.class) or M.quote(e.class) }
       for i, name in ipairs(e.names) do
-        parts[#parts + 1] = M.mangle(name) .. " = " .. expr(e.values[i])
+        -- A nil field reads the same when absent, and a smaller constructor
+        -- gives the table a smaller hash part.
+        local value = e.values[i]
+        if value.kind ~= "Literal" or value.value ~= nil then
+          parts[#parts + 1] = field(name) .. " = " .. expr(value)
+        end
       end
       return "{ " .. table.concat(parts, ", ") .. " }"
     elseif kind == "List" then
@@ -522,21 +541,17 @@ function M.emit(lowered)
     line(0, "local __wlo_test_open = io.open")
   end
 
-  local names, classes = {}, {}
+  local classes = {}
   for _, fn in ipairs(lowered.functions) do
-    if fn.class then
-      if not classes[fn.class] then
-        classes[fn.class] = true
-        classes[#classes + 1] = fn.class
-      end
-    elseif fn.module == entry then
-      names[#names + 1] = M.mangle(fn.name)
+    if fn.class and not classes[fn.class] then
+      classes[fn.class] = true
+      classes[#classes + 1] = fn.class
     end
   end
   line(0, "")
-  if #names > 0 then
-    line(0, "local " .. table.concat(names, ", "))
-  end
+  -- Filled in after the functions, once the forward declarations are known.
+  local declaration = #lines + 1
+  line(0, "")
   for _, module in ipairs(lowered.modules) do
     if module ~= entry or entry_imported then
       line(0, "local " .. module_table(module) .. " = {}")
@@ -559,13 +574,20 @@ function M.emit(lowered)
     end
   end
 
+  local forward = {}
   for _, fn in ipairs(lowered.functions) do
     fn_name, fn_module = fn.class and fn.class.name .. "." .. fn.name or fn.name, fn.module
     line(0, "")
-    line(0, "function " .. function_name(fn) .. "(" .. param_list(fn) .. ")", fn.span)
+    local local_function = fn.module == entry and not fn.class and not referenced[fn.name]
+    local name = local_function and M.mangle(fn.name) or function_name(fn)
+    line(0, (local_function and "local function " or "function ") .. name .. "(" .. param_list(fn) .. ")", fn.span)
     function_body(fn, 1)
     line(0, "end")
+    if fn.module == entry and not fn.class and not local_function then
+      forward[#forward + 1] = name
+    end
   end
+  lines[declaration] = #forward > 0 and "local " .. table.concat(forward, ", ") or ""
 
   -- Converters refer to methods, so they follow the definitions.
   for _, dispatch in ipairs(lowered.protocols) do

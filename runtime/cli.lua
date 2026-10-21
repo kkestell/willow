@@ -5,7 +5,7 @@
 local __wlo_TYPE_NAMES = { str = "str", int = "int", float = "float", flag = "bool", positional = "str", rest = "list" }
 
 function __wlo_cli_parser_new(prog, description, site)
-  return { __wlo_record = "cli.Parser", prog = prog, description = description, entries = {}, by_name = {}, by_short = {} }
+  return { "cli.Parser", prog = prog, description = description, entries = {}, by_name = {}, by_short = {} }
 end
 
 local function __wlo_cli_add(parser, entry, site)
@@ -234,7 +234,7 @@ function __wlo_cli_parser_parse(parser, args, site)
   for _, entry in ipairs(parser.entries) do
     kinds[entry.name] = __wlo_TYPE_NAMES[entry.kind]
   end
-  return { __wlo_record = "cli.Args", values = values, kinds = kinds }
+  return { "cli.Args", values = values, kinds = kinds }
 end
 
 local function __wlo_cli_get(args, name, kind, site)

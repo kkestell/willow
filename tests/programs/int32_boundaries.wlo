@@ -1,0 +1,27 @@
+def main() -> None:
+    zero = 0
+    big = 2147483647
+    low = -2147483648
+    print(big + 1)
+    print(low - 1)
+    print(65536 * 65536)
+    print(zero * -5)
+    print(zero * -30000000000)
+    print(-zero)
+    print(zero // -3)
+    print(zero % -3)
+    print(7 // -3)
+    print(7 % -3)
+    print(low // -1)
+    print(low % -1)
+    # An int32 numerator with a divisor beyond 2^31 of either sign.
+    huge = 9007199254740991
+    for a in [1, -1, big, low]:
+        print(a // huge)
+        print(a % huge)
+        print(a // -huge)
+        print(a % -huge)
+        print(a // 4294967296)
+        print(a % -4294967296)
+    print(low // 2147483648)
+    print(low % -2147483648)

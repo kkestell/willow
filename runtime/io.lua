@@ -5,7 +5,7 @@
 -- declared without `local`.
 
 local function __wlo_handle(file, path, mode, borrowed)
-  return { __wlo_record = "io.File", file = file, path = path, mode = mode, borrowed = borrowed, closed = false }
+  return { "io.File", file = file, path = path, mode = mode, borrowed = borrowed, closed = false }
 end
 
 local __wlo_standard = {

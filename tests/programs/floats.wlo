@@ -8,6 +8,9 @@ def show_float_division(a: float, b: float) -> None:
     print(a % b)
     print(a / b)
 
+def show_product(a: float, b: float) -> None:
+    print(a * b)
+
 def main() -> None:
     print(7 / 2)
     print(7 // 2)
@@ -64,3 +67,15 @@ def main() -> None:
     print(2.5e-3)
     print(1E+5)
     print(0.30000000000000004)
+
+    show_product(0.0, -5.0)
+    show_product(-5.0, 0.0)
+    show_product(0.0, -5.5)
+    show_product(-0.0, 3.0)
+    show_product(-0.0, -3.0)
+    show_product(0.0, -3e10)
+    show_product(0.0, 5.0)
+    show_product(-0.0, 0.0)
+    show_product(2147483648.0, 2147483648.0)
+    show_product(1e200, 1e200)
+    show_product(-1e200, 1e200)

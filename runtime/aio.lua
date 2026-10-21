@@ -235,7 +235,7 @@ end
 -- Errors are caught inside the coroutine, so their frames stop at the task's
 -- first frame.
 local function __wlo_aio_spawn(body, group, location)
-  local task = { __wlo_record = "aio.Task", state = "running", scope = group, group = group,
+  local task = { "aio.Task", state = "running", scope = group, group = group,
     location = location, waiters = {} }
   task.co = coroutine.create(function()
     local ok, value = xpcall(body, __wlo_catch)
@@ -261,7 +261,7 @@ local function __wlo_aio_outcome(task, site)
 end
 
 function __wlo_aio_task_group(site)
-  return { __wlo_record = "aio.TaskGroup", state = "inactive", count = 0 }
+  return { "aio.TaskGroup", state = "inactive", count = 0 }
 end
 
 function __wlo_aio_group_enter(group, site)

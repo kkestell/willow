@@ -1,0 +1,19 @@
+class Node:
+    n: int
+
+type Value = Node | list[str] | tuple[str, int] | dict[str, int]
+
+def describe(value: Value) -> str:
+    if isinstance(value, Node):
+        return f"node {value.n}"
+    elif isinstance(value, list):
+        return f"list {len(value)}"
+    elif isinstance(value, tuple):
+        return "tuple"
+    return "dict"
+
+def main() -> None:
+    print(describe(Node(1)))
+    print(describe(["Node"]))
+    print(describe(("Node", 2)))
+    print(describe({"Node": 3}))
