@@ -1,0 +1,107 @@
+# Downloads files from simulated mirrors with async functions and task groups:
+#   willow run mirrors.wlo
+# Each mirror answers after a fixed delay, so the output is the same on every
+# run. examples/stdlib/echo shows async TCP.
+
+import aio
+import time
+
+protocol Source:
+    async def fetch(self, name: str) -> str
+
+class Mirror:
+    name: str
+    delay: float
+    broken: bool
+
+    # Cleanup runs even when the request is cancelled.
+    async def fetch(self, name: str) -> str:
+        try:
+            await aio.sleep(self.delay)
+            if self.broken:
+                raise OSError(f"{self.name} reset the connection")
+            return f"{name} from {self.name}"
+        finally:
+            print(f"  {self.name} closed {name}")
+
+async def fetch_in_order(source: Source, names: list[str]) -> list[str]:
+    texts: list[str] = []
+    for name in names:
+        texts.append(await source.fetch(name))
+    return texts
+
+# Fetches every name at once and returns the texts in the order of `names`.
+async def fetch_together(source: Source, names: list[str]) -> list[str]:
+    tasks: list[aio.Task[str]] = []
+    async with aio.task_group() as group:
+        for name in names:
+            tasks.append(group.start(source.fetch(name)))
+    texts: list[str] = []
+    for task in tasks:
+        texts.append(task.result())
+    return texts
+
+# Awaits `work`, then stops the rest of `group`.
+async def finish_first[T](work: Coroutine[T], group: aio.TaskGroup) -> T:
+    value = await work
+    group.cancel()
+    return value
+
+# Asks every source for `name` and keeps the first answer.
+async def fastest(sources: list[Source], name: str) -> str:
+    tasks: list[aio.Task[str]] = []
+    async with aio.task_group() as group:
+        for source in sources:
+            tasks.append(group.start(finish_first(source.fetch(name), group)))
+    for task in tasks:
+        try:
+            return task.result()
+        except RuntimeError as cancelled:
+            print(f"  skipped: {cancelled.message}")
+    raise RuntimeError(f"no source delivered {name}")
+
+async def size_of(download: aio.Task[str]) -> int:
+    return len(await download)
+
+def elapsed(start: float) -> str:
+    return f"{time.monotonic() - start:.1f} s"
+
+async def main() -> None:
+    alpha = Mirror("alpha", 0.1, False)
+    beta = Mirror("beta", 0.05, False)
+    gamma = Mirror("gamma", 0.15, False)
+    delta = Mirror("delta", 0.02, True)
+    names = ["a.txt", "b.txt", "c.txt"]
+
+    print("in order:")
+    start = time.monotonic()
+    print("  " + ", ".join(await fetch_in_order(alpha, names)) + " in " + elapsed(start))
+
+    print("together:")
+    start = time.monotonic()
+    print("  " + ", ".join(await fetch_together(alpha, names)) + " in " + elapsed(start))
+
+    print("fastest of three:")
+    print("  " + await fastest([alpha, beta, gamma], "d.txt"))
+
+    # A task's handle can be awaited by another task in the group.
+    print("size check:")
+    async with aio.task_group() as group:
+        download = group.start(gamma.fetch("e.txt"))
+        size = group.start(size_of(download))
+    print(f"  {size.result()} characters")
+
+    # A failure cancels the rest of the group and propagates after cleanup.
+    print("one mirror fails:")
+    try:
+        async with aio.task_group() as group:
+            group.start(alpha.fetch("f.txt"))
+            group.start(delta.fetch("f.txt"))
+    except OSError as error:
+        print(f"  failed: {error.message}")
+
+    # Calling an async function runs nothing until the coroutine is awaited.
+    print("lazy coroutine:")
+    pending = beta.fetch("g.txt")
+    print("  created")
+    print("  " + await pending)
