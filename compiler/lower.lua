@@ -569,6 +569,16 @@ local function lower_function(fn, sites, helpers, protocols)
       sites[#sites + 1] = node.span
       args[#args + 1] = { kind = "Literal", value = #sites }
       return { kind = "Call", callee = dispatch(node.protocol, object, node.name), args = args, span = node.span }
+    elseif kind == "MethodCall" and node.name == "join" and node.object.type == types.str
+        and node.args[1].kind == "Slice" then
+      -- Joining a slice concatenates the list's elements in place, without
+      -- building the sliced list.
+      local slice = node.args[1]
+      local object = lower_operand(node.object)
+      local list = lower_operand(slice.object)
+      local start = slice.start and lower_operand(slice.start) or { kind = "Literal" }
+      local stop = slice.stop and lower_operand(slice.stop) or { kind = "Literal" }
+      return helper("str_join_slice", { object, list, start, stop }, node.span)
     elseif kind == "MethodCall" then
       local object = lower_operand(node.object)
       if node.name == "iter" and node.object.type.kind == "tuple" then

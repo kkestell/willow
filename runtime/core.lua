@@ -4,6 +4,7 @@
 
 local __wlo_ffi = require("ffi")
 local __wlo_tobit = require("bit").tobit
+local __wlo_table_new = require("table.new")
 -- Library functions the hot helpers call, bound once so a trace needs no guards
 -- on the global and library tables. The sqrt helper ignores its site argument.
 local __wlo_floor, __wlo_ceil, __wlo_sqrt = math.floor, math.ceil, math.sqrt
@@ -797,11 +798,12 @@ end
 -- A new list sharing the elements of the slice.
 local function __wlo_list_slice(list, start, stop, site)
   start, stop = __wlo_slice_bounds(start, stop, list.n)
-  local items = {}
+  local n = __wlo_max(stop - start, 0)
+  local items = __wlo_table_new(n, 1)
   for i = start + 1, stop do
     items[i - start] = list[i]
   end
-  return __wlo_list(items, __wlo_max(stop - start, 0))
+  return __wlo_list(items, n)
 end
 
 -- Whether `value`, an int, float, str, or comparable tuple, holds NaN.
@@ -1128,6 +1130,11 @@ end
 
 local function __wlo_str_join(sep, items, site)
   return table.concat(items, sep, 1, items.n)
+end
+
+local function __wlo_str_join_slice(sep, list, start, stop, site)
+  start, stop = __wlo_slice_bounds(start, stop, list.n)
+  return table.concat(list, sep, start + 1, stop)
 end
 
 -- The byte position of code point `k`, counting from 0, or one past the end.

@@ -24,6 +24,10 @@ def text(label: str, value: str) -> str:
     print(label)
     return value
 
+def listed(label: str, value: list[str]) -> list[str]:
+    print(label)
+    return value
+
 def held(v: int | str) -> str:
     return f"[{v:>4}][{v:<4}][{v:4}]"
 
@@ -50,6 +54,11 @@ def main() -> None:
 
     # Slice operands evaluate receiver, start, then stop.
     print(text("receiver", "abcdef")[show("start", 1):show("stop", -1)])
+
+    # Joining a slice takes the slice's bounds and evaluation order.
+    letters = ["a", "b", "c", "d"]
+    print("-".join(letters[1:3]) + "|" + "".join(letters[-3:]) + "|" + ",".join(letters[:-5]) + "|" + "".join(letters[3:1]) + "|" + "".join(letters[:]))
+    print(text("separator", "+").join(listed("list", letters)[show("start", 1):show("stop", -1)]))
 
     # Sorting.
     nums = [3, -1, 2, 2, 0]
