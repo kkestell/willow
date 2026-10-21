@@ -32,21 +32,31 @@ async def pending_return(log: Log) -> str:
         group.start(sleeper(log, "joined", 10.0))
         return "returned"
 
-# An outer request reaches the inner group's body, which cannot absorb it.
+# An outer request reaches the inner group's body and children, which cannot
+# absorb it. Each level's cleanup runs, innermost first, and protected cleanup
+# may await.
 async def nested(log: Log) -> None:
     async with aio.task_group() as outer:
         outer.start(stopper(outer, 0.01))
-        async with aio.task_group() as inner:
-            inner.start(sleeper(log, "inner child", 10.0))
-            await aio.sleep(10.0)
-            log.lines.append("inner body finished")
-        log.lines.append("after inner")
+        try:
+            async with aio.task_group() as inner:
+                inner.start(sleeper(log, "inner child", 10.0))
+                try:
+                    await aio.sleep(10.0)
+                    log.lines.append("inner body finished")
+                finally:
+                    await aio.sleep(0.0)
+                    log.lines.append("inner body cleanup")
+            log.lines.append("after inner")
+        finally:
+            log.lines.append("outer body cleanup")
     log.lines.append("after outer")
 
 # The inner child fails, and the outer request arrives while the inner body's
 # cleanup runs. The inner failure beats the request and leaves the outer group
-# as an exception unless caught first.
-async def precedence(catch: bool) -> str:
+# as an exception unless caught first. A caught failure leaves the request in
+# effect until the next checkpoint.
+async def precedence(log: Log, catch: bool) -> None:
     async with aio.task_group() as outer:
         outer.start(stopper(outer, 0.02))
         try:
@@ -60,8 +70,10 @@ async def precedence(catch: bool) -> str:
         except ValueError as error:
             if not catch:
                 raise
-            return "caught " + error.message
-    return "absorbed"
+            log.lines.append("caught " + error.message)
+        await aio.sleep(0.0)
+        log.lines.append("unreachable")
+    log.lines.append("absorbed")
 
 async def main() -> None:
     # The §15 example.
@@ -105,9 +117,11 @@ async def main() -> None:
     await nested(log)
     print(", ".join(log.lines))
 
-    print(await precedence(True))
+    log = Log([])
+    await precedence(log, True)
+    print(", ".join(log.lines))
     try:
-        await precedence(False)
+        await precedence(Log([]), False)
     except ValueError as error:
         print("propagated " + error.message)
 

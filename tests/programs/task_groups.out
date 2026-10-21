@@ -6,8 +6,8 @@ task was cancelled
 task group is not active
 returned
 joined cleanup
-inner child cleanup, after outer
-caught child failed
+inner body cleanup, inner child cleanup, outer body cleanup, after outer
+caught child failed, absorbed
 propagated child failed
 task group was already entered
 task group is not accepting tasks
