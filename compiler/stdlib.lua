@@ -227,6 +227,13 @@ local fs = provided("fs", {
   rename = { params = { types.str, types.str }, names = { "source", "destination" }, result = types.None },
 }, { Stat = stat })
 
+local aio = provided("aio", {
+  sleep = {
+    params = { types.float }, names = { "seconds" }, result = types.generic(M.coroutine, { types.None }),
+    helper = "aio_sleep_coroutine",
+  },
+})
+
 local time = provided("time", {
   time = { params = {}, result = types.float },
   monotonic = { params = {}, result = types.float },
@@ -498,6 +505,7 @@ M.dispatched[#M.dispatched + 1] = dispatched("<generator>", "generator", functio
 end)
 
 M.modules = {
+  aio = aio,
   cli = cli,
   fs = fs,
   http = http,

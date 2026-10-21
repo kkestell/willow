@@ -990,6 +990,13 @@ function M.lower(modules)
   for _, dispatched in ipairs(stdlib.dispatched) do
     records[#records + 1] = dispatched
   end
+  -- Async `main` and async tests run in the event loop.
+  local entry = modules[1]
+  for _, fn in ipairs(entry.tests or { entry.declarations.main }) do
+    if fn.async then
+      helpers.aio_run = true
+    end
+  end
   local tables = {}
   for i, protocol in ipairs(protocols) do
     local entries = {}
