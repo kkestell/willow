@@ -18,7 +18,7 @@ end
 local ROOT = capture("cd " .. quote(arg[0]:match("^(.*)/tests/[^/]*$") or ".") .. " && pwd"):gsub("\n$", "")
 local WILLOW = ROOT .. "/willow"
 local LUAJIT = ROOT .. "/vendor/luajit/src/luajit"
-local USAGE = "usage: willow check [file]\n       willow run [file [args...] | -- args...]\n"
+local USAGE = "usage: willow init\n       willow check [file]\n       willow run [file [args...] | -- args...]\n"
   .. "       willow compile [file] -o <output>\n       willow build [file] -o <output>\n"
   .. "       willow test [--check] [path]\n"
   .. "Without a file, the command uses willow.json in the current directory.\n"
@@ -991,6 +991,32 @@ return {
       write(dir .. "/vendor/textkit/shout.wlo", "import textkit.missing\n")
       eq("vendor/textkit/shout.wlo:1:8: error: cannot load module 'textkit.missing': src/textkit/missing.wlo: No such file or directory\n",
         manifest_error('{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor"]}'))
+    end)
+  end,
+
+  init_command = function()
+    in_temp_dir(function(dir)
+      local status, stdout, stderr = willow(dir, "init")
+      eq("", stderr)
+      eq(0, status)
+      eq("created willow.json\ncreated src/main.wlo\ncreated tests/test_main.wlo\ncreated AGENTS.md\n"
+        .. "created .gitignore\ninitialized a git repository\n", stdout)
+      eq("/with space\n/with space.lua\n", read(dir .. "/.gitignore"))
+      status, stdout = willow(dir, "run")
+      eq(0, status)
+      eq("Hello, Willow!\n", stdout)
+      status, stdout = willow(dir, "test")
+      eq(0, status)
+      eq("PASS tests/test_main.wlo test_main_runs\n1 passed, 0 failed\n", stdout)
+      status, stdout = sh(dir, "git status --short")
+      eq(0, status)
+      eq("?? .gitignore\n?? AGENTS.md\n?? src/\n?? tests/\n?? willow.json\n", stdout)
+      status, stdout, stderr = willow(dir, "init")
+      eq(1, status)
+      eq("error: willow.json already exists\n", stderr)
+      status, _, stderr = willow(dir, "init extra")
+      eq(1, status)
+      eq("error: unexpected argument 'extra'\n" .. USAGE, stderr)
     end)
   end,
 

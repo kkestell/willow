@@ -1481,6 +1481,11 @@ appears more than once, the last value is used. An unknown key, a value of the
 wrong type, an empty path, or an invalid `entry` is an error that names
 `willow.json`.
 
+`willow init` creates a project in the current directory: a `willow.json` with
+the source root `src` and the test directory `tests`, `src/main.wlo`,
+`tests/test_main.wlo`, `AGENTS.md`, `.gitignore`, and a git repository. It is an error if `willow.json` already exists; other existing
+files are left unchanged.
+
 When no source file is given, `willow check`, `willow run`,
 `willow compile -o <output>`, and `willow build -o <output>` use the project in
 the current directory, and `willow run -- <args>` passes `<args>` to the program.

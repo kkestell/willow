@@ -28,6 +28,7 @@ run it as `./willow`, or put a symlink to it in a directory on your `PATH`.
 ## Usage
 
 ```sh
+willow init                           # scaffold a project in the current directory
 willow check hello.wlo                # check without running
 willow run hello.wlo                  # check and run
 willow run number.wlo out.txt         # pass arguments to sys.args()
@@ -65,6 +66,11 @@ directory. `examples/projects` is an example project. Its `willow.json` sets the
 entry to `vowels/main.wlo` under the source root `src`, and lists `vendor` as a
 dependency root. The `tabulate` module in `vendor` is imported as
 `tabulate.table`.
+
+`willow init` creates a project in the current directory: `willow.json`,
+`src/main.wlo`, `tests/test_main.wlo`, an `AGENTS.md` that introduces the
+language and the commands, a `.gitignore`, and a git repository. It leaves
+existing files alone.
 
 In a project directory, the commands use `willow.json` when no source file is
 given:

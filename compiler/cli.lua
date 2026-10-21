@@ -19,7 +19,7 @@ else
   ffi.cdef([[int chmod(const char *path, uint32_t mode);]])
 end
 
-local USAGE = "usage: willow check [file]\n       willow run [file [args...] | -- args...]\n"
+local USAGE = "usage: willow init\n       willow check [file]\n       willow run [file [args...] | -- args...]\n"
   .. "       willow compile [file] -o <output>\n       willow build [file] -o <output>\n"
   .. "       willow test [--check] [path]\n"
   .. "Without a file, the command uses willow.json in the current directory."
@@ -231,6 +231,14 @@ local function compile_test(path, project)
     names[i] = fn.name
   end
   return text, names
+end
+
+if arg[1] == "init" then
+  if arg[2] then
+    usage_error("unexpected argument '" .. arg[2] .. "'")
+  end
+  require("compiler.init").init()
+  os.exit(0)
 end
 
 if arg[1] == "test" then
