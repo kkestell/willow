@@ -1,0 +1,82 @@
+protocol Source:
+    async def read(self) -> str
+
+class Fixed:
+    text: str
+
+    def read(self) -> Coroutine[str]:
+        return echo(self.text)
+
+class Counter:
+    count: int
+
+    async def read(self) -> str:
+        self.count = self.count + 1
+        return f"count {self.count}"
+
+async def echo(text: str) -> str:
+    print(f"echo {text}")
+    return text
+
+async def square(value: int) -> int:
+    return value * value
+
+async def first[T](items: list[T]) -> T:
+    return items[0]
+
+async def drain(source: Source) -> str:
+    return await source.read()
+
+async def fail(message: str) -> int:
+    raise ValueError(message)
+
+async def cleanup() -> None:
+    try:
+        await fail("inner")
+    finally:
+        print(await echo("finally"))
+
+def label(n: int) -> str:
+    print(f"argument {n}")
+    return str(n)
+
+async def main() -> None:
+    # A call evaluates its arguments but runs none of the body.
+    pending = echo(label(1))
+    print("called")
+    print(await pending)
+
+    print(await square(3) + await square(4))
+    print(await first(["a", "b"]))
+    print(await drain(Fixed("fixed")))
+    counter = Counter(0)
+    print(await drain(counter))
+    print(await counter.read())
+
+    suffix = "!"
+    async def shout(text: str) -> str:
+        return text + suffix
+    run: (str) -> Coroutine[str] = shout
+    print(await run("nested"))
+
+    try:
+        await fail("outer")
+    except ValueError as error:
+        print(f"caught {error.message}")
+    try:
+        await cleanup()
+    except ValueError as error:
+        print(f"caught {error.message}")
+
+    # A coroutine is consumed once; aliases share that state.
+    c = square(5)
+    alias = c
+    print(await c)
+    try:
+        await alias
+    except RuntimeError as consumed:
+        print(consumed.message)
+
+    # An unused coroutine never runs.
+    unused = echo("never")
+    print("done")

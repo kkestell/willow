@@ -955,6 +955,47 @@ return {
         "def m() -> int | None:\n    return 1\n")))
   end,
 
+  async_functions = function()
+    local F = "async def f() -> int:\n    return 1\n"
+    local function in_async_main(statements, helpers)
+      return "async " .. in_main(statements, helpers)
+    end
+    check_source(in_async_main("x: int = await f()\ny: Coroutine[int] = f()\nz = -await y", F))
+    eq("1:11: main must take no parameters and return None", check_errors("async def main() -> int:\n    return 1\n"))
+    eq("2:12: expected int, received str", check_errors("async def g() -> int:\n    return 'a'\n" .. MAIN))
+    eq("1:11: function 'g' must return a value on every path", check_errors("async def g() -> int:\n    pass\n" .. MAIN))
+    eq("3:5: 'yield' cannot be used in an async function",
+      check_errors("async def g() -> Iterator[int]:\n    await f()\n    yield 1\n" .. F .. MAIN))
+    eq("2:9: 'await' is only allowed in an async function", check_errors(in_main("x = await f()", F)))
+    eq("2:17: 'await' is only allowed in an async function", check_errors(in_async_main("g = lambda: await f()", F)))
+    eq("3:16: 'await' is only allowed in an async function",
+      check_errors(in_async_main("def g() -> int:\n    return await f()", F)))
+    check_source(in_async_main("try:\n    pass\nfinally:\n    await f()", F))
+    eq("2:9: cannot await a value of type int", check_errors(in_async_main("x = await 1")))
+    eq("2:25: expected Coroutine[str], received Coroutine[int]", check_errors(in_async_main("x: Coroutine[str] = f()", F)))
+    eq("2:25: a union can have only one specialization of Coroutine",
+      check_errors(in_main("x: Coroutine[int] | Coroutine[str] | None = None")))
+    eq("3:22: 'Coroutine' cannot be used in isinstance",
+      check_errors(in_main("x: Coroutine[int] | None = None\nif isinstance(x, Coroutine):\n    pass")))
+    -- Discarding a coroutine is an error even in a union; a type parameter is exempt.
+    eq("2:5: cannot discard a value of type Coroutine[int]; a discarded coroutine never runs",
+      check_errors(in_main("f()", F)))
+    eq("3:5: cannot discard a value of type Coroutine[int] | None; a discarded coroutine never runs",
+      check_errors(in_main("g: () -> Coroutine[int] | None = lambda: None\ng()", F)))
+    eq("2:5: cannot discard a value of type Coroutine[int]; a discarded coroutine never runs",
+      check_errors(in_async_main("await g()", F .. "async def g() -> Coroutine[int]:\n    return f()\n")))
+    check_source(in_main("run(f)", F .. "def run[T](g: () -> T) -> None:\n    g()\n"))
+    -- An async protocol method means a method returning a coroutine.
+    local P = "protocol P:\n    async def get(self) -> int\nclass C:\n    n: int\n\n"
+    check_source(P .. "    def get(self) -> Coroutine[int]:\n        return f()\n" .. F .. in_main("p: P = C(1)"))
+    eq("11:12: expected P, received C",
+      check_errors(P .. "    def get(self) -> int:\n        return 1\n" .. F .. in_main("p: P = C(1)")))
+    -- Other code may run during an await and rebind a captured variable.
+    eq("6:22: operator '+' cannot be applied to int | None and int",
+      check_errors(in_main("x = m()\nasync def g() -> int:\n    if x is not None:\n        await f()\n        return x + 1\n"
+        .. "    return 0", F .. "def m() -> int | None:\n    return 1\n")))
+  end,
+
   sorting = function()
     eq("2:14: expected int, received list[str]", check_errors(in_main("x: int = sorted({'a': 1})")))
     check_source(in_main("x = sorted([(1, 'a')])\ny: list[tuple[str, int]] = []\ny.sort()"))

@@ -1,0 +1,4 @@
+coroutine_traceback.wlo:6:13: error: ValueError: bottom
+  in Stack.descend at coroutine_traceback.wlo:6:13
+  called from Stack.descend at coroutine_traceback.wlo:7:16
+  called from main at coroutine_traceback.wlo:11:11

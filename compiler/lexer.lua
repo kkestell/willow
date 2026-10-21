@@ -19,7 +19,7 @@ local keywords = set([[
 False None True and as assert async await break case class continue def del
 elif else enum except finally for from global if import in is lambda match nonlocal
 not or pass protocol raise return try type while with yield int float bool str bytes list dict tuple
-Iterable Iterator ContextManager Generator
+Iterable Iterator ContextManager Generator Coroutine
 ]])
 
 local operators = set("-> == != <= >= < > = + - * / // % | ( ) [ ] { } , : .")

@@ -486,6 +486,13 @@ return {
     local status, stdout, stderr = willow(ROOT, "test tests/suites/failing")
     eq(1, status)
     eq(table.concat({
+      "PASS tests/suites/failing/test_shop.wlo test_async_known_price",
+      "FAIL tests/suites/failing/test_shop.wlo test_async_unknown_item",
+      "  tests/suites/failing/shop.wlo:4:5: error: KeyError: no price for cake",
+      "    in price at tests/suites/failing/shop.wlo:4:5",
+      "    called from priced at tests/suites/failing/test_shop.wlo:25:17",
+      "    called from test_async_unknown_item at tests/suites/failing/test_shop.wlo:31:5",
+      "  test did not return (exit status 1)",
       "FAIL tests/suites/failing/test_shop.wlo test_exit_is_a_failure",
       "  test did not return (exit status 0)",
       "PASS tests/suites/failing/test_shop.wlo test_isolated_process",
@@ -501,7 +508,7 @@ return {
       "  tests/suites/failing/test_shop.wlo:9:5: error: AssertionError: tea should cost 400",
       "    in test_wrong_price at tests/suites/failing/test_shop.wlo:9:5",
       "  test did not return (exit status 1)",
-      "3 passed, 3 failed",
+      "4 passed, 4 failed",
       "",
     }, "\n"), stdout)
     eq("", stderr)
@@ -532,6 +539,10 @@ return {
       status, stdout, stderr = willow(dir, "test --check")
       eq(1, status)
       eq("test_c.wlo:1:5: error: test function 'test_c' must take no parameters and return None\n", stderr)
+      write(dir .. "/test_c.wlo", "async def test_c() -> int:\n    return 1\n")
+      status, stdout, stderr = willow(dir, "test --check")
+      eq(1, status)
+      eq("test_c.wlo:1:11: error: test function 'test_c' must take no parameters and return None\n", stderr)
       os.execute("mkdir " .. quote(dir .. "/empty"))
       status, stdout, stderr = willow(dir, "test --check empty")
       eq(1, status)

@@ -1,0 +1,11 @@
+class Stack:
+    depth: int
+
+    async def descend(self, n: int) -> int:
+        if n == 0:
+            raise ValueError("bottom")
+        return await self.descend(n - 1)
+
+async def main() -> None:
+    print("start")
+    print(await Stack(0).descend(1))

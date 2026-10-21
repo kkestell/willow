@@ -336,11 +336,12 @@ function M.emit(lowered)
   end
 
   -- Writes the locals and body of lowered function `fn` at `depth`. A
-  -- generator's call binds its parameters and returns a generator whose
-  -- coroutine runs the body.
+  -- generator's or async function's call binds its parameters and returns a
+  -- generator or coroutine holding the body as a closure.
   local function function_body(fn, depth)
-    if fn.generator then
-      line(depth, "return __wlo_generator(function()", fn.span)
+    local wrapped = fn.generator or fn.async
+    if wrapped then
+      line(depth, "return " .. (fn.async and "__wlo_coroutine" or "__wlo_generator") .. "(function()", fn.span)
       depth = depth + 1
     end
     local locals = {}
@@ -357,7 +358,7 @@ function M.emit(lowered)
       line(depth, "local " .. table.concat(locals, ", "), fn.span)
     end
     block(fn.body, depth)
-    if fn.generator then
+    if wrapped then
       line(depth - 1, "end)")
     end
   end
@@ -554,13 +555,19 @@ function M.emit(lowered)
     quoted[i] = M.quote(path)
   end
   line(0, "__wlo_paths = { " .. table.concat(quoted, ", ") .. " }")
+  -- The function __wlo_run calls for `main` or a test, which drives an
+  -- async one's coroutine as the root task.
+  local function root(fn)
+    local name = M.mangle(fn.name)
+    return fn.async and "function() __wlo_root(" .. name .. "()) end" or name
+  end
   local tests = entry.tests
   if tests then
     -- A test chunk takes the test's name and a path to create once the test
     -- returns, which neither an exception nor sys.exit does.
     line(0, "local __wlo_tests = {")
     for _, fn in ipairs(tests) do
-      line(1, "[" .. M.quote(fn.name) .. "] = " .. M.mangle(fn.name) .. ",")
+      line(1, "[" .. M.quote(fn.name) .. "] = " .. root(fn) .. ",")
     end
     line(0, "}")
     line(0, "local __wlo_name, __wlo_result = ...")
@@ -568,7 +575,7 @@ function M.emit(lowered)
     line(0, 'assert(__wlo_test_open(__wlo_result, "wb")):close()')
   else
     -- The program arguments arrive as the chunk's varargs.
-    line(0, "__wlo_run(" .. M.mangle("main") .. ", ...)")
+    line(0, "__wlo_run(" .. root(entry.declarations.main) .. ", ...)")
   end
   return table.concat(lines, "\n") .. "\n"
 end
