@@ -31,15 +31,22 @@ local function optional_runtime(text)
   }
 end
 
+local host_runtime = optional_runtime(read_runtime("runtime.host"))
+local aio_runtime = optional_runtime(read_runtime("runtime.aio"))
+-- `aio`'s TCP handles wait through host.lua's socket bodies.
+local aio_net_runtime = optional_runtime(read_runtime("runtime.aio_net"))
+aio_net_runtime.needs = { aio_runtime, host_runtime }
+
 local optional_runtimes = {
   optional_runtime(read_runtime("runtime.case_data") .. read_runtime("runtime.case")),
-  optional_runtime(read_runtime("runtime.host")),
+  host_runtime,
   optional_runtime(read_runtime("runtime.bytes")),
   optional_runtime(read_runtime("runtime.io")),
   optional_runtime(read_runtime("runtime.cli")),
   optional_runtime(read_runtime("runtime.http")),
   optional_runtime(read_runtime("runtime.json")),
-  optional_runtime(read_runtime("runtime.aio")),
+  aio_runtime,
+  aio_net_runtime,
 }
 
 -- The generated reference to a helper named without its __wlo_ prefix.
@@ -52,10 +59,20 @@ end
 -- before it.
 function M.text(helpers)
   local text = "local __wlo_runtime = {}\n" .. core
+  local written = {}
+  local function write(optional)
+    if not written[optional] then
+      written[optional] = true
+      text = text .. optional.text
+      for _, needed in ipairs(optional.needs or {}) do
+        write(needed)
+      end
+    end
+  end
   for _, optional in ipairs(optional_runtimes) do
     for name in pairs(helpers) do
       if optional.helpers[name] then
-        text = text .. optional.text
+        write(optional)
         break
       end
     end

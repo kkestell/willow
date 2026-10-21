@@ -872,9 +872,10 @@ local function __wlo_connection(fd)
   return { __wlo_record = "net.Connection", fd = fd, closed = false, broken = false }
 end
 
--- The TCP operations below take the function they wait with, which blocks
--- until the socket is ready and reports timeout by returning false. The `net`
--- helpers pass `__wlo_wait_fd`; async `aio` ones will pass a suspending wait.
+-- The TCP operations below take the function they wait with, which waits until
+-- the socket is ready and reports timeout by returning false. It may also raise,
+-- as a suspending wait does when its task is cancelled or its handle is closed.
+-- The `net` helpers pass `__wlo_wait_fd`; async `aio` ones pass a suspending wait.
 function __wlo_socket_connect(wait, host, port, timeout, site)
   __wlo_check_host(host, port, 1, site)
   __wlo_check_timeout(timeout, site)
@@ -888,7 +889,11 @@ function __wlo_socket_connect(wait, host, port, timeout, site)
     else
       local started = __wlo_C.__wlo_c_connect(fd, address[1], address[2])
       if started ~= 0 and __wlo_ffi.errno() == __wlo_EINPROGRESS then
-        if not wait(fd, 4, deadline) then -- POLLOUT
+        local ok, ready = xpcall(wait, __wlo_catch, fd, 4, deadline) -- POLLOUT
+        if not ok then
+          __wlo_C.__wlo_c_close(fd)
+          error(ready, 0)
+        elseif not ready then
           __wlo_C.__wlo_c_close(fd)
           __wlo_timed_out("connect", timeout, site)
         end
@@ -981,9 +986,19 @@ function __wlo_socket_sendall(wait, connection, data, timeout, site)
       if err ~= __wlo_EAGAIN and err ~= __wlo_EINTR then
         connection.broken = true
         __wlo_fail("OSError", "cannot send: " .. __wlo_reason(), site)
-      elseif err == __wlo_EAGAIN and not wait(connection.fd, 4, deadline) then
-        connection.broken = true
-        __wlo_timed_out("send", timeout, site)
+      elseif err == __wlo_EAGAIN then
+        local ok, ready = xpcall(wait, __wlo_catch, connection.fd, 4, deadline)
+        if not ok then
+          -- Sent bytes may have reached the peer, so the connection cannot be
+          -- used for another send.
+          if sent > 0 then
+            connection.broken = true
+          end
+          error(ready, 0)
+        elseif not ready then
+          connection.broken = true
+          __wlo_timed_out("send", timeout, site)
+        end
       end
     end
   end

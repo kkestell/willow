@@ -1,0 +1,19 @@
+ping
+
+True
+ping
+
+0
+recv timed out after 0.1 seconds
+again
+size must be positive
+invalid host 'bad host'
+timeout must be finite and positive
+accept timed out after 0.1 seconds
+0
+I/O operation on closed connection
+I/O operation on closed connection
+recv is already in progress
+hello
+I/O operation on closed connection
+I/O operation on closed listener
