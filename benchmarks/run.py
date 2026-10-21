@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-"""Builds and times every benchmark in every language, checks that each
-language prints the same output, and replaces the results table in README.md.
+"""Builds and times the benchmarks and checks each program's output against
+benchmarks/expected.
 
-Run it from anywhere after `make`. It needs cc, go, node, and python3 on PATH.
+By default it times only Willow and prints one line per benchmark, for
+comparing Willow with itself before and after a change. `--all` also times
+the other languages, which needs cc, go, and node on PATH. `--readme` times
+every language and replaces the results table in README.md.
+
+Run it from anywhere after `make`.
 """
 
+import argparse
 import platform
 import subprocess
 import sys
@@ -30,14 +36,16 @@ BENCHMARKS = [
 LANGUAGES = ["C", "Go", "Node", "LuaJIT", "Willow", "Python"]
 
 
-def build(name):
-    """Builds `name` in each language and returns the command that runs it,
-    without the size argument, keyed by language."""
+def build(name, languages):
+    """Builds `name` in each of `languages` and returns the command that runs
+    it, without the size argument, keyed by language."""
     c = BUILD / f"{name}_c"
     go = BUILD / f"{name}_go"
     lua = BUILD / f"{name}.lua"
-    subprocess.run(["cc", "-O2", "-o", c, HERE / "c" / f"{name}.c", "-lm"], check=True)
-    subprocess.run(["go", "build", "-o", go, HERE / "go" / f"{name}.go"], check=True)
+    if "C" in languages:
+        subprocess.run(["cc", "-O2", "-o", c, HERE / "c" / f"{name}.c", "-lm"], check=True)
+    if "Go" in languages:
+        subprocess.run(["go", "build", "-o", go, HERE / "go" / f"{name}.go"], check=True)
     subprocess.run([ROOT / "willow", "compile", HERE / "willow" / f"{name}.wlo", "-o", lua], check=True)
     return {
         "C": [c],
@@ -83,29 +91,46 @@ def table(results):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--all", action="store_true", help="also time the other languages")
+    parser.add_argument("--readme", action="store_true", help="time every language and update README.md")
+    parser.add_argument("names", nargs="*", metavar="benchmark", help="benchmarks to run (default: all)")
+    args = parser.parse_args()
+
+    titles = [title for _, title, _ in BENCHMARKS]
+    unknown = [name for name in args.names if name not in titles]
+    if unknown:
+        parser.error(f"unknown benchmark {', '.join(unknown)}; choose from {', '.join(titles)}")
+    if args.readme and args.names:
+        parser.error("--readme runs every benchmark")
+    languages = LANGUAGES if args.all or args.readme else ["Willow"]
+
     BUILD.mkdir(exist_ok=True)
     results = {}
     failed = False
     for name, title, size in BENCHMARKS:
-        commands = build(name)
+        if args.names and title not in args.names:
+            continue
+        commands = build(name, languages)
+        expected = (HERE / "expected" / f"{name}.txt").read_text()
         results[title] = {}
-        outputs = {}
-        for language in LANGUAGES:
-            elapsed, outputs[language] = best_time(commands[language] + [str(size)])
+        for language in languages:
+            elapsed, output = best_time(commands[language] + [str(size)])
             results[title][language] = elapsed
-            print(f"{title} {language}: {elapsed:.2f}s", flush=True)
-        for language in LANGUAGES:
-            if outputs[language] != outputs["C"]:
-                print(f"{title}: {language} output differs from C", file=sys.stderr)
+            prefix = title if languages == ["Willow"] else f"{title} {language}"
+            print(f"{prefix} {elapsed:.3f}s", flush=True)
+            if output != expected:
+                print(f"{title}: {language} output differs from benchmarks/expected/{name}.txt", file=sys.stderr)
                 failed = True
     if failed:
         sys.exit(1)
 
-    text = README.read_text()
-    before, rest = text.split(START, 1)
-    _, after = rest.split(END, 1)
-    README.write_text(f"{before}{START}\n{table(results)}\n{END}{after}")
-    print(f"updated {README.relative_to(ROOT)}")
+    if args.readme:
+        text = README.read_text()
+        before, rest = text.split(START, 1)
+        _, after = rest.split(END, 1)
+        README.write_text(f"{before}{START}\n{table(results)}\n{END}{after}")
+        print(f"updated {README.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
