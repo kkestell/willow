@@ -11,13 +11,13 @@ in these slices, in order. Each task is one plan and one commit with focused
 tests and `make test`. The design review and runtime prototype are in
 `agents/reviews/2026-10-20-009-async-spec.md` and `agents/prototypes/async/`.
 
-- [ ] Coroutines and `await` (spec §1, §3, §5, §8, §15)
-  - [ ] `async def` for file-level, nested, and method declarations;
+- [x] Coroutines and `await` (spec §1, §3, §5, §8, §15)
+  - [x] `async def` for file-level, nested, and method declarations;
     `Coroutine[T]` annotations; `async def` protocol methods as sugar for
     `-> Coroutine[T]`; `await` at its precedence level, only in async bodies,
     and no `yield` in them; the discard rule for coroutine types and unions,
     exempting type parameters
-  - [ ] Each coroutine a Lua coroutine emitted like a generator body; `await`
+  - [x] Each coroutine a Lua coroutine emitted like a generator body; `await`
     of a coroutine as a helper call that consumes it and runs it inline;
     `coroutine was already awaited or started`; async `main` and async
     `test_*` functions driven as the root task

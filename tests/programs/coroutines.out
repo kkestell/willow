@@ -1,0 +1,18 @@
+argument 1
+called
+echo 1
+1
+25
+a
+echo fixed
+fixed
+count 1
+count 2
+nested!
+caught outer
+echo finally
+finally
+caught inner
+25
+coroutine was already awaited or started
+done

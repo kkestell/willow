@@ -10,14 +10,15 @@ local set = lexer.set
 
 -- Reserved words with no construct in this slice.
 local unsupported = set([[
-async await case del from global match
+case del from global match
 ]])
 
 local compare_ops = set("== != < <= > >= is in")
-local type_names = set("int float bool str bytes None list dict tuple Iterable Iterator ContextManager Generator")
--- The built-in protocols, which take type arguments like a named type.
-local protocol_names = set("Iterable Iterator ContextManager Generator")
-local expression_starts = set("NAME INT FLOAT STRING FSTRING True False None int float str bytes ( [ { - + not")
+local type_names = set("int float bool str bytes None list dict tuple Iterable Iterator ContextManager Generator Coroutine")
+-- The built-in protocols and `Coroutine`, which take type arguments like a
+-- named type.
+local protocol_names = set("Iterable Iterator ContextManager Generator Coroutine")
+local expression_starts = set("NAME INT FLOAT STRING FSTRING True False None int float str bytes ( [ { - + not await")
 local simple_statements = { pass = "Pass", ["break"] = "Break", continue = "Continue" }
 
 local descriptions = {
@@ -387,13 +388,23 @@ function M.parse(tokens)
     end
   end
 
+  -- The operand of `await` is a postfix expression, so `await -x` and
+  -- `await await c` are errors.
+  local function parse_await()
+    local token = accept("await")
+    if token then
+      return ast.node("Await", token.span, { operand = parse_postfix() })
+    end
+    return parse_postfix()
+  end
+
   local function parse_unary()
     local token = peek()
     if token.kind == "-" or token.kind == "+" then
       advance()
       return ast.node("Unary", token.span, { op = token.kind, operand = parse_unary() })
     end
-    return parse_postfix()
+    return parse_await()
   end
 
   -- Returns a parser for one left-associative binary precedence level.
@@ -656,8 +667,8 @@ function M.parse(tokens)
       reject_chained_assignment()
       return node
     elseif expression.kind ~= "Call" and expression.kind ~= "MethodCall" and expression.kind ~= "CallValue"
-      and expression.kind ~= "SpecializedCall" then
-      diag.error(expression.span, "only calls can be used as statements")
+      and expression.kind ~= "SpecializedCall" and expression.kind ~= "Await" then
+      diag.error(expression.span, "only calls and await expressions can be used as statements")
     end
     return ast.node("CallStmt", expression.span, { call = expression })
   end
@@ -706,7 +717,7 @@ function M.parse(tokens)
     elseif kind == "try" then
       advance()
       return parse_try(token)
-    elseif kind == "def" then
+    elseif kind == "def" or kind == "async" then
       local fn = parse_function()
       return ast.node("FunctionDef", fn.span, { fn = fn, name = fn.name })
     end
@@ -834,7 +845,8 @@ function M.parse(tokens)
   -- A method's first parameter is `self`, which has no annotation; bind gives
   -- it the class's type. A `signature` ends at its return type, with no body.
   parse_function = function(method, signature)
-    advance()
+    local async = accept("async") ~= nil
+    expect("def")
     local name = expect("NAME", "a function name")
     local type_params = parse_type_params()
     expect("(")
@@ -895,6 +907,7 @@ function M.parse(tokens)
     end
     return ast.node("Function", name.span, {
       name = name.value, type_params = type_params, params = params, return_type = return_type, body = body,
+      async = async,
     })
   end
 
@@ -909,7 +922,7 @@ function M.parse(tokens)
     local methods = {}
     repeat
       local token = peek()
-      if token.kind ~= "def" then
+      if token.kind ~= "def" and token.kind ~= "async" then
         diag.error(token.span, "protocols hold only method signatures")
       end
       local method = parse_function(true, true)
@@ -951,7 +964,7 @@ function M.parse(tokens)
     local methods = {}
     repeat
       local field = peek()
-      if field.kind == "def" then
+      if field.kind == "def" or field.kind == "async" then
         methods[#methods + 1] = parse_function(true)
       else
         if field.kind ~= "NAME" or tokens[pos + 1].kind ~= ":" then
@@ -1010,7 +1023,7 @@ function M.parse(tokens)
     local token = peek()
     if token.kind == "import" then
       diag.error(token.span, "imports must come before declarations")
-    elseif token.kind == "def" then
+    elseif token.kind == "def" or token.kind == "async" then
       functions[#functions + 1] = parse_function()
     elseif token.kind == "class" then
       records[#records + 1] = parse_record()
