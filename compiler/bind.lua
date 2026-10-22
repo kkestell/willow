@@ -498,7 +498,7 @@ local function resolve_signature(fn, module)
 end
 
 -- The declaration kinds that name no function or class to call.
-local CANNOT_CALL = { Alias = true, Enum = true, Protocol = true }
+local CANNOT_CALL = { Alias = true, Constant = true, Enum = true, Protocol = true }
 
 local function is_generic(declaration)
   return declaration and (declaration.kind == "Function" or declaration.kind == "Record")
@@ -524,6 +524,8 @@ local function resolve_function(fn, scope, module)
       -- A qualified name reaches the function even where a local hides it.
       node.qualified = node.kind == "Field"
       node.kind, node.target, node.object = "FunctionValue", declaration, nil
+    elseif declaration.kind == "Constant" then
+      node.kind, node.value, node.object = "Float", declaration.value, nil
     elseif declaration.kind == "Record" then
       diag.error(node.span, "class '" .. name .. "' cannot be used as a value")
     elseif declaration.kind == "Builtin" and declaration.params then
@@ -677,6 +679,16 @@ local function resolve_function(fn, scope, module)
     elseif kind == "MethodCall" and enum_named(node.object, module, scope) then
       local enum = enum_named(node.object, module, scope)
       diag.error(node.span, "enum '" .. enum.type_name .. "' has no method '" .. node.name .. "'")
+    elseif kind == "MethodCall" and node.object.kind == "Name" and node.object.reserved and node.object.name == "bytes" then
+      -- `bytes.fromhex(...)` is the only static method of a type.
+      if node.name ~= "fromhex" then
+        diag.error(node.span, "type 'bytes' has no static method '" .. node.name .. "'")
+      end
+      node.kind, node.name, node.object = "Call", "bytes.fromhex", nil
+      node.target = builtins[node.name]
+      for _, arg in ipairs(node.args) do
+        resolve_expression(arg)
+      end
     elseif kind == "MethodCall" and module_path(node.object) then
       -- `module.name(...)` calls a function or constructs a record of that module.
       local path = module_path(node.object)

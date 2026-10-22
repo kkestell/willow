@@ -1,0 +1,18 @@
+a in
+b in
+a out
+b out
+c in
+d in
+c out
+d out
+semaphore released too many times
+semaphore value must be positive
+semaphore value must be positive
+waiter done
+permit intact
+late done
+permit restored
+granted done
+permit returned
+end

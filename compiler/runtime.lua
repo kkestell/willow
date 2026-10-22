@@ -36,21 +36,42 @@ local function optional_runtime(text)
 end
 
 local host_runtime = optional_runtime(read_runtime("runtime.host"))
+-- fs.lua uses host.lua's C declarations and exports.
+local fs_runtime = optional_runtime(read_runtime("runtime.fs"))
+fs_runtime.needs = { host_runtime }
 local aio_runtime = optional_runtime(read_runtime("runtime.aio"))
 -- `aio`'s TCP handles wait through host.lua's socket bodies.
 local aio_net_runtime = optional_runtime(read_runtime("runtime.aio_net"))
 aio_net_runtime.needs = { aio_runtime, host_runtime }
+-- `net.Reader` receives through host.lua's `net` operations.
+local net_reader_runtime = optional_runtime(read_runtime("runtime.net_reader"))
+net_reader_runtime.needs = { host_runtime }
+-- `subprocess`'s async operations use host.lua's process bodies.
+local aio_process_runtime = optional_runtime(read_runtime("runtime.aio_process"))
+aio_process_runtime.needs = { aio_runtime, host_runtime }
+-- The async requests suspend through `aio_sleep` and run the http helpers.
+local http_runtime = optional_runtime(read_runtime("runtime.http"))
+local http_async_runtime = optional_runtime(read_runtime("runtime.http_async"))
+http_async_runtime.needs = { aio_runtime, http_runtime }
 
 local optional_runtimes = {
   optional_runtime(read_runtime("runtime.case_data") .. read_runtime("runtime.case")),
   host_runtime,
+  fs_runtime,
   optional_runtime(read_runtime("runtime.bytes")),
+  optional_runtime(read_runtime("runtime.math")),
+  optional_runtime(read_runtime("runtime.str")),
+  optional_runtime(read_runtime("runtime.collections")),
   optional_runtime(read_runtime("runtime.io")),
   optional_runtime(read_runtime("runtime.cli")),
-  optional_runtime(read_runtime("runtime.http")),
+  http_runtime,
   optional_runtime(read_runtime("runtime.json")),
+  optional_runtime(read_runtime("runtime.random")),
   aio_runtime,
   aio_net_runtime,
+  net_reader_runtime,
+  aio_process_runtime,
+  http_async_runtime,
 }
 
 -- The generated reference to a helper named without its __wlo_ prefix.

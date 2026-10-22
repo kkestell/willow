@@ -686,7 +686,18 @@ Length, ordering, indexing, slicing, iteration, and the indexes returned by
 | `s.find(sub)` | `int` | Index of the first occurrence of `sub`, or `-1` |
 | `s.replace(old, new)` | `str` | `s` with every non-overlapping occurrence of `old`, from left to right, replaced by `new` |
 | `s.strip()` | `str` | `s` without leading and trailing ASCII whitespace |
-| `s.split(sep)` | `list[str]` | The pieces of `s` between occurrences of `sep` |
+| `s.lstrip()` | `str` | `s` without leading ASCII whitespace |
+| `s.rstrip()` | `str` | `s` without trailing ASCII whitespace |
+| `s.split(sep=None, maxsplit=-1)` | `list[str]` | The pieces of `s` between occurrences of `sep`, or between runs of ASCII whitespace when `sep` is `None` |
+| `s.rsplit(sep=None, maxsplit=-1)` | `list[str]` | Like `split`, but `maxsplit` limits the splits made from the right |
+| `s.splitlines(keepends=False)` | `list[str]` | The lines of `s`, ended by LF, CR, or CRLF, with the line endings kept if `keepends` is true |
+| `s.removeprefix(prefix)` | `str` | `s` without a leading `prefix`, removed at most once |
+| `s.removesuffix(suffix)` | `str` | `s` without a trailing `suffix`, removed at most once |
+| `s.isascii()` | `bool` | Every code point of `s` is below 128; true for the empty string |
+| `s.isspace()` | `bool` | `s` is not empty and has only ASCII whitespace |
+| `s.isdigit()` | `bool` | `s` is not empty and has only `0` through `9` |
+| `s.isalpha()` | `bool` | `s` is not empty and has only `A` through `Z` and `a` through `z` |
+| `s.isalnum()` | `bool` | `s` is not empty and has only ASCII letters and digits |
 | `s.lower()` | `str` | `s` converted to Unicode lowercase |
 | `s.upper()` | `str` | `s` converted to Unicode uppercase |
 | `s.ljust(width)` | `str` | `s` padded on the right with spaces to at least `width` code points |
@@ -697,13 +708,20 @@ Length, ordering, indexing, slicing, iteration, and the indexes returned by
 | `chr(n)` | `str` | The single-code-point string for code point `n` |
 
 These operations return the same results as in Python, except that `strip`
-removes only space, tab, LF, VT, FF, and CR. `split` with an empty separator
-raises `ValueError` with the message `empty separator`. `ord` of a string whose
+removes only space, tab, LF, VT, FF, and CR, as do `lstrip`, `rstrip`, and the
+`sep=None` form of `split` and `rsplit`. `split` and `rsplit` with an empty
+separator raise `ValueError` with the message `empty separator`. A negative
+`maxsplit` places no limit on the splits. `ord` of a string whose
 length is not 1 raises `ValueError` with the message `expected one character`.
 `chr` of a surrogate, or of a value outside the range 0 through 0x10FFFF, raises
 `ValueError` with the message `invalid code point`. An index outside the string
 raises `IndexError` with the message `string index out of range`. Strings cannot
 be modified by assigning to an index.
+
+The classification methods are ASCII only: `isdigit`, `isalpha`, `isalnum`, and
+`isspace` are false for any non-ASCII code point, as they are for the empty
+string. This differs from Python for characters such as `é` and `²`. Case
+conversion and code-point indexing are unchanged.
 
 `lower` and `upper` use the default full case mappings of Unicode 17.0,
 including the Final_Sigma rule for `Σ`. They apply no locale-specific rules and
@@ -822,6 +840,12 @@ print(data[:3].decode())    # caf
 | `data[i:j]` | `bytes` | The octets from index `i` up to `j` |
 | `s.encode()` | `bytes` | The UTF-8 encoding of the string `s` |
 | `data.decode()` | `str` | The text whose UTF-8 encoding is `data` |
+| `data.find(sub: bytes)` | `int` | The offset of the first occurrence of `sub`, or -1 |
+| `data.startswith(prefix: bytes)` | `bool` | Whether `data` begins with `prefix` |
+| `data.endswith(suffix: bytes)` | `bool` | Whether `data` ends with `suffix` |
+| `data.split(sep: bytes, maxsplit: int = -1)` | `list[bytes]` | The fields between occurrences of `sep` |
+| `data.hex()` | `str` | Two lowercase hex digits per octet |
+| `bytes.fromhex(text: str)` | `bytes` | The octets written as hex digit pairs in `text` |
 
 A `for` loop over a bytes value produces each octet as an `int`. Indexes and
 slices follow the same rules as for strings and lists. `bytes` raises
@@ -849,11 +873,17 @@ A stored `None` counts toward the collection's length, and a key whose value is
 | `xs.append(v)` | `None` | Add `v` to the end |
 | `xs.pop()` | `T` | Remove and return the last element |
 | `xs.sort(reverse=False, *, key=None)` | `None` | Sort the list in place |
+| `xs.extend(items)` | `None` | Add the elements of an `Iterable[T]` to the end |
+| `xs.reverse()` | `None` | Reverse the list in place |
 | `v in xs` | `bool` | Some element equals `v` |
 | `len(d)` | `int` | Number of entries |
 | `d[k]` | `V` | Value for key `k` |
 | `d[k] = v` | | Insert or replace the entry for `k` |
 | `d.get(k)` | `V \| None` | Value for `k`, or `None` if `k` is missing |
+| `d.get(k, default)` | `V`, or `V \| None` | Value for `k`, or `default` if `k` is missing |
+| `d.keys()` | `Iterator[K]` | The keys in insertion order |
+| `d.values()` | `Iterator[V]` | The values in key order |
+| `d.items()` | `Iterator[tuple[K, V]]` | The keys and values in key order |
 | `d.pop(k)` | `V` | Remove the entry for `k` and return its value |
 | `k in d` | `bool` | `k` is a key |
 
@@ -865,8 +895,22 @@ message `key not found` when `k` is missing. When `V` is already an optional
 type, `d.get(k)` has type `V`. `v in xs` requires an element type that supports
 `==`.
 
+`d.get(k, default)` takes a `default` of type `V` or `None`. It has type `V` when
+`default` is assignable to `V` and `V | None` otherwise, so a `None` default
+gives `V | None`. The default is used only for a missing key: a key whose stored
+value is `None` is present, and `get` returns that `None`. `get` does not accept
+other default types.
+
 Replacing the value of an existing key keeps the entry in its current position.
 A key that is removed and then inserted again moves to the end.
+
+`xs.extend(items)` takes an `Iterable[T]` of the list's element type `T`. It
+iterates `items` completely before changing `xs`, so `xs.extend(xs)` appends a
+copy of the original elements, and a failure while iterating leaves `xs`
+unchanged. `d.keys()`, `d.values()`, and `d.items()` return iterators over the
+dictionary, which follow the rules for iterating a dictionary directly: adding
+or removing a key before the iterator is exhausted raises `RuntimeError` with
+the message `dictionary changed size during iteration` at its next step.
 
 `sorted(items, reverse=False, *, key=None)` returns a new sorted list from an
 `Iterable[T]` (§3), and `xs.sort(reverse=False, *, key=None)` sorts a list in
@@ -887,6 +931,44 @@ Infinities and signed zeros follow the usual comparisons. NaN anywhere in a
 comparison key raises `ValueError` with the message `cannot sort NaN`. Key
 evaluation and validation failures do not reorder the input; other effects of
 callbacks are not undone.
+
+### Numeric and iterable functions
+
+These built-in functions work on numbers and on iterables (§3), which they
+iterate as `for` does. Parameters are named as written below; `min` and `max`
+take no keyword arguments. No function treats a value as true or false.
+
+| Function | Meaning |
+| --- | --- |
+| `abs(x)` | The absolute value of an `int` or `float`, of the same type |
+| `round(x: float) -> int` | The nearest integer, with ties to the even integer |
+| `min(items)`, `max(items)` | The least or greatest item of an `Iterable[T]` |
+| `min(a, b)`, `max(a, b)` | The lesser or greater of two operands of type `T` |
+| `sum(items)` | The total of an `Iterable[int]` as an `int`, or of an `Iterable[float]` as a `float` |
+| `any(items)`, `all(items)` | Whether some, or every, item of an `Iterable[bool]` is `True` |
+| `list(items) -> list[T]` | A new list of the items of an `Iterable[T]` |
+| `enumerate(items, start=0)` | An `Iterator[tuple[int, T]]` of positions and items |
+| `zip(a, b)` | An `Iterator[tuple[T, U]]` of pairs from an `Iterable[T]` and an `Iterable[U]` |
+
+`abs` of an `int` cannot overflow, since the `int` range is symmetric. `round`
+raises `ValueError` with the message `cannot round float to int` when `x` is NaN
+or infinite or the result is outside the `int` range.
+
+For `min` and `max`, `T` is one type that `sorted` accepts without a key: `int`,
+`float`, `str`, or a comparable tuple. Two operands must have the same type. The
+iterable form raises `ValueError` with the message `min() of an empty iterable`
+(or `max()`) when it has no items. NaN in any compared value, including a tuple
+position, raises `ValueError` with the message `cannot compare NaN`. Of equal
+values the first is returned. Arguments are evaluated once, from left to right.
+
+`sum` returns `0` or `0.0` for no items, and `int` addition raises
+`OverflowError` as `+` does. `any` and `all` stop at the first item that decides
+the result; their results for no items are `False` and `True`.
+
+`list` iterates its argument once. `enumerate` and `zip` are lazy: `enumerate`
+counts from `start`, which raises `OverflowError` if the count leaves the `int`
+range, and `zip` takes the next item of `a` and then of `b`, stopping when either
+is exhausted.
 
 ### Tuples and unpacking
 
@@ -1383,6 +1465,7 @@ the program reports `deadlock: all tasks are waiting` and exits with status 1.
 | `print(value) -> None` | Write a printable value and `\n` to stdout |
 | `input() -> str \| None` | The next line of stdin without its line ending, or `None` at end of input |
 | `len`, `range`, `int`, `float`, `str`, `bytes`, `ord`, `chr`, `isinstance`, `sorted` | See §4, §6, §7, and §8 |
+| `abs`, `round`, `min`, `max`, `sum`, `any`, `all`, `list`, `enumerate`, `zip` | See §7 |
 | `iter(value)` | Obtain the iterator of an iterable (§3) |
 | `next(iterator)` | Obtain its next value, or raise `StopIteration` (§3) |
 
@@ -1613,10 +1696,12 @@ async def main():
 | `task_group() -> TaskGroup` | Create an inactive, single-use task group |
 | `connect(host: str, port: int, timeout: float \| None = 30.0) -> Coroutine[Connection]` | Open a TCP connection |
 | `listen(host: str, port: int, backlog: int = 16) -> Listener` | Listen for TCP connections on `host` |
+| `semaphore(value: int = 1) -> Semaphore` | Create a semaphore with `value` permits |
 | `class Task[T]` | A handle to a scheduled task (§15) |
 | `class TaskGroup` | A scope owning concurrent tasks, entered with `async with` (§15) |
 | `class Connection` | A native type with the methods below |
 | `class Listener` | A native type with the methods below |
+| `class Semaphore` | A native type with the methods below |
 
 | Method | Meaning |
 | --- | --- |
@@ -1630,6 +1715,8 @@ async def main():
 | `Connection.exit(error: Exception \| None) -> None` | Close the connection |
 | `Listener.enter() -> Listener` | Return this open listener for scoped use |
 | `Listener.exit(error: Exception \| None) -> None` | Close the listener |
+| `Semaphore.acquire() -> Coroutine[None]` | Take a permit, waiting until one is available |
+| `Semaphore.release() -> None` | Return a permit |
 
 `sleep` validates its argument as `time.sleep` does. `await aio.sleep(0.0)`
 always suspends the current task, so other ready tasks run before it continues.
@@ -1651,6 +1738,27 @@ connection may run at the same time.
 Closing a handle wakes its pending operations, which raise `ValueError` with
 that handle's closed-handle message. An operation never acts on a handle other
 than its own.
+
+A semaphore limits how many tasks hold a permit at once. `semaphore` raises
+`ValueError` if `value` is not positive; `value` is also the most permits the
+semaphore can hold. `acquire` is a cancellation checkpoint even when a permit
+is free, but it suspends only when none is. Waiting tasks receive permits in
+the order they began waiting, and a task that arrives later never overtakes
+them. A task cancelled while waiting stops waiting without taking a permit; if
+the cancellation arrives after a `release` handed it a permit, the permit goes
+to the next waiter or back to the semaphore. `release` raises `ValueError` when
+every permit is already available. A permit belongs to no task: scope one with
+`try` and `finally`, releasing only after a successful `acquire`. A semaphore
+whose waiters can never be woken is reported as a deadlock (§10).
+
+```python
+async def fetch(limit: aio.Semaphore):
+    await limit.acquire()
+    try:
+        ...
+    finally:
+        limit.release()
+```
 
 ### `cli`
 
@@ -1765,6 +1873,16 @@ kind (`'<name>' is not an int argument`). Each call to `parse` returns a separat
 | `remove(path: str) -> None` | Remove a file or symlink |
 | `rmdir(path: str) -> None` | Remove an empty directory |
 | `rename(source: str, destination: str) -> None` | Rename a file or directory, replacing the destination where POSIX allows it |
+| `read_bytes(path: str) -> bytes` | The contents of the file, without decoding |
+| `write_bytes(path: str, data: bytes) -> None` | Create the file, or replace its contents, with `data` |
+| `copy_file(source: str, destination: str) -> None` | Copy the contents of a file, creating or replacing the destination |
+| `normpath(path: str) -> str` | `path` with redundant separators and `.` and `..` components removed |
+| `abspath(path: str) -> str` | `path` made absolute against the working directory and normalized |
+| `realpath(path: str) -> str` | The absolute path of an existing file with symlinks resolved |
+| `glob(pattern: str) -> list[str]` | The paths that match `pattern`, sorted by code point |
+| `walk(path: str) -> Iterator[tuple[str, list[str], list[str]]]` | The directory tree below `path`, one tuple of directory path, directory names, and other names per directory, top down |
+| `temp_file(prefix: str = "willow-", directory: str \| None = None) -> str` | Create a new empty file with a unique name and return its path |
+| `temp_dir(prefix: str = "willow-", directory: str \| None = None) -> str` | Create a new empty directory with a unique name and return its path |
 | `class Stat` | A class with the fields `kind: str`, `size: int`, and `modified: float` |
 
 Paths are strings. A relative path is relative to the working directory.
@@ -1776,6 +1894,42 @@ same way as Python's `posixpath`. They do not access the filesystem, follow
 symlinks, or resolve `..`. For example, `join("a", "")` is `a/`, `join("", "b")`
 is `b`, and a leading sequence of slashes is kept together, so `dirname("//a")`
 is `//`.
+
+`read_bytes` and `write_bytes` follow `read_file` and `write_file`, except that
+they do not decode. `copy_file` streams the data of `source` to `destination`,
+which it creates or truncates first. It does not copy permissions, ownership, or
+timestamps, and it does not replace the destination atomically. If `source` and
+`destination` are the same file, or `source` cannot be read, `copy_file` raises
+`OSError` before it changes the destination.
+
+`normpath` and `abspath` operate on the text of the path in the same way as
+Python's `posixpath`, so `normpath("")` is `.` and exactly two leading slashes are
+kept. `abspath` joins a relative path to the working directory first. `realpath`
+asks the system to resolve the path, which must exist, and raises `OSError`
+otherwise.
+
+`glob` matches `*`, `?`, and `[...]` (with `!` negating a set) within each path
+component. A backslash is an ordinary character, and `**` is not recursive. A
+name that starts with `.` is matched only by a component that starts with `.`.
+A pattern without wildcard characters matches itself when the path exists, a
+pattern ending with `/` matches directories, and a directory that cannot be read
+has no matches. A pattern with no matches gives an empty list.
+
+`walk` yields the starting directory and then each directory below it, parents
+before children, with each directory's entries sorted by code point. The two
+lists hold the names of the real directories and of every other entry. A symlink,
+even to a directory, is not a real directory: it is listed with the other entries
+and not entered. Each list is a snapshot, and changing it does not change which
+directories `walk` visits. The directory is read completely and closed before its
+tuple is yielded. A failure, including one for `path` itself, raises on the
+`next` call that reaches it.
+
+`temp_file` and `temp_dir` create the entry atomically in `directory`, or if it
+is `None`, in the directory named by the `TMPDIR` environment variable, or `/tmp`
+when that is unset or empty. Its name is `prefix` followed by six random
+characters. A `prefix` that contains `/` or a NUL character raises `ValueError`.
+The file is closed before `temp_file` returns. The program owns the entry and
+removes it with `remove` or `rmdir`.
 
 `Stat` is an ordinary class. `kind` is `file`, `directory`, `symlink`, or
 `other`. `size` is the size in bytes. `modified` is the time of the last
@@ -1798,8 +1952,9 @@ A path that contains a NUL character raises `ValueError` with the message
 `invalid UTF-8`. When the operating system reports a failure, the function raises
 `OSError` with a message that names the operation and the path and gives the
 system's reason. Examples are `cannot read <path>: <reason>`,
-`cannot write <path>: <reason>`, `cannot list <path>: <reason>`, and
-`cannot remove directory <path>: <reason>`.
+`cannot write <path>: <reason>`, `cannot list <path>: <reason>`,
+`cannot remove directory <path>: <reason>`, `cannot resolve <path>: <reason>`, and
+`cannot create temporary file in <directory>: <reason>`.
 
 ### `http`
 
@@ -1821,6 +1976,8 @@ def main():
 | --- | --- |
 | `request(method: str, url: str, headers: list[Header] \| None = None, body: bytes \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Response` | Make a request and read the whole response |
 | `download(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Download` | Send a `GET` request and save the response body to the file at `path` |
+| `request_async(method: str, url: str, headers: list[Header] \| None = None, body: bytes \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Coroutine[Response]` | `request` for tasks |
+| `download_async(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Coroutine[Download]` | `download` for tasks |
 | `header(headers: list[Header], name: str) -> str \| None` | The value of the first header named `name`, compared case-insensitively, or `None` |
 | `urlencode(values: dict[str, str]) -> str` | `values` encoded as `key=value` pairs joined with `&`, in insertion order |
 | `class Header` | A class with the fields `name: str` and `value: str` |
@@ -1888,6 +2045,15 @@ final response is not 2xx, `download` returns its status with `bytes_written`
 set to 0 and does not change `path`. If the download fails, the temporary file is
 removed. The body is written to the file as it arrives instead of being held in
 memory.
+
+`request_async` and `download_async` take the same parameters and defaults as
+`request` and `download`, return the same results, and raise the same errors,
+which are raised when the coroutine is awaited. The transfer advances in steps
+of at most 10 ms, between which other tasks run. A request that is cancelled
+releases its connection as a failed request does, and a cancelled download
+removes its temporary file and leaves `path` unchanged. Host name lookup is
+synchronous unless the system's libcurl resolves names in the background, and
+blocks every task while it runs. `timeout` applies as for `request`.
 
 ### `io`
 
@@ -2024,9 +2190,28 @@ the message `cannot encode <value>`, as in `cannot encode inf`.
 | Function | Meaning |
 | --- | --- |
 | `sqrt(x: float) -> float` | The square root of `x`, correctly rounded |
+| `floor(x: float) -> int` | The largest integer not greater than `x` |
+| `ceil(x: float) -> int` | The smallest integer not less than `x` |
+| `isfinite(x: float) -> bool` | Whether `x` is neither infinite nor NaN |
+| `isnan(x: float) -> bool` | Whether `x` is NaN |
+| `isinf(x: float) -> bool` | Whether `x` is positive or negative infinity |
+| `pow(x: float, y: float) -> float` | `x` raised to the power `y` |
+| `exp(x: float) -> float` | `e` raised to the power `x` |
+| `log(x: float) -> float` | The natural logarithm of `x` |
+| `log10(x: float) -> float` | The base-10 logarithm of `x` |
+| `sin(x: float)`, `cos(x: float)`, `tan(x: float) -> float` | Trigonometric functions of `x` in radians |
+| `asin(x: float)`, `acos(x: float)`, `atan(x: float) -> float` | Inverse trigonometric functions, in radians |
+| `atan2(y: float, x: float) -> float` | The angle in radians of the point `(x, y)` |
+
+`math` also provides the `float` constants `pi`, `e`, and `tau` (`2 * pi`).
+They are values, not functions, and cannot be assigned.
 
 `sqrt` follows IEEE 754: `sqrt(-0.0)` is `-0.0`, and the square root of a
-negative number or NaN is NaN.
+negative number or NaN is NaN. The other functions that return `float` follow
+the host's C math library in the same way: a domain error such as `log(-1.0)`
+is NaN, an overflow such as `exp(1000.0)` is infinity, and a result that is a
+zero keeps its sign. `floor` and `ceil` raise `ValueError` if `x` is NaN or
+infinite or the result is outside the range of `int`.
 
 ### `net`
 
@@ -2048,8 +2233,10 @@ def main():
 | --- | --- |
 | `connect(host: str, port: int, timeout: float \| None = 30.0) -> Connection` | Open a TCP connection |
 | `listen(host: str, port: int, backlog: int = 16) -> Listener` | Listen for TCP connections on `host` |
+| `reader(connection: Connection) -> Reader` | Buffer reads from `connection`, which the reader then owns |
 | `class Connection` | A native type with the methods below |
 | `class Listener` | A native type with the methods below |
+| `class Reader` | A native type with the methods below |
 
 | Method | Meaning |
 | --- | --- |
@@ -2063,6 +2250,11 @@ def main():
 | `Connection.exit(error: Exception \| None) -> None` | Close the connection |
 | `Listener.enter() -> Listener` | Return this open listener for scoped use |
 | `Listener.exit(error: Exception \| None) -> None` | Close the listener |
+| `Reader.read_exactly(size: int, timeout: float \| None = None) -> bytes` | Return exactly `size` bytes |
+| `Reader.read_until(separator: bytes, max_bytes: int = 1048576, timeout: float \| None = None) -> bytes` | Return the bytes through the next `separator` |
+| `Reader.close() -> None` | Close the reader and its connection |
+| `Reader.enter() -> Reader` | Return this open reader for scoped use |
+| `Reader.exit(error: Exception \| None) -> None` | Close the reader and its connection |
 
 A host is a host name, which is looked up with the system resolver, or a literal
 IPv4 or IPv6 address. Hosts are written in ASCII, and internationalized domain
@@ -2098,6 +2290,65 @@ inherit connections or listeners.
 `enter` rejects a closed or unusable handle with the same error as its other
 operations. `exit` has the same behavior as `close`.
 
+A `Reader` receives from its connection into a buffer and keeps the bytes a call
+did not return for the next call. Once a connection is given to `reader`, the
+program must not call `recv` on it, because the reader may hold bytes that
+`recv` would skip; closing the reader closes the connection. `reader` rejects a
+closed or unusable connection like `enter`.
+
+`read_exactly` returns `size` bytes, and empty bytes for a `size` of 0. If the
+peer closes the connection first, it raises `OSError` with a message that starts
+`unexpected end of stream`. `read_until` returns the bytes up to and including
+the first `separator`; a separator that ends exactly at `max_bytes` is found. If
+the peer closes the connection first, it returns the bytes that remain, which
+are empty when there are none. If `max_bytes` bytes arrive without a complete
+separator, it raises `ValueError` with a message that starts
+`separator not found`. A negative `size`, an empty `separator`, a `max_bytes`
+less than 1, and a timeout that is not finite and positive raise `ValueError`.
+
+The `timeout` of a `Reader` call covers the whole call, however many receives it
+takes, and expiry raises `TimeoutError` with a message such as
+`read_exactly timed out after <timeout> seconds`. Bytes already received stay
+buffered after a timeout, a size limit, or an early end of stream, so the next
+call sees them. Operations on a closed reader raise `ValueError` with the
+message `I/O operation on closed reader`.
+
+### `random`
+
+```python
+import random
+
+def main():
+    rng = random.generator(42)
+    print(rng.randint(1, 6))
+    items = ["a", "b", "c"]
+    rng.shuffle(items)
+    print(rng.choice(items))
+    key = random.secure_bytes(16)
+```
+
+| Declaration | Meaning |
+| --- | --- |
+| `generator(seed: int) -> Random` | A new pseudo-random generator started from `seed` |
+| `secure_bytes(size: int) -> bytes` | `size` bytes from the operating system's random source |
+| `class Random` | A native type with the methods below |
+
+| Method | Meaning |
+| --- | --- |
+| `Random.random() -> float` | The next float in `[0, 1)` |
+| `Random.randint(a: int, b: int) -> int` | The next integer from `a` through `b`, inclusive |
+| `Random.choice[T](items: list[T]) -> T` | A uniformly chosen element of `items` |
+| `Random.shuffle[T](items: list[T]) -> None` | Reorder `items` in place, uniformly at random |
+
+Each `Random` has its own state, so the same seed always produces the same
+sequence of results from the same calls, in this version of Willow. The
+sequence is not compatible with Python's. The generator is a small 32-bit PRNG
+for simulations, tests, and games. It is not secure; use `secure_bytes` for
+secrets. `randint` accepts any `a <= b` in the `int` range. `choice` of an empty
+list and `randint` with `a > b` raise `ValueError`. `secure_bytes` with a
+negative `size` raises `ValueError`, and a failure to read the random source
+raises `OSError`.
+
 ### `subprocess`
 
 ```python
@@ -2113,6 +2364,7 @@ def main():
 | Declaration | Meaning |
 | --- | --- |
 | `run(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Result` | Run a command and wait for it to finish |
+| `run_async(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Coroutine[Result]` | `run` for a task, without blocking other tasks |
 | `spawn(args: list[str], cwd: str \| None = None, env: dict[str, str] \| None = None, stdin: io.File \| None = None, stdout: io.File \| None = None, stderr: io.File \| None = None) -> Process` | Start a command and return without waiting for it |
 | `class Result` | A class with the fields `returncode: int`, `stdout: bytes \| None`, and `stderr: bytes \| None` |
 | `class Process` | A native type with the methods below |
@@ -2121,6 +2373,7 @@ def main():
 | --- | --- |
 | `poll() -> int \| None` | The exit status if the child has exited, otherwise `None` |
 | `wait(timeout: float \| None = None) -> int` | Wait for the child to exit and return its status |
+| `wait_async(timeout: float \| None = None) -> Coroutine[int]` | `wait` for a task, without blocking other tasks |
 | `terminate() -> None` | Send `SIGTERM` to the child |
 | `kill() -> None` | Send `SIGKILL` to the child |
 
@@ -2162,6 +2415,20 @@ Once a child's exit status has been collected, the `Process` remembers it, so
 `wait` with a `timeout` raises `TimeoutError` with the message
 `process did not exit within <timeout> seconds` and leaves the child running.
 Children are not stopped or waited for automatically.
+
+`run_async` and `wait_async` take the same arguments and give the same results
+and errors as `run` and `wait`, but only when the coroutine is awaited, and they
+suspend the calling task instead of blocking the program (§15). Each begins with
+an await checkpoint. `run_async` writes the input and collects the output
+without blocking, so other tasks run even while a command moves large amounts of
+data. It does not use threads: while the child runs, the task checks its pipes
+and its exit status at intervals of at most 10 ms, so the child's exit can be
+noticed up to 10 ms late. A `timeout` is a deadline for the whole operation.
+If `run_async` times out, is cancelled, or fails, it kills the child with
+`SIGKILL`, waits for it to exit, and closes its pipes before the original
+`TimeoutError` or cancellation continues; processes started by the child are
+not killed. `wait_async` is cancelled or times out like `wait`: it leaves the
+child running and owned by the caller.
 
 Before a child starts, stdout, stderr, and any `io.File` handles passed to
 `spawn` for writing are flushed. If flushing fails, the call raises `OSError` and

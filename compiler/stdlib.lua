@@ -42,6 +42,24 @@ local builtins = builtins_of({
     keyword_only = { [3] = true },
   },
   bytes = { params = { types.list(types.int) }, result = types.bytes },
+  -- `bytes.fromhex(text)`, which the binder resolves; the name is not an identifier.
+  ["bytes.fromhex"] = { params = { types.str }, names = { "text" }, result = types.bytes, helper = "bytes_fromhex" },
+  -- These are checked by name in check.lua: the result depends on the
+  -- argument types, and `min` and `max` take one or two arguments.
+  abs = { params = { "any" }, names = { "x" } },
+  round = { params = { types.float }, names = { "x" }, result = types.int },
+  min = { params = { "any", "any" } },
+  max = { params = { "any", "any" } },
+  sum = { params = { "any" }, names = { "items" } },
+  any = { params = { "any" }, names = { "items" }, result = types.bool },
+  all = { params = { "any" }, names = { "items" }, result = types.bool },
+  list = { params = { "any" }, names = { "items" } },
+  enumerate = {
+    params = { "any", types.int },
+    names = { "items", "start" },
+    defaults = { [2] = { kind = "Int", value = 0 } },
+  },
+  zip = { params = { "any", "any" }, names = { "a", "b" } },
 })
 M.builtins = builtins
 
@@ -226,6 +244,30 @@ local fs = provided("fs", {
   remove = { params = { types.str }, names = { "path" }, result = types.None },
   rmdir = { params = { types.str }, names = { "path" }, result = types.None },
   rename = { params = { types.str, types.str }, names = { "source", "destination" }, result = types.None },
+  read_bytes = { params = { types.str }, names = { "path" }, result = types.bytes },
+  write_bytes = { params = { types.str, types.bytes }, names = { "path", "data" }, result = types.None },
+  copy_file = { params = { types.str, types.str }, names = { "source", "destination" }, result = types.None },
+  normpath = { params = { types.str }, names = { "path" }, result = types.str },
+  abspath = { params = { types.str }, names = { "path" }, result = types.str },
+  realpath = { params = { types.str }, names = { "path" }, result = types.str },
+  glob = { params = { types.str }, names = { "pattern" }, result = types.list(types.str) },
+  walk = {
+    params = { types.str },
+    names = { "path" },
+    result = iterator_of(types.tuple({ types.str, types.list(types.str), types.list(types.str) })),
+  },
+  temp_file = {
+    params = { types.str, optional_str },
+    names = { "prefix", "directory" },
+    defaults = { [1] = { kind = "String", value = "willow-" }, [2] = { kind = "None" } },
+    result = types.str,
+  },
+  temp_dir = {
+    params = { types.str, optional_str },
+    names = { "prefix", "directory" },
+    defaults = { [1] = { kind = "String", value = "willow-" }, [2] = { kind = "None" } },
+    result = types.str,
+  },
 }, { Stat = stat })
 
 -- `aio.Task[T]`, an opaque generic handle like `Coroutine[T]`. A native
@@ -278,6 +320,11 @@ local aio_listener = native_record("aio", "Listener", "aio_listener", {
 scoped(aio_connection)
 scoped(aio_listener)
 
+local semaphore = native_record("aio", "Semaphore", "aio_semaphore", {
+  acquire = { params = {}, result = types.generic(M.coroutine, { types.None }) },
+  release = { params = {}, result = types.None },
+})
+
 local aio = provided("aio", {
   sleep = {
     params = { types.float }, names = { "seconds" }, result = types.generic(M.coroutine, { types.None }),
@@ -298,11 +345,57 @@ local aio = provided("aio", {
     result = aio_listener.type,
     helper = "aio_listen",
   },
-}, { Task = task, TaskGroup = task_group, Connection = aio_connection, Listener = aio_listener })
-
-local math = provided("math", {
-  sqrt = { params = { types.float }, names = { "x" }, result = types.float },
+  semaphore = {
+    params = { types.int }, names = { "value" }, defaults = { { kind = "Int", value = 1 } },
+    result = semaphore.type, helper = "aio_semaphore",
+  },
+}, {
+  Task = task, TaskGroup = task_group, Connection = aio_connection, Listener = aio_listener, Semaphore = semaphore,
 })
+
+local function math_function(params, names, result)
+  return { params = params, names = names, result = result }
+end
+
+local math_functions = {
+  sqrt = math_function({ types.float }, { "x" }, types.float),
+  floor = math_function({ types.float }, { "x" }, types.int),
+  ceil = math_function({ types.float }, { "x" }, types.int),
+  isfinite = math_function({ types.float }, { "x" }, types.bool),
+  isnan = math_function({ types.float }, { "x" }, types.bool),
+  isinf = math_function({ types.float }, { "x" }, types.bool),
+  pow = math_function({ types.float, types.float }, { "x", "y" }, types.float),
+  atan2 = math_function({ types.float, types.float }, { "y", "x" }, types.float),
+}
+for _, name in ipairs({ "exp", "log", "log10", "sin", "cos", "tan", "asin", "acos", "atan" }) do
+  math_functions[name] = math_function({ types.float }, { "x" }, types.float)
+end
+-- sqrt is a core helper; the rest are in runtime/math.lua.
+for name, target in pairs(math_functions) do
+  target.helper = name ~= "sqrt" and "math_" .. name or nil
+end
+
+-- A constant is a float value that binding replaces with its literal.
+local math = provided("math", math_functions, {
+  pi = { kind = "Constant", value = 3.141592653589793 },
+  e = { kind = "Constant", value = 2.718281828459045 },
+  tau = { kind = "Constant", value = 6.283185307179586 },
+})
+
+local random_T = types.typevar("T")
+local random = native_record("random", "Random", "random", {
+  random = { params = {}, result = types.float },
+  randint = { params = { types.int, types.int }, names = { "a", "b" }, result = types.int },
+  choice = { params = { types.list(random_T) }, names = { "items" }, result = random_T, typevars = { random_T } },
+  shuffle = {
+    params = { types.list(random_T) }, names = { "items" }, result = types.None, typevars = { random_T },
+  },
+})
+
+local random_module = provided("random", {
+  generator = { params = { types.int }, names = { "seed" }, result = random.type, helper = "random_generator" },
+  secure_bytes = { params = { types.int }, names = { "size" }, result = types.bytes, helper = "random_secure_bytes" },
+}, { Random = random })
 
 local time = provided("time", {
   time = { params = {}, result = types.float },
@@ -345,6 +438,12 @@ local process = native_record("subprocess", "Process", "process", {
     defaults = { { kind = "None" } },
     result = types.int,
   },
+  wait_async = {
+    params = { optional_float },
+    names = { "timeout" },
+    defaults = { { kind = "None" } },
+    result = types.generic(M.coroutine, { types.int }),
+  },
   terminate = { params = {}, result = types.None },
   kill = { params = {}, result = types.None },
 })
@@ -363,6 +462,19 @@ local subprocess = provided("subprocess", {
     },
     result = result.type,
     helper = "process_run",
+  },
+  run_async = {
+    params = { types.list(types.str), optional_bytes, types.bool, optional_str, optional_env, optional_float },
+    names = { "args", "input", "capture_output", "cwd", "env", "timeout" },
+    defaults = {
+      [2] = { kind = "None" },
+      [3] = { kind = "Bool", value = false },
+      [4] = { kind = "None" },
+      [5] = { kind = "None" },
+      [6] = { kind = "None" },
+    },
+    result = types.generic(M.coroutine, { result.type }),
+    helper = "process_run_async",
   },
   spawn = {
     params = { types.list(types.str), optional_str, optional_env, optional_file, optional_file, optional_file },
@@ -445,32 +557,37 @@ local response = provided_record("http", "Response", {
 local download = provided_record("http", "Download", {
   { "status", types.int }, { "headers", headers }, { "url", types.str }, { "bytes_written", types.int },
 })
+local request_signature = {
+  params = { types.str, types.str, optional_headers, optional_bytes, types.float, types.bool, optional_str },
+  names = { "method", "url", "headers", "body", "timeout", "follow_redirects", "ca_file" },
+  defaults = {
+    [3] = { kind = "None" },
+    [4] = { kind = "None" },
+    [5] = { kind = "Float", value = 30.0 },
+    [6] = { kind = "Bool", value = true },
+    [7] = { kind = "None" },
+  },
+}
+local download_signature = {
+  params = { types.str, types.str, optional_headers, types.float, types.bool, optional_str },
+  names = { "url", "path", "headers", "timeout", "follow_redirects", "ca_file" },
+  defaults = {
+    [3] = { kind = "None" },
+    [4] = { kind = "Float", value = 30.0 },
+    [5] = { kind = "Bool", value = true },
+    [6] = { kind = "None" },
+  },
+}
+-- A signature of `base` with another result and helper.
+local function with_result(base, result, helper)
+  return { params = base.params, names = base.names, defaults = base.defaults, result = result, helper = helper }
+end
 local http = provided("http", {
-  request = {
-    params = { types.str, types.str, optional_headers, optional_bytes, types.float, types.bool, optional_str },
-    names = { "method", "url", "headers", "body", "timeout", "follow_redirects", "ca_file" },
-    defaults = {
-      [3] = { kind = "None" },
-      [4] = { kind = "None" },
-      [5] = { kind = "Float", value = 30.0 },
-      [6] = { kind = "Bool", value = true },
-      [7] = { kind = "None" },
-    },
-    result = response.type,
-    helper = "http_request",
-  },
-  download = {
-    params = { types.str, types.str, optional_headers, types.float, types.bool, optional_str },
-    names = { "url", "path", "headers", "timeout", "follow_redirects", "ca_file" },
-    defaults = {
-      [3] = { kind = "None" },
-      [4] = { kind = "Float", value = 30.0 },
-      [5] = { kind = "Bool", value = true },
-      [6] = { kind = "None" },
-    },
-    result = download.type,
-    helper = "http_download",
-  },
+  request = with_result(request_signature, response.type, "http_request"),
+  request_async = with_result(request_signature, types.generic(M.coroutine, { response.type }), "http_request_async"),
+  download = with_result(download_signature, download.type, "http_download"),
+  download_async = with_result(download_signature, types.generic(M.coroutine, { download.type }),
+    "http_download_async"),
   header = {
     params = { headers, types.str },
     names = { "headers", "name" },
@@ -526,8 +643,24 @@ local listener = native_record("net", "Listener", "net_listener", {
   local_port = { params = {}, result = types.int },
   close = { params = {}, result = types.None },
 })
+local reader = native_record("net", "Reader", "net_reader", {
+  read_exactly = {
+    params = { types.int, optional_float },
+    names = { "size", "timeout" },
+    defaults = { [2] = { kind = "None" } },
+    result = types.bytes,
+  },
+  read_until = {
+    params = { types.bytes, types.int, optional_float },
+    names = { "separator", "max_bytes", "timeout" },
+    defaults = { [2] = { kind = "Int", value = 1048576 }, [3] = { kind = "None" } },
+    result = types.bytes,
+  },
+  close = { params = {}, result = types.None },
+})
 scoped(connection)
 scoped(listener)
+scoped(reader)
 local net = provided("net", {
   connect = {
     params = { types.str, types.int, optional_float },
@@ -543,7 +676,13 @@ local net = provided("net", {
     result = listener.type,
     helper = "net_listen",
   },
-}, { Connection = connection, Listener = listener })
+  reader = {
+    params = { connection.type },
+    names = { "connection" },
+    result = reader.type,
+    helper = "net_reader",
+  },
+}, { Connection = connection, Listener = listener, Reader = reader })
 
 -- Run-time types of built-in values that protocol dispatch finds converters
 -- for, by their dispatch tags, which no class can have. Programs cannot name
@@ -583,6 +722,7 @@ M.modules = {
   json = json,
   math = math,
   net = net,
+  random = random_module,
   subprocess = subprocess,
   sys = sys,
   terminal = terminal,
