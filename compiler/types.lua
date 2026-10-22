@@ -78,17 +78,25 @@ function M.callable(params, result)
   }
 end
 
--- The type of a declared function as a value. It is compared by identity, so
--- calls through it use the declaration's own parameters.
+-- The type of a declared function as a value, retaining its full call signature.
 -- A `bound` method keeps its receiver, so calls skip its `self` parameter.
-function M.func(decl, bound)
-  local name = bound and decl.class.type_name .. "." .. decl.name or decl.type_name
-  return { kind = "function", fn = decl, bound = bound, name = "function " .. name }
+-- A generic receiver specializes the signature and participates in type identity.
+function M.func(decl, bound, receiver)
+  local name = bound and (receiver and receiver.name or decl.class.type_name) .. "." .. decl.name or decl.type_name
+  local signature = receiver and M.method(receiver, decl.name)
+  return {
+    kind = "function", fn = decl, bound = bound, name = "function " .. name,
+    receiver = receiver, params = signature and signature.params, result = signature and signature.result,
+  }
 end
 
 -- The parameters a call through function type `t` binds.
 function M.params(t)
-  return t.bound and { unpack(t.fn.params, 2) } or t.fn.params
+  return t.params or (t.bound and { unpack(t.fn.params, 2) } or t.fn.params)
+end
+
+function M.result(t)
+  return t.result or t.fn.return_type
 end
 
 -- A type parameter as its declaration's body sees it: compared by identity,
@@ -206,6 +214,9 @@ local function same(a, b, assumed)
   if a == b then
     return true
   end
+  if a.kind == "function" and b.kind == "function" and a.receiver and b.receiver then
+    return a.fn == b.fn and same(a.receiver, b.receiver, assumed)
+  end
   if a.kind ~= b.kind
     or (a.kind == "record" or a.kind == "protocol") and not (a.args and b.args and M.generic_decl(a) == M.generic_decl(b))
     or a.kind == "function" or a.kind == "typevar" or SCALARS[a.kind] then
@@ -260,7 +271,7 @@ end
 local function serves(target, source)
   local params, result = source.params, source.result
   if source.kind == "function" then
-    params, result = {}, source.fn.return_type
+    params, result = {}, M.result(source)
     for i, param in ipairs(M.params(source)) do
       if i <= #target.params and param.keyword_only or i > #target.params and not param.default then
         return false

@@ -79,7 +79,7 @@ end
 local function adapter(source, target)
   local params, result, defaults = source.params, source.result, {}
   if source.kind == "function" then
-    params, result = {}, source.fn.return_type
+    params, result = {}, types.result(source)
     for i, param in ipairs(types.params(source)) do
       params[i], defaults[i] = param.type, param.default
     end
@@ -511,7 +511,8 @@ local function lower_function(fn, sites, helpers, protocols)
       -- Creating a closure has no effects, so it is set into a temporary first.
       return spill({ kind = "Closure", fn = lower_function(node.fn, sites, helpers, protocols) }, depth)
     elseif kind == "FunctionValue" then
-      local value = { kind = "FunctionValue", target = node.target, qualified = node.qualified }
+      local value = node.symbol and { kind = "Local", symbol = node.symbol }
+        or { kind = "FunctionValue", target = node.target, qualified = node.qualified }
       -- A specialized generic function takes its callable's representation.
       return node.target.typevars and convert(value, node.target.value_type, node.type) or value
     elseif kind == "BuiltinValue" then

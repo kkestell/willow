@@ -874,12 +874,33 @@ return {
       check_errors(in_main("q: (int) -> str = identity", N)))
   end,
 
+  nested_generic_values = function()
+    local nested = "def identity[T](x: T) -> T:\n    return x\n"
+    eq("4:9: generic function 'identity' needs type arguments or an expected callable type",
+      check_errors(in_main(nested .. "f = identity")))
+    eq("4:23: cannot infer type parameter 'T' of 'identity' from int and str",
+      check_errors(in_main(nested .. "f: (int) -> str = identity")))
+    eq("4:9: 'identity' expects 1 type argument, received 2",
+      check_errors(in_main(nested .. "f = identity[int, str]")))
+    eq("2:9: variable 'identity' may be used before assignment",
+      check_errors(in_main("f = identity[int]\n" .. nested)))
+    eq("2:23: variable 'identity' may be used before assignment",
+      check_errors(in_main("f: (int) -> int = identity\n" .. nested)))
+  end,
+
   generic_classes = function()
     local B = "class Box[T]:\n    value: T\n\n    def get(self) -> T:\n        return self.value\n"
     eq("2:26: expected Box[int | None], received Box[int]", check_errors(in_main("b: Box[int | None] = Box[int](1)", B)))
     eq("2:25: expected int, received str", check_errors(in_main("Box[int](1).value = 'a'", B)))
     eq("2:21: expected str, received int", check_errors(in_main("x: str = Box(1).get()", B)))
-    eq("2:16: methods of generic classes cannot be used as values", check_errors(in_main("f = Box(1).get", B)))
+    check_source(in_main("f = Box(1).get\nx: int = f()", B))
+    eq("3:14: expected str, received int", check_errors(in_main("f = Box(1).get\nx: str = f()", B)))
+    eq("2:27: expected () -> str, received function Box[int].get",
+      check_errors(in_main("f: () -> str = Box(1).get", B)))
+    local S = B .. "    def set(self, value: T):\n        self.value = value\n"
+    eq("3:7: expected int, received str", check_errors(in_main("f = Box(1).set\nf('bad')", S)))
+    eq("3:18: expected function Box[int].set, received function Box[str].set",
+      check_errors(in_main("f = Box(1).set\nf = Box('s').set", S)))
     local P = "class P:\n    n: int\n\n    def pick[U](self, u: U) -> U:\n        return u\n"
     eq("2:14: generic method 'pick' cannot be used as a value", check_errors(in_main("f = P(1).pick", P)))
     eq("4:23: operator '+' cannot be applied to T and T",

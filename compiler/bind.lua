@@ -581,7 +581,7 @@ local function resolve_function(fn, scope, module)
         diag.error(node.span, "unknown name '" .. node.name .. "'")
       end
       if is_generic(node.symbol.def) and not node.is_callee then
-        diag.error(node.span, "generic function '" .. node.name .. "' cannot be used as a value")
+        node.kind, node.target = "FunctionValue", node.symbol.def
       end
       if node.symbol.owner ~= fn then
         capture(node.symbol, node.span)
@@ -622,13 +622,18 @@ local function resolve_function(fn, scope, module)
       resolve_expression(node)
     elseif kind == "Specialized" then
       -- A generic function specialized as a value, or else an index.
-      local callee, declaration = node.callee
+      local callee, declaration, symbol = node.callee
       if callee.kind == "Name" then
-        declaration = not scope[callee.name] and declarations[callee.name]
+        symbol = scope[callee.name]
+        declaration = symbol and symbol.def or not symbol and declarations[callee.name]
       elseif module_path(callee.object) and imports[module_path(callee.object)] then
         declaration = lookup(module, imports[module_path(callee.object)], callee.name, callee.span)
       end
       if declaration and declaration.kind == "Function" and is_generic(declaration) then
+        if symbol then
+          resolve_expression(callee)
+          node.symbol = symbol
+        end
         for i, arg in ipairs(node.type_args) do
           node.type_args[i] = resolve_type(arg, module)
         end

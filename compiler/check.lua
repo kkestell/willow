@@ -510,7 +510,7 @@ local function collect(param, arg, candidates)
   elseif param.kind == "callable" and (arg.kind == "callable" or arg.kind == "function") then
     local params, result = arg.params, arg.result
     if arg.kind == "function" then
-      params, result = {}, arg.fn.return_type
+      params, result = {}, types.result(arg)
       for i, p in ipairs(types.params(arg)) do
         params[i] = p.type
       end
@@ -803,7 +803,7 @@ local function check_function(fn, entry)
     elseif key.kind == "BuiltinValue" then
       key_type = check_expression(key, state, types.callable({ item }, key.target.result or types.None))
     end
-    local result = key_type.kind == "callable" and key_type.result or key_type.kind == "function" and key_type.fn.return_type
+    local result = key_type.kind == "callable" and key_type.result or key_type.kind == "function" and types.result(key_type)
     if not result then
       diag.error(key.span, "a sort key must be a function, received " .. key_type.name)
     elseif not types.ordered(result, result) then
@@ -910,6 +910,9 @@ local function check_function(fn, entry)
     local kind = node.kind
     local type
     local true_facts, false_facts = NO_FACTS, NO_FACTS
+    if kind == "FunctionValue" and node.symbol and not state[node.symbol] then
+      diag.error(node.span, "variable '" .. node.symbol.name .. "' may be used before assignment")
+    end
     if kind == "Int" then
       type = types.int
     elseif kind == "Float" then
@@ -1190,7 +1193,7 @@ local function check_function(fn, entry)
         if inferred then
           map = infer_call(node, name, params, callee.fn, state, expected)
         end
-        type = specialized(callee.fn.return_type, map)
+        type = specialized(types.result(callee), map)
       elseif callee.kind == "callable" then
         -- A callable takes exactly its listed positional arguments.
         params, type = {}, callee.result
@@ -1209,12 +1212,14 @@ local function check_function(fn, entry)
       -- Reading a method gives it bound to the object.
       local object = check_expression(node.object, state)
       node.method = class_method(object, node.name)
-      if node.method and object.args then
-        diag.error(node.span, "methods of generic classes cannot be used as values")
-      elseif node.method and node.method.typevars then
+      if node.method and node.method.typevars then
         diag.error(node.span, "generic method '" .. node.name .. "' cannot be used as a value")
       end
-      type = node.method and node.method.value_type or field_type(node, object)
+      if node.method then
+        type = object.args and types.func(node.method, true, object) or node.method.value_type
+      else
+        type = field_type(node, object)
+      end
     elseif kind == "FString" then
       -- Literal text is a String part.
       for i, part in ipairs(node.parts) do

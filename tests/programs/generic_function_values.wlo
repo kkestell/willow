@@ -1,0 +1,72 @@
+class Box[T]:
+    value: T
+
+    def get(self) -> T:
+        return self.value
+
+    def replace(self, value: T, *, keep: bool = False) -> T:
+        previous = self.value
+        if not keep:
+            self.value = value
+        return previous
+
+def make_box(events: list[int]) -> Box[float]:
+    events.append(1)
+    return Box(1.5)
+
+def apply[T](f: () -> T) -> T:
+    return f()
+
+def make_tagged() -> (float) -> tuple[float, str]:
+    prefix = "before"
+
+    def tagged[T](value: T, suffix: str = "!") -> tuple[T, str]:
+        return (value, prefix + suffix)
+
+    explicit = tagged[float]
+    prefix = "after"
+    assert explicit(2.5) == (2.5, "after!")
+
+    def capture() -> (float) -> tuple[float, str]:
+        return tagged
+
+    return capture()
+
+def main():
+    events: list[int] = []
+    get = make_box(events).get
+    assert get() == 1.5
+    assert get() == 1.5
+    assert len(events) == 1
+
+    box = Box(2.5)
+    get = box.get
+    replace = box.replace
+    assert replace(keep=True, value=3.5) == 2.5
+    assert get() == 2.5
+    assert replace(4.5) == 2.5
+    assert get() == 4.5
+    assert apply(box.get) == 4.5
+
+    # Callable conversion keeps the specialized result and omitted default.
+    wide: () -> int | float = box.get
+    value = wide()
+    assert isinstance(value, float)
+    assert value == 4.5
+    change: (float) -> float = box.replace
+    assert change(5.5) == 4.5
+    assert get() == 5.5
+    readers = [box.get, Box(6.5).get]
+    assert readers[1]() == 6.5
+
+    # The specialized value retains its closure after its enclosing call returns.
+    tagged = make_tagged()
+    assert tagged(7.5) == (7.5, "after!")
+
+    def first[T](items: list[T]) -> T:
+        return items[0]
+
+    inferred: (list[int]) -> int = first
+    explicit = first[str]
+    assert inferred([8]) == 8
+    assert explicit(["ok"]) == "ok"
