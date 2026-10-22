@@ -1765,6 +1765,16 @@ kind (`'<name>' is not an int argument`). Each call to `parse` returns a separat
 | `remove(path: str) -> None` | Remove a file or symlink |
 | `rmdir(path: str) -> None` | Remove an empty directory |
 | `rename(source: str, destination: str) -> None` | Rename a file or directory, replacing the destination where POSIX allows it |
+| `read_bytes(path: str) -> bytes` | The contents of the file, without decoding |
+| `write_bytes(path: str, data: bytes) -> None` | Create the file, or replace its contents, with `data` |
+| `copy_file(source: str, destination: str) -> None` | Copy the contents of a file, creating or replacing the destination |
+| `normpath(path: str) -> str` | `path` with redundant separators and `.` and `..` components removed |
+| `abspath(path: str) -> str` | `path` made absolute against the working directory and normalized |
+| `realpath(path: str) -> str` | The absolute path of an existing file with symlinks resolved |
+| `glob(pattern: str) -> list[str]` | The paths that match `pattern`, sorted by code point |
+| `walk(path: str) -> Iterator[tuple[str, list[str], list[str]]]` | The directory tree below `path`, one tuple of directory path, directory names, and other names per directory, top down |
+| `temp_file(prefix: str = "willow-", directory: str \| None = None) -> str` | Create a new empty file with a unique name and return its path |
+| `temp_dir(prefix: str = "willow-", directory: str \| None = None) -> str` | Create a new empty directory with a unique name and return its path |
 | `class Stat` | A class with the fields `kind: str`, `size: int`, and `modified: float` |
 
 Paths are strings. A relative path is relative to the working directory.
@@ -1776,6 +1786,42 @@ same way as Python's `posixpath`. They do not access the filesystem, follow
 symlinks, or resolve `..`. For example, `join("a", "")` is `a/`, `join("", "b")`
 is `b`, and a leading sequence of slashes is kept together, so `dirname("//a")`
 is `//`.
+
+`read_bytes` and `write_bytes` follow `read_file` and `write_file`, except that
+they do not decode. `copy_file` streams the data of `source` to `destination`,
+which it creates or truncates first. It does not copy permissions, ownership, or
+timestamps, and it does not replace the destination atomically. If `source` and
+`destination` are the same file, or `source` cannot be read, `copy_file` raises
+`OSError` before it changes the destination.
+
+`normpath` and `abspath` operate on the text of the path in the same way as
+Python's `posixpath`, so `normpath("")` is `.` and exactly two leading slashes are
+kept. `abspath` joins a relative path to the working directory first. `realpath`
+asks the system to resolve the path, which must exist, and raises `OSError`
+otherwise.
+
+`glob` matches `*`, `?`, and `[...]` (with `!` negating a set) within each path
+component. A backslash is an ordinary character, and `**` is not recursive. A
+name that starts with `.` is matched only by a component that starts with `.`.
+A pattern without wildcard characters matches itself when the path exists, a
+pattern ending with `/` matches directories, and a directory that cannot be read
+has no matches. A pattern with no matches gives an empty list.
+
+`walk` yields the starting directory and then each directory below it, parents
+before children, with each directory's entries sorted by code point. The two
+lists hold the names of the real directories and of every other entry. A symlink,
+even to a directory, is not a real directory: it is listed with the other entries
+and not entered. Each list is a snapshot, and changing it does not change which
+directories `walk` visits. The directory is read completely and closed before its
+tuple is yielded. A failure, including one for `path` itself, raises on the
+`next` call that reaches it.
+
+`temp_file` and `temp_dir` create the entry atomically in `directory`, or if it
+is `None`, in the directory named by the `TMPDIR` environment variable, or `/tmp`
+when that is unset or empty. Its name is `prefix` followed by six random
+characters. A `prefix` that contains `/` or a NUL character raises `ValueError`.
+The file is closed before `temp_file` returns. The program owns the entry and
+removes it with `remove` or `rmdir`.
 
 `Stat` is an ordinary class. `kind` is `file`, `directory`, `symlink`, or
 `other`. `size` is the size in bytes. `modified` is the time of the last
@@ -1798,8 +1844,9 @@ A path that contains a NUL character raises `ValueError` with the message
 `invalid UTF-8`. When the operating system reports a failure, the function raises
 `OSError` with a message that names the operation and the path and gives the
 system's reason. Examples are `cannot read <path>: <reason>`,
-`cannot write <path>: <reason>`, `cannot list <path>: <reason>`, and
-`cannot remove directory <path>: <reason>`.
+`cannot write <path>: <reason>`, `cannot list <path>: <reason>`,
+`cannot remove directory <path>: <reason>`, `cannot resolve <path>: <reason>`, and
+`cannot create temporary file in <directory>: <reason>`.
 
 ### `http`
 
