@@ -1,0 +1,26 @@
+. a/b ../.. /
+//b /a a/b .
+True /a/b
+True directory
+True True
+0
+True
+True
+True 0
+0
+same: True
+393216
+True
+True True
+/sub [deep] [.hidden,a.txt]
+/sub/deep [] [b.txt,c.log]
+True
+1 True
+True
+[/sub/a.txt,/sub/deep] [/sub/.hidden] [/sub/a.txt]
+[/sub/deep/b.txt,/sub/deep/c.log] [/sub/deep] [/sub/deep/] [] [/sub/a.txt]
+[] []
+False
+prefix must be a single path component
+True
+True
