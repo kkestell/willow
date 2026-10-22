@@ -40,6 +40,9 @@ local aio_runtime = optional_runtime(read_runtime("runtime.aio"))
 -- `aio`'s TCP handles wait through host.lua's socket bodies.
 local aio_net_runtime = optional_runtime(read_runtime("runtime.aio_net"))
 aio_net_runtime.needs = { aio_runtime, host_runtime }
+-- `net.Reader` receives through host.lua's `net` operations.
+local net_reader_runtime = optional_runtime(read_runtime("runtime.net_reader"))
+net_reader_runtime.needs = { host_runtime }
 
 local optional_runtimes = {
   optional_runtime(read_runtime("runtime.case_data") .. read_runtime("runtime.case")),
@@ -51,6 +54,7 @@ local optional_runtimes = {
   optional_runtime(read_runtime("runtime.json")),
   aio_runtime,
   aio_net_runtime,
+  net_reader_runtime,
 }
 
 -- The generated reference to a helper named without its __wlo_ prefix.
