@@ -119,28 +119,28 @@ push to `main` changes the compiler, the runtime, or the benchmarks, and it can
 be started by hand from the Actions tab.
 
 <!-- benchmarks:start -->
-Seconds of wall-clock time, best of 3 runs, on AMD EPYC 7763 64-Core Processor, Linux. In
+Seconds of wall-clock time, best of 3 runs, on AMD EPYC 9V45 96-Core Processor, Linux. In
 parentheses is how many times faster Willow is than Python.
 
 | Benchmark (size) | C | LuaJIT | Python | Willow (vs Python) |
 |---|---:|---:|---:|---:|
-| n-body (5,000,000) | 0.34 | 0.81 | 27.13 | 1.30 (20.9x) |
-| spectral-norm (2,000) | 0.23 | 0.26 | 27.70 | 1.01 (27.5x) |
-| fannkuch-redux (10) | 0.22 | 0.51 | 6.51 | 0.75 (8.7x) |
-| binary-trees (18) | 1.13 | 7.28 | 31.35 | 6.36 (4.9x) |
-| fasta (2,500,000) | 0.43 | 1.04 | 5.47 | 4.21 (1.3x) |
-| mandelbrot (2,500) | 0.45 | 0.48 | 18.60 | 0.70 (26.7x) |
-| k-nucleotide (2,500,000) | 0.73 | 0.56 | 3.66 | 1.35 (2.7x) |
-| reverse-complement (5,000,000) | 0.15 | 3.06 | 0.62 | 7.96 (0.1x) |
-| recursive (9) | 0.08 | 0.32 | 9.73 | 0.41 (24.0x) |
-| nsieve (11) | 0.15 | 0.73 | 4.00 | 0.84 (4.8x) |
-| matrix (10,000) | 0.12 | 0.54 | 16.64 | 1.53 (10.9x) |
-| methcall (50,000,000) | 0.31 | 0.65 | 9.92 | 1.19 (8.3x) |
-| except (1,000,000) | 0.04 | 1.75 | 0.74 | 10.62 (0.1x) |
-| heapsort (2,000,000) | 0.37 | 0.71 | 7.83 | 1.03 (7.6x) |
-| hash2 (5,000) | 0.96 | 0.47 | 7.63 | 3.08 (2.5x) |
-| sumcol (10,000,000) | 0.30 | 0.81 | 1.38 | 3.46 (0.4x) |
-| raytracer (200) | 0.21 | 0.75 | 17.45 | 0.97 (18.0x) |
+| n-body (5,000,000) | 0.22 | 0.47 | 13.77 | 0.74 (18.6x) |
+| spectral-norm (2,000) | 0.15 | 0.16 | 16.06 | 0.58 (27.9x) |
+| fannkuch-redux (10) | 0.19 | 0.37 | 3.67 | 0.49 (7.5x) |
+| binary-trees (18) | 0.92 | 5.61 | 38.00 | 4.43 (8.6x) |
+| fasta (2,500,000) | 0.30 | 0.68 | 2.96 | 2.43 (1.2x) |
+| mandelbrot (2,500) | 0.30 | 0.33 | 10.54 | 0.47 (22.6x) |
+| k-nucleotide (2,500,000) | 0.40 | 0.45 | 2.20 | 0.94 (2.4x) |
+| reverse-complement (5,000,000) | 0.06 | 1.65 | 0.32 | 4.81 (0.1x) |
+| recursive (9) | 0.05 | 0.19 | 6.95 | 0.23 (30.5x) |
+| nsieve (11) | 0.07 | 0.39 | 3.98 | 0.43 (9.4x) |
+| matrix (10,000) | 0.08 | 0.31 | 8.51 | 0.84 (10.1x) |
+| methcall (50,000,000) | 0.21 | 0.38 | 5.21 | 0.75 (6.9x) |
+| except (1,000,000) | 0.03 | 1.00 | 0.41 | 6.09 (0.1x) |
+| heapsort (2,000,000) | 0.30 | 0.68 | 7.07 | 0.89 (7.9x) |
+| hash2 (5,000) | 0.45 | 0.26 | 4.16 | 1.91 (2.2x) |
+| sumcol (10,000,000) | 0.18 | 0.49 | 0.73 | 1.86 (0.4x) |
+| raytracer (200) | 0.10 | 0.43 | 8.63 | 0.54 (15.9x) |
 <!-- benchmarks:end -->
 
 ## Editor support
