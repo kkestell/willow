@@ -553,8 +553,24 @@ local listener = native_record("net", "Listener", "net_listener", {
   local_port = { params = {}, result = types.int },
   close = { params = {}, result = types.None },
 })
+local reader = native_record("net", "Reader", "net_reader", {
+  read_exactly = {
+    params = { types.int, optional_float },
+    names = { "size", "timeout" },
+    defaults = { [2] = { kind = "None" } },
+    result = types.bytes,
+  },
+  read_until = {
+    params = { types.bytes, types.int, optional_float },
+    names = { "separator", "max_bytes", "timeout" },
+    defaults = { [2] = { kind = "Int", value = 1048576 }, [3] = { kind = "None" } },
+    result = types.bytes,
+  },
+  close = { params = {}, result = types.None },
+})
 scoped(connection)
 scoped(listener)
+scoped(reader)
 local net = provided("net", {
   connect = {
     params = { types.str, types.int, optional_float },
@@ -570,7 +586,13 @@ local net = provided("net", {
     result = listener.type,
     helper = "net_listen",
   },
-}, { Connection = connection, Listener = listener })
+  reader = {
+    params = { connection.type },
+    names = { "connection" },
+    result = reader.type,
+    helper = "net_reader",
+  },
+}, { Connection = connection, Listener = listener, Reader = reader })
 
 -- Run-time types of built-in values that protocol dispatch finds converters
 -- for, by their dispatch tags, which no class can have. Programs cannot name

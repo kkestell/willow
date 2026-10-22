@@ -2073,8 +2073,10 @@ def main():
 | --- | --- |
 | `connect(host: str, port: int, timeout: float \| None = 30.0) -> Connection` | Open a TCP connection |
 | `listen(host: str, port: int, backlog: int = 16) -> Listener` | Listen for TCP connections on `host` |
+| `reader(connection: Connection) -> Reader` | Buffer reads from `connection`, which the reader then owns |
 | `class Connection` | A native type with the methods below |
 | `class Listener` | A native type with the methods below |
+| `class Reader` | A native type with the methods below |
 
 | Method | Meaning |
 | --- | --- |
@@ -2088,6 +2090,11 @@ def main():
 | `Connection.exit(error: Exception \| None) -> None` | Close the connection |
 | `Listener.enter() -> Listener` | Return this open listener for scoped use |
 | `Listener.exit(error: Exception \| None) -> None` | Close the listener |
+| `Reader.read_exactly(size: int, timeout: float \| None = None) -> bytes` | Return exactly `size` bytes |
+| `Reader.read_until(separator: bytes, max_bytes: int = 1048576, timeout: float \| None = None) -> bytes` | Return the bytes through the next `separator` |
+| `Reader.close() -> None` | Close the reader and its connection |
+| `Reader.enter() -> Reader` | Return this open reader for scoped use |
+| `Reader.exit(error: Exception \| None) -> None` | Close the reader and its connection |
 
 A host is a host name, which is looked up with the system resolver, or a literal
 IPv4 or IPv6 address. Hosts are written in ASCII, and internationalized domain
@@ -2122,6 +2129,29 @@ inherit connections or listeners.
 
 `enter` rejects a closed or unusable handle with the same error as its other
 operations. `exit` has the same behavior as `close`.
+
+A `Reader` receives from its connection into a buffer and keeps the bytes a call
+did not return for the next call. Once a connection is given to `reader`, the
+program must not call `recv` on it, because the reader may hold bytes that
+`recv` would skip; closing the reader closes the connection. `reader` rejects a
+closed or unusable connection like `enter`.
+
+`read_exactly` returns `size` bytes, and empty bytes for a `size` of 0. If the
+peer closes the connection first, it raises `OSError` with a message that starts
+`unexpected end of stream`. `read_until` returns the bytes up to and including
+the first `separator`; a separator that ends exactly at `max_bytes` is found. If
+the peer closes the connection first, it returns the bytes that remain, which
+are empty when there are none. If `max_bytes` bytes arrive without a complete
+separator, it raises `ValueError` with a message that starts
+`separator not found`. A negative `size`, an empty `separator`, a `max_bytes`
+less than 1, and a timeout that is not finite and positive raise `ValueError`.
+
+The `timeout` of a `Reader` call covers the whole call, however many receives it
+takes, and expiry raises `TimeoutError` with a message such as
+`read_exactly timed out after <timeout> seconds`. Bytes already received stay
+buffered after a timeout, a size limit, or an early end of stream, so the next
+call sees them. Operations on a closed reader raise `ValueError` with the
+message `I/O operation on closed reader`.
 
 ### `subprocess`
 
