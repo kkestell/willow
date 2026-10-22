@@ -345,6 +345,12 @@ local process = native_record("subprocess", "Process", "process", {
     defaults = { { kind = "None" } },
     result = types.int,
   },
+  wait_async = {
+    params = { optional_float },
+    names = { "timeout" },
+    defaults = { { kind = "None" } },
+    result = types.generic(M.coroutine, { types.int }),
+  },
   terminate = { params = {}, result = types.None },
   kill = { params = {}, result = types.None },
 })
@@ -363,6 +369,19 @@ local subprocess = provided("subprocess", {
     },
     result = result.type,
     helper = "process_run",
+  },
+  run_async = {
+    params = { types.list(types.str), optional_bytes, types.bool, optional_str, optional_env, optional_float },
+    names = { "args", "input", "capture_output", "cwd", "env", "timeout" },
+    defaults = {
+      [2] = { kind = "None" },
+      [3] = { kind = "Bool", value = false },
+      [4] = { kind = "None" },
+      [5] = { kind = "None" },
+      [6] = { kind = "None" },
+    },
+    result = types.generic(M.coroutine, { result.type }),
+    helper = "process_run_async",
   },
   spawn = {
     params = { types.list(types.str), optional_str, optional_env, optional_file, optional_file, optional_file },
