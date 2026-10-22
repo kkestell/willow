@@ -46,6 +46,10 @@ net_reader_runtime.needs = { host_runtime }
 -- `subprocess`'s async operations use host.lua's process bodies.
 local aio_process_runtime = optional_runtime(read_runtime("runtime.aio_process"))
 aio_process_runtime.needs = { aio_runtime, host_runtime }
+-- The async requests suspend through `aio_sleep` and run the http helpers.
+local http_runtime = optional_runtime(read_runtime("runtime.http"))
+local http_async_runtime = optional_runtime(read_runtime("runtime.http_async"))
+http_async_runtime.needs = { aio_runtime, http_runtime }
 
 local optional_runtimes = {
   optional_runtime(read_runtime("runtime.case_data") .. read_runtime("runtime.case")),
@@ -55,13 +59,14 @@ local optional_runtimes = {
   optional_runtime(read_runtime("runtime.str")),
   optional_runtime(read_runtime("runtime.io")),
   optional_runtime(read_runtime("runtime.cli")),
-  optional_runtime(read_runtime("runtime.http")),
+  http_runtime,
   optional_runtime(read_runtime("runtime.json")),
   optional_runtime(read_runtime("runtime.random")),
   aio_runtime,
   aio_net_runtime,
   net_reader_runtime,
   aio_process_runtime,
+  http_async_runtime,
 }
 
 -- The generated reference to a helper named without its __wlo_ prefix.
