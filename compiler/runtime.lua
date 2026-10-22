@@ -43,6 +43,9 @@ aio_net_runtime.needs = { aio_runtime, host_runtime }
 -- `net.Reader` receives through host.lua's `net` operations.
 local net_reader_runtime = optional_runtime(read_runtime("runtime.net_reader"))
 net_reader_runtime.needs = { host_runtime }
+-- `subprocess`'s async operations use host.lua's process bodies.
+local aio_process_runtime = optional_runtime(read_runtime("runtime.aio_process"))
+aio_process_runtime.needs = { aio_runtime, host_runtime }
 
 local optional_runtimes = {
   optional_runtime(read_runtime("runtime.case_data") .. read_runtime("runtime.case")),
@@ -58,6 +61,7 @@ local optional_runtimes = {
   aio_runtime,
   aio_net_runtime,
   net_reader_runtime,
+  aio_process_runtime,
 }
 
 -- The generated reference to a helper named without its __wlo_ prefix.
