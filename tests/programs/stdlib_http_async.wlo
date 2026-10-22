@@ -1,0 +1,131 @@
+# http.request_async and http.download_async against a server running as tasks
+# in the same event loop, so a request can only finish if it yields.
+
+import aio
+import fs
+import http
+import time
+
+async def serve(connection: aio.Connection, log: list[str]):
+    with connection:
+        data = bytes([])
+        while data.decode().find("\r\n\r\n") < 0:
+            chunk = await connection.recv(4096)
+            if len(chunk) == 0:
+                return
+            data = data + chunk
+        head = data.decode()
+        path = head.split(" ")[1]
+        if path == "/delay":
+            await aio.sleep(0.4)
+            await respond(connection, "200 OK", "", "late")
+        elif path == "/redirect":
+            await respond(connection, "302 Found", "Location: /delay\r\n", "")
+        elif path == "/echo":
+            await respond(connection, "200 OK", "", head.split("\r\n")[0])
+        elif path == "/file":
+            await respond(connection, "200 OK", "", "file body")
+        elif path == "/missing":
+            await respond(connection, "404 Not Found", "", "nope")
+        else:
+            # Sends the start of a response, then waits for the client to leave.
+            await connection.sendall("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\npartial".encode())
+            while len(await connection.recv(1)) > 0:
+                pass
+            log.append("client left " + path)
+
+async def respond(connection: aio.Connection, status: str, extra: str, body: str):
+    head = f"HTTP/1.1 {status}\r\nContent-Length: {len(body.encode())}\r\nConnection: close\r\n{extra}\r\n"
+    await connection.sendall((head + body).encode())
+
+async def accept_loop(listener: aio.Listener, log: list[str]):
+    async with aio.task_group() as connections:
+        while True:
+            connections.start(serve(await listener.accept(), log))
+
+async def tick(counter: list[int]):
+    while True:
+        await aio.sleep(0.02)
+        counter[0] = counter[0] + 1
+
+async def get(base: str, path: str) -> http.Response:
+    return await http.request_async("GET", base + path)
+
+async def partial_files() -> list[str]:
+    names: list[str] = []
+    for name in fs.listdir("."):
+        if name.startswith(".stdlib_http_") and name.endswith(".part"):
+            names.append(name)
+    return names
+
+async def main():
+    log: list[str] = []
+    with aio.listen("127.0.0.1", 0) as listener:
+        base = f"http://127.0.0.1:{listener.local_port()}"
+        async with aio.task_group() as server:
+            server.start(accept_loop(listener, log))
+
+            # Two slow responses and a ticker overlap in one event loop.
+            counter = [0]
+            started = time.monotonic()
+            async with aio.task_group() as group:
+                group.start(tick(counter))
+                first = group.start(get(base, "/delay"))
+                second = group.start(get(base, "/redirect"))
+                print((await first).body.decode())
+                response = await second
+                print(f"{response.status} {response.body.decode()} {response.url == base + '/delay'}")
+                group.cancel()
+            print(time.monotonic() - started < 0.7)
+            print(counter[0] >= 10)
+
+            # Arguments are those of request.
+            headers = [http.Header("X-Test", "yes")]
+            echoed = await http.request_async("POST", base + "/echo", headers=headers, body="x".encode())
+            print(echoed.body.decode())
+            redirected = await http.request_async("GET", base + "/redirect", follow_redirects=False)
+            print(f"{redirected.status} {http.header(redirected.headers, 'location')}")
+            for bad in ["ftp://example.com/", "http://example.com:x/"]:
+                try:
+                    await http.request_async("GET", bad)
+                except ValueError as error:
+                    print(error.message)
+            try:
+                await http.request_async("GET", base + "/stall", timeout=0.3)
+            except TimeoutError as expired:
+                print(expired.message)
+
+            # Concurrent downloads to one destination keep separate temporary files.
+            async with aio.task_group() as downloads:
+                slow = downloads.start(http.download_async(base + "/delay", "stdlib_http_shared.bin"))
+                fast = downloads.start(http.download_async(base + "/file", "stdlib_http_shared.bin"))
+            assert slow.result().status == 200 and fast.result().status == 200
+            assert fs.read_file("stdlib_http_shared.bin") == "late"
+            fs.remove("stdlib_http_shared.bin")
+            assert len(await partial_files()) == 0
+
+            # Downloads.
+            download = await http.download_async(base + "/file", "stdlib_http_async.bin")
+            print(f"{download.status} {download.bytes_written} {fs.read_file('stdlib_http_async.bin')}")
+            missing = await http.download_async(base + "/missing", "stdlib_http_async.bin")
+            print(f"{missing.status} {missing.bytes_written} {fs.read_file('stdlib_http_async.bin')}")
+            fs.remove("stdlib_http_async.bin")
+            try:
+                await http.download_async(base + "/stall", "stdlib_http_async.bin", timeout=0.3)
+            except TimeoutError as expired:
+                print(expired.message)
+            print(f"{fs.exists('stdlib_http_async.bin')} {len(await partial_files())}")
+
+            # Cancelling a request or download closes its connection and
+            # removes its partial file.
+            async with aio.task_group() as group:
+                group.start(get(base, "/cancel-request"))
+                group.start(http.download_async(base + "/cancel-download", "stdlib_http_cancel.bin"))
+                await aio.sleep(0.2)
+                print(len(await partial_files()))
+                group.cancel()
+            await aio.sleep(0.1)
+            print(f"{len(await partial_files())} {fs.exists('stdlib_http_cancel.bin')}")
+            log.sort()
+            print(", ".join(log))
+            server.cancel()
