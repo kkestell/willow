@@ -1,0 +1,47 @@
+class Source:
+    name: str
+    log: list[str]
+
+    def iter(self) -> Iterator[int]:
+        self.log.append("iter " + self.name)
+        if self.name == "bad":
+            raise ValueError("cannot iterate")
+        return iter([1])
+
+def source(name: str, log: list[str]) -> Source:
+    log.append("argument " + name)
+    return Source(name, log)
+
+def start(log: list[str]) -> int:
+    log.append("start")
+    return 3
+
+def mutate(values: dict[str, int]) -> list[int]:
+    values["b"] = 2
+    return [1, 2]
+
+def main():
+    log: list[str] = []
+    pairs = zip(source("a", log), source("b", log))
+    assert ",".join(log) == "argument a,argument b,iter a,iter b"
+    assert next(pairs) == (1, 1)
+
+    log = []
+    pairs = zip(b=source("b", log), a=source("a", log))
+    assert ",".join(log) == "argument b,argument a,iter a,iter b"
+    assert next(pairs) == (1, 1)
+
+    log = []
+    numbered = enumerate(source("a", log), start(log))
+    assert ",".join(log) == "argument a,start,iter a"
+    assert next(numbered) == (3, 1)
+
+    log = []
+    try:
+        zip(source("bad", log), source("b", log))
+    except ValueError:
+        pass
+    assert ",".join(log) == "argument bad,argument b,iter bad"
+
+    values = {"a": 1}
+    assert len(list(zip(values, mutate(values)))) == 2

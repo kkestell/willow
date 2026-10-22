@@ -255,6 +255,8 @@ local function lower_function(fn, sites, helpers, protocols)
   end
 
   local lower_node, lower_value, lower_operand, lower_object
+  -- Receivers already evaluated before an iterable built-in starts iterating.
+  local iterable_operands = {}
 
   -- The converter of the type of `object`, an operand, for method `name` of
   -- `protocol`, whose table the program then gets.
@@ -303,10 +305,12 @@ local function lower_function(fn, sites, helpers, protocols)
 
   -- The Lua iterator over the items of `iterable`, whose checked `iter` and
   -- `next` calls `holder` keeps when it iterates through them.
-  local function items_iterator(holder, iterable, span)
+  local function items_iterator(holder, iterable, span, value)
     if holder.iter_call then
       -- The iterator's `next` is found once and called for each step.
+      iterable_operands[iterable] = value
       local iterator = lower_operand(holder.iter_call)
+      iterable_operands[iterable] = nil
       local next_call, callee = holder.next_call, nil
       if next_call.protocol then
         callee = dispatch(next_call.protocol, iterator, "next")
@@ -318,7 +322,7 @@ local function lower_function(fn, sites, helpers, protocols)
       end
       return helper("iterate", { callee, iterator }, span)
     end
-    local value = lower_operand(iterable)
+    value = value or lower_operand(iterable)
     if iterable.type.kind == "tuple" then
       -- Each position takes the representation of the item type.
       value = convert(value, iterable.type, items_tuple(iterable.type))
@@ -331,15 +335,19 @@ local function lower_function(fn, sites, helpers, protocols)
   -- them. An iterable argument becomes the Lua iterator over its items.
   local function lower_args(node)
     local args = {}
-    local function lower_arg(i)
-      local holder = node.iterables and node.iterables[i]
-      return holder and items_iterator(holder, node.args[i], node.span) or lower_operand(node.args[i])
-    end
     for _, i in ipairs(node.order) do
-      args[i] = lower_arg(i)
+      args[i] = lower_operand(node.args[i])
     end
-    for i in ipairs(node.args) do
-      args[i] = args[i] or lower_arg(i)
+    for i, arg in ipairs(node.args) do
+      args[i] = args[i] or lower_operand(arg)
+    end
+    -- Calling iter can have effects or fail, so all argument expressions must
+    -- have run before an iterable is adapted, in parameter order.
+    for i, arg in ipairs(node.args) do
+      local holder = node.iterables and node.iterables[i]
+      if holder then
+        args[i] = items_iterator(holder, arg, node.span, args[i])
+      end
     end
     return args
   end
@@ -638,6 +646,9 @@ local function lower_function(fn, sites, helpers, protocols)
   -- Returns an expression with no calls or field reads, moving a call, helper
   -- call, or field read into a temporary first.
   lower_operand = function(node)
+    if iterable_operands[node] then
+      return iterable_operands[node]
+    end
     local mark = depth
     local value = lower_node(node)
     if value.kind == "Call" or value.kind == "Helper" or value.kind == "Field" then
