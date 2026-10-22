@@ -1,0 +1,21 @@
+1 -1 0 1
+True True False
+True True False
+[61], [62], [], [63]
+[61], [622c2c63]
+[612c622c2c63]
+[61], [62], [], [63]
+[]
+[], [61], []
+[61], [622d63]
+empty separator
+000f10ffab []
+True
+True
+0
+Hi
+abc: invalid hex string
+0g: invalid hex string
+0 f: invalid hex string
+é1: invalid hex string
+a b: invalid hex string

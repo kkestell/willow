@@ -110,6 +110,19 @@ local STRING_METHODS = {
   rjust = { { types.int }, types.str, { "width" } },
 }
 
+-- The same for the bytes methods; `maxsplit` defaults to -1.
+local BYTES_METHODS = {
+  decode = { {}, types.str },
+  find = { { types.bytes }, types.int, { "sub" } },
+  startswith = { { types.bytes }, types.bool, { "prefix" } },
+  endswith = { { types.bytes }, types.bool, { "suffix" } },
+  split = {
+    { types.bytes, types.int }, types.list(types.bytes), { "sep", "maxsplit" },
+    { [2] = { kind = "Int", value = -1 } },
+  },
+  hex = { {}, types.str },
+}
+
 local FORMAT_TYPES = { s = types.str, d = types.int, f = types.float }
 
 -- Parameter types, result type, and, for methods that accept keywords, the
@@ -137,8 +150,8 @@ local function method_signature(type, name)
     return { type.key }, optional_of(types.expand(type.value)), { "k" }
   elseif type.kind == "dict" and name == "pop" then
     return { type.key }, types.expand(type.value), { "k" }
-  elseif type == types.bytes and name == "decode" then
-    return {}, types.str
+  elseif type == types.bytes and BYTES_METHODS[name] then
+    return unpack(BYTES_METHODS[name])
   elseif type.kind == "record" and type.record.native and type.record.native_methods[name] then
     -- A generic native type's methods see its type arguments.
     local method, map = type.record.native_methods[name], types.record_map(type)
