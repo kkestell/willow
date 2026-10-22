@@ -10,6 +10,14 @@ __wlo_curl_t *curl_easy_init(void);
 void curl_easy_cleanup(__wlo_curl_t *handle);
 int curl_easy_setopt(__wlo_curl_t *handle, int option, ...);
 int curl_easy_perform(__wlo_curl_t *handle);
+__wlo_curl_t *curl_multi_init(void);
+int curl_multi_add_handle(__wlo_curl_t *multi, __wlo_curl_t *handle);
+int curl_multi_remove_handle(__wlo_curl_t *multi, __wlo_curl_t *handle);
+int curl_multi_perform(__wlo_curl_t *multi, int *running);
+int curl_multi_timeout(__wlo_curl_t *multi, long *milliseconds);
+int curl_multi_cleanup(__wlo_curl_t *multi);
+typedef struct { int msg; __wlo_curl_t *handle; union { void *other; int result; } data; } __wlo_curl_msg_t;
+__wlo_curl_msg_t *curl_multi_info_read(__wlo_curl_t *multi, int *queued);
 int curl_easy_getinfo(__wlo_curl_t *handle, int info, ...);
 const char *curl_easy_strerror(int code);
 __wlo_curl_slist_t *curl_slist_append(__wlo_curl_slist_t *list, const char *text);
@@ -19,6 +27,7 @@ int __wlo_curl_getpid(void) __asm__("getpid");
 
 local __wlo_CURL_NAME = __wlo_ffi.os == "OSX" and "libcurl.4.dylib" or "libcurl.so.4"
 local __wlo_curl_library
+local __wlo_download_id = 0
 
 local __wlo_OPT = {
   url = 10002, errorbuffer = 10010, postfieldsize_large = 30120, copypostfields = 10165,
@@ -140,10 +149,47 @@ local function __wlo_curl_perform(curl, handle)
 end
 jit.off(__wlo_curl_perform)
 
+local function __wlo_curl_multi_perform(curl, multi, running)
+  return curl.curl_multi_perform(multi, running)
+end
+jit.off(__wlo_curl_multi_perform)
+
+-- Advances the transfer on `handle` with libcurl's multi interface, calling
+-- `sleep(seconds)` between steps so other tasks run, and returns its result
+-- code. The steps are at most 10 ms apart, sooner when libcurl asks. A true
+-- `expired()` aborts the transfer. libcurl's own resolver may still block a
+-- step: only a threaded or c-ares build looks up names in the background.
+local function __wlo_curl_drive(curl, handle, expired, sleep)
+  local ffi = __wlo_ffi
+  local multi = curl.curl_multi_init()
+  local running, millis, queued = ffi.new("int[1]", 1), ffi.new("long[1]"), ffi.new("int[1]")
+  curl.curl_multi_add_handle(multi, handle)
+  local ok, code = pcall(function()
+    while true do
+      __wlo_curl_multi_perform(curl, multi, running)
+      if running[0] == 0 then
+        local message = curl.curl_multi_info_read(multi, queued)
+        return message ~= nil and message.data.result or __wlo_CURLE_ABORTED
+      elseif expired() then
+        return __wlo_CURLE_ABORTED
+      end
+      curl.curl_multi_timeout(multi, millis)
+      sleep(millis[0] < 0 and 0.01 or math.min(tonumber(millis[0]), 10) / 1000)
+    end
+  end)
+  curl.curl_multi_remove_handle(multi, handle)
+  curl.curl_multi_cleanup(multi)
+  if not ok then
+    error(code, 0)
+  end
+  return code
+end
+
 -- One exchange. `body_sink(chunk, status)` receives the response body and
 -- returns an error message to stop the transfer. Returns the status, the response
--- headers as { name, value } pairs, and the redirect target if any.
-local function __wlo_http_exchange(method, url, header_lines, body, timeout, ca_file, body_sink, site)
+-- headers as { name, value } pairs, and the redirect target if any. A `sleep`
+-- function makes the exchange wait by calling it instead of blocking.
+local function __wlo_http_exchange(method, url, header_lines, body, timeout, ca_file, body_sink, site, sleep)
   local curl = __wlo_curl(site)
   local ffi = __wlo_ffi
   local handle = curl.curl_easy_init()
@@ -160,6 +206,7 @@ local function __wlo_http_exchange(method, url, header_lines, body, timeout, ca_
 
   local write = ffi.cast("size_t (*)(char *, size_t, size_t, void *)", function(data, size, count)
     local length = tonumber(size * count)
+    last_time = __wlo_clock(__wlo_CLOCK_MONOTONIC)
     local status = ffi.new("long[1]")
     curl.curl_easy_getinfo(handle, __wlo_INFO_RESPONSE_CODE, status)
     failure = failure or body_sink(ffi.string(data, length), tonumber(status[0]))
@@ -167,6 +214,7 @@ local function __wlo_http_exchange(method, url, header_lines, body, timeout, ca_
   end)
   local read_header = ffi.cast("size_t (*)(char *, size_t, size_t, void *)", function(data, size, count)
     local length = tonumber(size * count)
+    last_time = __wlo_clock(__wlo_CLOCK_MONOTONIC)
     local line = ffi.string(data, length):gsub("\r?\n$", "")
     if line:match("^HTTP/") then
       response_headers = {}
@@ -231,7 +279,27 @@ local function __wlo_http_exchange(method, url, header_lines, body, timeout, ca_
   set("xferinfofunction", progress)
   set("noprogress", 0)
 
-  local code = __wlo_curl_perform(curl, handle)
+  local function release()
+    curl.curl_easy_cleanup(handle)
+    curl.curl_slist_free_all(list)
+    write:free()
+    read_header:free()
+    progress:free()
+  end
+  local code
+  if sleep then
+    local ok, result = pcall(__wlo_curl_drive, curl, handle, function()
+      timed_out = __wlo_clock(__wlo_CLOCK_MONOTONIC) - last_time > timeout
+      return timed_out
+    end, sleep)
+    if not ok then
+      release()
+      error(result, 0)
+    end
+    code = result
+  else
+    code = __wlo_curl_perform(curl, handle)
+  end
   local status, target = ffi.new("long[1]"), ffi.new("char *[1]")
   curl.curl_easy_getinfo(handle, __wlo_INFO_RESPONSE_CODE, status)
   curl.curl_easy_getinfo(handle, __wlo_INFO_REDIRECT_URL, target)
@@ -240,11 +308,7 @@ local function __wlo_http_exchange(method, url, header_lines, body, timeout, ca_
   if message == "" then
     message = ffi.string(curl.curl_easy_strerror(code))
   end
-  curl.curl_easy_cleanup(handle)
-  curl.curl_slist_free_all(list)
-  write:free()
-  read_header:free()
-  progress:free()
+  release()
 
   if failure then
     __wlo_fail("OSError", failure, site)
@@ -259,7 +323,7 @@ end
 -- Follows redirects as the spec allows and returns the final status,
 -- headers, and URL. `body_sink(chunk, status, hop)` sees every response body,
 -- numbered by hop.
-local function __wlo_http_fetch(method, url, headers, body, timeout, follow, ca_file, body_sink, site)
+local function __wlo_http_fetch(method, url, headers, body, timeout, follow, ca_file, body_sink, site, sleep)
   if not method:match(__wlo_TOKEN) then
     __wlo_fail("ValueError", "invalid method '" .. method .. "'", site)
   end
@@ -272,7 +336,7 @@ local function __wlo_http_fetch(method, url, headers, body, timeout, follow, ca_
     local status, response_headers, redirect = __wlo_http_exchange(method, current.text, lines, body, timeout,
       ca_file, function(chunk, status)
         return body_sink(chunk, status, hop)
-      end, site)
+      end, site, sleep)
     if not (follow and (method == "GET" or method == "HEAD") and __wlo_REDIRECTS[status] and redirect) then
       return status, response_headers, current.text
     end
@@ -293,7 +357,8 @@ local function __wlo_http_fetch(method, url, headers, body, timeout, follow, ca_
   end
 end
 
-function __wlo_http_request(method, url, headers, body, timeout, follow_redirects, ca_file, site)
+-- The request and download helpers take the `sleep` of an async exchange.
+function __wlo_http_request(method, url, headers, body, timeout, follow_redirects, ca_file, site, sleep)
   -- Only the final exchange's body is kept.
   local parts, parts_hop = {}, 0
   local status, response_headers, final = __wlo_http_fetch(method, url, headers, body, timeout, follow_redirects,
@@ -302,7 +367,7 @@ function __wlo_http_request(method, url, headers, body, timeout, follow_redirect
         parts, parts_hop = {}, hop
       end
       parts[#parts + 1] = chunk
-    end, site)
+    end, site, sleep)
   return {
     "http.Response",
     status = status,
@@ -312,11 +377,12 @@ function __wlo_http_request(method, url, headers, body, timeout, follow_redirect
   }
 end
 
-function __wlo_http_download(url, path, headers, timeout, follow_redirects, ca_file, site)
+function __wlo_http_download(url, path, headers, timeout, follow_redirects, ca_file, site, sleep)
   __wlo_check_path(path, site)
   local directory, name = path:match("^(.-)([^/]*)$")
-  -- The process id keeps concurrent downloads to one path apart.
-  local temp = string.format("%s.%s.%d.part", directory, name, __wlo_ffi.C.__wlo_curl_getpid())
+  -- The counter distinguishes concurrent tasks within the same process.
+  __wlo_download_id = __wlo_download_id + 1
+  local temp = string.format("%s.%s.%d.%d.part", directory, name, __wlo_ffi.C.__wlo_curl_getpid(), __wlo_download_id)
   local file, open_error = io.open(temp, "wb")
   if not file then
     __wlo_fail("OSError", "cannot write " .. path .. ": " .. __wlo_open_reason(open_error, temp), site)
@@ -332,7 +398,7 @@ function __wlo_http_download(url, path, headers, timeout, follow_redirects, ca_f
         return "cannot write " .. path .. ": " .. tostring(err)
       end
       written = written + #chunk
-    end, site)
+    end, site, sleep)
   local closed, close_error = file:close()
   if ok and status >= 200 and status <= 299 then
     local reason = close_error

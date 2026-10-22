@@ -411,3 +411,66 @@ function __wlo_aio_sleep_coroutine(seconds, site)
     __wlo_aio_sleep(seconds)
   end)
 end
+
+-- `aio.semaphore`: `value` permits, handed to waiters in the order they began
+-- waiting. `max` is the initial count, which `release` may not exceed.
+function __wlo_aio_semaphore(value, site)
+  if value <= 0 then
+    __wlo_fail("ValueError", "semaphore value must be positive", site)
+  end
+  return { "aio.Semaphore", value = value, max = value, waiters = {} }
+end
+
+-- Returns a permit: to the first waiter still waiting, which owns it once
+-- woken, or else to the count. A waiter that a cancellation request already
+-- woke is skipped, since it never takes the permit.
+local function __wlo_aio_give_permit(semaphore)
+  local waiters = semaphore.waiters
+  while waiters[1] do
+    local waiter = table.remove(waiters, 1)
+    if waiter.task.wait == waiter.wait then
+      waiter.granted = true
+      __wlo_aio_wake(waiter.task, waiter.wait)
+      return
+    end
+  end
+  semaphore.value = semaphore.value + 1
+end
+
+-- A checkpoint even when a permit is free. A waiting task takes the permit its
+-- release hands over, so a later acquire cannot overtake it.
+function __wlo_aio_semaphore_acquire(semaphore, site)
+  return __wlo_coroutine(function()
+    __wlo_aio_checkpoint()
+    if semaphore.value > 0 then
+      semaphore.value = semaphore.value - 1
+      return
+    end
+    local task, id = __wlo_aio_wait(true)
+    local waiter = { task = task, wait = id }
+    semaphore.waiters[#semaphore.waiters + 1] = waiter
+    coroutine.yield()
+    if waiter.granted then
+      -- A request that arrived after the handoff must not leak the permit.
+      if __wlo_aio_pending(task) then
+        __wlo_aio_give_permit(semaphore)
+        error(__wlo_cancel, 0)
+      end
+      return
+    end
+    for i, queued in ipairs(semaphore.waiters) do
+      if queued == waiter then
+        table.remove(semaphore.waiters, i)
+        break
+      end
+    end
+    __wlo_aio_checkpoint()
+  end)
+end
+
+function __wlo_aio_semaphore_release(semaphore, site)
+  if semaphore.value == semaphore.max then
+    __wlo_fail("ValueError", "semaphore released too many times", site)
+  end
+  __wlo_aio_give_permit(semaphore)
+end

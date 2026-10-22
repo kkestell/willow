@@ -142,9 +142,11 @@ Rules that differ from Python:
 - `+=`, `**`, bitwise operators, chained comparisons, conditional expressions,
   and `x = y = 0` are not supported.
 - Strings are immutable code-point sequences with `len`, indexing, slicing,
-  `in`, `startswith`, `endswith`, `find`, `replace`, `strip`, `split`, `lower`,
-  `upper`, `ljust`, `rjust`, and `sep.join(items)`. f-strings accept format
-  specifications such as `{value:>8.2f}`.
+  `in`, `startswith`, `endswith`, `find`, `replace`, `strip`, `lstrip`,
+  `rstrip`, `split`, `rsplit`, `splitlines`, `removeprefix`, `removesuffix`,
+  `lower`, `upper`, `ljust`, `rjust`, `sep.join(items)`, and ASCII-only
+  `isascii`, `isspace`, `isdigit`, `isalpha`, and `isalnum`. f-strings accept
+  format specifications such as `{value:>8.2f}`.
 - Lists have `append`, `pop`, `sort`, indexing, slicing, and `in`.
   Dictionaries keep insertion order and have `get`, `pop`, indexing, and `in`.
   Dictionary keys are `int`, `str`, or an enum. `sorted(items, key=...)`
@@ -179,10 +181,10 @@ Rules that differ from Python:
 | `subprocess` | `run(args, capture_output=True)` returning a `Result` with `stdout`, `stderr`, and the exit status |
 | `http` | `request(method, url, headers=..., body=...)` returning a `Response` with `status`, `headers`, and `body` |
 | `net` | TCP `listen`, `connect`, and `accept` |
-| `aio` | `sleep`, `task_group`, and async TCP |
+| `aio` | `sleep`, `task_group`, `semaphore`, and async TCP |
 | `time` | `time()`, `monotonic()`, `sleep(seconds)`, `utc(timestamp)` |
 | `terminal` | `isatty`, `color_enabled`, `style`, `progress` |
-| `math` | `sqrt` |
+| `math` | `sqrt`, `floor`, `ceil`, `pow`, `log`, trigonometry, `isnan`, and constants `pi`, `e`, `tau` |
 
 Library functions raise `OSError`, `ValueError`, or `TimeoutError` with a
 `message` field when they fail.

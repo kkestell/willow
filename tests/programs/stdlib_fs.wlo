@@ -1,0 +1,102 @@
+import fs
+
+# Removes everything below `root`, which walk lists top down.
+def remove_tree(root: str):
+    dirs: list[str] = []
+    for path, names, files in fs.walk(root):
+        dirs.append(path)
+        for name in files:
+            fs.remove(fs.join(path, name))
+    for i in range(len(dirs) - 1, -1, -1):
+        fs.rmdir(dirs[i])
+
+def show(items: list[str]) -> str:
+    return "[" + ",".join(items) + "]"
+
+def main():
+    print(f"{fs.normpath('')} {fs.normpath('a//b/./c/..')} {fs.normpath('../a/../..')} {fs.normpath('/..')}")
+    print(f"{fs.normpath('//a/../b')} {fs.normpath('///a')} {fs.normpath('a/b/')} {fs.normpath('./')}")
+    print(f"{fs.abspath('x/../y') == fs.join(fs.abspath('.'), 'y')} {fs.abspath('/a/./b//')}")
+
+    root = fs.temp_dir()
+    print(f"{fs.basename(root).startswith('willow-')} {fs.stat(root).kind}")
+    private = fs.temp_dir(prefix="p-", directory=root)
+    print(f"{fs.dirname(private) == root} {fs.basename(private).startswith('p-')}")
+    empty = fs.temp_file(directory=root)
+    print(fs.stat(empty).size)
+
+    data = bytes([0, 255, 10, 13, 128])
+    source = fs.join(root, "source.bin")
+    copy = fs.join(root, "copy.bin")
+    fs.write_bytes(source, data)
+    print(fs.read_bytes(source) == data)
+    fs.write_bytes(copy, bytes([1, 2, 3, 4, 5, 6, 7, 8, 9]))
+    fs.copy_file(source, copy)
+    print(fs.read_bytes(copy) == data)
+    big = bytes([7, 8, 9])
+    for i in range(17):
+        big = big + big
+    fs.write_bytes(source, big)
+    fs.copy_file(source=source, destination=copy)
+    print(f"{fs.read_bytes(copy) == big} {len(fs.read_bytes(empty))}")
+    fs.write_bytes(empty, bytes([]))
+    fs.copy_file(empty, copy)
+    print(len(fs.read_bytes(copy)))
+    try:
+        fs.copy_file(source, source)
+    except OSError as e1:
+        print(f"same: {e1.message.endswith('they are the same file')}")
+    print(len(fs.read_bytes(source)))
+    try:
+        fs.copy_file(fs.join(root, "missing"), copy)
+    except OSError as e2:
+        print(e2.message.startswith("cannot read "))
+    fs.write_bytes(copy, data)
+    try:
+        fs.copy_file(root, copy)
+    except OSError as e3:
+        print(f"{e3.message.startswith('cannot read ')} {fs.read_bytes(copy) == data}")
+
+    fs.mkdir(fs.join(root, "sub/deep"), parents=True)
+    fs.write_file(fs.join(root, "sub/a.txt"), "a")
+    fs.write_file(fs.join(root, "sub/.hidden"), "h")
+    fs.write_file(fs.join(root, "sub/deep/b.txt"), "b")
+    fs.write_file(fs.join(root, "sub/deep/c.log"), "c")
+
+    for path, dirs, files in fs.walk(fs.join(root, "sub")):
+        print(f"{path[len(root):]} {show(dirs)} {show(files)}")
+    fs.rename(fs.join(root, "sub/deep"), fs.join(root, "sub/zdeep"))
+    fs.rename(fs.join(root, "sub/zdeep"), fs.join(root, "sub/deep"))
+
+    old = fs.abspath(".")
+    print(fs.realpath(root + "/sub/../sub/deep") == fs.realpath(root) + "/sub/deep")
+    print(f"{len(fs.realpath('/'))} {old != ''}")
+    try:
+        fs.realpath(fs.join(root, "nope"))
+    except OSError as e4:
+        print(e4.message.startswith("cannot resolve "))
+
+    def shown(pattern: str) -> list[str]:
+        paths: list[str] = []
+        for path in fs.glob(root + "/" + pattern):
+            paths.append(path[len(root):])
+        return paths
+    print(f"{show(shown('sub/*'))} {show(shown('sub/.*'))} {show(shown('sub/?.txt'))}")
+    print(f"{show(shown('*/deep/[bc].*'))} {show(shown('sub/[!a]*'))} {show(shown('sub/deep/'))} {show(shown('nothing*'))} {show(shown('sub/a.txt'))}")
+    print(f"{show(shown('sub/missing'))} {show(shown('sub/a.txt/*'))}")
+
+    remove_tree(root)
+    print(fs.exists(root))
+    try:
+        fs.temp_file(prefix="a/b")
+    except ValueError as e5:
+        print(e5.message)
+    try:
+        for entry in fs.walk(root):
+            print("unreachable")
+    except OSError as e6:
+        print(e6.message.startswith("cannot list "))
+    try:
+        fs.temp_dir(directory=root)
+    except OSError as e7:
+        print(e7.message.startswith("cannot create temporary directory in "))

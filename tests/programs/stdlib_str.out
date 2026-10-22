@@ -1,0 +1,39 @@
+3 <a><b><c>
+2 <a><b  c >
+1 <a b >
+0 
+0 
+1 <>
+4 <a><><b><>
+2 <a><b,c>
+1 <a,b,c>
+2 <a><b>
+2 <  a b><c>
+1 <  a b>
+2 <a,b><c>
+1 <a,b,c>
+4 <a><><b><>
+2 <a><>
+2 <><a>
+2 <é><ü>
+4 <a><b><c><d>
+3 <a
+><
+><b
+>
+0 
+1 <>
+[a b 
+]
+[ 	 a b]
+[]
+bar foobar foobar
+foo foobar foobar
+foo bar
+True True False
+False True False
+False True False False
+False True False False
+False True False
+empty separator
+empty separator

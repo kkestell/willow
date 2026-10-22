@@ -246,7 +246,7 @@ return {
   string_formatting = function()
     eq('t1 = f(1); t2 = f(2); x = ("n=" .. str(t1) .. ", " .. str(t2))', lower_main("x = f'n={f(1)}, {f(2)}'", INT_HELPERS))
     eq('s = "a"; x = s; y = str_float(1.5); z = str(None)', lower_main("s = 'a'\nx = f'{s}'\ny = str(1.5)\nz = str(None)"))
-    eq('s = "a"; x = str_split(s, ",")#1', lower_main("s = 'a'\nx = s.split(',')"))
+    eq('s = "a"; x = str_split(s, ",", -1)#1', lower_main("s = 'a'\nx = s.split(',')"))
   end,
 
   conversions = function()
