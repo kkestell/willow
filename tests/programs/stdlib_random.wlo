@@ -33,6 +33,27 @@ def main():
         assert big >= -low and big <= low
     print(a.randint(-low, low) != a.randint(-low, low))
 
+    # Ranges wider than 2^53 and at the extremes of int, and extreme seeds.
+    wide = random.generator(low)
+    other = random.generator(-low)
+    print(wide.random() != other.random())
+    negative = 0
+    huge = 0
+    top = 0
+    for _ in range(200):
+        value = wide.randint(-low, low)
+        if value < 0:
+            negative = negative + 1
+        if value > 4503599627370496 or value < -4503599627370496:
+            huge = huge + 1
+        if wide.randint(low - 1, low) == low:
+            top = top + 1
+        assert wide.randint(-low, -low + 1) <= -low + 1
+    assert negative > 60 and negative < 140
+    assert huge > 60
+    assert top > 60 and top < 140
+    assert wide.randint(low, low) == low and wide.randint(-low, -low) == -low
+
     items = [1, 2, 3, 4, 5, 6, 7, 8]
     a.shuffle(items)
     assert show(sorted(items)) == "1, 2, 3, 4, 5, 6, 7, 8"
