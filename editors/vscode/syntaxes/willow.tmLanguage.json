@@ -141,7 +141,7 @@
         },
         {
           "name": "support.function.builtin.willow",
-          "match": "\\b(print|input|len|range|ord|chr|isinstance|sorted|iter|next)\\b"
+          "match": "\\b(print|input|len|range|ord|chr|isinstance|sorted|iter|next|abs|round|min|max|sum|any|all|enumerate|zip)\\b"
         },
         {
           "name": "support.type.exception.willow",
