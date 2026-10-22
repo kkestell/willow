@@ -35,7 +35,7 @@ def find(target: int) -> int:
         return n
     return -1
 
-def main() -> None:
+def main():
     i = 0
     total = 0
     while next_value(i) <= 10:

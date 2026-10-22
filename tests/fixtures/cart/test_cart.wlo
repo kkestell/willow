@@ -6,19 +6,19 @@ def _sample() -> cart.Cart:
     order.add("scone", 325)
     return order
 
-def test_subtotal_counts_quantities() -> None:
+def test_subtotal_counts_quantities():
     assert _sample().subtotal() == 1225
 
-def test_empty_cart_totals_zero() -> None:
+def test_empty_cart_totals_zero():
     assert cart.Cart([]).total() == 0
 
-def test_discount_rounds_down() -> None:
+def test_discount_rounds_down():
     order = _sample()
     order.apply_discount(10)
     total = order.total()
     assert total == 1103, f"expected 1103, received {total}"
 
-def test_discount_out_of_range() -> None:
+def test_discount_out_of_range():
     order = _sample()
     try:
         order.apply_discount(101)

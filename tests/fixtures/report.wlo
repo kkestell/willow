@@ -65,7 +65,7 @@ def level_color(level: str) -> str:
         return "green"
     return "default"
 
-def main() -> None:
+def main():
     options = parse_options()
     source = io.stdin()
     if options.path != "-":

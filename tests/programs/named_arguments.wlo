@@ -42,7 +42,7 @@ class Counter:
     def scaled(self, *, by: int = 2) -> int:
         return self.n * by
 
-def main() -> None:
+def main():
     assert str(zero()) == "-0.0"
     assert str(Options("report").zero) == "-0.0"
     print(greet("Ada"))

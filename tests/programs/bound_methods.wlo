@@ -15,7 +15,7 @@ def make() -> Counter:
 def apply(f: (int) -> int, x: int) -> int:
     return f(x)
 
-def main() -> None:
+def main():
     # The receiver is evaluated once, when the method is read.
     add = make().add
     print(add())

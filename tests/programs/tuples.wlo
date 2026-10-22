@@ -39,7 +39,7 @@ def found(flag: bool) -> tuple[int, str] | None:
         return (1, "a")
     return None
 
-def comparisons() -> None:
+def comparisons():
     print((1, "a") == (1, "a"))
     print((1, "a") != (1, "b"))
     print(((1, 2), None) == ((1, 2), None))
@@ -65,19 +65,19 @@ def comparisons() -> None:
     print(widened in [(1.0,)])
     print(one in [(1.0,)])
 
-def iteration() -> None:
+def iteration():
     for item in (1, 2.5, None):
         print(f"{item} {isinstance(item, float)}")
     for nothing in ():
         print(nothing)
 
-def defaults() -> None:
+def defaults():
     print(greet())
     print(greet((Side.LEFT, 3)))
     print(Box().size[1])
     print(Box((3, 4)).size[0])
 
-def main() -> None:
+def main():
     t = (1, "Ada")
     print(t[0])
     print(t[-1])

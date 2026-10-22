@@ -4,7 +4,7 @@ import terminal
 def visible(text: str) -> str:
     return text.replace("\x1b", "ESC")
 
-def main() -> None:
+def main():
     for color in ["default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]:
         print(f"{color}: {visible(terminal.style('x', color=color))}")
     print(visible(terminal.style("bold", bold=True)))

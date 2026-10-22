@@ -61,7 +61,7 @@ def ray_sphere(sphere: Sphere, origin: Vec, direction: Vec) -> float:
         return t1
     return t2
 
-def intersect(scene: Scene, origin: Vec, direction: Vec, hit: Hit) -> None:
+def intersect(scene: Scene, origin: Vec, direction: Vec, hit: Hit):
     if isinstance(scene, Sphere):
         distance = ray_sphere(scene, origin, direction)
         if distance >= hit.distance:
@@ -111,7 +111,7 @@ def create(level: int, center: Vec, radius: float) -> Scene:
             children.append(create(level - 1, add(center, scale(offset, Vec(dx, 1.0, dz))), 0.5 * radius))
     return Group(Sphere(center, 3.0 * radius), children)
 
-def main() -> None:
+def main():
     n = int(sys.args()[0])
     samples = 4
     size = float(n)

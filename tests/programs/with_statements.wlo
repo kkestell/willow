@@ -9,7 +9,7 @@ class Resource:
         print("enter " + self.name)
         return self.name
 
-    def exit(self, error: Exception | None) -> None:
+    def exit(self, error: Exception | None):
         if error is None:
             print("exit " + self.name)
         else:
@@ -23,7 +23,7 @@ class Pair:
     def enter(self) -> tuple[str, int]:
         return ("pair", self.n)
 
-    def exit(self, error: Exception | None) -> None:
+    def exit(self, error: Exception | None):
         print("pair done")
 
 def plain(name: str) -> Resource:
@@ -54,7 +54,7 @@ def numbers() -> Generator[int]:
     finally:
         print("numbers closed")
 
-def main() -> None:
+def main():
     with plain("a") as a, plain("b") as b:
         print(a + b)
     print(a)

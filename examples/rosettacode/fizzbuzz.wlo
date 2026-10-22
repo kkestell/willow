@@ -1,6 +1,6 @@
 # https://rosettacode.org/wiki/FizzBuzz
 
-def main() -> None:
+def main():
     for n in range(1, 101):
         if n % 15 == 0:
             print("FizzBuzz")

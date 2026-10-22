@@ -6,7 +6,7 @@ def trace(label: str) -> str:
     print(label)
     return label
 
-def main() -> None:
+def main():
     name = "Willow"
     print(f"{name} has {len(name)} letters")    # Willow has 6 letters
     words = "a, b, c".split(", ")

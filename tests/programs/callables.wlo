@@ -37,7 +37,7 @@ def call_optional(o: ((int) -> int) | None) -> int:
         return o(21)
     return -1
 
-def main() -> None:
+def main():
     print(apply(add, 1))
     print(apply(scaled, 2))
     print(apply(maybe, 4))

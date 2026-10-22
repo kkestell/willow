@@ -21,6 +21,6 @@ def show(tree: Tree[str] | None) -> str:
         return "."
     return "(" + show(tree.left) + " " + tree.value + " " + show(tree.right) + ")"
 
-def main() -> None:
+def main():
     numbers = Tree(2, Tree(1), Tree(3))
     print(show(numbers.map(lambda n: str(n * n))))

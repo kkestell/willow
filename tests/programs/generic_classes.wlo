@@ -4,7 +4,7 @@ class Box[T]:
     def get(self) -> T:
         return self.value
 
-    def set(self, value: T) -> None:
+    def set(self, value: T):
         self.value = value
 
     # A method's own type parameter is inferred at each call.
@@ -28,7 +28,7 @@ def describe(x: Box[int] | None) -> str:
         return "box " + str(x.get())
     return "none"
 
-def main() -> None:
+def main():
     # The constructor infers T, or takes it explicitly.
     b = Box(1)
     print(b.get())

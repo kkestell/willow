@@ -22,7 +22,7 @@ local function bind_error(source)
   return string.format("%d:%d: %s", err[1].span.line, err[1].span.col, err[1].message)
 end
 
-local MAIN = "def main() -> None:\n    pass\n"
+local MAIN = "def main():\n    pass\n"
 
 -- Parses a list of { name, source } pairs into a module list, entry first.
 local function bind_modules(sources)
@@ -52,11 +52,11 @@ end
 return {
   signatures_collected_before_bodies = function()
     local program = bind_source(table.concat({
-      "def main() -> None:",
+      "def main():",
       "    ping(3)",
-      "def ping(n: int) -> None:",
+      "def ping(n: int):",
       "    pong(n)",
-      "def pong(n: int) -> None:",
+      "def pong(n: int):",
       "    ping(n)",
     }, "\n"))
     local main, ping, pong = program.functions[1], program.functions[2], program.functions[3]
@@ -66,16 +66,16 @@ return {
   end,
 
   duplicate_names_rejected = function()
-    eq("3:5: duplicate function 'main'", bind_error(MAIN .. "def main() -> None:\n    pass\n"))
-    eq("1:15: duplicate parameter 'a'", bind_error("def f(a: int, a: int) -> None:\n    pass\n" .. MAIN))
-    eq("1:5: cannot redefine built-in function 'print'", bind_error("def print(x: int) -> None:\n    pass\n" .. MAIN))
+    eq("3:5: duplicate function 'main'", bind_error(MAIN .. "def main():\n    pass\n"))
+    eq("1:15: duplicate parameter 'a'", bind_error("def f(a: int, a: int):\n    pass\n" .. MAIN))
+    eq("1:5: cannot redefine built-in function 'print'", bind_error("def print(x: int):\n    pass\n" .. MAIN))
   end,
 
   main_required = function()
-    eq("1:1: program has no main function", bind_error("def f() -> None:\n    pass\n"))
+    eq("1:1: program has no main function", bind_error("def f():\n    pass\n"))
     local message = "1:5: main must take no parameters and return None"
-    eq(message, bind_error("def main(args: list[str]) -> None:\n    pass\n"))
-    eq(message, bind_error("def main(x: int) -> None:\n    pass\n"))
+    eq(message, bind_error("def main(args: list[str]):\n    pass\n"))
+    eq(message, bind_error("def main(x: int):\n    pass\n"))
     eq(message, bind_error("def main() -> int:\n    return 0\n"))
   end,
 
@@ -83,7 +83,7 @@ return {
     local program = bind_source(table.concat({
       "import sys",
       "import fs",
-      "def main() -> None:",
+      "def main():",
       "    a = sys.args()",
       "    sys.exit(0)",
       "    b = fs.read_file('a')",
@@ -95,14 +95,14 @@ return {
     eq("exit", body[2].call.target.name)
     eq("read_file", body[3].value.target.name)
     eq("3:9: module 'sys' has no function, class, enum, or alias 'missing'",
-      bind_error("import sys\ndef main() -> None:\n    sys.missing()\n"))
-    eq("3:11: module 'sys' cannot be used as a value", bind_error("import sys\ndef main() -> None:\n    print(sys)\n"))
-    bind_source("def exit(status: int) -> None:\n    pass\ndef eprint(x: int) -> None:\n    exit(x)\n" .. MAIN)
+      bind_error("import sys\ndef main():\n    sys.missing()\n"))
+    eq("3:11: module 'sys' cannot be used as a value", bind_error("import sys\ndef main():\n    print(sys)\n"))
+    bind_source("def exit(status: int):\n    pass\ndef eprint(x: int):\n    exit(x)\n" .. MAIN)
   end,
 
   locals_cover_the_whole_body = function()
     local program = bind_source(table.concat({
-      "def f(a: int) -> None:",
+      "def f(a: int):",
       "    if a > 0:",
       "        x = 1",
       "    else:",
@@ -127,7 +127,7 @@ return {
     local program = bind_source(table.concat({
       "def g() -> int:",
       "    return 1",
-      "def main() -> None:",
+      "def main():",
       "    g = 2",
       "    print = g",
       "    g = print",
@@ -141,52 +141,52 @@ return {
 
   calls_on_locals = function()
     -- A local hides a declaration or built-in of the same name, so calls use its value.
-    local main = bind_source("def main() -> None:\n    print(1)\n    print = 2\n").functions[1]
+    local main = bind_source("def main():\n    print(1)\n    print = 2\n").functions[1]
     eq("CallValue", main.body[1].call.kind)
     eq(main.body[2].symbol, main.body[1].call.callee.symbol)
-    local f = bind_source("def f(g: int) -> None:\n    g()\n" .. MAIN).functions[1]
+    local f = bind_source("def f(g: int):\n    g()\n" .. MAIN).functions[1]
     eq(f.params[1].symbol, f.body[1].call.callee.symbol)
   end,
 
   unknown_names_rejected = function()
-    eq("2:9: unknown name 'y'", bind_error("def main() -> None:\n    x = y\n"))
-    eq("2:5: unknown function 'f'", bind_error("def main() -> None:\n    f()\n"))
+    eq("2:9: unknown name 'y'", bind_error("def main():\n    x = y\n"))
+    eq("2:5: unknown function 'f'", bind_error("def main():\n    f()\n"))
   end,
 
   function_values = function()
-    local program = bind_source("def main() -> None:\n    x = main\n")
+    local program = bind_source("def main():\n    x = main\n")
     eq(program.functions[1], program.functions[1].body[1].value.target)
     eq("FunctionValue", program.functions[1].body[1].value.kind)
-    eq("BuiltinValue", bind_source("def main() -> None:\n    print(print)\n").functions[1].body[1].call.args[1].kind)
-    eq("2:9: function 'range' cannot be used as a value", bind_error("def main() -> None:\n    x = range\n"))
-    local time = bind_modules({ { "main", "import time\ndef main() -> None:\n    f = time.time\n" } })
+    eq("BuiltinValue", bind_source("def main():\n    print(print)\n").functions[1].body[1].call.args[1].kind)
+    eq("2:9: function 'range' cannot be used as a value", bind_error("def main():\n    x = range\n"))
+    local time = bind_modules({ { "main", "import time\ndef main():\n    f = time.time\n" } })
     eq("BuiltinValue", time[1].functions[1].body[1].value.kind)
     local geo = { "geo", "class Point:\n    x: int\ndef area(p: Point) -> int:\n    return p.x\n" }
-    local modules = bind_modules({ { "main", "import geo\ndef main() -> None:\n    f = geo.area\n" }, geo })
+    local modules = bind_modules({ { "main", "import geo\ndef main():\n    f = geo.area\n" }, geo })
     eq(modules[2].functions[1], modules[1].functions[1].body[1].value.target)
     eq("main.wlo:3:13: class 'geo.Point' cannot be used as a value",
-      modules_error({ { "main", "import geo\ndef main() -> None:\n    f = geo.Point\n" }, geo }))
+      modules_error({ { "main", "import geo\ndef main():\n    f = geo.Point\n" }, geo }))
   end,
 
   records = function()
     eq("3:7: duplicate class 'A'", bind_error("class A:\n    x: int\nclass A:\n    y: int\n" .. MAIN))
-    eq("3:7: duplicate class 'A'", bind_error("def A() -> None:\n    pass\nclass A:\n    y: int\n" .. MAIN))
-    eq("3:5: duplicate function 'A'", bind_error("class A:\n    x: int\ndef A() -> None:\n    pass\n" .. MAIN))
+    eq("3:7: duplicate class 'A'", bind_error("def A():\n    pass\nclass A:\n    y: int\n" .. MAIN))
+    eq("3:5: duplicate function 'A'", bind_error("class A:\n    x: int\ndef A():\n    pass\n" .. MAIN))
     eq("1:7: cannot redefine built-in function 'len'", bind_error("class len:\n    x: int\n" .. MAIN))
     eq("3:5: duplicate field 'x'", bind_error("class A:\n    x: int\n    x: str\n" .. MAIN))
     local program = bind_source("class A:\n    b: B | None\nclass B:\n    a: A\n    self: B\n"
-      .. "def main() -> None:\n    x = B(A(None), None)\n")
+      .. "def main():\n    x = B(A(None), None)\n")
     eq(program.records[2], program.functions[1].body[1].value.target)
   end,
 
   methods = function()
-    local method = "    def f(self) -> None:\n        pass\n"
+    local method = "    def f(self):\n        pass\n"
     eq("4:9: duplicate method 'f'", bind_error("class A:\n" .. method .. method .. MAIN))
     eq("3:9: method 'x' has the same name as a field",
       bind_error("class A:\n    x: int\n    def x(self) -> int:\n        return 1\n" .. MAIN))
     eq("2:9: method 'message' has the same name as a field",
       bind_error("class E(Exception):\n    def message(self) -> str:\n        return ''\n" .. MAIN))
-    eq("2:17: duplicate parameter 'self'", bind_error("class A:\n    def f(self, self: int) -> None:\n        pass\n" .. MAIN))
+    eq("2:17: duplicate parameter 'self'", bind_error("class A:\n    def f(self, self: int):\n        pass\n" .. MAIN))
     local program = bind_source("class A:\n    def f(self, other: A) -> A:\n        return other\n" .. MAIN)
     local f = program.records[1].methods[1]
     eq(program.records[1], f.class)
@@ -195,16 +195,16 @@ return {
 
   unknown_types = function()
     eq("2:8: unknown type 'Missing'", bind_error("class A:\n    x: Missing\n" .. MAIN))
-    eq("1:10: unknown type 'Missing'", bind_error("def f(a: Missing) -> None:\n    pass\n" .. MAIN))
-    eq("2:13: unknown type 'Missing'", bind_error("def main() -> None:\n    x: list[Missing] = []\n"))
-    eq("2:8: unknown type 'f'", bind_error("def main() -> None:\n    x: f = 1\ndef f() -> None:\n    pass\n"))
+    eq("1:10: unknown type 'Missing'", bind_error("def f(a: Missing):\n    pass\n" .. MAIN))
+    eq("2:13: unknown type 'Missing'", bind_error("def main():\n    x: list[Missing] = []\n"))
+    eq("2:8: unknown type 'f'", bind_error("def main():\n    x: f = 1\ndef f():\n    pass\n"))
   end,
 
   locals_shadow_constructors = function()
     local P = "class P:\n    x: int\n"
-    eq("CallValue", bind_source(P .. "def main() -> None:\n    P = 1\n    p = P(1)\n").functions[1].body[2].value.kind)
-    bind_source(P .. "def main() -> None:\n    P = 1\n    q: P | None = None\n")
-    eq("4:9: class 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
+    eq("CallValue", bind_source(P .. "def main():\n    P = 1\n    p = P(1)\n").functions[1].body[2].value.kind)
+    bind_source(P .. "def main():\n    P = 1\n    q: P | None = None\n")
+    eq("4:9: class 'P' cannot be used as a value", bind_error(P .. "def main():\n    x = P\n"))
   end,
 
   modules = function()
@@ -225,41 +225,41 @@ return {
     local function main(source)
       return { "main", "import geo\n" .. source }
     end
-    local modules = bind_modules({ main("def main() -> None:\n    p: geo.Point = geo.make(1)\n    q = geo.Point(2)\n"), geo })
+    local modules = bind_modules({ main("def main():\n    p: geo.Point = geo.make(1)\n    q = geo.Point(2)\n"), geo })
     local body = modules[1].functions[1].body
     eq(modules[2].declarations.make, body[1].value.target)
     eq(modules[2].declarations.Point, body[2].value.target)
     eq("geo.Point", body[1].annotation.name)
     eq("geo.Point", modules[2].functions[1].return_type.name)
-    eq("main.wlo:2:5: duplicate function 'geo'", modules_error({ main("def geo() -> None:\n    pass\n" .. MAIN), geo }))
+    eq("main.wlo:2:5: duplicate function 'geo'", modules_error({ main("def geo():\n    pass\n" .. MAIN), geo }))
     eq("main.wlo:2:7: duplicate class 'geo'", modules_error({ main("class geo:\n    x: int\n" .. MAIN), geo }))
     eq("main.wlo:2:8: duplicate import 'geo'", modules_error({ main("import geo\n" .. MAIN), geo }))
     eq("main.wlo:1:8: cannot redefine built-in function 'len'",
-      modules_error({ { "main", "import len\n" .. MAIN }, { "len", "def f() -> None:\n    pass\n" } }))
-    eq("main.wlo:3:8: unknown module 'nope'", modules_error({ main("def main() -> None:\n    x: nope.Point = 1\n"), geo }))
-    eq("main.wlo:3:8: unknown type 'geo.make'", modules_error({ main("def main() -> None:\n    x: geo.make = 1\n"), geo }))
+      modules_error({ { "main", "import len\n" .. MAIN }, { "len", "def f():\n    pass\n" } }))
+    eq("main.wlo:3:8: unknown module 'nope'", modules_error({ main("def main():\n    x: nope.Point = 1\n"), geo }))
+    eq("main.wlo:3:8: unknown type 'geo.make'", modules_error({ main("def main():\n    x: geo.make = 1\n"), geo }))
     eq("main.wlo:3:13: module 'geo' has no function, class, enum, or alias 'nope'",
-      modules_error({ main("def main() -> None:\n    x = geo.nope()\n"), geo }))
+      modules_error({ main("def main():\n    x = geo.nope()\n"), geo }))
     eq("main.wlo:3:13: '_hidden' is private to module 'geo'",
-      modules_error({ main("def main() -> None:\n    x = geo._hidden()\n"), geo }))
+      modules_error({ main("def main():\n    x = geo._hidden()\n"), geo }))
     eq("main.wlo:2:10: '_Secret' is private to module 'geo'",
-      modules_error({ main("def f(s: geo._Secret) -> None:\n    pass\n" .. MAIN), geo }))
-    eq("main.wlo:3:9: module 'geo' cannot be used as a value", modules_error({ main("def main() -> None:\n    x = geo\n"), geo }))
+      modules_error({ main("def f(s: geo._Secret):\n    pass\n" .. MAIN), geo }))
+    eq("main.wlo:3:9: module 'geo' cannot be used as a value", modules_error({ main("def main():\n    x = geo\n"), geo }))
     -- A local shadows the module name, so this is a method call on an int.
-    local shadowed = bind_modules({ main("def main() -> None:\n    geo = 1\n    x = geo.make(1)\n"), geo })
+    local shadowed = bind_modules({ main("def main():\n    geo = 1\n    x = geo.make(1)\n"), geo })
     eq("MethodCall", shadowed[1].functions[1].body[2].value.kind)
     eq("main.wlo:4:1: imports must come before declarations", modules_error({ { "main", "import geo\n" .. MAIN .. "import x\n" }, geo }))
   end,
 
   collection_builtins = function()
     eq("1:5: cannot redefine built-in function 'len'", bind_error("def len(x: int) -> int:\n    return x\n" .. MAIN))
-    eq("1:5: cannot redefine built-in function 'range'", bind_error("def range() -> None:\n    pass\n" .. MAIN))
-    local main = bind_source("def main() -> None:\n    range = 3\n    for i in range(3):\n        pass\n").functions[1]
+    eq("1:5: cannot redefine built-in function 'range'", bind_error("def range():\n    pass\n" .. MAIN))
+    local main = bind_source("def main():\n    range = 3\n    for i in range(3):\n        pass\n").functions[1]
     eq("CallValue", main.body[2].iterable.kind)
   end,
 
   for_names_are_locals = function()
-    local program = bind_source("def f() -> None:\n    pass\ndef main() -> None:\n    for f in [1]:\n        print(f)\n")
+    local program = bind_source("def f():\n    pass\ndef main():\n    for f in [1]:\n        print(f)\n")
     local main = program.functions[2]
     eq("f", main.locals[1].name)
     eq(main.body[1].symbol, main.body[1].body[1].call.args[1].symbol)
@@ -269,7 +269,7 @@ return {
     local program = bind_source(table.concat({
       "def f(n: int) -> int:",
       "    return n",
-      "def main() -> None:",
+      "def main():",
       "    print(1 + f(f(2)))",
     }, "\n"))
     local f = program.functions[1]
@@ -283,16 +283,16 @@ return {
 
   exception_classes = function()
     eq("1:7: cannot redefine built-in class 'ValueError'", bind_error("class ValueError(Exception):\n    pass\n" .. MAIN))
-    eq("2:9: class 'KeyError' cannot be used as a value", bind_error("def main() -> None:\n    x = KeyError\n"))
-    local program = bind_source("def main() -> None:\n    e: Exception | None = ValueError('x')\n")
+    eq("2:9: class 'KeyError' cannot be used as a value", bind_error("def main():\n    x = KeyError\n"))
+    local program = bind_source("def main():\n    e: Exception | None = ValueError('x')\n")
     eq("Exception | None", program.functions[1].body[1].annotation.name)
-    local main = bind_source("def main() -> None:\n    ValueError = 1\n    e: ValueError = ValueError('x')\n").functions[1]
+    local main = bind_source("def main():\n    ValueError = 1\n    e: ValueError = ValueError('x')\n").functions[1]
     eq("CallValue", main.body[2].value.kind)
   end,
 
   except_classes = function()
     local function clause(class)
-      return "def f() -> None:\n    pass\nclass P:\n    x: int\ndef main() -> None:\n    try:\n        pass\n    except "
+      return "def f():\n    pass\nclass P:\n    x: int\ndef main():\n    try:\n        pass\n    except "
         .. class .. ":\n        pass\n"
     end
     eq("8:12: unknown type 'Missing'", bind_error(clause("Missing")))
@@ -306,10 +306,10 @@ return {
 
   bare_raise_only_in_except = function()
     local message = "bare 'raise' is only allowed in an 'except' clause"
-    eq("2:5: " .. message, bind_error("def main() -> None:\n    raise\n"))
-    eq("3:9: " .. message, bind_error("def main() -> None:\n    try:\n        raise\n    finally:\n        pass\n"))
+    eq("2:5: " .. message, bind_error("def main():\n    raise\n"))
+    eq("3:9: " .. message, bind_error("def main():\n    try:\n        raise\n    finally:\n        pass\n"))
     local program = bind_source(table.concat({
-      "def main() -> None:",
+      "def main():",
       "    try:",
       "        pass",
       "    except Exception:",
@@ -334,19 +334,19 @@ return {
     eq("list[Tree]", program.records[1].fields[1].type.members[1].name)
     eq(program.aliases[2].type, program.records[1].fields[1].type.members[1].element.type)
     -- A local shadows the alias, but annotations still name it.
-    program = bind_source("type N = int | None\ndef main() -> None:\n    N = 1\n    x: N = N\n")
+    program = bind_source("type N = int | None\ndef main():\n    N = 1\n    x: N = N\n")
     eq("N", program.functions[1].body[2].annotation.name)
     eq(program.functions[1].locals[1], program.functions[1].body[2].value.symbol)
-    eq("3:6: duplicate alias 'f'", bind_error("def f() -> None:\n    pass\ntype f = int\n" .. MAIN))
+    eq("3:6: duplicate alias 'f'", bind_error("def f():\n    pass\ntype f = int\n" .. MAIN))
     eq("1:6: cannot redefine built-in function 'isinstance'", bind_error("type isinstance = int\n" .. MAIN))
-    eq("1:5: cannot redefine built-in function 'isinstance'", bind_error("def isinstance() -> None:\n    pass\n" .. MAIN))
-    eq("3:9: alias 'N' cannot be used as a value", bind_error("type N = int\ndef main() -> None:\n    x = N\n"))
-    eq("3:9: alias 'N' cannot be called", bind_error("type N = int\ndef main() -> None:\n    x = N(1)\n"))
+    eq("1:5: cannot redefine built-in function 'isinstance'", bind_error("def isinstance():\n    pass\n" .. MAIN))
+    eq("3:9: alias 'N' cannot be used as a value", bind_error("type N = int\ndef main():\n    x = N\n"))
+    eq("3:9: alias 'N' cannot be called", bind_error("type N = int\ndef main():\n    x = N(1)\n"))
     eq("3:23: alias 'N' cannot be used in isinstance",
-      bind_error("type N = int\ndef main() -> None:\n    x = isinstance(1, N)\n"))
+      bind_error("type N = int\ndef main():\n    x = isinstance(1, N)\n"))
     eq("3:9: cannot call local variable 'isinstance'",
-      bind_error("def main() -> None:\n    isinstance = 1\n    x = isinstance(1, int)\n"))
-    eq("3:23: unknown type 'Nope'", bind_error("def main() -> None:\n    x = 1\n    y = isinstance(x, Nope)\n"))
+      bind_error("def main():\n    isinstance = 1\n    x = isinstance(1, int)\n"))
+    eq("3:23: unknown type 'Nope'", bind_error("def main():\n    x = 1\n    y = isinstance(x, Nope)\n"))
   end,
 
   recursive_aliases = function()
@@ -362,19 +362,19 @@ return {
       bind_error("class E(Exception):\n    pass\ntype T = Exception | E\n" .. MAIN))
     eq("1:22: a union can have only one list member", bind_error("type T = list[int] | list[str]\n" .. MAIN))
     eq("2:14: union members None and None overlap", bind_error("type N = int | None\ntype T = N | None\n" .. MAIN))
-    eq("1:15: dictionary keys must be int, str, or an enum", bind_error("def f(x: dict[float, int]) -> None:\n    pass\n" .. MAIN))
-    bind_source("type Key = str\ndef f(x: dict[Key, int]) -> None:\n    pass\n" .. MAIN)
+    eq("1:15: dictionary keys must be int, str, or an enum", bind_error("def f(x: dict[float, int]):\n    pass\n" .. MAIN))
+    bind_source("type Key = str\ndef f(x: dict[Key, int]):\n    pass\n" .. MAIN)
   end,
 
   aliases_across_modules = function()
     local shapes = { "shapes", "class Circle:\n    r: float\ntype Shape = Circle | None\ntype _Hidden = int\n" }
     local modules = bind_modules({
-      { "main", "import shapes\ntype Self = list[Self]\ndef main() -> None:\n    s: shapes.Shape = None\n" }, shapes })
+      { "main", "import shapes\ntype Self = list[Self]\ndef main():\n    s: shapes.Shape = None\n" }, shapes })
     eq("shapes.Shape", modules[1].functions[1].body[1].annotation.name)
     eq("main.wlo:2:10: '_Hidden' is private to module 'shapes'",
-      modules_error({ { "main", "import shapes\ndef f(x: shapes._Hidden) -> None:\n    pass\n" .. MAIN }, shapes }))
+      modules_error({ { "main", "import shapes\ndef f(x: shapes._Hidden):\n    pass\n" .. MAIN }, shapes }))
     eq("main.wlo:3:16: alias 'shapes.Shape' cannot be called",
-      modules_error({ { "main", "import shapes\ndef main() -> None:\n    x = shapes.Shape(1)\n" }, shapes }))
+      modules_error({ { "main", "import shapes\ndef main():\n    x = shapes.Shape(1)\n" }, shapes }))
   end,
 
   qualified_modules = function()
@@ -384,80 +384,80 @@ return {
     local function entry(text)
       return { "main", text }
     end
-    local modules = bind_modules({ entry("import app.util\nimport app.other\ndef main() -> None:\n    print(app.util.f() + app.other.g())\n"), util, other })
+    local modules = bind_modules({ entry("import app.util\nimport app.other\ndef main():\n    print(app.util.f() + app.other.g())\n"), util, other })
     eq(modules[2].declarations.f, modules[1].functions[1].body[1].call.args[1].left.target)
     eq("main.wlo:2:8: 'app' is imported as a module and as a namespace",
       modules_error({ entry("import app.util\nimport app\n" .. MAIN), util, app }))
-    eq("main.wlo:2:5: duplicate function 'app'", modules_error({ entry("import app.util\ndef app() -> None:\n    pass\n" .. MAIN), util }))
+    eq("main.wlo:2:5: duplicate function 'app'", modules_error({ entry("import app.util\ndef app():\n    pass\n" .. MAIN), util }))
     eq("main.wlo:3:11: module 'app' cannot be used as a value",
-      modules_error({ entry("import app.util\ndef main() -> None:\n    print(app)\n"), util }))
+      modules_error({ entry("import app.util\ndef main():\n    print(app)\n"), util }))
     eq("main.wlo:3:15: unknown module 'app.missing'",
-      modules_error({ entry("import app.util\ndef main() -> None:\n    print(app.missing.f())\n"), util }))
+      modules_error({ entry("import app.util\ndef main():\n    print(app.missing.f())\n"), util }))
     eq("main.wlo:3:20: module 'app.util' has no function, class, enum, or alias 'nope'",
-      modules_error({ entry("import app.util\ndef main() -> None:\n    print(app.util.nope())\n"), util }))
+      modules_error({ entry("import app.util\ndef main():\n    print(app.util.nope())\n"), util }))
     -- A local shadows the namespace, so the call stays a method call on it.
-    modules = bind_modules({ entry("import app.util\ndef main() -> None:\n    app = 1\n    print(app.util.f())\n"), util })
+    modules = bind_modules({ entry("import app.util\ndef main():\n    app = 1\n    print(app.util.f())\n"), util })
     eq("MethodCall", modules[1].functions[1].body[2].call.args[1].kind)
   end,
 
   enums = function()
     local E = "enum E:\n    A\n    B\n"
-    local program = bind_source(E .. "def main() -> None:\n    x = E.A\ndef f(E: int) -> None:\n    x = E.A\n")
+    local program = bind_source(E .. "def main():\n    x = E.A\ndef f(E: int):\n    x = E.A\n")
     eq("EnumMember", program.functions[1].body[1].value.kind)
     eq(program.enums[1], program.functions[1].body[1].value.enum)
     -- A local hides the enum, so this is a field access on it.
     eq("Field", program.functions[2].body[1].value.kind)
     eq("4:5: duplicate enum member 'A'", bind_error("enum E:\n    A\n    B\n    A\n" .. MAIN))
     eq("4:6: duplicate enum 'E'", bind_error("class E:\n    x: int\n\nenum E:\n    A\n" .. MAIN))
-    eq("5:9: enum 'E' cannot be used as a value", bind_error(E .. "def main() -> None:\n    x = E\n"))
-    eq("5:9: enum 'E' cannot be called", bind_error(E .. "def main() -> None:\n    x = E()\n"))
-    eq("5:11: enum 'E' has no member 'C'", bind_error(E .. "def main() -> None:\n    x = E.C\n"))
-    eq("5:11: enum 'E' has no method 'A'", bind_error(E .. "def main() -> None:\n    x = E.A()\n"))
-    eq("5:7: cannot assign to a member of enum 'E'", bind_error(E .. "def main() -> None:\n    E.A = E.B\n"))
+    eq("5:9: enum 'E' cannot be used as a value", bind_error(E .. "def main():\n    x = E\n"))
+    eq("5:9: enum 'E' cannot be called", bind_error(E .. "def main():\n    x = E()\n"))
+    eq("5:11: enum 'E' has no member 'C'", bind_error(E .. "def main():\n    x = E.C\n"))
+    eq("5:11: enum 'E' has no method 'A'", bind_error(E .. "def main():\n    x = E.A()\n"))
+    eq("5:7: cannot assign to a member of enum 'E'", bind_error(E .. "def main():\n    E.A = E.B\n"))
     local geo = { "geo", E }
-    local modules = bind_modules({ { "main", "import geo\ndef main() -> None:\n    x: geo.E = geo.E.B\n" }, geo })
+    local modules = bind_modules({ { "main", "import geo\ndef main():\n    x: geo.E = geo.E.B\n" }, geo })
     eq(modules[2].enums[1], modules[1].functions[1].body[1].value.enum)
     eq("geo.E", modules[1].functions[1].body[1].annotation.name)
     eq("main.wlo:3:15: enum 'geo.E' has no member 'C'",
-      modules_error({ { "main", "import geo\ndef main() -> None:\n    x = geo.E.C\n" }, geo }))
+      modules_error({ { "main", "import geo\ndef main():\n    x = geo.E.C\n" }, geo }))
     eq("main.wlo:3:13: enum 'geo.E' cannot be called",
-      modules_error({ { "main", "import geo\ndef main() -> None:\n    x = geo.E()\n" }, geo }))
+      modules_error({ { "main", "import geo\ndef main():\n    x = geo.E()\n" }, geo }))
   end,
 
   enum_defaults = function()
     local E = "enum E:\n    A\n    B\nenum F:\n    A\n"
-    local program = bind_source(E .. "class C:\n    e: E = E.B\ndef f(e: E = E.A) -> None:\n    pass\n" .. MAIN)
+    local program = bind_source(E .. "class C:\n    e: E = E.B\ndef f(e: E = E.A):\n    pass\n" .. MAIN)
     eq("EnumMember", program.records[1].fields[1].default.kind)
     eq(program.enums[1], program.functions[1].params[1].default.enum)
-    eq("6:16: enum 'E' has no member 'C'", bind_error(E .. "def f(e: E = E.C) -> None:\n    pass\n" .. MAIN))
-    eq("6:16: expected F, received E", bind_error(E .. "def f(e: F = E.A) -> None:\n    pass\n" .. MAIN))
-    eq("6:16: unknown enum 'q'", bind_error(E .. "def f(e: int = q.A) -> None:\n    pass\n" .. MAIN))
+    eq("6:16: enum 'E' has no member 'C'", bind_error(E .. "def f(e: E = E.C):\n    pass\n" .. MAIN))
+    eq("6:16: expected F, received E", bind_error(E .. "def f(e: F = E.A):\n    pass\n" .. MAIN))
+    eq("6:16: unknown enum 'q'", bind_error(E .. "def f(e: int = q.A):\n    pass\n" .. MAIN))
     local geo = { "geo", E }
-    local modules = bind_modules({ { "main", "import geo\ndef f(e: geo.E = geo.E.B) -> None:\n    pass\n" .. MAIN }, geo })
+    local modules = bind_modules({ { "main", "import geo\ndef f(e: geo.E = geo.E.B):\n    pass\n" .. MAIN }, geo })
     eq(modules[2].enums[1], modules[1].functions[1].params[1].default.enum)
   end,
 
   tuples = function()
-    local program = bind_source("type Pair = tuple[int, str]\ndef f(p: Pair, e: tuple[()]) -> None:\n    pass\n" .. MAIN)
+    local program = bind_source("type Pair = tuple[int, str]\ndef f(p: Pair, e: tuple[()]):\n    pass\n" .. MAIN)
     eq("tuple[int, str]", program.functions[1].params[1].type.name)
     eq("tuple[()]", program.functions[1].params[2].type.name)
     eq("list[tuple[int, tuple[()]]]",
-      bind_source("def f(x: list[tuple[int, tuple[()]]]) -> None:\n    pass\n" .. MAIN).functions[1].params[1].type.name)
+      bind_source("def f(x: list[tuple[int, tuple[()]]]):\n    pass\n" .. MAIN).functions[1].params[1].type.name)
     eq("1:23: a union can have only one tuple member",
-      bind_error("def f(x: tuple[int] | tuple[str]) -> None:\n    pass\n" .. MAIN))
+      bind_error("def f(x: tuple[int] | tuple[str]):\n    pass\n" .. MAIN))
   end,
 
   callable_types = function()
     local P = "class P:\n    n: int\n"
-    local program = bind_source(P .. "def f(g: (int, str | None) -> bool, h: ((int) -> int) | None) -> None:\n    pass\n" .. MAIN)
+    local program = bind_source(P .. "def f(g: (int, str | None) -> bool, h: ((int) -> int) | None):\n    pass\n" .. MAIN)
     eq("(int, str | None) -> bool", program.functions[1].params[1].type.name)
     eq("((int) -> int) | None", program.functions[1].params[2].type.name)
     eq("list[((int) -> int) | None]",
-      bind_source("def f(g: list[((int) -> int) | None]) -> None:\n    pass\n" .. MAIN).functions[1].params[1].type.name)
-    eq("3:10: type 'P' does not take type arguments", bind_error(P .. "def f(g: P[int]) -> None:\n    pass\n" .. MAIN))
+      bind_source("def f(g: list[((int) -> int) | None]):\n    pass\n" .. MAIN).functions[1].params[1].type.name)
+    eq("3:10: type 'P' does not take type arguments", bind_error(P .. "def f(g: P[int]):\n    pass\n" .. MAIN))
     eq("3:28: a union can have only one callable member",
-      bind_error(P .. "def f(g: ((int) -> int) | ((str) -> int)) -> None:\n    pass\n" .. MAIN))
-    eq("1:10: unknown module 'typing'", bind_error("def f(g: typing.Callable) -> None:\n    pass\n" .. MAIN))
+      bind_error(P .. "def f(g: ((int) -> int) | ((str) -> int)):\n    pass\n" .. MAIN))
+    eq("1:10: unknown module 'typing'", bind_error("def f(g: typing.Callable):\n    pass\n" .. MAIN))
   end,
 
   generic_functions = function()
@@ -467,46 +467,46 @@ return {
     eq(params[1].type.element.type, program.functions[1].return_type)
     eq("T | None", params[2].type.name)
     eq("1:13: a type parameter can be in a union only with None",
-      bind_error("def f[T](x: T | int) -> None:\n    pass\n" .. MAIN))
+      bind_error("def f[T](x: T | int):\n    pass\n" .. MAIN))
     eq("2:11: type parameter 'T' hides another type parameter",
       bind_error("def f[T](x: T) -> T:\n    def g[T](y: T) -> T:\n        return y\n    return x\n" .. MAIN))
     eq("2:26: type parameter 'T' cannot be used in isinstance",
       bind_error("def f[T](x: T) -> bool:\n    return isinstance(x, T)\n" .. MAIN))
-    eq("FunctionValue", bind_source("def f[T](x: T) -> T:\n    return x\ndef main() -> None:\n    g = f[int]\n")
+    eq("FunctionValue", bind_source("def f[T](x: T) -> T:\n    return x\ndef main():\n    g = f[int]\n")
       .functions[2].body[1].value.kind)
-    eq("Index", bind_source("def main() -> None:\n    xs = [1]\n    i = 0\n    y = xs[i]\n").functions[1].body[3].value.kind)
+    eq("Index", bind_source("def main():\n    xs = [1]\n    i = 0\n    y = xs[i]\n").functions[1].body[3].value.kind)
     -- A subscript inside brackets is an index too.
-    local nested = bind_source("def main() -> None:\n    xs = [1]\n    ys = [0]\n    i = 0\n    y = xs[ys[i]]\n")
+    local nested = bind_source("def main():\n    xs = [1]\n    ys = [0]\n    i = 0\n    y = xs[ys[i]]\n")
       .functions[1].body[4].value
     eq("Index Index", nested.kind .. " " .. nested.index.kind)
     -- An index read from brackets keeps its own span and expression.
-    local value = bind_source("def main() -> None:\n    xs = [1]\n    i = 0\n    y = xs[i] + xs[None]\n")
+    local value = bind_source("def main():\n    xs = [1]\n    i = 0\n    y = xs[i] + xs[None]\n")
       .functions[1].body[3].value
     eq("4:11 None", value.left.span.line .. ":" .. value.left.span.col .. " " .. value.right.index.kind)
-    eq("4:14: unsupported operator '|'", bind_error("def main() -> None:\n    xs = [1]\n    i = 0\n    y = xs[i | i]\n"))
-    eq("4:5: 'g' is not generic", bind_error("def g(x: int) -> None:\n    pass\ndef main() -> None:\n    g[int](1)\n"))
-    local main = bind_source("def main() -> None:\n    xs = [main]\n    i = 0\n    xs[i]()\n").functions[1]
+    eq("4:14: unsupported operator '|'", bind_error("def main():\n    xs = [1]\n    i = 0\n    y = xs[i | i]\n"))
+    eq("4:5: 'g' is not generic", bind_error("def g(x: int):\n    pass\ndef main():\n    g[int](1)\n"))
+    local main = bind_source("def main():\n    xs = [main]\n    i = 0\n    xs[i]()\n").functions[1]
     eq("Index", main.body[3].call.callee.kind)
-    eq("3:5: 'len' is not generic", bind_error("def main() -> None:\n    xs = [1]\n    len[int](xs)\n"))
+    eq("3:5: 'len' is not generic", bind_error("def main():\n    xs = [1]\n    len[int](xs)\n"))
   end,
 
   generic_classes = function()
     local B = "class Box[T]:\n    value: T\n\n    def get(self) -> T:\n        return self.value\n"
-    eq("6:10: type 'Box' needs type arguments", bind_error(B .. "def f(b: Box) -> None:\n    pass\n" .. MAIN))
-    eq("6:10: 'Box' expects 1 type argument, received 2", bind_error(B .. "def f(b: Box[int, str]) -> None:\n    pass\n" .. MAIN))
+    eq("6:10: type 'Box' needs type arguments", bind_error(B .. "def f(b: Box):\n    pass\n" .. MAIN))
+    eq("6:10: 'Box' expects 1 type argument, received 2", bind_error(B .. "def f(b: Box[int, str]):\n    pass\n" .. MAIN))
     eq("1:9: exception classes cannot be generic", bind_error("class E[T](Exception):\n    pass\n" .. MAIN))
     eq("4:11: type parameter 'T' hides another type parameter",
-      bind_error("class B[T]:\n    v: T\n\n    def m[T](self) -> None:\n        pass\n" .. MAIN))
+      bind_error("class B[T]:\n    v: T\n\n    def m[T](self):\n        pass\n" .. MAIN))
     eq("6:21: a union can have only one specialization of Box",
-      bind_error(B .. "def f(b: Box[int] | Box[str]) -> None:\n    pass\n" .. MAIN))
-    local program = bind_source(B .. "def f(b: Box[int]) -> None:\n    pass\n" .. MAIN)
+      bind_error(B .. "def f(b: Box[int] | Box[str]):\n    pass\n" .. MAIN))
+    local program = bind_source(B .. "def f(b: Box[int]):\n    pass\n" .. MAIN)
     eq("Box[int]", program.functions[1].params[1].type.name)
     eq("Box[T]", program.records[1].methods[1].params[1].type.name)
   end,
 
   generic_aliases_and_bounds = function()
     local A = "type Pair[K, V] = tuple[K, V]\ntype Nested[T] = list[Nested[T]] | None\n"
-    local program = bind_source(A .. "def f(p: Pair[int, str], n: Nested[int]) -> None:\n    pass\n" .. MAIN)
+    local program = bind_source(A .. "def f(p: Pair[int, str], n: Nested[int]):\n    pass\n" .. MAIN)
     eq("tuple[int, str]", program.functions[1].params[1].type.name)
     eq("Nested[int]", program.functions[1].params[2].type.name)
     eq("1:15: alias 'Bad' expands to itself", bind_error("type Bad[T] = Bad[T]\n" .. MAIN))
@@ -514,35 +514,35 @@ return {
     -- Each use of a generic alias is its own application, however many there are.
     local uses = {}
     for i = 1, 120 do
-      uses[i] = "def f" .. i .. "(p: Pair[list[int], str]) -> None:\n    pass\n"
+      uses[i] = "def f" .. i .. "(p: Pair[list[int], str]):\n    pass\n"
     end
     bind_source(A .. table.concat(uses) .. MAIN)
-    eq("3:10: type 'Pair' needs type arguments", bind_error(A .. "def f(p: Pair) -> None:\n    pass\n" .. MAIN))
+    eq("3:10: type 'Pair' needs type arguments", bind_error(A .. "def f(p: Pair):\n    pass\n" .. MAIN))
     eq("1:10: a type parameter's bound must be a class, native type, or protocol",
-      bind_error("def f[T: int](x: T) -> None:\n    pass\n" .. MAIN))
+      bind_error("def f[T: int](x: T):\n    pass\n" .. MAIN))
     eq("5:14: type argument int does not satisfy the bound N of 'T'",
-      bind_error("class N:\n    n: int\nclass Box[T: N]:\n    v: T\ndef f(b: Box[int]) -> None:\n    pass\n" .. MAIN))
+      bind_error("class N:\n    n: int\nclass Box[T: N]:\n    v: T\ndef f(b: Box[int]):\n    pass\n" .. MAIN))
   end,
 
   nonlocal_declarations = function()
-    local main = bind_source("def main() -> None:\n    x = 1\n    def g() -> None:\n        nonlocal x\n        x = 2\n"
+    local main = bind_source("def main():\n    x = 1\n    def g():\n        nonlocal x\n        x = 2\n"
       .. "    g()\n").functions[1]
     local g = main.body[2].fn
     eq(main.locals[1], g.body[2].symbol)
     eq(0, #g.locals)
     eq(true, main.locals[1].captured)
     local function nested(body)
-      return "def main() -> None:\n    x = 1\n    def g(p: int) -> None:\n" .. body:gsub("[^\n]+", "        %0") .. "\n    g(1)\n"
+      return "def main():\n    x = 1\n    def g(p: int):\n" .. body:gsub("[^\n]+", "        %0") .. "\n    g(1)\n"
     end
     eq("4:18: nonlocal 'q' must name a variable of an enclosing function", bind_error(nested("nonlocal q")))
     eq("4:18: nonlocal 'p' must name a variable of an enclosing function", bind_error(nested("nonlocal p")))
     eq("4:15: 'x' is used before its nonlocal declaration", bind_error(nested("print(x)\nnonlocal x")))
     eq("5:18: 'x' is used before its nonlocal declaration", bind_error(nested("x = 2\nnonlocal x")))
-    eq("2:14: nonlocal 'x' must name a variable of an enclosing function", bind_error("def main() -> None:\n    nonlocal x\n"))
+    eq("2:14: nonlocal 'x' must name a variable of an enclosing function", bind_error("def main():\n    nonlocal x\n"))
   end,
 
   nested_functions = function()
-    local main = bind_source("def main() -> None:\n    x = 1\n    def g() -> int:\n        y = x\n"
+    local main = bind_source("def main():\n    x = 1\n    def g() -> int:\n        y = x\n"
       .. "        def h() -> int:\n            return x\n        x = 2\n        return y\n    print(g())\n").functions[1]
     local g = main.body[2].fn
     local h = g.body[2].fn
@@ -552,7 +552,7 @@ return {
     eq(true, g.locals[3].captured)
     eq(nil, main.locals[1].captured)
     eq(main.locals[2], main.body[2].symbol)
-    main = bind_source("def main() -> None:\n    x = 1\n    def g() -> None:\n        def h() -> int:\n"
+    main = bind_source("def main():\n    x = 1\n    def g():\n        def h() -> int:\n"
       .. "            return x\n        print(h())\n    g()\n").functions[1]
     g = main.body[2].fn
     eq(main.locals[1], g.captures[1].symbol)
@@ -561,31 +561,31 @@ return {
 
   tuple_defaults = function()
     local E = "enum E:\n    A\n"
-    local program = bind_source(E .. "def f(t: tuple[E, int] = (E.A, 1)) -> None:\n    pass\n" .. MAIN)
+    local program = bind_source(E .. "def f(t: tuple[E, int] = (E.A, 1)):\n    pass\n" .. MAIN)
     eq(program.enums[1], program.functions[1].params[1].default.elements[1].enum)
     eq("3:28: expected tuple[int, int], received tuple[int, str]",
-      bind_error(E .. "def f(t: tuple[int, int] = (1, 'a')) -> None:\n    pass\n" .. MAIN))
+      bind_error(E .. "def f(t: tuple[int, int] = (1, 'a')):\n    pass\n" .. MAIN))
   end,
 
   enum_dictionary_keys = function()
     local E = "enum E:\n    A\nenum F:\n    A\n"
-    eq("dict[E, int]", bind_source(E .. "def f(d: dict[E, int]) -> None:\n    pass\n" .. MAIN).functions[1].params[1].type.name)
+    eq("dict[E, int]", bind_source(E .. "def f(d: dict[E, int]):\n    pass\n" .. MAIN).functions[1].params[1].type.name)
     eq("5:15: dictionary keys must be int, str, or an enum",
-      bind_error(E .. "def f(d: dict[E | F, int]) -> None:\n    pass\n" .. MAIN))
+      bind_error(E .. "def f(d: dict[E | F, int]):\n    pass\n" .. MAIN))
   end,
   protocols = function()
     local P = "protocol P:\n    def area(self) -> int\n"
     local C = "class C:\n    n: int\n\n    def area(self) -> int:\n        return self.n\n"
-    eq("4:9: protocol 'P' cannot be called", bind_error(P .. "def main() -> None:\n    x = P()\n"))
-    eq("4:23: protocol 'P' cannot be used in isinstance", bind_error(P .. "def main() -> None:\n    x = isinstance(1, P)\n"))
-    eq("4:9: protocol 'P' cannot be used as a value", bind_error(P .. "def main() -> None:\n    x = P\n"))
+    eq("4:9: protocol 'P' cannot be called", bind_error(P .. "def main():\n    x = P()\n"))
+    eq("4:23: protocol 'P' cannot be used in isinstance", bind_error(P .. "def main():\n    x = isinstance(1, P)\n"))
+    eq("4:9: protocol 'P' cannot be used as a value", bind_error(P .. "def main():\n    x = P\n"))
     eq("3:10: duplicate protocol 'P'", bind_error(P .. P .. MAIN))
-    eq("8:14: union members C and P overlap", bind_error(P .. C .. "def f(x: C | P) -> None:\n    pass\n" .. MAIN))
+    eq("8:14: union members C and P overlap", bind_error(P .. C .. "def f(x: C | P):\n    pass\n" .. MAIN))
     eq("4:23: protocol 'Iterable' cannot be used in isinstance",
-      bind_error(P .. "def main() -> None:\n    x = isinstance(1, Iterable)\n"))
-    eq("1:10: type 'Iterable' needs type arguments", bind_error("def f(x: Iterable) -> None:\n    pass\n" .. MAIN))
+      bind_error(P .. "def main():\n    x = isinstance(1, Iterable)\n"))
+    eq("1:10: type 'Iterable' needs type arguments", bind_error("def f(x: Iterable):\n    pass\n" .. MAIN))
     eq("(P) -> None",
-      bind_source(P .. "def f(x: (P) -> None) -> None:\n    pass\n" .. MAIN)
+      bind_source(P .. "def f(x: (P) -> None):\n    pass\n" .. MAIN)
         .functions[1].params[1].type.name)
   end,
 }

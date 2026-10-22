@@ -1,6 +1,6 @@
 import json
 
-def main() -> None:
+def main():
     doc = json.parse('{"name": "Willow", "ports": [80, 443]}')
     if isinstance(doc, dict):
         ports = doc["ports"]

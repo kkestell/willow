@@ -64,27 +64,27 @@ return {
   end,
 
   output_is_deterministic = function()
-    local source = "def f(n: int) -> int:\n    return n * 2\ndef main() -> None:\n    print(f(1) + f(2))\n"
+    local source = "def f(n: int) -> int:\n    return n * 2\ndef main():\n    print(f(1) + f(2))\n"
     local first = emit_source(source)
     eq(first, emit_source(source))
     eq(nil, first:find("0x", 1, true))
   end,
 
   case_runtime_only_when_used = function()
-    eq(nil, emit_source("def main() -> None:\n    print('a'.strip())\n"):find("__wlo_LOWER_RUNS", 1, true))
-    assert(emit_source("def main() -> None:\n    print('a'.upper())\n"):find("__wlo_LOWER_RUNS", 1, true))
+    eq(nil, emit_source("def main():\n    print('a'.strip())\n"):find("__wlo_LOWER_RUNS", 1, true))
+    assert(emit_source("def main():\n    print('a'.upper())\n"):find("__wlo_LOWER_RUNS", 1, true))
   end,
 
   host_runtime_only_when_used = function()
-    eq(nil, emit_source("def main() -> None:\n    print(1)\n"):find("__wlo_c_stat", 1, true))
-    assert(emit_source("import fs\ndef main() -> None:\n    print(fs.exists('x'))\n"):find("__wlo_c_stat", 1, true))
+    eq(nil, emit_source("def main():\n    print(1)\n"):find("__wlo_c_stat", 1, true))
+    assert(emit_source("import fs\ndef main():\n    print(fs.exists('x'))\n"):find("__wlo_c_stat", 1, true))
   end,
 
   module_tables_stay_distinct = function()
     local function emit_modules(names)
       local modules = {}
       for i, name in ipairs(names) do
-        local source = i == 1 and "import a.b\nimport a_0b\ndef main() -> None:\n    print(a.b.f() + a_0b.f())\n"
+        local source = i == 1 and "import a.b\nimport a_0b\ndef main():\n    print(a.b.f() + a_0b.f())\n"
           or "def f() -> int:\n    return " .. i .. "\n"
         local program = parser.parse(lexer.lex(source, name .. ".wlo"))
         program.name, program.path = name, name .. ".wlo"
@@ -103,7 +103,7 @@ return {
     local text = emit_source(table.concat({
       "def f(a: int, b: int) -> int:",
       "    return a * b + f(a - 1, b) - -a",
-      "def main() -> None:",
+      "def main():",
       "    x = f(f(1, 2) + f(3, 4), f(5, f(6, 7)))",
       "    print(f(x, 1) == 2 and f(1, 1) < 3)",
     }, "\n"))
@@ -123,7 +123,7 @@ return {
       "    return n == 0 or odd(n - 1)",
       "def odd(n: int) -> bool:",
       "    return n != 0 and even(n - 1)",
-      "def main() -> None:",
+      "def main():",
       "    print(even(10))",
     }, "\n"))
     assert(text:find("\nlocal odd\n", 1, true), "odd is forward declared")
@@ -133,14 +133,14 @@ return {
   end,
 
   write_failures_are_runtime_errors = function()
-    local status, stderr, path = run("def main() -> None:\n    print(1)\n", ">&-")
+    local status, stderr, path = run("def main():\n    print(1)\n", ">&-")
     eq(1, status)
     assert(stderr:find(path .. ":2:5: error: cannot write output: ", 1, true) == 1, stderr)
     assert(stderr:find("\n  in main at " .. path .. ":2:5\n", 1, true), stderr)
   end,
 
   stack_overflow_reports_innermost_frame = function()
-    local status, stderr, path = run("def down(n: int) -> int:\n    return down(n + 1)\ndef main() -> None:\n    print(down(0))\n", "")
+    local status, stderr, path = run("def down(n: int) -> int:\n    return down(n + 1)\ndef main():\n    print(down(0))\n", "")
     eq(1, status)
     assert(stderr:find(path .. ":1:5: error: stack overflow\n  in down at " .. path .. ":1:5\n", 1, true) == 1, stderr)
     local _, lines = stderr:gsub("\n", "")

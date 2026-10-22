@@ -2,7 +2,7 @@ def source() -> tuple[int, tuple[str, float]]:
     print("source")
     return (1, ("a", 2.5))
 
-def main() -> None:
+def main():
     a = 1
     b = 2
     a, b = (b, a)

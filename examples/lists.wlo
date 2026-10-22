@@ -1,7 +1,7 @@
 # Lists: ordered, mutable sequences with indexing, slicing, appending,
 # popping, sorting, and membership tests.
 
-def main() -> None:
+def main():
     primes = [2, 3, 5, 7]
     primes.append(11)
     print(len(primes))

@@ -15,7 +15,7 @@ def ints(xs: list[int]) -> str:
         texts.append(str(x))
     return " ".join(texts)
 
-def main() -> None:
+def main():
     print(words(sorted({"b": 1, "a": 2, "c": 3})))
     print(words(sorted("cab")))
     print(ints(sorted(bytes([3, 1, 2]))))

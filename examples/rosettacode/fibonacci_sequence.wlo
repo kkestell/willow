@@ -14,7 +14,7 @@ def fib_iterative(n: int) -> int:
         previous, current = (current, previous + current)
     return current
 
-def main() -> None:
+def main():
     for n in range(16):
         print(f"fib({n}) = {fib_iterative(n)}")
     print(fib_recursive(25) == fib_iterative(25))

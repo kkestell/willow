@@ -44,10 +44,10 @@ class Mentions:
 class Section:
     title: str
 
-    def enter(self) -> None:
+    def enter(self):
         print(f"== {self.title} ==")
 
-    def exit(self, error: Exception | None) -> None:
+    def exit(self, error: Exception | None):
         print("")
 
 def sample_logs() -> dict[str, str]:
@@ -113,7 +113,7 @@ def counter(prefix: str = "#") -> () -> str:
 
     return next_label
 
-async def main() -> None:
+async def main():
     hosts = ["web", "db"]
     downloads: dict[str, aio.Task[str]] = {}
     async with aio.task_group() as group:

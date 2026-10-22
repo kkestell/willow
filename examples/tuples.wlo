@@ -4,7 +4,7 @@
 def divide(a: int, b: int) -> tuple[int, int]:
     return (a // b, a % b)
 
-def main() -> None:
+def main():
     quotient, remainder = divide(17, 5)
     print(f"{quotient} remainder {remainder}")
 

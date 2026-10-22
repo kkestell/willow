@@ -38,13 +38,13 @@ return {
   end,
 
   crlf_matches_lf = function()
-    local lf = "def f() -> None:\n    pass\n"
-    local crlf = "def f() -> None:\r\n    pass\r\n"
+    local lf = "def f():\n    pass\n"
+    local crlf = "def f():\r\n    pass\r\n"
     eq(kinds(lf), kinds(crlf))
-    local newline = lexer.lex(crlf)[8]
+    local newline = lexer.lex(crlf)[6]
     eq("NEWLINE", newline.kind)
     eq("\r\n", crlf:sub(newline.span.first, newline.span.last))
-    eq(2, lexer.lex(crlf)[10].span.line)
+    eq(2, lexer.lex(crlf)[8].span.line)
   end,
 
   bare_cr_rejected = function()
@@ -71,32 +71,32 @@ return {
 
   tabs_rejected_outside_strings_and_comments = function()
     local message = "tabs are not allowed outside strings and comments"
-    eq("2:1: " .. message, lex_error("def f() -> None:\n\tpass\n"))
+    eq("2:1: " .. message, lex_error("def f():\n\tpass\n"))
     eq("1:4: " .. message, lex_error("x =\t1\n"))
     eq("2:3: " .. message, lex_error("x = 1\n  \t\ny = 2\n"))
     eq("NAME = STRING NEWLINE EOF", kinds("x = '\t'  # \t\n"))
   end,
 
   blank_and_comment_lines_ignored = function()
-    local source = "def f() -> None:\n\n   # odd\n  \n    pass\n      # deeper\n# end\n"
-    eq("def NAME ( ) -> None : NEWLINE INDENT pass NEWLINE DEDENT EOF", kinds(source))
+    local source = "def f():\n\n   # odd\n  \n    pass\n      # deeper\n# end\n"
+    eq("def NAME ( ) : NEWLINE INDENT pass NEWLINE DEDENT EOF", kinds(source))
   end,
 
   missing_final_newline = function()
-    local source = "def f() -> None:\n    while True:\n        pass"
-    eq("def NAME ( ) -> None : NEWLINE INDENT while True : NEWLINE INDENT pass NEWLINE DEDENT DEDENT EOF",
+    local source = "def f():\n    while True:\n        pass"
+    eq("def NAME ( ) : NEWLINE INDENT while True : NEWLINE INDENT pass NEWLINE DEDENT DEDENT EOF",
       kinds(source))
   end,
 
   newlines_inside_parentheses = function()
-    local source = "def f() -> None:\n    g(1,\n  2,\n          (3\n),\n    )\n    pass\n"
-    eq("def NAME ( ) -> None : NEWLINE INDENT NAME ( INT , INT , ( INT ) , ) NEWLINE pass NEWLINE DEDENT EOF",
+    local source = "def f():\n    g(1,\n  2,\n          (3\n),\n    )\n    pass\n"
+    eq("def NAME ( ) : NEWLINE INDENT NAME ( INT , INT , ( INT ) , ) NEWLINE pass NEWLINE DEDENT EOF",
       kinds(source))
   end,
 
   indentation_errors = function()
-    eq("2:3: indentation must be a multiple of four spaces", lex_error("def f() -> None:\n  pass\n"))
-    eq("2:9: unexpected indent", lex_error("def f() -> None:\n        pass\n"))
+    eq("2:3: indentation must be a multiple of four spaces", lex_error("def f():\n  pass\n"))
+    eq("2:9: unexpected indent", lex_error("def f():\n        pass\n"))
   end,
 
   keywords_and_names = function()

@@ -46,7 +46,7 @@ def system() -> list[Body]:
     ]
 
 # Gives the sun the momentum that makes the system's total momentum zero.
-def offset_momentum(bodies: list[Body]) -> None:
+def offset_momentum(bodies: list[Body]):
     px = 0.0
     py = 0.0
     pz = 0.0
@@ -73,7 +73,7 @@ def energy(bodies: list[Body]) -> float:
             e = e - a.mass * b.mass / math.sqrt(dx * dx + dy * dy + dz * dz)
     return e
 
-def advance(bodies: list[Body], dt: float) -> None:
+def advance(bodies: list[Body], dt: float):
     count = len(bodies)
     for i in range(count):
         a = bodies[i]
@@ -97,7 +97,7 @@ def advance(bodies: list[Body], dt: float) -> None:
         body.y = body.y + dt * body.vy
         body.z = body.z + dt * body.vz
 
-def main() -> None:
+def main():
     steps = int(sys.args()[0])
     bodies = system()
     offset_momentum(bodies)

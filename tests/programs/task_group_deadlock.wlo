@@ -9,7 +9,7 @@ async def waiter(holder: Holder) -> int:
         return await task
     return 0
 
-async def main() -> None:
+async def main():
     holder = Holder(None)
     async with aio.task_group() as group:
         holder.task = group.start(waiter(holder))

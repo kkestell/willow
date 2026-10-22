@@ -23,7 +23,7 @@ def checked(text: str) -> int:
         print(f"rejecting '{text}'")
         raise
 
-def main() -> None:
+def main():
     print(total(["1", "2", "3"]))
 
     try:

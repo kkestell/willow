@@ -6,7 +6,7 @@ def reverse(text: str) -> str:
         result = c + result
     return result
 
-def main() -> None:
+def main():
     print(reverse("asdf"))
     # Reversal is by code point.
     print(reverse("café"))

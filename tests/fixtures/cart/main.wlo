@@ -8,7 +8,7 @@ def cents(amount: int) -> str:
         rest = "0" + rest
     return f"{amount // 100}.{rest}"
 
-def main() -> None:
+def main():
     order = cart.Cart([])
     order.add("tea", 450, quantity=2)
     order.add("scone", 325)

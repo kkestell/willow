@@ -19,7 +19,7 @@ def max(a: int, b: int) -> int:
         return a
     return b
 
-def main() -> None:
+def main():
     options = Options()
     words: list[str] = []
     for arg in sys.args():

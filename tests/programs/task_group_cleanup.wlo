@@ -1,15 +1,15 @@
 import aio
 
 # Awaiting a task that the same stop cancelled raises in cleanup.
-async def flusher() -> None:
+async def flusher():
     while True:
         await aio.sleep(1.0)
 
-async def serve(group: aio.TaskGroup) -> None:
+async def serve(group: aio.TaskGroup):
     await aio.sleep(0.01)
     group.cancel()
 
-async def main() -> None:
+async def main():
     async with aio.task_group() as group:
         background = group.start(flusher())
         try:

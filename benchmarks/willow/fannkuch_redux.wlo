@@ -4,7 +4,7 @@
 
 import sys
 
-def main() -> None:
+def main():
     n = int(sys.args()[0])
     perm1: list[int] = []
     perm: list[int] = []

@@ -9,7 +9,7 @@ def lines(path: str, opened: list[io.File]) -> Generator[str]:
         for line in source:
             yield line
 
-def main() -> None:
+def main():
     path = fs.join("/tmp", "wlo_scoped_" + str(int(time.time() * 1000000.0)))
     fs.write_file(path, "one\ntwo\nthree\n")
 

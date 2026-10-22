@@ -1,31 +1,31 @@
 import shop
 import sys
 
-def test_known_price() -> None:
+def test_known_price():
     assert shop.price("tea") == 450
 
-def test_wrong_price() -> None:
+def test_wrong_price():
     print("checking tea")
     assert shop.price("tea") == 400, "tea should cost 400"
 
-def test_unknown_item() -> None:
+def test_unknown_item():
     shop.price("cake")
 
-def test_exit_is_a_failure() -> None:
+def test_exit_is_a_failure():
     sys.exit(0)
 
-def test_output_of_passing_tests_is_hidden() -> None:
+def test_output_of_passing_tests_is_hidden():
     print("hidden")
 
-def test_isolated_process() -> None:
+def test_isolated_process():
     assert input() is None
     assert len(sys.args()) == 0
 
 async def priced(item: str) -> int:
     return shop.price(item)
 
-async def test_async_known_price() -> None:
+async def test_async_known_price():
     assert await priced("tea") == 450
 
-async def test_async_unknown_item() -> None:
+async def test_async_unknown_item():
     await priced("cake")

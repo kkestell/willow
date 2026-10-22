@@ -1,11 +1,11 @@
 # https://rosettacode.org/wiki/Towers_of_Hanoi
 
-def hanoi(disks: int, source: int, target: int, spare: int) -> None:
+def hanoi(disks: int, source: int, target: int, spare: int):
     if disks == 0:
         return
     hanoi(disks - 1, source, spare, target)
     print(f"Move disk {disks} from peg {source} to peg {target}")
     hanoi(disks - 1, spare, target, source)
 
-def main() -> None:
+def main():
     hanoi(4, 1, 3, 2)

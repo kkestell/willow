@@ -2,7 +2,7 @@ import aio
 
 # Listeners can be opened and closed by synchronous code, before any event
 # loop runs.
-def main() -> None:
+def main():
     listener = aio.listen("127.0.0.1", 0)
     print(listener.local_port() > 0)
     listener.close()

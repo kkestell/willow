@@ -9,11 +9,11 @@ async def halve(x: int) -> int:
         raise ValueError("odd")
     return x // 2
 
-async def test_double() -> None:
+async def test_double():
     async with aio.task_group() as group:
         task = group.start(double(2))
     assert task.result() == 4
 
-async def test_halve_odd() -> None:
+async def test_halve_odd():
     async with aio.task_group() as group:
         group.start(halve(3))

@@ -1,4 +1,4 @@
-def main() -> None:
+def main():
     top = 9007199254740990 + 1
     bottom = -9007199254740990 - 1
     print(top)

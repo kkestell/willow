@@ -2,7 +2,7 @@ import fs
 import sys
 import time
 
-def main() -> None:
+def main():
     print(fs.join("a", "b") + " " + fs.join("a/", "b") + " " + fs.join("a", "/b") + " " + fs.join("", "b") + " " + fs.join("a", ""))
     for p in ["a/b", "a/b/", "/", "a", "//a", "a//b", ""]:
         print(f"[{fs.basename(p)}] [{fs.dirname(p)}]")

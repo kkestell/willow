@@ -9,7 +9,7 @@ import portcheck.probe
 import sys
 import textkit.table
 
-async def main() -> None:
+async def main():
     parser = cli.parser("portcheck", description="Check whether TCP ports accept connections.")
     parser.add_float("timeout", 2.0, help="Seconds to wait for each connection", short="t")
     parser.add_flag("json", help="Write one JSON object per target")

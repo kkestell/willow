@@ -49,7 +49,7 @@ def same(a: Number, b: Number) -> bool:
 def contains(value: Number, items: list[float]) -> bool:
     return value in items
 
-def main() -> None:
+def main():
     print(describe(41))
     print(describe("x"))
     print(describe(None))

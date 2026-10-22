@@ -1,6 +1,6 @@
 import geometry
 
-def main() -> None:
+def main():
     origin = geometry.Point(0.0, 0.0)
     corner = geometry.Point(3.0, 4.0)
     print(geometry.distance_squared(origin, corner))    # 25.0

@@ -13,7 +13,7 @@ def counter() -> () -> int:
 def total() -> int:
     sum = 0
 
-    def add(n: int) -> None:
+    def add(n: int):
         nonlocal sum
         sum = sum + n
 
@@ -27,7 +27,7 @@ def apply(f: (int) -> int, x: int) -> int:
 def threshold(minimum: int) -> (int) -> bool:
     return lambda score: score >= minimum
 
-def main() -> None:
+def main():
     a = counter()
     b = counter()
     print(a())

@@ -31,7 +31,7 @@ def listed(label: str, value: list[str]) -> list[str]:
 def held(v: int | str) -> str:
     return f"[{v:>4}][{v:<4}][{v:4}]"
 
-def main() -> None:
+def main():
     # String indexing and slicing.
     for s in ["hello", "héllo→"]:
         print(s[0] + s[-1] + s[-len(s)])

@@ -1,6 +1,6 @@
 import errors
 
-def main() -> None:
+def main():
     try:
         errors.check("", 1)
     except errors.ParseError as error:

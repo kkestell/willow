@@ -1,7 +1,7 @@
 # f-strings insert expressions written in braces, with optional format
 # specifications for alignment, width, and precision.
 
-def main() -> None:
+def main():
     name = "Ada"
     year = 1843
     print(f"{name} wrote the first program in {year}.")

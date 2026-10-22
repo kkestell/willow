@@ -1,6 +1,6 @@
 import sys
 
-def main() -> None:
+def main():
     sys.exit(3)
     print(sys.args())
     print("after")

@@ -53,7 +53,7 @@ def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:
             channel.send(reply(store, request))
     return False
 
-def main() -> None:
+def main():
     args = sys.args()
     if len(args) != 1:
         sys.eprint("usage: server <port-file>")

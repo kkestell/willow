@@ -1,20 +1,20 @@
 import aio
 
-async def sibling() -> None:
+async def sibling():
     try:
         await aio.sleep(10.0)
     finally:
         print("sibling cleanup")
 
-async def check(value: int) -> None:
+async def check(value: int):
     await aio.sleep(0.01)
     if value < 0:
         raise ValueError("negative value")
 
-async def worker(value: int) -> None:
+async def worker(value: int):
     await check(value)
 
-async def main() -> None:
+async def main():
     try:
         async with aio.task_group() as group:
             group.start(sibling())

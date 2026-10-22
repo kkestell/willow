@@ -8,7 +8,7 @@ import sys
 def a(i: int, j: int) -> float:
     return 1.0 / float((i + j) * (i + j + 1) // 2 + i + 1)
 
-def times(v: list[float], out: list[float]) -> None:
+def times(v: list[float], out: list[float]):
     n = len(v)
     for i in range(n):
         total = 0.0
@@ -16,7 +16,7 @@ def times(v: list[float], out: list[float]) -> None:
             total = total + a(i, j) * v[j]
         out[i] = total
 
-def times_transposed(v: list[float], out: list[float]) -> None:
+def times_transposed(v: list[float], out: list[float]):
     n = len(v)
     for i in range(n):
         total = 0.0
@@ -25,11 +25,11 @@ def times_transposed(v: list[float], out: list[float]) -> None:
         out[i] = total
 
 # Sets `out` to A transposed times A times `v`.
-def times_a_transposed_a(v: list[float], out: list[float], scratch: list[float]) -> None:
+def times_a_transposed_a(v: list[float], out: list[float], scratch: list[float]):
     times(v, scratch)
     times_transposed(scratch, out)
 
-def main() -> None:
+def main():
     n = int(sys.args()[0])
     u: list[float] = []
     v: list[float] = []

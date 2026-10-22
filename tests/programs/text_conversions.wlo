@@ -1,29 +1,29 @@
-def show_int(text: str) -> None:
+def show_int(text: str):
     try:
         print(int(text))
     except ValueError as e:
         print(e.message)
 
-def show_float(text: str) -> None:
+def show_float(text: str):
     try:
         print(float(text))
     except ValueError as e:
         print(e.message)
 
-def show_ord(text: str) -> None:
+def show_ord(text: str):
     try:
         print(ord(text))
     except ValueError as e:
         print(e.message)
 
-def show_chr(n: int) -> None:
+def show_chr(n: int):
     try:
         c = chr(n)
         print(ord(c) == n)
     except ValueError as e:
         print(e.message)
 
-def main() -> None:
+def main():
     for text in ["0", "-0", "+7", "007", "-9007199254740991", "9007199254740991"]:
         show_int(text)
     for text in ["9007199254740992", "-9007199254740992", "12345678901234567890", "", "+", " 1", "1_000", "1.0", "0x10"]:

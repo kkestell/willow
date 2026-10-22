@@ -1,6 +1,6 @@
 def half(n: int) -> int:
     return n + "2"
 
-def main() -> None:
+def main():
     if 1:
         print(half(4))

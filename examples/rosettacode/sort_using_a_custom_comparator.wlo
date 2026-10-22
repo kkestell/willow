@@ -4,7 +4,7 @@
 def order(text: str) -> tuple[int, str]:
     return (-len(text), text.lower())
 
-def main() -> None:
+def main():
     strings = ["Here", "are", "some", "sample", "strings", "to", "be", "sorted"]
     for text in sorted(strings, key=order):
         print(text)

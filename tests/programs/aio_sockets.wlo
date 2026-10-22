@@ -1,19 +1,19 @@
 import aio
 
-async def echo(listener: aio.Listener) -> None:
+async def echo(listener: aio.Listener):
     with await listener.accept(timeout=5.0) as connection:
         await connection.sendall(await connection.recv(1024))
 
 async def read(connection: aio.Connection) -> str:
     return (await connection.recv(1024)).decode()
 
-async def take_second_recv(connection: aio.Connection) -> None:
+async def take_second_recv(connection: aio.Connection):
     try:
         await connection.recv(1024)
     except RuntimeError as error:
         print(error.message)
 
-async def main() -> None:
+async def main():
     # The §14 echo example, with a task group.
     with aio.listen("127.0.0.1", 0) as listener:
         async with aio.task_group() as group:

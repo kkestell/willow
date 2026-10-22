@@ -7,7 +7,7 @@ def divides(a: int, b: int) -> bool:
         return False
     return True
 
-def main() -> None:
+def main():
     print(divides(10, 2))
     print(divides(10, 0))
     try:

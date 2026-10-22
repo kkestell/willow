@@ -13,7 +13,7 @@ import time
 class TrashError(Exception):
     pass
 
-def move(path: str) -> None:
+def move(path: str):
     if fs.stat(path, follow_symlinks=False).kind == "directory":
         raise TrashError(f"{path} is a directory")
     parent = fs.dirname(path)
@@ -44,7 +44,7 @@ def empty(directory: str) -> int:
     fs.rmdir(trash)
     return len(names)
 
-def main() -> None:
+def main():
     parser = cli.parser("trash", description="Move files to a .trash directory beside them.")
     parser.add_flag("empty", help="Delete the trash in each directory instead")
     parser.add_rest("path", help="Files to trash, or directories with --empty")

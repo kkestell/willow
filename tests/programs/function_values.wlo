@@ -18,14 +18,14 @@ def fact(n: int) -> int:
     return n * f(n - 1)
 
 # A local hides the declaration of the same name throughout the function.
-def hidden() -> None:
+def hidden():
     double = add
     print(double(1))
     # A qualified name still reaches the hidden declaration.
     g = function_values.double
     print(g(3))
 
-def main() -> None:
+def main():
     hidden()
     f = add
     print(f(1))

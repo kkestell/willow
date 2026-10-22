@@ -16,11 +16,11 @@ async def sleeper(log: Log, name: str, seconds: float) -> int:
         await aio.sleep(0.0)
         log.lines.append(name + " cleanup")
 
-async def stopper(group: aio.TaskGroup, seconds: float) -> None:
+async def stopper(group: aio.TaskGroup, seconds: float):
     await aio.sleep(seconds)
     group.cancel()
 
-async def failing(seconds: float) -> None:
+async def failing(seconds: float):
     await aio.sleep(seconds)
     raise ValueError("child failed")
 
@@ -35,7 +35,7 @@ async def pending_return(log: Log) -> str:
 # An outer request reaches the inner group's body and children, which cannot
 # absorb it. Each level's cleanup runs, innermost first, and protected cleanup
 # may await.
-async def nested(log: Log) -> None:
+async def nested(log: Log):
     async with aio.task_group() as outer:
         outer.start(stopper(outer, 0.01))
         try:
@@ -56,7 +56,7 @@ async def nested(log: Log) -> None:
 # cleanup runs. The inner failure beats the request and leaves the outer group
 # as an exception unless caught first. A caught failure leaves the request in
 # effect until the next checkpoint.
-async def precedence(log: Log, catch: bool) -> None:
+async def precedence(log: Log, catch: bool):
     async with aio.task_group() as outer:
         outer.start(stopper(outer, 0.02))
         try:
@@ -75,7 +75,7 @@ async def precedence(log: Log, catch: bool) -> None:
         log.lines.append("unreachable")
     log.lines.append("absorbed")
 
-async def main() -> None:
+async def main():
     # The §15 example.
     async with aio.task_group() as group:
         first = group.start(square(3))

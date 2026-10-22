@@ -11,7 +11,7 @@ class iterator:
     def iter(self) -> Iterator[int]:
         return [self.n].iter()
 
-def floats(xs: Iterable[int | float]) -> None:
+def floats(xs: Iterable[int | float]):
     for x in xs:
         print(isinstance(x, float))
 
@@ -24,7 +24,7 @@ def sum_all(xs: Iterable[int]) -> int:
 def first[T](xs: Iterable[T]) -> T:
     return next(iter(xs))
 
-def main() -> None:
+def main():
     print(next(iter([7, 8])))
     print(next({"k": 1}.iter()))
     letters = iter("aé")

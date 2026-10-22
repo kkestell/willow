@@ -27,7 +27,7 @@ def multiply(rows: int, columns: int, a: list[list[int]], b: list[list[int]]) ->
         product.append(row)
     return product
 
-def main() -> None:
+def main():
     n = int(sys.args()[0])
     size = 30
     a = make_matrix(size, size)

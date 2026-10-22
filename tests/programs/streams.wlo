@@ -3,7 +3,7 @@ import io
 import sys
 import time
 
-def main() -> None:
+def main():
     # input() and stdin handles share one buffer.
     stdin = io.stdin()
     print(input())

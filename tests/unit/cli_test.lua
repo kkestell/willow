@@ -88,7 +88,7 @@ local function with_http_server(test)
   end
 end
 
-local JSON_PROGRAM = "import json\ndef main() -> None:\n    print(json.dump(json.parse('[1, 2.5]')))\n"
+local JSON_PROGRAM = "import json\ndef main():\n    print(json.dump(json.parse('[1, 2.5]')))\n"
 
 -- Runs `command` in `dir`; returns its exit status, stdout, and stderr.
 local function sh(dir, command)
@@ -118,7 +118,7 @@ local function in_temp_dir(test)
   end
 end
 
-local PROGRAM = "def main() -> None:\n    print(1)\n"
+local PROGRAM = "def main():\n    print(1)\n"
 
 return {
   usage_errors = function()
@@ -152,7 +152,7 @@ return {
       eq(0, status)
       eq("", stdout)
       eq("", stderr)
-      write(dir .. "/bad.wlo", "def main() -> None:\n    print(x)\n")
+      write(dir .. "/bad.wlo", "def main():\n    print(x)\n")
       status, stdout, stderr = willow(dir, "check bad.wlo")
       eq(1, status)
       eq("bad.wlo:2:11: error: unknown name 'x'\n", stderr)
@@ -164,7 +164,7 @@ return {
       write(dir .. "/prog.wlo", table.concat({
         "def twice(n: int) -> int:",
         "    return n * 2",
-        "def main() -> None:",
+        "def main():",
         "    print(twice(21))",
         "    print(twice(9007199254740991))",
       }, "\n"))
@@ -189,7 +189,7 @@ return {
   modules_compile_matches_run = function()
     in_temp_dir(function(dir, base)
       write(dir .. "/util.wlo", "def twice(n: int) -> int:\n    return n * 2\n")
-      write(dir .. "/prog.wlo", "import util\ndef main() -> None:\n    print(util.twice(21))\n")
+      write(dir .. "/prog.wlo", "import util\ndef main():\n    print(util.twice(21))\n")
       local run_status, run_out = willow(dir, "run prog.wlo")
       eq(0, run_status)
       eq("42\n", run_out)
@@ -214,7 +214,7 @@ return {
       write(dir .. "/prog.wlo", table.concat({
         "def twice(n: int) -> int:",
         "    return n * 2",
-        "def main() -> None:",
+        "def main():",
         "    print(twice(21))",
         "    print(twice(9007199254740991))",
       }, "\n"))
@@ -238,7 +238,7 @@ return {
   modules_build_matches_run = function()
     in_temp_dir(function(dir, base)
       write(dir .. "/util.wlo", "def twice(n: int) -> int:\n    return n * 2\n")
-      write(dir .. "/prog.wlo", "import util\ndef main() -> None:\n    print(util.twice(21))\n")
+      write(dir .. "/prog.wlo", "import util\ndef main():\n    print(util.twice(21))\n")
       eq(0, (willow(dir, "build prog.wlo -o out")))
       local elsewhere = base .. "/elsewhere"
       os.execute("mkdir " .. quote(elsewhere))
@@ -258,7 +258,7 @@ return {
   unreadable_module = function()
     in_temp_dir(function(dir)
       os.execute("mkdir " .. quote(dir .. "/util.wlo"))
-      write(dir .. "/prog.wlo", "import util\ndef main() -> None:\n    pass\n")
+      write(dir .. "/prog.wlo", "import util\ndef main():\n    pass\n")
       local status, _, stderr = willow(dir, "check prog.wlo")
       eq(1, status)
       eq("prog.wlo:1:8: error: cannot load module 'util': util.wlo: Is a directory\n", stderr)
@@ -268,7 +268,7 @@ return {
   failed_compile_preserves_output = function()
     in_temp_dir(function(dir)
       write(dir .. "/out.lua", "old")
-      write(dir .. "/bad.wlo", "def main() -> None:\n    x = 1 + 'a'\n")
+      write(dir .. "/bad.wlo", "def main():\n    x = 1 + 'a'\n")
       local status = willow(dir, "compile bad.wlo -o out.lua")
       eq(1, status)
       eq("old", read(dir .. "/out.lua"))
@@ -302,7 +302,7 @@ return {
     in_temp_dir(function(dir)
       write(dir .. "/prog.wlo", table.concat({
         "import sys",
-        "def main() -> None:",
+        "def main():",
         "    first = sys.args()",
         "    args = sys.args()",
         "    print(len(args))",
@@ -330,7 +330,7 @@ return {
     in_temp_dir(function(dir)
       write(dir .. "/prog.wlo", table.concat({
         "import sys",
-        "def main() -> None:",
+        "def main():",
         "    print(1)",
         "    try:",
         "        sys.args()",
@@ -348,7 +348,7 @@ return {
 
   exit_status = function()
     in_temp_dir(function(dir)
-      write(dir .. "/three.wlo", "import sys\ndef main() -> None:\n    print(1)\n    sys.exit(3)\n")
+      write(dir .. "/three.wlo", "import sys\ndef main():\n    print(1)\n    sys.exit(3)\n")
       local status, stdout, stderr = willow(dir, "run three.wlo")
       eq(3, status)
       eq("1\n", stdout)
@@ -357,12 +357,12 @@ return {
       status, stdout = sh(dir, "./three")
       eq(3, status)
       eq("1\n", stdout)
-      write(dir .. "/finally.wlo", "import sys\ndef main() -> None:\n    try:\n        sys.exit(0)\n    finally:\n        print(1)\n")
+      write(dir .. "/finally.wlo", "import sys\ndef main():\n    try:\n        sys.exit(0)\n    finally:\n        print(1)\n")
       status, stdout = willow(dir, "run finally.wlo")
       eq(0, status)
       eq("", stdout)
       for _, value in ipairs({ "256", "-1" }) do
-        write(dir .. "/range.wlo", "import sys\ndef main() -> None:\n    sys.exit(" .. value .. ")\n")
+        write(dir .. "/range.wlo", "import sys\ndef main():\n    sys.exit(" .. value .. ")\n")
         status, stdout, stderr = willow(dir, "run range.wlo")
         eq(1, status)
         eq("range.wlo:3:9: error: ValueError: exit status out of range\n  in main at range.wlo:3:9\n", stderr)
@@ -375,7 +375,7 @@ return {
       local text = "caf\195\169\r\nline\n"
       write(dir .. "/prog.wlo", table.concat({
         "import fs",
-        "def main() -> None:",
+        "def main():",
         "    text = 'caf\\u00e9\\r\\nline\\n'",
         "    fs.write_file('out.txt', text)",
         "    print(fs.read_file('out.txt') == text)",
@@ -536,8 +536,8 @@ return {
   async_tests_run_in_the_event_loop = function()
     in_temp_dir(function(dir)
       write(dir .. "/test_sleep.wlo", "import aio\n"
-        .. "async def test_sleeps() -> None:\n    await aio.sleep(0.0)\n    print('woke')\n"
-        .. "async def test_bad_sleep() -> None:\n    await aio.sleep(-1.0)\n")
+        .. "async def test_sleeps():\n    await aio.sleep(0.0)\n    print('woke')\n"
+        .. "async def test_bad_sleep():\n    await aio.sleep(-1.0)\n")
       local status, stdout = willow(dir, "test")
       eq(1, status)
       eq("FAIL test_sleep.wlo test_bad_sleep\n"
@@ -549,9 +549,9 @@ return {
 
   test_command_checks_before_running = function()
     in_temp_dir(function(dir)
-      write(dir .. "/test_a.wlo", "def test_a() -> None:\n    print('ran')\n    assert False\n")
-      write(dir .. "/test_b.wlo", "def test_b() -> None:\n    x: int = 'b'\n")
-      write(dir .. "/helper.wlo", "def io() -> None:\n    pass\ndef test_helper() -> None:\n    pass\n")
+      write(dir .. "/test_a.wlo", "def test_a():\n    print('ran')\n    assert False\n")
+      write(dir .. "/test_b.wlo", "def test_b():\n    x: int = 'b'\n")
+      write(dir .. "/helper.wlo", "def io():\n    pass\ndef test_helper():\n    pass\n")
       local status, stdout, stderr = willow(dir, "test")
       eq(1, status)
       eq("", stdout)
@@ -564,7 +564,7 @@ return {
       eq(1, status)
       eq("FAIL test_a.wlo test_a\n  ran\n  test_a.wlo:3:5: error: AssertionError: assertion failed\n"
         .. "    in test_a at test_a.wlo:3:5\n  test did not return (exit status 1)\n0 passed, 1 failed\n", stdout)
-      write(dir .. "/test_c.wlo", "def test_c(x: int) -> None:\n    pass\n")
+      write(dir .. "/test_c.wlo", "def test_c(x: int):\n    pass\n")
       status, stdout, stderr = willow(dir, "test --check")
       eq(1, status)
       eq("test_c.wlo:1:5: error: test function 'test_c' must take no parameters and return None\n", stderr)
@@ -608,7 +608,7 @@ return {
       eq("symlink      1 entries         5 bytes", lines[8])
       assert(lines[9]:match("^listed %. in %d+%.%d%d%ds$"), lines[9])
 
-      write(dir .. "/link.wlo", "import fs\ndef main() -> None:\n"
+      write(dir .. "/link.wlo", "import fs\ndef main():\n"
         .. "    print(fs.stat('link').kind + ' ' + fs.stat('link', follow_symlinks=False).kind)\n")
       status, stdout = willow(dir, "run link.wlo")
       eq(0, status)
@@ -618,11 +618,11 @@ return {
 
   broken_pipes_are_errors = function()
     in_temp_dir(function(dir)
-      write(dir .. "/lines.wlo", "def main() -> None:\n    for i in range(100000):\n        print(i)\n")
+      write(dir .. "/lines.wlo", "def main():\n    for i in range(100000):\n        print(i)\n")
       write(dir .. "/handle.wlo", table.concat({
         "import io",
         "import sys",
-        "def main() -> None:",
+        "def main():",
         "    out = io.stdout()",
         "    try:",
         "        for i in range(100000):",
@@ -777,7 +777,7 @@ return {
 
   finish_progress_message = function()
     in_temp_dir(function(dir)
-      write(dir .. "/done.wlo", "import terminal\ndef main() -> None:\n    terminal.progress('x')\n    terminal.finish_progress('done')\n")
+      write(dir .. "/done.wlo", "import terminal\ndef main():\n    terminal.progress('x')\n    terminal.finish_progress('done')\n")
       local status, stdout, stderr = willow(dir, "run done.wlo")
       eq(0, status)
       eq("", stdout)
@@ -840,13 +840,13 @@ return {
       write(dir .. "/tls.wlo", table.concat({
         "import http",
         "import sys",
-        "def attempt(url: str, ca_file: str | None) -> None:",
+        "def attempt(url: str, ca_file: str | None):",
         "    try:",
         "        r = http.request('GET', url, ca_file=ca_file, timeout=5.0)",
         "        print(f'{r.status} {r.body.decode()}')",
         "    except OSError as error:",
         "        print('failed: ' + error.message.split(': ')[0])",
-        "def main() -> None:",
+        "def main():",
         "    port = sys.args()[0]",
         "    attempt('https://localhost:' + port + '/hello.txt', 'cert.pem')",
         "    attempt('https://localhost:' + port + '/hello.txt', None)",
@@ -912,7 +912,7 @@ return {
       write(dir .. "/src/app/main.wlo", table.concat({
         "import app.greet",
         "import sys",
-        "def main() -> None:",
+        "def main():",
         "    names = sys.args()",
         "    if len(names) == 0:",
         "        names = ['world']",
@@ -925,9 +925,9 @@ return {
         .. "def greet(name: str) -> str:\n    return textkit.shout.shout('hello, ' + name)\n")
       write(dir .. "/vendor/textkit/shout.wlo", "def shout(text: str) -> str:\n    return text.upper() + '!'\n")
       write(dir .. "/tests/test_shout.wlo", "import textkit.shout\n"
-        .. "def test_shout() -> None:\n    assert textkit.shout.shout('a') == 'A!'\n")
+        .. "def test_shout():\n    assert textkit.shout.shout('a') == 'A!'\n")
       write(dir .. "/tests/unit/test_greet.wlo", "import app.greet\n"
-        .. "def test_greet() -> None:\n    assert app.greet.greet('x') == 'HELLO, X!'\n")
+        .. "def test_greet():\n    assert app.greet.greet('x') == 'HELLO, X!'\n")
 
       local status, stdout, stderr = willow(dir, "check")
       eq(0, status)
@@ -984,10 +984,10 @@ return {
       eq("src/app/greet.wlo:2:8: error: module 'textkit.shout' is ambiguous: found in vendor/textkit/shout.wlo"
         .. " and vendor2/textkit/shout.wlo\n",
         manifest_error('{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor", "vendor2"]}'))
-      write(dir .. "/src/app/main.wlo", "import app.greet\nimport greet\ndef main() -> None:\n    pass\n")
+      write(dir .. "/src/app/main.wlo", "import app.greet\nimport greet\ndef main():\n    pass\n")
       eq("src/app/main.wlo:2:8: error: module 'greet' is the same file as module 'app.greet'\n",
         manifest_error('{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor", "src/app"]}'))
-      write(dir .. "/src/app/main.wlo", "import textkit.shout\ndef main() -> None:\n    pass\n")
+      write(dir .. "/src/app/main.wlo", "import textkit.shout\ndef main():\n    pass\n")
       write(dir .. "/vendor/textkit/shout.wlo", "import textkit.missing\n")
       eq("vendor/textkit/shout.wlo:1:8: error: cannot load module 'textkit.missing': src/textkit/missing.wlo: No such file or directory\n",
         manifest_error('{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor"]}'))
@@ -1044,7 +1044,7 @@ return {
         "import prog",
         "def f() -> int:",
         "    return 7",
-        "def main() -> None:",
+        "def main():",
         "    f = 1",
         "    print(prog.f())",
         "",
@@ -1064,7 +1064,7 @@ return {
         "import cli",
         "import http",
         "import json",
-        "def exercise() -> None:",
+        "def exercise():",
         "    assert fs.join('a', 'b') == 'a/b'",
         "    io.stdout().flush()",
         "    parser = cli.parser('mixed')",
@@ -1077,7 +1077,7 @@ return {
         "    assert bytes([195, 169]).decode().upper() == 'É'",
         "",
       }, "\n")
-      write(dir .. "/prog.wlo", source .. "def main() -> None:\n    exercise()\n    print('ok')\n")
+      write(dir .. "/prog.wlo", source .. "def main():\n    exercise()\n    print('ok')\n")
       local status, stdout, stderr = willow(dir, "run prog.wlo")
       eq("", stderr)
       eq(0, status)
@@ -1092,7 +1092,7 @@ return {
       eq("", stderr)
       eq(0, status)
       eq("ok\n", stdout)
-      write(dir .. "/test_mixed.wlo", source .. "def test_mixed() -> None:\n    exercise()\n")
+      write(dir .. "/test_mixed.wlo", source .. "def test_mixed():\n    exercise()\n")
       status, stdout, stderr = willow(dir, "test test_mixed.wlo")
       eq("", stderr)
       eq(0, status)

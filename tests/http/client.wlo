@@ -9,7 +9,7 @@ import sys
 def show(response: http.Response) -> str:
     return f"{response.status} {response.url} {response.body.decode()}"
 
-def main() -> None:
+def main():
     base = sys.args()[0]
     directory = sys.args()[1]
 

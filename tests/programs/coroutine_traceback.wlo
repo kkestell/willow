@@ -6,6 +6,6 @@ class Stack:
             raise ValueError("bottom")
         return await self.descend(n - 1)
 
-async def main() -> None:
+async def main():
     print("start")
     print(await Stack(0).descend(1))

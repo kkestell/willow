@@ -1,6 +1,6 @@
 # https://rosettacode.org/wiki/Multiplication_tables
 
-def main() -> None:
+def main():
     header = "  x |"
     for column in range(1, 13):
         header = header + f"{column:>4}"

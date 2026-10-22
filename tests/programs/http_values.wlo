@@ -1,12 +1,12 @@
 import http
 
-def attempt(method: str, url: str, headers: list[http.Header], timeout: float) -> None:
+def attempt(method: str, url: str, headers: list[http.Header], timeout: float):
     try:
         http.request(method, url, headers=headers, timeout=timeout)
     except ValueError as error:
         print(error.message)
 
-def main() -> None:
+def main():
     print(http.urlencode({"q": "a b&c", "é": "x=y~", "empty": ""}))
     print(f"[{http.urlencode({})}]")
     headers = [http.Header("Content-Type", "text/plain"), http.Header("X-Twice", "one"), http.Header("x-twice", "two")]

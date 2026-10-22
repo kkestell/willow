@@ -1,7 +1,7 @@
 import io
 import subprocess
 
-def main() -> None:
+def main():
     stdin = io.stdin()
     print(stdin.readline())
     try:

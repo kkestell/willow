@@ -29,7 +29,7 @@ def show(items: list[int]) -> str:
         words.append(str(item))
     return " ".join(words)
 
-def main() -> None:
+def main():
     items = [4, 65, 2, -31, 0, 99, 2, 83, 782, 1]
     print(show(items))
     print(show(merge_sort(items)))

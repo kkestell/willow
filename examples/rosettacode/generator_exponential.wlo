@@ -23,7 +23,7 @@ def without(values: Iterator[int], excluded: Iterator[int]) -> Generator[int]:
         if value != skip:
             yield value
 
-def main() -> None:
+def main():
     squares = without(powers(2), powers(3))
     for i in range(20):
         next(squares)

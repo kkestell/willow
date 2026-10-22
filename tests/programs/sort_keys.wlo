@@ -29,7 +29,7 @@ def ints(xs: list[int]) -> str:
         texts.append(str(x))
     return " ".join(texts)
 
-def main() -> None:
+def main():
     data = [Row("cy", 2), Row("ada", 3), Row("bob", 2), Row("dee", 1)]
     print(names(sorted(data, key=lambda row: row.score)))
     print(names(sorted(data, key=lambda row: (row.score, row.name))))

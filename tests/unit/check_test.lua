@@ -30,10 +30,10 @@ end
 
 -- Indents statements into `main`, which starts on line 1, and appends helpers.
 local function in_main(statements, helpers)
-  return "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. (helpers or "")
+  return "def main():\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. (helpers or "")
 end
 
-local MAIN = "def main() -> None:\n    pass\n"
+local MAIN = "def main():\n    pass\n"
 
 return {
   expression_and_local_types = function()
@@ -130,7 +130,7 @@ return {
   narrowing = function()
     -- `f` starts on line 1 with optional parameters x and y.
     local function f(statements)
-      return "def f(x: int | None, y: int | None) -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
+      return "def f(x: int | None, y: int | None):\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
     end
     local valid = {
       "if x is None:\n    return\nprint(x + 1)",
@@ -157,7 +157,7 @@ return {
   end,
 
   display_types = function()
-    local helpers = "def f(x: list[int]) -> None:\n    pass\ndef g() -> dict[str, int]:\n    return {}\n"
+    local helpers = "def f(x: list[int]):\n    pass\ndef g() -> dict[str, int]:\n    return {}\n"
     check_source(in_main(table.concat({
       "a: list[int] = []",
       "b: dict[str, int] = {}",
@@ -246,7 +246,7 @@ return {
   records = function()
     local P = "class P:\n    x: int\n    y: int | None\nclass Bag:\n    items: list[int]\n"
     local function m(statements)
-      return P .. "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n"
+      return P .. "def main():\n" .. statements:gsub("[^\n]+", "    %0") .. "\n"
     end
     local program = check_source(m("p = P(1, None)\nq = P(2, 3)\ny: int = p.x\nb = Bag([])\nb.items = []\np.y = None"))
     eq("P", program.functions[1].body[1].symbol.type.name)
@@ -261,12 +261,12 @@ return {
     eq("8:11: operator '==' cannot be applied to P and P", check_errors(m("p = P(1, None)\nb = p == p")))
     eq("8:11: cannot print a value of type P", check_errors(m("p = P(1, None)\nprint(p)")))
     eq("6:12: expected A, received B",
-      check_errors("class A:\n    x: int\nclass B:\n    x: int\ndef main() -> None:\n    a: A = B(1)\n"))
+      check_errors("class A:\n    x: int\nclass B:\n    x: int\ndef main():\n    a: A = B(1)\n"))
   end,
 
   field_expressions_do_not_narrow = function()
     eq("7:17: operator '+' cannot be applied to int | None and int", check_errors(
-      "class P:\n    x: int\n    y: int | None\ndef main() -> None:\n    p = P(1, None)\n"
+      "class P:\n    x: int\n    y: int | None\ndef main():\n    p = P(1, None)\n"
       .. "    if p.y is not None:\n        z = p.y + 1\n"))
   end,
 
@@ -307,7 +307,7 @@ return {
       "",
     }, "\n")
     local function m(statements)
-      return C .. "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n"
+      return C .. "def main():\n" .. statements:gsub("[^\n]+", "    %0") .. "\n"
     end
     local program = check_source(m("c = C(1)\na = c.add(2)\nb = c.add(times=3, k=1)\nok = c.same(c)"))
     local body = program.functions[1].body
@@ -338,9 +338,9 @@ return {
       bind.bind(modules)
       check.check(modules)
     end
-    check_modules("def main() -> None:\n    p = geo.Point(1)\n    q: geo.Point = p\n    print(q.x + 1)\n")
-    check_modules("def main() -> None:\n    print(geo.Point(1).moved(dx=2).x)\n")
-    local ok, err = pcall(check_modules, "class Point:\n    x: int\ndef main() -> None:\n    p: Point = geo.Point(1)\n")
+    check_modules("def main():\n    p = geo.Point(1)\n    q: geo.Point = p\n    print(q.x + 1)\n")
+    check_modules("def main():\n    print(geo.Point(1).moved(dx=2).x)\n")
+    local ok, err = pcall(check_modules, "class Point:\n    x: int\ndef main():\n    p: Point = geo.Point(1)\n")
     eq(false, ok)
     eq("5:20: expected Point, received geo.Point", err[1].span.line .. ":" .. err[1].span.col .. ": " .. err[1].message)
   end,
@@ -378,7 +378,7 @@ return {
     eq("3:5: only the first assignment to 'x' can have an annotation", check_errors(in_main("x = 1\nx: int = 2")))
     eq("5:9: only the first assignment to 'x' can have an annotation",
       check_errors(in_main("if True:\n    x = 1\nelse:\n    x: int = 2")))
-    eq("2:5: cannot annotate parameter 'a'", check_errors("def f(a: int) -> None:\n    a: int = 1\n" .. MAIN))
+    eq("2:5: cannot annotate parameter 'a'", check_errors("def f(a: int):\n    a: int = 1\n" .. MAIN))
     eq("None", check_source(in_main("x: None = print(1)")).functions[1].body[1].symbol.type.name)
   end,
 
@@ -416,7 +416,7 @@ return {
     local source = table.concat({
       "def f() -> int:",
       "    return 'a'",
-      "def g() -> None:",
+      "def g():",
       "    x = 1 + True",
       "    y = 'a' * 2",
       MAIN,
@@ -485,7 +485,7 @@ return {
 
   try_flow = function()
     local function f(statements)
-      return "def f(x: int | None) -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
+      return "def f(x: int | None):\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
     end
     eq("5:15: variable 'y' may be used before assignment",
       check_errors(f("try:\n    y = 1\nexcept Exception:\n    print(y)")))
@@ -514,7 +514,7 @@ return {
     end
     eq("5:5: unreachable statement", check_errors(with_modules(in_main("sys.exit(0)\nprint(1)"))))
     check_source(with_modules("def f() -> int:\n    sys.exit(1)\n" .. MAIN))
-    check_source("def exit(status: int) -> None:\n    pass\n" .. in_main("exit(0)\nprint(1)"))
+    check_source("def exit(status: int):\n    pass\n" .. in_main("exit(0)\nprint(1)"))
     eq("3:9: 'len' cannot be applied to str | None", check_errors(in_main("line = input()\nn = len(line)")))
     local program = check_source(with_modules(in_main("args = sys.args()")))
     eq("list[str]", program.functions[1].body[1].symbol.type.name)
@@ -551,7 +551,7 @@ return {
   union_operations = function()
     -- `f` starts on line 1 with parameters x and y.
     local function f(statements)
-      return "def f(x: int | str, y: int | list[int]) -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
+      return "def f(x: int | str, y: int | list[int]):\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
     end
     check_source(f("b = x == 1 or x != 'a'\nprint(x)\nz = f'{x}' + str(x)"))
     eq("2:11: operator '==' cannot be applied to int | str and float", check_errors(f("b = x == 1.5")))
@@ -566,7 +566,7 @@ return {
   isinstance_narrowing = function()
     -- `f` starts on line 1 with parameter x.
     local function f(statements)
-      return "class P:\n    v: int\ndef f(x: int | str | list[int] | P | None) -> None:\n"
+      return "class P:\n    v: int\ndef f(x: int | str | list[int] | P | None):\n"
         .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
     end
     local valid = {
@@ -627,11 +627,11 @@ return {
     eq("2:15: format type 'd' requires int, received int | str",
       check_errors("def f(v: int | str) -> str:\n    return f'{v:d}'\n" .. MAIN))
     check_source(in_main("sorted = 1\nprint(sorted)"))
-    eq("1:5: cannot redefine built-in function 'sorted'", check_errors("def sorted() -> None:\n    pass\n" .. MAIN))
+    eq("1:5: cannot redefine built-in function 'sorted'", check_errors("def sorted():\n    pass\n" .. MAIN))
   end,
 
   named_arguments = function()
-    local F = "def f(a: int, b: str = 'x', c: float = 1.5) -> None:\n    pass\n"
+    local F = "def f(a: int, b: str = 'x', c: float = 1.5):\n    pass\n"
     local P = "class P:\n    x: int\n    y: int = 0\n"
     local E = "class E(Exception):\n    code: int = 1\n"
     check_source("import fs\n" .. in_main(table.concat({
@@ -648,7 +648,7 @@ return {
     }, "\n"), F .. P .. E))
     check_source("import sys\ndef g(x: int | None = None, y: float | int = 2.0) -> int:\n"
       .. "    sys.exit(status=1)\n" .. MAIN)
-    eq("1:16: expected int, received str", check_errors("def g(x: int = 'a') -> None:\n    pass\n" .. MAIN))
+    eq("1:16: expected int, received str", check_errors("def g(x: int = 'a'):\n    pass\n" .. MAIN))
     eq("4:14: expected str, received None", check_errors(MAIN .. "class Q:\n    s: str = None\n"))
     eq("2:10: 'f' has no parameter 'd'", check_errors(in_main("f(1, d=2)", F)))
     eq("2:11: 'P' has no field 'z'", check_errors(in_main("x = P(z=1)", P)))
@@ -727,7 +727,7 @@ return {
     eq("5:11: type io.File has no field 'path'", err("f = io.stdin()\nx = f.path"))
     eq("5:11: operator '==' cannot be applied to io.File and io.File", err("f = io.stdin()\nx = f == f"))
     eq("5:11: cannot print a value of type io.File", err("f = io.stdin()\nprint(f)"))
-    eq("1:15: dictionary keys must be int, str, or an enum", check_errors("def f(d: dict[bytes, int]) -> None:\n    pass\n" .. MAIN))
+    eq("1:15: dictionary keys must be int, str, or an enum", check_errors("def f(d: dict[bytes, int]):\n    pass\n" .. MAIN))
     eq("2:5: cannot assign to 'bytes'", check_errors(in_main("bytes = 1")))
   end,
 
@@ -801,7 +801,7 @@ return {
     eq("3:16: tuple index must be an integer literal", check_errors(in_main("i = 0\nx = pair()[i]", PAIR)))
     eq("3:6: cannot assign to an index of a value of type tuple[int, str]", check_errors(in_main("t = pair()\nt[0] = 1", PAIR)))
     eq("2:15: cannot slice a value of type tuple[int, str]", check_errors(in_main("x = pair()[0:1]", PAIR)))
-    eq("2:7: expected tuple[int], received tuple[int, int]", check_errors(in_main("f((1, 2))", "def f(t: tuple[int]) -> None:\n    pass\n")))
+    eq("2:7: expected tuple[int], received tuple[int, int]", check_errors(in_main("f((1, 2))", "def f(t: tuple[int]):\n    pass\n")))
     eq("2:30: expected str, received int", check_errors(in_main("x: tuple[int, str] = (1, 2)")))
     eq("2:25: type int | str has no member tuple", check_errors(in_main("x = isinstance(f(), tuple)", "def f() -> int | str:\n    return 1\n")))
     eq("2:11: cannot print a value of type tuple[int]", check_errors(in_main("print((1,))")))
@@ -830,7 +830,7 @@ return {
       check_errors(in_main("f = double\nb = f == f", D)))
     eq("3:23: type function double has no member int", check_errors(in_main("f = double\nb = isinstance(f, int)", D)))
     eq("3:5: 'f' expects 1 argument, received 0", check_errors(in_main("f = double\nf()", D)))
-    local K = "def k(a: int, *, c: int = 0) -> None:\n    pass\n"
+    local K = "def k(a: int, *, c: int = 0):\n    pass\n"
     eq("3:10: 'g' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("g = k\ng(1, 2)", K)))
   end,
 
@@ -857,9 +857,9 @@ return {
 
   generic_alias_names = function()
     local A = "type Box[T] = list[T]\ntype Pair[K, V] = tuple[K, V]\n"
-    eq("4:19: expected list[int], received str", check_errors(A .. "def main() -> None:\n    x: Box[int] = \"s\"\n"))
+    eq("4:19: expected list[int], received str", check_errors(A .. "def main():\n    x: Box[int] = \"s\"\n"))
     eq("4:31: expected list[Pair[int, str]], received str",
-      check_errors(A .. "def main() -> None:\n    y: list[Pair[int, str]] = \"s\"\n"))
+      check_errors(A .. "def main():\n    y: list[Pair[int, str]] = \"s\"\n"))
   end,
 
   bounds_and_generic_values = function()
@@ -893,7 +893,7 @@ return {
     eq("2:33: expected str, received int", check_errors(in_main("f: (int) -> str = lambda x: x")))
     eq("2:17: variable 'y' may be used before assignment", check_errors(in_main("g = lambda: y\ny = 1")))
     eq("5:13: expected int, received str",
-      check_errors(in_main("x = 1\ndef inner() -> None:\n    nonlocal x\n    x = 's'\ninner()")))
+      check_errors(in_main("x = 1\ndef inner():\n    nonlocal x\n    x = 's'\ninner()")))
   end,
 
   closures = function()
@@ -904,7 +904,7 @@ return {
     eq("5:22: operator '+' cannot be applied to int | None and int",
       check_errors(in_main("x = m()\nif x is not None:\n    def inner() -> int:\n        return x + 1\n    print(inner())", H)))
     -- Every call removes the narrowing of a captured variable.
-    local capture = "x = m()\ndef inner() -> None:\n    print(x)\n"
+    local capture = "x = m()\ndef inner():\n    print(x)\n"
     eq("7:17: operator '+' cannot be applied to int | None and int",
       check_errors(in_main(capture .. "if x is not None:\n    g()\n    print(x + 1)", H)))
     eq("6:17: operator '+' cannot be applied to int | None and int",
@@ -924,7 +924,7 @@ return {
       check_errors(in_main(capture .. "c = C(1)\nif x is not None:\n    try:\n        for y in c:\n            pass\n"
         .. "    except ValueError:\n        print(x + 1)", C)))
     -- Arguments are checked in the order they are written.
-    local K = H .. "def k(a: int, b: bool, c: int) -> None:\n    pass\n"
+    local K = H .. "def k(a: int, b: bool, c: int):\n    pass\n"
     eq("6:22: operator '+' cannot be applied to int | None and int",
       check_errors(in_main(capture .. "if x is not None:\n    k(b=g(), a=x + 1, c=1)", K)))
     check_source(in_main(capture .. "if x is not None:\n    k(c=x + 1, b=g(), a=1)", K))
@@ -984,7 +984,7 @@ return {
       check_errors(in_main("g: () -> Coroutine[int] | None = lambda: None\ng()", F)))
     eq("2:5: cannot discard a value of type Coroutine[int]; a discarded coroutine never runs",
       check_errors(in_async_main("await g()", F .. "async def g() -> Coroutine[int]:\n    return f()\n")))
-    check_source(in_main("run(f)", F .. "def run[T](g: () -> T) -> None:\n    g()\n"))
+    check_source(in_main("run(f)", F .. "def run[T](g: () -> T):\n    g()\n"))
     -- An async protocol method means a method returning a coroutine.
     local P = "protocol P:\n    async def get(self) -> int\nclass C:\n    n: int\n\n"
     check_source(P .. "    def get(self) -> Coroutine[int]:\n        return f()\n" .. F .. in_main("p: P = C(1)"))
@@ -1035,7 +1035,7 @@ return {
       .. "        x = 1\nprint(x)"))
     -- A return after an await does not return on every path; without an await
     -- it does, and the statement after the group is unreachable.
-    local G = F .. "def main() -> None:\n    pass\n"
+    local G = F .. "def main():\n    pass\n"
     eq("6:11: function 'g' must return a value on every path",
       check_errors(G .. "async def g() -> int:\n    async with aio.task_group() as t:\n        return await f()\n"))
     eq("10:5: unreachable statement",
@@ -1049,7 +1049,7 @@ return {
         .. "print(y + 1)", "def m() -> int | None:\n    return 1\n")))
     -- The join removes captured narrowing.
     eq("12:17: operator '+' cannot be applied to int | None and int",
-      check_errors(in_async_main("y = m()\ndef h() -> None:\n    nonlocal y\n    y = None\nif y is not None:\n"
+      check_errors(in_async_main("y = m()\ndef h():\n    nonlocal y\n    y = None\nif y is not None:\n"
         .. "    async with aio.task_group() as g:\n        pass\n    print(y + 1)", "def m() -> int | None:\n    return 1\n")))
   end,
 
@@ -1082,7 +1082,7 @@ return {
 
   with_statements = function()
     local M = "class M:\n    n: int\n\n    def enter(self) -> str:\n        return ''\n\n"
-      .. "    def exit(self, error: Exception | None) -> None:\n        pass\n"
+      .. "    def exit(self, error: Exception | None):\n        pass\n"
     eq("2:10: type int is not a context manager", check_errors(in_main("with 1:\n    pass")))
     eq("12:14: expected int, received str", check_errors(M .. in_main("with M(1) as x:\n    pass\ns: int = x")))
     check_source(M .. in_main("with M(1) as x:\n    pass\nprint(x)"))
@@ -1101,7 +1101,7 @@ return {
     local F = "def f(a: int) -> int:\n    return a\ndef k(a: int, *, b: int) -> int:\n    return a\n"
       .. "def s() -> str:\n    return ''\n"
     local function body(text)
-      return F .. "def main() -> None:\n" .. text:gsub("[^\n]+", "    %0") .. "\n"
+      return F .. "def main():\n" .. text:gsub("[^\n]+", "    %0") .. "\n"
     end
     eq("8:23: expected (int) -> int, received function k", check_errors(body("g: (int) -> int = k")))
     eq("8:30: expected (int | None) -> int, received function f",
@@ -1115,7 +1115,7 @@ return {
   end,
 
   keyword_only_parameters = function()
-    local F = "def f(a: int, *, c: int) -> None:\n    pass\n"
+    local F = "def f(a: int, *, c: int):\n    pass\n"
     eq("2:10: 'f' received a positional argument for keyword-only parameter 'c'", check_errors(in_main("f(1, 2)", F)))
     eq("2:5: 'f' is missing argument 'c'", check_errors(in_main("f(1)", F)))
     eq("2:5: 'f' is missing argument 'a'", check_errors(in_main("f(c=2)", F)))
@@ -1141,7 +1141,7 @@ return {
     eq("2:13: operator '==' cannot be applied to E and str", check_errors(in_main("x = E.A == 'A'", E)))
     eq("2:15: cannot convert a value of type E to int", check_errors(in_main("x = int(E.A)", E)))
     eq("2:14: format type 's' requires str, received E", check_errors(in_main("x = f'{E.A:s}'", E)))
-    eq("1:14: union members E and E overlap", check_errors("def f(x: E | E) -> None:\n    pass\n" .. E .. MAIN))
+    eq("1:14: union members E and E overlap", check_errors("def f(x: E | E):\n    pass\n" .. E .. MAIN))
     eq("3:18: expected E, received F", check_errors("def f(x: E | F) -> E:\n    if isinstance(x, E):\n        return F.A\n"
       .. "    return E.A\n" .. E .. MAIN))
     eq("2:20: expected E, received F", check_errors(in_main("x = {E.A: 1, F.A: 2}", E)))
@@ -1153,7 +1153,7 @@ return {
       return R .. "class C:\n    n: int\n\n" .. method .. "\n" .. in_main("r: Reader = C(1)")
     end
     local rejected = "10:17: expected Reader, received C"
-    eq(rejected, check_errors(R .. "class C:\n    n: int\n\n    def write(self) -> None:\n        pass\n"
+    eq(rejected, check_errors(R .. "class C:\n    n: int\n\n    def write(self):\n        pass\n"
       .. in_main("r: Reader = C(1)")))
     eq(rejected, check_errors(satisfied("    def read(self, count: int) -> bytes:\n        return bytes([])")))
     eq(rejected, check_errors(satisfied("    def read(self, size: bool) -> bytes:\n        return bytes([])")))
@@ -1168,10 +1168,10 @@ return {
     eq("9:12: expected K, received C", check_errors(K .. "class C:\n    n: int\n\n    def get(self, key: str, n: int) -> int:\n"
       .. "        return 1\n" .. in_main("k: K = C(1)")))
 
-    local W = "import io\nprotocol W:\n    def write_text(self, text: str) -> None\n"
-      .. "protocol D:\n    def write_text(self, data: str) -> None\n"
-      .. "protocol F:\n    def write_text(self, text: str) -> None\n"
-      .. "    def flush(self) -> None\n"
+    local W = "import io\nprotocol W:\n    def write_text(self, text: str)\n"
+      .. "protocol D:\n    def write_text(self, data: str)\n"
+      .. "protocol F:\n    def write_text(self, text: str)\n"
+      .. "    def flush(self)\n"
     check_source(W .. in_main("w: W = io.stdout()\nf: F = io.stdout()\nv: W = f"))
     eq("10:15: expected D, received io.File", check_errors(W .. in_main("d: D = io.stdout()")))
     eq("11:12: expected F, received W", check_errors(W .. in_main("w: W = io.stdout()\nf: F = w")))
@@ -1188,14 +1188,14 @@ return {
     check_source(N .. in_main("n: Node = Link(1)"))
     eq("10:11: type Node has no field 'n'", check_errors(N .. in_main("n: Node = Link(1)\nx = n.n")))
     eq("10:7: type Node has no method 'prev'", check_errors(N .. in_main("n: Node = Link(1)\nn.prev()")))
-    eq("5:7: 'read' expects 1 argument, received 0", check_errors(R .. "def f(r: Reader) -> None:\n    r.read()\n" .. MAIN))
+    eq("5:7: 'read' expects 1 argument, received 0", check_errors(R .. "def f(r: Reader):\n    r.read()\n" .. MAIN))
     eq("5:12: 'read' has no parameter 'count'",
-      check_errors(R .. "def f(r: Reader) -> None:\n    r.read(count=1)\n" .. MAIN))
+      check_errors(R .. "def f(r: Reader):\n    r.read(count=1)\n" .. MAIN))
 
     local I = "class Counter:\n    n: int\n\n    def iter(self) -> Counter:\n        return self\n\n"
       .. "    def next(self) -> int:\n        return self.n\n"
       .. "class Manager:\n    n: int\n\n    def enter(self) -> str:\n        return ''\n\n"
-      .. "    def exit(self, error: Exception | None) -> None:\n        pass\n"
+      .. "    def exit(self, error: Exception | None):\n        pass\n"
     check_source(I .. in_main("a: Iterator[int] = Counter(1)\nb: Iterable[int] = Counter(1)\nc: ContextManager[str] = Manager(1)"))
     eq("18:24: expected Iterator[str], received Counter", check_errors(I .. in_main("a: Iterator[str] = Counter(1)")))
     -- Inference through a self-referential protocol terminates.
@@ -1203,10 +1203,10 @@ return {
       "def first[T](xs: Iterable[T]) -> T:\n    return xs.iter().next()\n")))
     eq("18:30: expected ContextManager[str], received Manager",
       check_errors(I:gsub("error: Exception", "e: Exception") .. in_main("c: ContextManager[str] = Manager(1)")))
-    local G = "def g(x: Generator[int]) -> None:\n    a: Iterator[int] = x\n    b: ContextManager[Generator[int]] = x\n"
+    local G = "def g(x: Generator[int]):\n    a: Iterator[int] = x\n    b: ContextManager[Generator[int]] = x\n"
     check_source(G .. MAIN)
     eq("2:25: expected Generator[int], received Iterator[int]",
-      check_errors("def g(x: Iterator[int]) -> None:\n    a: Generator[int] = x\n" .. MAIN))
+      check_errors("def g(x: Iterator[int]):\n    a: Generator[int] = x\n" .. MAIN))
 
     local B = "protocol Shape:\n    def area(self) -> float\n"
       .. "def total[T: Shape](xs: list[T]) -> float:\n    sum = 0.0\n    for x in xs:\n        sum = sum + x.area()\n    return sum\n"
@@ -1219,7 +1219,7 @@ return {
     local Q = "class Q:\n    n: int\n\n    def next(self) -> int:\n        return 1\n"
     eq("7:9: 'next' cannot be applied to Q", check_errors(Q .. in_main("x = next(Q(1))")))
     eq("7:14: cannot iterate over Q", check_errors(Q .. in_main("for x in Q(1):\n    pass")))
-    local X = "def f(xs: Iterable[int]) -> None:\n"
+    local X = "def f(xs: Iterable[int]):\n"
     eq("3:18: expected str, received int", check_errors(X .. "    for x in xs:\n        s: str = x\n" .. MAIN))
     eq("2:14: expected str, received int", check_errors(X .. "    s: str = next(iter(xs))\n" .. MAIN))
 
@@ -1227,9 +1227,9 @@ return {
       .. "d: Iterable[str] = {'a': 1}\ne: Iterable[int] = range(3)\nf: Iterator[int] = [1].iter()"))
     eq("2:25: expected Iterable[str], received list[int]", check_errors(in_main("xs: Iterable[str] = [1]")))
     eq("1:22: union members list[int] and Iterable[int] overlap",
-      check_errors("def f(x: list[int] | Iterable[int]) -> None:\n    pass\n" .. MAIN))
+      check_errors("def f(x: list[int] | Iterable[int]):\n    pass\n" .. MAIN))
     eq("1:22: union members list[str] and Iterable[int] overlap",
-      check_errors("def f(x: list[str] | Iterable[int]) -> None:\n    pass\n" .. MAIN))
+      check_errors("def f(x: list[str] | Iterable[int]):\n    pass\n" .. MAIN))
     -- A tuple serving a protocol is copied into its item type's representation,
     -- which a type parameter's value or a protocol's item cannot be.
     eq("2:9: type argument tuple[int, float] does not satisfy the bound Iterable[int | float] of 'T'",

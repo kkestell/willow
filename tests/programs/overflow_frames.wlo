@@ -7,7 +7,7 @@ def boom(n: int) -> int:
 def wrap(n: int) -> int:
     return boom(n)
 
-def main() -> None:
+def main():
     print("before")
     print(safe(1) + wrap(2))
     print("after")

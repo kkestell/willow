@@ -120,11 +120,11 @@ end
 
 -- Lowers `main` with the statements indented in, followed by any helpers.
 local function lower_main(statements, helpers)
-  local source = "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. (helpers or "")
+  local source = "def main():\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. (helpers or "")
   return show_body(lower_source(source).functions[1])
 end
 
-local MAIN = "def main() -> None:\n    pass\n"
+local MAIN = "def main():\n    pass\n"
 local INT_HELPERS = "def f(n: int) -> int:\n    return n\ndef g(n: int) -> int:\n    return n\n"
 local BOOL_HELPERS = "def f(n: int) -> bool:\n    return True\ndef g(n: int) -> bool:\n    return False\n"
 
@@ -134,10 +134,10 @@ return {
   end,
 
   temporaries_are_recycled = function()
-    local lowered = lower_source("def main() -> None:\n    x = f(f(f(1)))\n" .. INT_HELPERS)
+    local lowered = lower_source("def main():\n    x = f(f(f(1)))\n" .. INT_HELPERS)
     eq("t1 = f(1); t1 = f(t1); x = f(t1)", show_body(lowered.functions[1]))
     eq(1, lowered.functions[1].temps)
-    lowered = lower_source("def main() -> None:\n    x = f(1) + f(2) + f(3)\n" .. INT_HELPERS)
+    lowered = lower_source("def main():\n    x = f(1) + f(2) + f(3)\n" .. INT_HELPERS)
     eq("t1 = f(1); t2 = f(2); t1 = add(t1, t2)#1; t2 = f(3); x = add(t1, t2)#2", show_body(lowered.functions[1]))
     eq(2, lowered.functions[1].temps)
   end,
@@ -153,7 +153,7 @@ return {
   end,
 
   integer_helpers_carry_sites = function()
-    local lowered = lower_source("def main() -> None:\n    a = 1\n    b = 2\n    x = -a * (b - 1)\n    y = +a\n")
+    local lowered = lower_source("def main():\n    a = 1\n    b = 2\n    x = -a * (b - 1)\n    y = +a\n")
     eq("a = 1; b = 2; t1 = neg(a)#1; t2 = sub(b, 1)#2; x = mul(t1, t2)#3; y = a", show_body(lowered.functions[1]))
     eq(3, #lowered.sites)
     eq("4:9", lowered.sites[1].line .. ":" .. lowered.sites[1].col)
@@ -162,7 +162,7 @@ return {
   end,
 
   string_plus_is_concat = function()
-    local lowered = lower_source("def main() -> None:\n    s = 'a'\n    x = s + '!'\n")
+    local lowered = lower_source("def main():\n    s = 'a'\n    x = s + '!'\n")
     eq('s = "a"; x = (s concat "!")', show_body(lowered.functions[1]))
     eq(0, #lowered.sites)
   end,
@@ -175,7 +175,7 @@ return {
       "    if a < 0:",
       "        return a + 1",
       "    return a",
-      "def k() -> None:",
+      "def k():",
       "    return",
     }, "\n") .. "\n" .. MAIN .. INT_HELPERS)
     eq("if (a > 0) { t1 = f(1); return t1 }; if (a < 0) { t1 = add(a, 1)#1; return t1 }; return a",
@@ -225,7 +225,7 @@ return {
   records = function()
     local P = "class P:\n    x: int\n    y: int\n"
     local function lower_records(statements)
-      local source = P .. "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. INT_HELPERS
+      local source = P .. "def main():\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. INT_HELPERS
         .. "def mk(n: int) -> P:\n    return P(n, n)\n"
       return show_body(lower_source(source).functions[1])
     end
@@ -237,7 +237,7 @@ return {
 
   methods = function()
     local source = "class P:\n    x: int\n    def m(self, a: int, b: int = 2) -> int:\n        return a\n"
-      .. "def main() -> None:\n    p = P(1)\n    y = p.m(f(1))\n    mk(0).m(b=f(2), a=3)\n" .. INT_HELPERS
+      .. "def main():\n    p = P(1)\n    y = p.m(f(1))\n    mk(0).m(b=f(2), a=3)\n" .. INT_HELPERS
       .. "def mk(n: int) -> P:\n    return P(n)\n"
     local lowered = lower_source(source)
     eq("p = P{x = 1}; t1 = f(1); y = m(p, t1, 2); t1 = mk(0); t2 = f(2); m(t1, 3, t2)", show_body(lowered.functions[1]))
@@ -259,7 +259,7 @@ return {
 
   loops_and_transfers = function()
     local source = table.concat({
-      "def main() -> None:",
+      "def main():",
       "    i = 0",
       "    while f(i) < 10:",
       "        i = i + 1",
@@ -286,7 +286,7 @@ return {
       "def f(n: int) -> int:",
       "    m = n * 2",
       "    return m",
-      "def main() -> None:",
+      "def main():",
       "    k = f(1) + 1",
       "    print(k)",
     }, "\n"))
@@ -305,7 +305,7 @@ return {
 
   unions = function()
     local function lower_f(statements)
-      local source = "def f(x: int | float, y: float | str) -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
+      local source = "def f(x: int | float, y: float | str):\n" .. statements:gsub("[^\n]+", "    %0") .. "\n" .. MAIN
       return show_body(lower_source(source).functions[1])
     end
     eq("x = box(1.5); z = unbox(x)", lower_f("x = 1.5\nz = x"))

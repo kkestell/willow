@@ -1,3 +1,3 @@
-def main() -> None:
+def main():
     top = 9007199254740991
     print(top + 1)

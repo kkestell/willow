@@ -15,7 +15,7 @@ def size(value: app.models.Size | str) -> str:
 def size_name(value: app.models.Size = app.models.Size.SMALL) -> str:
     return str(value)
 
-def main() -> None:
+def main():
     items = [app.util.make("tea", count=2), app.models.Item("scone", 1)]
     print(app.models.describe(app.deep.leaf.first(items)))
     print(check(items[1]))
@@ -38,6 +38,6 @@ def main() -> None:
     shadowed()
 
 # A local named like a namespace root shadows the whole namespace.
-def shadowed() -> None:
+def shadowed():
     app = 5
     print(app)

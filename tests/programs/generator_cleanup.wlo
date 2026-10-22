@@ -15,7 +15,7 @@ def failing_cleanup() -> Generator[int]:
     finally:
         raise ValueError("cleanup failed")
 
-def main() -> None:
+def main():
     log: list[str] = []
     g = nested(log)
     print(next(g))

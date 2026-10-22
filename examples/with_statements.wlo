@@ -9,13 +9,13 @@ class Transaction:
         self.log.append(f"begin {self.name}")
         return self
 
-    def exit(self, error: Exception | None) -> None:
+    def exit(self, error: Exception | None):
         if error is None:
             self.log.append(f"commit {self.name}")
         else:
             self.log.append(f"roll back {self.name}: {error.message}")
 
-def main() -> None:
+def main():
     log: list[str] = []
 
     with Transaction("first", log) as transaction:

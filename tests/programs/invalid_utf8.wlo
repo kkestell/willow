@@ -1,6 +1,6 @@
 import fs
 
-def main() -> None:
+def main():
     print(input())
     try:
         input()

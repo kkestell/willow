@@ -1,7 +1,7 @@
 # Strings: immutable UTF-8 text, indexed and sliced by code point, with
 # methods for searching, splitting, joining, and case.
 
-def main() -> None:
+def main():
     text = "Willow café"
     print(len(text))
     print(text[0])

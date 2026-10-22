@@ -8,5 +8,5 @@ def total() -> int:
         sum = sum + n
     return sum
 
-def main() -> None:
+def main():
     print(total())

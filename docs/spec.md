@@ -17,7 +17,7 @@ def sum_to(limit: int) -> int:
 def greeting(name: str) -> str:
     return "Hello, " + name
 
-def main() -> None:
+def main():
     print(greeting("Willow"))
     print(sum_to(10))
 ```
@@ -36,7 +36,7 @@ and `type` declarations in any order. No other statements may appear at file
 scope.
 
 The entry file must define exactly one `main` function, with the signature
-`def main() -> None:` or `async def main() -> None:`. In other modules, `main`
+`def main():` or `async def main():`. In other modules, `main`
 is an ordinary function name. The program reads its command-line arguments with
 `sys.args()` (§14).
 
@@ -138,8 +138,9 @@ def function_name(parameter: Type, other: Type) -> Type:
     statements
 ```
 
-Every parameter and the return type must have a type annotation. A parameter may
-have a default value after its annotation, as in `prefix: str = "Hello"`. A
+Every parameter must have a type annotation. A function without a return
+annotation returns `None`, as if annotated `-> None`. A parameter may have a
+default value after its annotation, as in `prefix: str = "Hello"`. A
 default value must be `None`, `True`, `False`, a string literal, an enum member,
 an integer or float literal with an optional `+` or `-` sign, or a tuple of such
 defaults, and it must be assignable to the parameter's type. Among positional
@@ -148,7 +149,7 @@ A bare `*` introduces keyword-only parameters; these must be supplied by name
 and may be required or have defaults, in any order:
 
 ```python
-def report(path: str, *, limit: int = 100, verbose: bool = False) -> None:
+def report(path: str, *, limit: int = 100, verbose: bool = False):
     pass
 ```
 
@@ -211,7 +212,7 @@ class Counter:
         self.count = self.count + amount
         return self.count
 
-def main() -> None:
+def main():
     counter = Counter()
     counter.add()
     print(counter.add(amount=5))    # 6
@@ -476,7 +477,7 @@ def describe(value: int | str | None) -> str:
 
 ### `None`
 
-Function bodies annotated `-> None` return `None`. A `return` statement with no
+Functions whose return type is `None` return `None`. A `return` statement with no
 value returns `None`, and such a body may also return by reaching its end.
 Calling an async function still produces a coroutine (§15).
 
@@ -1040,7 +1041,7 @@ def lines(path: str) -> Generator[str]:
         for line in source:
             yield line
 
-def main() -> None:
+def main():
     with lines("input.txt") as rows:
         for line in rows:
             print(line)
@@ -1290,7 +1291,7 @@ def parse_digit(text: str, line: int) -> int:
         raise ParseError(f"not a digit: {text}", line)
     return index
 
-def main() -> None:
+def main():
     try:
         print(parse_digit("7", 1))                      # 7
         print(parse_digit("x", 2))
@@ -1410,7 +1411,7 @@ def distance_squared(a: Point, b: Point) -> float:
 # main.wlo
 import geometry
 
-def main() -> None:
+def main():
     origin = geometry.Point(0.0, 0.0)
     corner = geometry.Point(3.0, 4.0)
     print(geometry.distance_squared(origin, corner))    # 25.0
@@ -1505,7 +1506,7 @@ a standalone executable.
 # test_cart.wlo, next to cart.wlo
 import cart
 
-def test_empty_cart_totals_zero() -> None:
+def test_empty_cart_totals_zero():
     assert cart.Cart([]).total() == 0
 ```
 
@@ -1593,11 +1594,11 @@ imported in the same way as a program's own modules (§12).
 ```python
 import aio
 
-async def echo(listener: aio.Listener) -> None:
+async def echo(listener: aio.Listener):
     with await listener.accept(timeout=5.0) as connection:
         await connection.sendall(await connection.recv(1024))
 
-async def main() -> None:
+async def main():
     with aio.listen("127.0.0.1", 0) as listener:
         async with aio.task_group() as group:
             group.start(echo(listener))
@@ -1658,7 +1659,7 @@ import cli
 import io
 import sys
 
-def main() -> None:
+def main():
     parser = cli.parser("report", description="Summarize a log file")
     parser.add_int("limit", 10, help="Maximum rows", short="n")
     parser.add_positional("file")
@@ -1806,7 +1807,7 @@ system's reason. Examples are `cannot read <path>: <reason>`,
 import http
 import json
 
-def main() -> None:
+def main():
     response = http.request("GET", "https://example.com/api/items?" + http.urlencode({"q": "tea"}))
     if response.status == 200:
         items = json.parse(response.body.decode())
@@ -1893,7 +1894,7 @@ memory.
 ```python
 import io
 
-def main() -> None:
+def main():
     source = io.open("input.bin")
     try:
         target = io.open("output.bin", mode="w")
@@ -1984,7 +1985,7 @@ from `print` (§10).
 ```python
 import json
 
-def main() -> None:
+def main():
     doc = json.parse('{"name": "Willow", "ports": [80, 443]}')
     if isinstance(doc, dict):
         ports = doc["ports"]
@@ -2032,7 +2033,7 @@ negative number or NaN is NaN.
 ```python
 import net
 
-def main() -> None:
+def main():
     listener = net.listen("127.0.0.1", 0)
     client = net.connect("127.0.0.1", listener.local_port())
     server = listener.accept(timeout=5.0)
@@ -2102,7 +2103,7 @@ operations. `exit` has the same behavior as `close`.
 ```python
 import subprocess
 
-def main() -> None:
+def main():
     result = subprocess.run(["printf", "%s", "hello"], capture_output=True)
     output = result.stdout
     if output is not None:
@@ -2185,7 +2186,7 @@ A program that cannot be found or started raises `OSError` with the message
 import fs
 import sys
 
-def main() -> None:
+def main():
     args = sys.args()
     if len(args) != 1:
         sys.eprint("usage: chars <file>")
@@ -2270,7 +2271,7 @@ import aio
 async def square(value: int) -> int:
     return value * value
 
-async def main() -> None:
+async def main():
     async with aio.task_group() as group:
         first = group.start(square(3))
         second = group.start(square(4))

@@ -13,7 +13,7 @@ def complements() -> dict[str, str]:
     return table
 
 # Writes the complemented sequence back to front in lines of 60.
-def write_reversed(sequence: list[str]) -> None:
+def write_reversed(sequence: list[str]):
     end = len(sequence)
     while end > 0:
         start = end - 60
@@ -25,7 +25,7 @@ def write_reversed(sequence: list[str]) -> None:
         print("".join(line))
         end = start
 
-def main() -> None:
+def main():
     table = complements()
     sequence: list[str] = []
     for line in io.stdin():

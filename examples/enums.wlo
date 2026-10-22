@@ -22,7 +22,7 @@ def parse(text: str) -> Light | None:
 def is_stop(light: Light = Light.RED) -> bool:
     return light == Light.RED
 
-def main() -> None:
+def main():
     light = Light.RED
     for i in range(4):
         print(light)

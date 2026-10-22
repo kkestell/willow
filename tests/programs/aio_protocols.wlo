@@ -14,13 +14,13 @@ class Host:
         await aio.sleep(0.0)
         return "hello, " + who
 
-def show(named: Named) -> None:
+def show(named: Named):
     print(named.name())
 
-async def welcome(greeter: Greeter) -> None:
+async def welcome(greeter: Greeter):
     print(await greeter.greet("guest"))
 
-async def main() -> None:
+async def main():
     host = Host()
     show(host)
     await welcome(host)

@@ -8,13 +8,13 @@ def find(limit: int) -> int | None:
         return limit * 2
     return None
 
-def show(i: int | None, f: float | None, s: str | None, b: bool | None) -> None:
+def show(i: int | None, f: float | None, s: str | None, b: bool | None):
     print(i)
     print(f)
     print(s)
     print(b)
 
-def main() -> None:
+def main():
     count: int | None = None
     print(describe(None))           # anonymous
     print(describe("ada"))          # user ada

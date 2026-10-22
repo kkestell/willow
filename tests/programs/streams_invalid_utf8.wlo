@@ -1,6 +1,6 @@
 import io
 
-def main() -> None:
+def main():
     stdin = io.stdin()
     print(stdin.readline())
     try:

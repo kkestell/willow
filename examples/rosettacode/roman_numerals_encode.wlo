@@ -10,6 +10,6 @@ def to_roman(n: int) -> str:
             n = n - values[i]
     return result
 
-def main() -> None:
+def main():
     for n in [1990, 2008, 1666, 3999]:
         print(f"{n} = {to_roman(n)}")

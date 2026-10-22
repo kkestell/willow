@@ -5,7 +5,7 @@ enum Fruit:
     BANANA
     CHERRY
 
-def main() -> None:
+def main():
     for fruit in [Fruit.APPLE, Fruit.BANANA, Fruit.CHERRY]:
         print(fruit)
     # Members carry no values of their own; a dictionary gives them some.

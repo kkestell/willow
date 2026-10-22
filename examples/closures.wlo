@@ -14,7 +14,7 @@ def counter() -> () -> int:
 def multiplier(factor: int) -> (int) -> int:
     return lambda n: n * factor
 
-def main() -> None:
+def main():
     tick = counter()
     tick()
     tick()

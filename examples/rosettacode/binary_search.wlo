@@ -23,7 +23,7 @@ def search_recursive(items: list[int], value: int, low: int, high: int) -> int:
         return search_recursive(items, value, low, middle - 1)
     return middle
 
-def main() -> None:
+def main():
     items = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
     for value in [2, 19, 37, 4, 40]:
         index = search_iterative(items, value)

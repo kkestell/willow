@@ -1,4 +1,4 @@
 import counter
 
-def main() -> None:
+def main():
     print(counter.grow(9007199254740991))

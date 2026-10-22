@@ -10,7 +10,7 @@ def hailstone(n: int) -> list[int]:
         sequence.append(n)
     return sequence
 
-def main() -> None:
+def main():
     sequence = hailstone(27)
     print(f"hailstone(27) has {len(sequence)} elements")
     print(f"it starts {sequence[0]}, {sequence[1]}, {sequence[2]}, {sequence[3]}")

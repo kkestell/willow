@@ -30,7 +30,7 @@ def same(a: ColorMode | Keyword | str, b: ColorMode | Keyword | str) -> bool:
 def same_number(a: int | float | ColorMode, b: int | float | ColorMode) -> bool:
     return a == b
 
-def main() -> None:
+def main():
     mode = ColorMode.AUTO
     print(mode)
     print(f"{mode} {ColorMode.NEVER:>18}|")

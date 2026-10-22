@@ -13,7 +13,7 @@ class Countdown:
         self.current = self.current - 1
         return self.current + 1
 
-def main() -> None:
+def main():
     for n in Countdown(3):
         print(n)
 

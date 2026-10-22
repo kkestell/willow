@@ -1,7 +1,7 @@
 # sumcol: sum the integers on the lines of standard input, from the Computer
 # Language Benchmarks Game.
 
-def main() -> None:
+def main():
     total = 0
     line = input()
     while line is not None:

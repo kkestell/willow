@@ -7,6 +7,6 @@ class Faulty:
     def next(self) -> int:
         raise ValueError("broken")
 
-def main() -> None:
+def main():
     for n in Faulty(0):
         print(n)

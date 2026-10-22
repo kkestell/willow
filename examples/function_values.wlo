@@ -19,7 +19,7 @@ class Greeter:
     def greet(self, name: str) -> str:
         return f"{self.greeting}, {name}"
 
-def main() -> None:
+def main():
     increment: (int) -> int = lambda n: n + 1
     for result in apply_all([double, increment, compose(double, increment)], 5):
         print(result)

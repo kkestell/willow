@@ -5,7 +5,7 @@ import fs
 import sys
 import time
 
-def main() -> None:
+def main():
     start = time.monotonic()
     directory = sys.getenv("LISTING_DIR")
     if directory is None:

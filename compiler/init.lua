@@ -16,14 +16,14 @@ local MANIFEST = [[
 ]]
 
 local MAIN = [[
-def main() -> None:
+def main():
     print("Hello, Willow!")
 ]]
 
 local TEST = [[
 import main
 
-def test_main_runs() -> None:
+def test_main_runs():
     main.main()
 ]]
 
@@ -68,7 +68,7 @@ errors. An uncaught exception reports its class, message, and call frames.
 
 A file contains `import` statements followed by `def`, `async def`, `class`,
 `enum`, `type`, and `protocol` declarations. The entry file defines
-`def main() -> None:`. Blocks are indented with four spaces, and comments start
+`def main():`. Blocks are indented with four spaces, and comments start
 with `#`. The whole program is type-checked before any of it runs.
 
 ```python
@@ -105,7 +105,7 @@ def summarize(readings: list[Reading]) -> dict[str, float]:
         totals[reading.name] = previous + reading.value
     return totals
 
-def main() -> None:
+def main():
     readings: list[Reading] = []
     number = 0
     for line in sys.args():
@@ -122,7 +122,8 @@ def main() -> None:
 
 Rules that differ from Python:
 
-- Every parameter and return type is annotated. Types are `int`, `float`,
+- Every parameter is annotated. A function without `-> T` returns `None`.
+  Types are `int`, `float`,
   `bool`, `str`, `bytes`, `None`, `list[T]`, `dict[K, V]`, `tuple[A, B]`,
   unions such as `int | None`, function types such as `(int) -> str`, classes,
   enums, and protocols. Generic functions and classes take type parameters:
@@ -196,7 +197,7 @@ Test files are named `tests/test_*.wlo`. Their functions whose names begin with
 ```python
 import main
 
-def test_main_runs() -> None:
+def test_main_runs():
     main.main()
 ```
 

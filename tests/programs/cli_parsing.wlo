@@ -15,7 +15,7 @@ def show(args: cli.Args) -> str:
     extra = ", ".join(args.get_list("extra"))
     return f"{args.get_str('output')} {args.get_int('count')} {args.get_float('ratio')} {args.get_str('name')} {args.get_bool('verbose')} {args.get_str('source')} [{extra}]"
 
-def attempt(parser: cli.Parser, args: list[str]) -> None:
+def attempt(parser: cli.Parser, args: list[str]):
     try:
         print(show(parser.parse(args)))
     except cli.UsageError as error:
@@ -23,7 +23,7 @@ def attempt(parser: cli.Parser, args: list[str]) -> None:
     except cli.HelpRequested as help:
         print(f"help: {len(help.message.split(chr(10)))} lines")
 
-def schema(kind: str) -> None:
+def schema(kind: str):
     parser = cli.parser("bad")
     try:
         if kind == "name":
@@ -49,7 +49,7 @@ def schema(kind: str) -> None:
     except ValueError as error:
         print(f"{kind}: {error.message}")
 
-def main() -> None:
+def main():
     parser = build()
     print(parser.help())
     attempt(parser, ["--name", "Ada", "in.txt"])

@@ -1,6 +1,6 @@
 def broken() -> int:
     return "not an int"
 
-def main() -> None:
+def main():
     print("started")
     print(broken())

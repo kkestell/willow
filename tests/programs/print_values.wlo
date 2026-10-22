@@ -1,4 +1,4 @@
-def main() -> None:
+def main():
     print(9007199254740991)
     print(-9007199254740991)
     print(-42)

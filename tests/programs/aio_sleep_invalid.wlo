@@ -1,8 +1,8 @@
 import aio
 
-async def wait(seconds: float) -> None:
+async def wait(seconds: float):
     await aio.sleep(seconds)
 
-async def main() -> None:
+async def main():
     print("start")
     await wait(-0.5)

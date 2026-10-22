@@ -23,7 +23,7 @@ class Circle:
     def name(self) -> str:
         return "circle"
 
-def report(shapes: list[Shape]) -> None:
+def report(shapes: list[Shape]):
     for shape in shapes:
         print(f"{shape.name():<8s}{shape.area():>8.2f}")
 
@@ -48,6 +48,6 @@ def drain[T](source: Source[T]) -> list[T]:
         item = source.read()
     return items
 
-def main() -> None:
+def main():
     report([Square(2.0), Circle(1.0)])
     print(len(drain[int](Countdown(3))))

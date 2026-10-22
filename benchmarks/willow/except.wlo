@@ -13,24 +13,24 @@ class Counts:
     hi: int = 0
     lo: int = 0
 
-def blowup(n: int) -> None:
+def blowup(n: int):
     if n % 2 == 1:
         raise LoException("Lo_exception", n)
     raise HiException("Hi_exception", n)
 
-def lo_function(n: int, counts: Counts) -> None:
+def lo_function(n: int, counts: Counts):
     try:
         blowup(n)
     except LoException:
         counts.lo = counts.lo + 1
 
-def hi_function(n: int, counts: Counts) -> None:
+def hi_function(n: int, counts: Counts):
     try:
         lo_function(n, counts)
     except HiException:
         counts.hi = counts.hi + 1
 
-def main() -> None:
+def main():
     n = int(sys.args()[0])
     counts = Counts()
     for i in range(n - 1, -1, -1):

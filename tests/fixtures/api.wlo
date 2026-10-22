@@ -7,7 +7,7 @@ import http
 import json
 import sys
 
-def main() -> None:
+def main():
     args = sys.args()
     if len(args) < 1 or len(args) > 2:
         sys.eprint("usage: api <url> [json-body]")

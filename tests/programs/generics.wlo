@@ -41,7 +41,7 @@ def maybe() -> int | None:
     return None
 
 # Calls without type arguments infer them.
-def inferred() -> None:
+def inferred():
     print(first([3, 4]))
     print(first(["a"]))
     # int and int | None infer int | None.
@@ -104,7 +104,7 @@ def identity[T](x: T) -> T:
 def apply(f: (str) -> str, s: str) -> str:
     return f(s)
 
-def aliases_bounds_values() -> None:
+def aliases_bounds_values():
     print(swap((1, "a"))[0])
     print(depth([[None], [[None]]]))
     print(label(Named("a")))
@@ -114,7 +114,7 @@ def aliases_bounds_values() -> None:
     print(f([7]))
     print(apply(identity, "same"))
 
-def main() -> None:
+def main():
     print(first[int]([3, 4]))
     print(first[str](["a", "b"]))
     print(len(repeat[str]("x", 3)))

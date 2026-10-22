@@ -16,7 +16,7 @@ def text(data: bytes | None) -> str:
         return "None"
     return data.decode()
 
-def main() -> None:
+def main():
     # Arguments reach the program literally; output is captured as bytes.
     r = subprocess.run(["printf", "%s|%s", "a b", "$HOME *"], capture_output=True)
     print(f"{r.returncode} {text(r.stdout)} {show(r.stderr)}")

@@ -1,6 +1,6 @@
 def words(text: str, sep: str) -> list[str]:
     return text.split(sep)
 
-def main() -> None:
+def main():
     print(len(words("a b", " ")))
     print(len(words("a b", "")))

@@ -14,17 +14,17 @@ async def verify(transfer: aio.Task[int]) -> str:
     size = await transfer
     return f"verified {size} bytes"
 
-async def upload() -> None:
+async def upload():
     try:
         await aio.sleep(1.0)
     finally:
         print("  upload cleaned up")
 
-async def fail_soon() -> None:
+async def fail_soon():
     await aio.sleep(0.05)
     raise ValueError("disk full")
 
-async def main() -> None:
+async def main():
     start = time.monotonic()
     async with aio.task_group() as group:
         big = group.start(download("big.iso", 0.3))

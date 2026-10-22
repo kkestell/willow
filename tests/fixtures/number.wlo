@@ -1,7 +1,7 @@
 import fs
 import sys
 
-def main() -> None:
+def main():
     args = sys.args()
     if len(args) != 1:
         sys.eprint("usage: number <output>")

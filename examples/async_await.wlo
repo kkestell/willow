@@ -32,7 +32,7 @@ async def run_twice(make: () -> Coroutine[str]) -> str:
     second = await make()
     return first + ", " + second
 
-async def main() -> None:
+async def main():
     print(await fetch("first", 0.01))
 
     pending = fetch("second", 0.01)

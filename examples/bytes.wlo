@@ -1,7 +1,7 @@
 # Bytes: immutable sequences of octets, made by encoding text or from a list of
 # integers.
 
-def main() -> None:
+def main():
     data = "café".encode()
     print(len(data))
     print(data[-1])

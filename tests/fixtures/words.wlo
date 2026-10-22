@@ -7,7 +7,7 @@ def keys(items: dict[int, list[str]]) -> list[int]:
         result.append(key)
     return result
 
-def main() -> None:
+def main():
     counts: dict[str, int] = {}
     total = 0
     line = input()

@@ -4,7 +4,7 @@ class Account:
     owner: str
     balance: int = 0
 
-    def deposit(self, amount: int) -> None:
+    def deposit(self, amount: int):
         self.balance = self.balance + amount
 
     def withdraw(self, amount: int) -> bool:
@@ -16,7 +16,7 @@ class Account:
     def describe(self) -> str:
         return f"{self.owner} has {self.balance}"
 
-def main() -> None:
+def main():
     account = Account("Ada")
     account.deposit(100)
     print(account.withdraw(30))

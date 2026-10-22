@@ -12,6 +12,6 @@ def from_roman(numeral: str) -> int:
             total = total + value
     return total
 
-def main() -> None:
+def main():
     for numeral in ["MCMXC", "MMVIII", "MDCLXVI", "MMMCMXCIX"]:
         print(f"{numeral} = {from_roman(numeral)}")

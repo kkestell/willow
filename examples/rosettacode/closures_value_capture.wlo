@@ -5,7 +5,7 @@
 def square_of(i: int) -> () -> int:
     return lambda: i * i
 
-def main() -> None:
+def main():
     funcs: list[() -> int] = []
     for i in range(10):
         funcs.append(square_of(i))

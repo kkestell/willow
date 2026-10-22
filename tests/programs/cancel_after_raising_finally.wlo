@@ -2,11 +2,11 @@ import aio
 
 # A `finally` that raises skips restoring the task's cancellation scope; the
 # enclosing `try` restores it, so the task is still cancelled afterwards.
-async def stopper(group: aio.TaskGroup) -> None:
+async def stopper(group: aio.TaskGroup):
     await aio.sleep(0.01)
     group.cancel()
 
-async def worker() -> None:
+async def worker():
     try:
         try:
             await aio.sleep(0.0)
@@ -17,7 +17,7 @@ async def worker() -> None:
     await aio.sleep(10.0)
     print("not reached")
 
-async def main() -> None:
+async def main():
     async with aio.task_group() as group:
         group.start(stopper(group))
         group.start(worker())

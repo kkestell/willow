@@ -14,7 +14,7 @@ def trace(text: str) -> int:
     print(text)
     return len(text)
 
-def builtin_failures() -> None:
+def builtin_failures():
     items = [1]
     ages = {"a": 1}
     for step in range(7):
@@ -45,7 +45,7 @@ def builtin_failures() -> None:
         except Exception as other:
             print(f"other: {other.message}")
 
-def clause_order() -> None:
+def clause_order():
     errors: list[Exception] = [ParseError("p", 1), Empty("e"), ValueError("v")]
     for raised in errors:
         try:
@@ -71,7 +71,7 @@ def returns() -> int:
     finally:
         print("finally after return")
 
-def departures() -> None:
+def departures():
     for i in range(4):
         try:
             if i == 1:
@@ -83,7 +83,7 @@ def departures() -> None:
             print(f"finally {i}")
     print("after loop")
 
-def replaced() -> None:
+def replaced():
     try:
         try:
             raise Empty("first")
@@ -107,7 +107,7 @@ def nested() -> int:
         print(f"nested finally {total}")
     return 0
 
-def reraise() -> None:
+def reraise():
     try:
         try:
             parse_digit("x", 4)
@@ -120,7 +120,7 @@ def reraise() -> None:
     except ParseError as error:
         print(f"reraised {error.line}")
 
-def handler_raises() -> None:
+def handler_raises():
     try:
         try:
             raise Empty("one")
@@ -131,7 +131,7 @@ def handler_raises() -> None:
     except ParseError as error:
         print(error.message)
 
-def main() -> None:
+def main():
     try:
         print(parse_digit("7", 1))
         print(parse_digit("x", 2))

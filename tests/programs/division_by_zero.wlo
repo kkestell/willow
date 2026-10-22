@@ -1,6 +1,6 @@
 def remainder(a: float, b: float) -> float:
     return a % b
 
-def main() -> None:
+def main():
     print(remainder(7.0, 2.0))
     print(remainder(1.0, -0.0))

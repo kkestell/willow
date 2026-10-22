@@ -30,7 +30,7 @@ async def drain(source: Source) -> str:
 async def fail(message: str) -> int:
     raise ValueError(message)
 
-async def cleanup() -> None:
+async def cleanup():
     try:
         await fail("inner")
     finally:
@@ -40,7 +40,7 @@ def label(n: int) -> str:
     print(f"argument {n}")
     return str(n)
 
-async def main() -> None:
+async def main():
     # A call evaluates its arguments but runs none of the body.
     pending = echo(label(1))
     print("called")

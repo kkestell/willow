@@ -4,7 +4,7 @@ def pair(listener: net.Listener) -> list[net.Connection]:
     client = net.connect("127.0.0.1", listener.local_port(), timeout=5.0)
     return [client, listener.accept(timeout=5.0)]
 
-def main() -> None:
+def main():
     listener = net.listen("127.0.0.1", 0)
     print(listener.local_port() > 0)
     ends = pair(listener)

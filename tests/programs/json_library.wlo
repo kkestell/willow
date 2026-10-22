@@ -15,20 +15,20 @@ def kind(value: json.Json) -> str:
         return "list"
     return "dict"
 
-def round_trip(text: str) -> None:
+def round_trip(text: str):
     try:
         value = json.parse(text)
         print(kind(value) + " " + json.dump(value))
     except json.JsonError as error:
         print(error.message)
 
-def encode(value: json.Json) -> None:
+def encode(value: json.Json):
     try:
         print(json.dump(value))
     except json.JsonError as error:
         print(error.message)
 
-def main() -> None:
+def main():
     # Values and nesting
     round_trip("null")
     round_trip("true")

@@ -26,7 +26,7 @@ def power_of_two(exponent: int) -> int:
         result = result * 2
     return result
 
-def main() -> None:
+def main():
     n = int(sys.args()[0])
     min_depth = 4
     max_depth = n

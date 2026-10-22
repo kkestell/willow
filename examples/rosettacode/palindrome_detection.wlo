@@ -17,7 +17,7 @@ def letters(text: str) -> str:
             result = result + c
     return result
 
-def main() -> None:
+def main():
     for text in ["racecar", "rotor", "willow", "A man, a plan, a canal: Panama!"]:
         exact = is_palindrome(text)
         inexact = is_palindrome(letters(text))

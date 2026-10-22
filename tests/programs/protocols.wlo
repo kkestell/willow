@@ -8,7 +8,7 @@ protocol Area:
     def area(self) -> float
 
 protocol Writer:
-    def write_text(self, text: str) -> None
+    def write_text(self, text: str)
 
 protocol Source[T]:
     def get(self) -> T
@@ -116,12 +116,12 @@ class Oops(Exception):
 def take[T](source: Source[T]) -> T:
     return source.get()
 
-def show(number: Number) -> None:
+def show(number: Number):
     r = number.value()
     print(isinstance(r, float))
     print(r)
 
-def main() -> None:
+def main():
     shapes: list[Shape] = [Rect(2.0, 3.0), Circle(1.0)]
     for shape in shapes:
         print(shape.area())

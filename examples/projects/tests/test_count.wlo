@@ -1,7 +1,7 @@
 import vowels.count
 
-def test_counts_upper_and_lower_case() -> None:
+def test_counts_upper_and_lower_case():
     assert vowels.count.vowels("Banana") == 3
 
-def test_word_without_vowels() -> None:
+def test_word_without_vowels():
     assert vowels.count.vowels("rhythm") == 0

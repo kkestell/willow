@@ -12,7 +12,7 @@ class Random:
         return maximum * float(self.last) / 139968.0
 
 # Sorts items[1] through items[n]. items[0] is unused.
-def heapsort(n: int, items: list[float]) -> None:
+def heapsort(n: int, items: list[float]):
     ir = n
     l = n // 2 + 1
     while True:
@@ -39,7 +39,7 @@ def heapsort(n: int, items: list[float]) -> None:
                 j = ir + 1
         items[i] = rra
 
-def main() -> None:
+def main():
     n = int(sys.args()[0])
     random = Random()
     items = [0.0]

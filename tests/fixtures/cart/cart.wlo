@@ -9,7 +9,7 @@ class Cart:
     items: list[Item]
     discount: int = 0
 
-    def add(self, name: str, price: int, *, quantity: int = 1) -> None:
+    def add(self, name: str, price: int, *, quantity: int = 1):
         self.items.append(Item(name, price, quantity))
 
     def iter(self) -> Iterator[Item]:
@@ -21,7 +21,7 @@ class Cart:
             total = total + item.price * item.quantity
         return total
 
-    def apply_discount(self, percent: int) -> None:
+    def apply_discount(self, percent: int):
         if percent < 0 or percent > 100:
             raise ValueError(f"discount must be from 0 to 100, received {percent}")
         self.discount = percent

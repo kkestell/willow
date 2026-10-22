@@ -29,14 +29,14 @@ def trace(label: str, value: int) -> int:
     print(label)
     return value
 
-def move(p: Point, dx: int) -> None:
+def move(p: Point, dx: int):
     p.x = p.x + dx
 
 def make_point() -> Point:
     print("object")
     return Point(0, 0)
 
-def main() -> None:
+def main():
     print(total(Node(1, Node(2, Node(3, None)))))   # 6
 
     p = Point(1, 2)

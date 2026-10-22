@@ -2,11 +2,11 @@ def trace(label: str, value: int) -> int:
     print(label)
     return value
 
-def add_all(items: list[int], extra: list[int]) -> None:
+def add_all(items: list[int], extra: list[int]):
     for item in extra:
         items.append(item)
 
-def main() -> None:
+def main():
     totals: dict[str, int] = {}
     for word in ["a", "b", "a"]:
         if word in totals:

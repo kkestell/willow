@@ -8,7 +8,7 @@ import sys
 import tabulate.table
 import vowels.count
 
-def main() -> None:
+def main():
     rows: list[list[str]] = []
     for word in sys.args():
         rows.append([word, str(vowels.count.vowels(word))])

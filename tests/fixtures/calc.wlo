@@ -123,7 +123,7 @@ def evaluate(expr: Expr) -> float:
         return left * right
     return left / right
 
-def main() -> None:
+def main():
     prompt = terminal.isatty(io.stdin())
     out = io.stdout()
     while True:

@@ -5,14 +5,14 @@
 import aio
 import stock
 
-def test_add_counts_items() -> None:
+def test_add_counts_items():
     shelf = stock.Stock({})
     shelf.add("tea", 2)
     shelf.add("tea", 3)
     assert shelf.count("tea") == 5
     assert shelf.count("cake") == 0, "an unknown item counts zero"
 
-def test_rejects_zero_quantity() -> None:
+def test_rejects_zero_quantity():
     shelf = stock.Stock({})
     try:
         shelf.add("tea", 0)
@@ -21,7 +21,7 @@ def test_rejects_zero_quantity() -> None:
         assert error.message == "quantity must be positive"
 
 # An async test runs in the event loop, like an async `main`.
-async def test_concurrent_restocks() -> None:
+async def test_concurrent_restocks():
     shelf = stock.Stock({})
     async with aio.task_group() as group:
         group.start(shelf.restock("tea", 2, 0.02))

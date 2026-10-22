@@ -39,7 +39,7 @@ def guarded(log: list[str]) -> Generator[int]:
     finally:
         log.append("cleanup")
 
-def main() -> None:
+def main():
     numbers = count(3)
     print("created")
     print(next(numbers))

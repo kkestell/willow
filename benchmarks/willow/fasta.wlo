@@ -42,7 +42,7 @@ def cumulative(table: list[tuple[str, float]]) -> list[tuple[str, float]]:
         result.append((symbol, total))
     return result
 
-def repeat_fasta(header: str, sequence: str, count: int) -> None:
+def repeat_fasta(header: str, sequence: str, count: int):
     print(header)
     doubled = sequence + sequence
     length = len(sequence)
@@ -55,7 +55,7 @@ def repeat_fasta(header: str, sequence: str, count: int) -> None:
         position = (position + width) % length
         count = count - width
 
-def random_fasta(header: str, table: list[tuple[str, float]], count: int, random: Random) -> None:
+def random_fasta(header: str, table: list[tuple[str, float]], count: int, random: Random):
     print(header)
     while count > 0:
         width = 60
@@ -73,7 +73,7 @@ def random_fasta(header: str, table: list[tuple[str, float]], count: int, random
         print("".join(line))
         count = count - width
 
-def main() -> None:
+def main():
     n = int(sys.args()[0])
     random = Random()
     repeat_fasta(">ONE Homo sapiens alu", alu(), 2 * n)

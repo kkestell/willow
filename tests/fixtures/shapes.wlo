@@ -46,7 +46,7 @@ def parse_shape(text: str) -> Shape:
         raise ShapeError("expected WIDTHxHEIGHT or rRADIUS", text)
     return Rect(parse_number(parts[0], text), parse_number(parts[1], text))
 
-def main() -> None:
+def main():
     total = 0.0
     for text in sys.args():
         try:

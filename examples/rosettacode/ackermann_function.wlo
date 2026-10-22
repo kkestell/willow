@@ -7,7 +7,7 @@ def ackermann(m: int, n: int) -> int:
         return ackermann(m - 1, 1)
     return ackermann(m - 1, ackermann(m, n - 1))
 
-def main() -> None:
+def main():
     for m in range(4):
         for n in range(5):
             print(f"A({m}, {n}) = {ackermann(m, n)}")

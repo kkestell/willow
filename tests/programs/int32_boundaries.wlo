@@ -1,4 +1,4 @@
-def main() -> None:
+def main():
     zero = 0
     big = 2147483647
     low = -2147483648

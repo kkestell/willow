@@ -1,4 +1,4 @@
-def exit(status: int) -> None:
+def exit(status: int):
     print(f"exit {status}")
 
 def args() -> str:

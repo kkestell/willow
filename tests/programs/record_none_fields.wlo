@@ -11,7 +11,7 @@ def nothing() -> Node | None:
     print("nothing")
     return None
 
-def main() -> None:
+def main():
     # None fields, passed explicitly or taken from a default, read as None.
     a = Node(1, None, None)
     b = Node(2, None)

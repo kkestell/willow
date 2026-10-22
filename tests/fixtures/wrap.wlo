@@ -5,7 +5,7 @@
 import subprocess
 import sys
 
-def describe(name: str, data: bytes | None) -> None:
+def describe(name: str, data: bytes | None):
     if data is None or len(data) == 0:
         print(f"{name}: (empty)")
         return
@@ -14,7 +14,7 @@ def describe(name: str, data: bytes | None) -> None:
     except ValueError:
         print(f"{name}: {len(data)} bytes, not UTF-8")
 
-def main() -> None:
+def main():
     args = sys.args()
     if len(args) < 2:
         sys.eprint("usage: wrap <seconds> <command> [args...]")

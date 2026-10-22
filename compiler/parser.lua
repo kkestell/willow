@@ -905,8 +905,8 @@ function M.parse(tokens)
     if star and not (params[#params] and params[#params].keyword_only) then
       diag.error(star.span, "'*' must be followed by a keyword-only parameter")
     end
-    expect("->")
-    local return_type = parse_type()
+    -- A function without `-> R` returns None.
+    local return_type = accept("->") and parse_type() or ast.node("Type", name.span, { name = "None" })
     local body
     if signature then
       if peek().kind == ":" then

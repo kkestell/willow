@@ -50,7 +50,7 @@ def total[T: Iterable[int]](xs: T) -> int:
         sum = sum + x
     return sum
 
-def main() -> None:
+def main():
     for n in Countdown(3):
         print(n)
     bag = Bag(2)

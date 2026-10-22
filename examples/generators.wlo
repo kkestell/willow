@@ -17,7 +17,7 @@ def fibonacci() -> Generator[int]:
     finally:
         print("fibonacci closed")
 
-def main() -> None:
+def main():
     for n in countdown(3):
         print(n)
 

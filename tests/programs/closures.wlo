@@ -17,7 +17,7 @@ def fact(n: int) -> int:
     return go(n)
 
 # Closures made in a loop share the loop variable's one binding.
-def loop() -> None:
+def loop():
     fs: list[() -> int] = []
     for i in range(3):
         def get() -> int:
@@ -34,7 +34,7 @@ class Box:
             return x * self.n
         return apply
 
-def main() -> None:
+def main():
     # Separate outer calls make separate bindings.
     a = make_counter(1)
     b = make_counter(5)

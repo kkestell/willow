@@ -18,7 +18,7 @@ class Session:
         print("enter " + self.name)
         return self.name
 
-    def exit(self, error: Exception | None) -> None:
+    def exit(self, error: Exception | None):
         print(error is None)
 
 class Rect:
@@ -43,7 +43,7 @@ def total[T: Shape](shapes: list[T]) -> float:
 def first(items: Iterable[int]) -> int:
     return items.iter().next()
 
-def main() -> None:
+def main():
     it: Iterator[int] = Countdown(3)
     print(it.next())
     print(it.iter().next())

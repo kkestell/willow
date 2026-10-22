@@ -10,7 +10,7 @@ def swap[A, B](pair: tuple[A, B]) -> tuple[B, A]:
 class Stack[T]:
     items: list[T]
 
-    def push(self, item: T) -> None:
+    def push(self, item: T):
         self.items.append(item)
 
     def pop(self) -> T:
@@ -36,7 +36,7 @@ def longest[T: Named](items: list[T]) -> T:
             best = item
     return best
 
-def main() -> None:
+def main():
     print(first([3, 1, 2]))
     print(first(["x", "y"]))
     print(first[float]([2.5]))

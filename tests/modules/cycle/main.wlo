@@ -12,7 +12,7 @@ def is_even(n: int) -> bool:
         return True
     return util.is_odd(n - 1)
 
-def main() -> None:
+def main():
     s = shapes.square(3)
     print(shapes.area(s))
     print(is_even(10))

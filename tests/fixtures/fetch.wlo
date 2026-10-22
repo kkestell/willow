@@ -5,7 +5,7 @@
 import http
 import sys
 
-def main() -> None:
+def main():
     args = sys.args()
     if len(args) < 2:
         sys.eprint("usage: fetch <url> <path> [name=value...]")

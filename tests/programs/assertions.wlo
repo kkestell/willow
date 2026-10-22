@@ -2,10 +2,10 @@ def explode() -> str:
     print("message evaluated")
     return "explode"
 
-def check_positive(n: int) -> None:
+def check_positive(n: int):
     assert n > 0, f"{n} is not positive"
 
-def main() -> None:
+def main():
     assert len("ab") == 2, explode()
     try:
         assert False

@@ -7,7 +7,7 @@ def bottles(n: int) -> str:
         return "1 bottle"
     return f"{n} bottles"
 
-def main() -> None:
+def main():
     for n in range(99, 0, -1):
         print(f"{bottles(n)} of beer on the wall")
         print(f"{bottles(n)} of beer")

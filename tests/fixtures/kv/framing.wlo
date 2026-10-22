@@ -9,7 +9,7 @@ class Channel:
     connection: net.Connection
     pending: bytes
 
-    def send(self, value: json.Json) -> None:
+    def send(self, value: json.Json):
         self.connection.sendall((json.dump(value) + "\n").encode())
 
     # The next complete line without its newline, or None when the peer closed.
@@ -31,13 +31,13 @@ class Channel:
             return None
         return json.parse(line)
 
-    def close(self) -> None:
+    def close(self):
         self.connection.close()
 
     def enter(self) -> Channel:
         return self
 
-    def exit(self, error: Exception | None) -> None:
+    def exit(self, error: Exception | None):
         self.close()
 
 def channel(connection: net.Connection) -> Channel:

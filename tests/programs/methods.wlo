@@ -27,7 +27,7 @@ def shadowed(counter: Counter) -> int:
     Counter = 10
     return counter.add(Counter)
 
-def main() -> None:
+def main():
     counter = Counter()
     counter.add()
     print(counter.add(5))           # 6

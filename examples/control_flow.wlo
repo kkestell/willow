@@ -9,7 +9,7 @@ def classify(n: int) -> str:
     else:
         return "positive"
 
-def main() -> None:
+def main():
     for n in [-5, 0, 5]:
         print(f"{n} is {classify(n)}")
 

@@ -12,7 +12,7 @@ def greeting(name: str | None) -> str:
         return "Hello, stranger"
     return "Hello, " + name
 
-def main() -> None:
+def main():
     names = ["ada", "alan", "grace"]
     print(greeting(find(names, "gr")))
     print(greeting(find(names, "x")))

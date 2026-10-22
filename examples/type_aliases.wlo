@@ -21,7 +21,7 @@ def best(scores: dict[str, Score]) -> Pair[str, int] | None:
                 winner = (name, score)
     return winner
 
-def main() -> None:
+def main():
     print(total([1, [2, 3], [[4], 5]]))
     result = best({"ada": 7, "alan": None, "grace": 9})
     if result is not None:

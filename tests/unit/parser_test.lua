@@ -176,7 +176,7 @@ end
 
 -- Wraps statements in `main`, indenting each line one level.
 local function in_main(statements)
-  return "def main() -> None:\n" .. statements:gsub("[^\n]+", "    %0") .. "\n"
+  return "def main():\n" .. statements:gsub("[^\n]+", "    %0") .. "\n"
 end
 
 local function body(statements)
@@ -193,7 +193,7 @@ end
 
 return {
   function_signatures = function()
-    local source = "def f() -> None:\n    pass\n\ndef g(a: int, b: bool,\n      c: str, d: None,) -> int:\n    return a\n"
+    local source = "def f():\n    pass\n\ndef g(a: int, b: bool,\n      c: str, d: None,) -> int:\n    return a\n"
     local program = parse(source)
     eq("def f() -> None { pass }; def g(a: int, b: bool, c: str, d: None) -> int { return a }",
       show_list(program.functions, "; "))
@@ -205,16 +205,15 @@ return {
 
   annotations_required_and_limited = function()
     eq("1:8: expected ':', found ')'", parse_error("def f(x) -> int:\n    return x\n"))
-    eq("1:14: expected '->', found ':'", parse_error("def f(x: int):\n    pass\n"))
-    eq("1:14: expected '[', found ')'", parse_error("def f(x: list) -> None:\n    pass\n"))
-    eq("1:10: expected a type, found integer", parse_error("def f(x: 1) -> None:\n    pass\n"))
+    eq("1:14: expected '[', found ')'", parse_error("def f(x: list):\n    pass\n"))
+    eq("1:10: expected a type, found integer", parse_error("def f(x: 1):\n    pass\n"))
   end,
 
   file_scope_holds_only_declarations = function()
     eq("1:1: only function, class, protocol, enum, and type declarations are allowed at file scope", parse_error("x = 1\n"))
     eq("1:1: 'from' is not supported", parse_error("from os import path\n"))
     eq("1:5: only function, class, protocol, enum, and type declarations are allowed at file scope",
-      parse_error("    def f() -> None:\n        pass\n"))
+      parse_error("    def f():\n        pass\n"))
   end,
 
   statements = function()
@@ -244,7 +243,7 @@ return {
   blocks_need_a_statement = function()
     eq("2:11: expected end of line, found 'pass'", body_error("if a: pass"))
     eq("4:5: expected an indented block, found 'x'", body_error("if a:\n# nothing\nx = 1"))
-    eq("2:1: expected an indented block, found end of file", parse_error("def f() -> None:\n"))
+    eq("2:1: expected an indented block, found end of file", parse_error("def f():\n"))
   end,
 
   non_call_expression_statements_rejected = function()
@@ -263,17 +262,17 @@ return {
 
   callable_annotations = function()
     local function annotation(text)
-      return show(parse("def f(g: " .. text .. ") -> None:\n    pass\n").functions[1].params[1].type)
+      return show(parse("def f(g: " .. text .. "):\n    pass\n").functions[1].params[1].type)
     end
     eq("def f(g: ((int, str) -> bool), h: (() -> int)) -> None { pass }",
-      show(parse("def f(g: (int, str) -> bool, h: () -> int) -> None:\n    pass\n").functions[1]))
+      show(parse("def f(g: (int, str) -> bool, h: () -> int):\n    pass\n").functions[1]))
     eq("((int) -> str | None)", annotation("(int) -> str | None"))
     eq("((int) -> str) | None", annotation("((int) -> str) | None"))
     eq("int", annotation("(int)"))
     eq("tuple[(() -> int), int]", annotation("tuple[() -> int, int]"))
     eq("((int) -> ((str) -> bool))", annotation("(int) -> (str) -> bool"))
     eq("((((int) -> int)) -> int)", annotation("((int) -> int) -> int"))
-    eq("1:20: expected '->', found ')'", parse_error("def f(g: (int, str)) -> None:\n    pass\n"))
+    eq("1:20: expected '->', found ')'", parse_error("def f(g: (int, str)):\n    pass\n"))
   end,
 
   standard_protocols = function()
@@ -284,15 +283,15 @@ return {
 
   keyword_only_parameters = function()
     eq("def f(a: int, *b: int = 1, *c: str) -> None { pass }",
-      show(parse("def f(a: int, *, b: int = 1, c: str) -> None:\n    pass\n").functions[1]))
-    local record = parse("class C:\n    n: int\n\n    def m(self, *, x: int) -> None:\n        pass\n").records[1]
+      show(parse("def f(a: int, *, b: int = 1, c: str):\n    pass\n").functions[1]))
+    local record = parse("class C:\n    n: int\n\n    def m(self, *, x: int):\n        pass\n").records[1]
     eq(true, record.methods[1].params[2].keyword_only)
-    eq("1:18: only one '*' is allowed in a parameter list", parse_error("def f(*, a: int, *, b: int) -> None:\n    pass\n"))
-    eq("1:8: variadic parameters are not supported", parse_error("def f(*args: int) -> None:\n    pass\n"))
-    eq("1:15: '*' must be followed by a keyword-only parameter", parse_error("def f(a: int, *) -> None:\n    pass\n"))
-    eq("1:7: '*' must be followed by a keyword-only parameter", parse_error("def f(*) -> None:\n    pass\n"))
+    eq("1:18: only one '*' is allowed in a parameter list", parse_error("def f(*, a: int, *, b: int):\n    pass\n"))
+    eq("1:8: variadic parameters are not supported", parse_error("def f(*args: int):\n    pass\n"))
+    eq("1:15: '*' must be followed by a keyword-only parameter", parse_error("def f(a: int, *):\n    pass\n"))
+    eq("1:7: '*' must be followed by a keyword-only parameter", parse_error("def f(*):\n    pass\n"))
     eq("1:19: parameter 'b' without a default follows one with a default",
-      parse_error("def f(a: int = 1, b: int, *, c: int) -> None:\n    pass\n"))
+      parse_error("def f(a: int = 1, b: int, *, c: int):\n    pass\n"))
   end,
 
   unpacking = function()
@@ -322,9 +321,9 @@ return {
   union_annotations = function()
     local source = "def f(x: int | None) -> str | None:\n    y: bool | None = None\n    return None\n"
     eq("def f(x: int | None) -> str | None { y: bool | None = None; return None }", show(parse(source).functions[1]))
-    source = "def f(x: None | int, y: int | str | list[int | float]) -> None:\n    pass\n"
+    source = "def f(x: None | int, y: int | str | list[int | float]):\n    pass\n"
     eq("def f(x: None | int, y: int | str | list[int | float]) -> None { pass }", show(parse(source).functions[1]))
-    eq("1:16: expected a type, found ')'", parse_error("def f(x: int | ) -> None:\n    pass\n"))
+    eq("1:16: expected a type, found ')'", parse_error("def f(x: int | ):\n    pass\n"))
   end,
 
   aliases = function()
@@ -333,7 +332,7 @@ return {
     eq("type S = shapes.Shape", show(program.aliases[2]))
     eq("2:6", program.aliases[1].span.line .. ":" .. program.aliases[1].span.col)
     eq("1:7: expected '=', found ':'", parse_error("type T: int\n"))
-    eq("2:5: expected a statement, found 'type'", parse_error("def f() -> None:\n    type T = int\n"))
+    eq("2:5: expected a statement, found 'type'", parse_error("def f():\n    type T = int\n"))
   end,
 
   tuples = function()
@@ -346,7 +345,7 @@ return {
     eq("1", expr("(1)"))
     eq("isinstance(x, tuple)", expr("isinstance(x, tuple)"))
     eq("2:5: expected a statement, found 'tuple'", body_error("tuple = 1"))
-    eq("1:16: expected a type, found ']'", parse_error("def f(x: tuple[]) -> None:\n    pass\n"))
+    eq("1:16: expected a type, found ']'", parse_error("def f(x: tuple[]):\n    pass\n"))
   end,
 
   isinstance = function()
@@ -400,7 +399,7 @@ return {
     eq("list[geometry.Point] | None", show(type))
     local point = type.members[1].args[1]
     eq("geometry Point 3:34", point.module .. " " .. point.name .. " " .. point.span.line .. ":" .. point.span.col)
-    eq("3:1: imports must come before declarations", parse_error("def f() -> None:\n    pass\nimport x\n"))
+    eq("3:1: imports must come before declarations", parse_error("def f():\n    pass\nimport x\n"))
     program = parse("import app.util.text\ndef f(r: app.util.Rec) -> list[app.util.Rec]:\n"
       .. "    try:\n        return [r]\n    except app.errors.Bad:\n        raise\n")
     eq("app.util.text app", program.imports[1].name .. " " .. program.imports[1].root)
@@ -426,10 +425,10 @@ return {
       "    n: int",
       "    def get(self) -> int:",
       "        return self.n",
-      "    def add(self, k: int = 1) -> None:",
+      "    def add(self, k: int = 1):",
       "        self.n = self.n + k",
       "class Only:",
-      "    def f(self,) -> None:",
+      "    def f(self,):",
       "        pass",
       "class E(Exception):",
       "    def show(self) -> str:",
@@ -446,12 +445,12 @@ return {
     eq("show", program.records[3].methods[1].name)
     eq(0, #program.functions)
     eq("2:11: method 'f' must take 'self' as its first parameter",
-      parse_error("class A:\n    def f(x: int) -> None:\n        pass\n"))
+      parse_error("class A:\n    def f(x: int):\n        pass\n"))
     eq("2:11: method 'f' must take 'self' as its first parameter",
-      parse_error("class A:\n    def f() -> None:\n        pass\n"))
-    eq("2:15: 'self' cannot have an annotation", parse_error("class A:\n    def f(self: A) -> None:\n        pass\n"))
+      parse_error("class A:\n    def f():\n        pass\n"))
+    eq("2:15: 'self' cannot have an annotation", parse_error("class A:\n    def f(self: A):\n        pass\n"))
     eq("4:5: fields must come before methods",
-      parse_error("class A:\n    def f(self) -> None:\n        pass\n    x: int\n"))
+      parse_error("class A:\n    def f(self):\n        pass\n    x: int\n"))
   end,
 
   exception_classes = function()
@@ -466,7 +465,7 @@ return {
   end,
 
   protocols = function()
-    local program = parse("protocol P[T]:\n    def read(self, size: int) -> T\n    def close(self) -> None\n")
+    local program = parse("protocol P[T]:\n    def read(self, size: int) -> T\n    def close(self)\n")
     local protocol = program.protocols[1]
     eq("P 1 2", protocol.name .. " " .. #protocol.type_params .. " " .. #protocol.methods)
     eq(0, #program.records)
@@ -569,23 +568,23 @@ return {
 
   defaults = function()
     local program = parse("def f(a: int, b: int = -1, c: float = +2.5, d: float = -0.0, e: str = 'x',"
-      .. " g: int | None = None, h: bool = True) -> None:\n    pass\n"
+      .. " g: int | None = None, h: bool = True):\n    pass\n"
       .. "class P:\n    x: int\n    y: int = 0\n")
     eq("def f(a: int, b: int = -1, c: float = 2.5, d: float = -0, e: str = \"x\", g: int | None = None, h: bool = True)"
       .. " -> None { pass }", show(program.functions[1]))
     eq("-inf", tostring(1 / program.functions[1].params[4].default.value))
     eq("class P { x: int; y: int = 0 }", show(program.records[1]))
     eq("def f(a: E = E.A, b: m.E = m.E.B) -> None { pass }",
-      show(parse("def f(a: E = E.A, b: m.E = m.E.B) -> None:\n    pass\n").functions[1]))
+      show(parse("def f(a: E = E.A, b: m.E = m.E.B):\n    pass\n").functions[1]))
     eq("def f(a: tuple[] = tuple(), b: tuple[int] = tuple(1), c: tuple[E, int] = tuple(E.A, -1)) -> None { pass }",
-      show(parse("def f(a: tuple[()] = (), b: tuple[int] = (1,), c: tuple[E, int] = (E.A, -1)) -> None:\n    pass\n")
+      show(parse("def f(a: tuple[()] = (), b: tuple[int] = (1,), c: tuple[E, int] = (E.A, -1)):\n    pass\n")
         .functions[1]))
-    eq("1:18: expected ',', found ')'", parse_error("def f(a: int = (1)) -> None:\n    pass\n"))
+    eq("1:18: expected ',', found ')'", parse_error("def f(a: int = (1)):\n    pass\n"))
     for _, text in ipairs({ "f()", "x", "[1]", "f'a'", "-'a'", "-True", "-E.A" }) do
-      eq("1:16: a default must be a literal or an enum member", parse_error("def f(a: int = " .. text .. ") -> None:\n    pass\n"))
+      eq("1:16: a default must be a literal or an enum member", parse_error("def f(a: int = " .. text .. "):\n    pass\n"))
     end
     eq("1:19: parameter 'b' without a default follows one with a default",
-      parse_error("def f(a: int = 1, b: int) -> None:\n    pass\n"))
+      parse_error("def f(a: int = 1, b: int):\n    pass\n"))
     eq("3:5: field 'y' without a default follows one with a default",
       parse_error("class P:\n    x: int = 1\n    y: int\n"))
     eq("2:12: positional argument follows keyword argument", body_error("f(a=1, 2)"))
@@ -645,12 +644,12 @@ return {
   end,
 
   async_functions_and_await = function()
-    local program = parse("async def f() -> int:\n    return 1\n\nclass C:\n    async def m(self) -> None:\n"
+    local program = parse("async def f() -> int:\n    return 1\n\nclass C:\n    async def m(self):\n"
       .. "        pass\n\nprotocol P:\n    async def m(self) -> Coroutine[int]\n")
     eq("async def f() -> int { return 1 }", show(program.functions[1]))
     eq(true, program.records[1].methods[1].async)
     eq("Coroutine[int]", show(program.protocols[1].methods[1].return_type))
-    eq("{ async def g() -> None { pass } }", body("async def g() -> None:\n    pass"))
+    eq("{ async def g() -> None { pass } }", body("async def g():\n    pass"))
     -- `await` binds tighter than unary minus and looser than postfix operations.
     eq("(- (await c.m(1)))", expr("-await c.m(1)"))
     eq("((await f()) + 1)", expr("await f() + 1"))
@@ -667,6 +666,6 @@ return {
     eq("Mode", program.enums[1].name)
     eq("AUTO NEVER", program.enums[1].members[1].name .. " " .. program.enums[1].members[2].name)
     eq("2:5: enum bodies hold only member names", parse_error("enum Mode:\n    AUTO = 1\n"))
-    eq("1:7: expected a parameter name, found 'enum'", parse_error("def f(enum: int) -> None:\n    pass\n"))
+    eq("1:7: expected a parameter name, found 'enum'", parse_error("def f(enum: int):\n    pass\n"))
   end,
 }

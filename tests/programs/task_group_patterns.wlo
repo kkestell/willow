@@ -7,14 +7,14 @@ class Buffer:
     items: list[str]
     done: bool
 
-async def producer(buffer: Buffer) -> None:
+async def producer(buffer: Buffer):
     for line in ["a", "b", "c"]:
         while len(buffer.items) >= 2:
             await aio.sleep(0.0)
         buffer.items.append(line)
     buffer.done = True
 
-async def consumer(buffer: Buffer) -> None:
+async def consumer(buffer: Buffer):
     while True:
         if len(buffer.items) > 0:
             print(buffer.items[0])
@@ -31,7 +31,7 @@ async def fetch(name: str, seconds: float) -> str:
     await aio.sleep(seconds)
     return name
 
-async def deadline(group: aio.TaskGroup, seconds: float, flag: Flag) -> None:
+async def deadline(group: aio.TaskGroup, seconds: float, flag: Flag):
     await aio.sleep(seconds)
     flag.fired = True
     group.cancel()
@@ -58,7 +58,7 @@ async def retry_once[T](attempt: Coroutine[T]) -> T:
     except ValueError:
         return await attempt
 
-async def main() -> None:
+async def main():
     buffer = Buffer([], False)
     async with aio.task_group() as group:
         group.start(producer(buffer))

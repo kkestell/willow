@@ -1,4 +1,4 @@
-def main() -> None:
+def main():
     line = input()
     while line is not None:
         print(len(line))

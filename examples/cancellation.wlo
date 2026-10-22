@@ -31,7 +31,7 @@ async def first_of(names: list[str]) -> str:
             print(f"  {error.message}")
     return ""
 
-async def watchdog(group: aio.TaskGroup, seconds: float) -> None:
+async def watchdog(group: aio.TaskGroup, seconds: float):
     await aio.sleep(seconds)
     group.cancel()
 
@@ -45,7 +45,7 @@ async def with_deadline(seconds: float, work: Coroutine[str]) -> str | None:
     except RuntimeError:
         return None
 
-async def main() -> None:
+async def main():
     print("first of three:")
     winner = await first_of(["fast", "medium", "slow"])
     print(f"  winner {winner}")

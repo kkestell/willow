@@ -28,7 +28,7 @@ def outcome(status: int) -> str:
         return f"killed by signal {-status}"
     return f"exit status {status}"
 
-def main() -> None:
+def main():
     parser = cli.parser("jobs", description="Run shell commands in parallel.")
     parser.add_float("limit", 60.0, help="Seconds before running jobs are killed", short="l")
     parser.add_positional("logs", help="Directory for the job logs")

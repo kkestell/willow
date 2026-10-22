@@ -17,7 +17,7 @@ def encode(text: str, key: int) -> str:
 def decode(text: str, key: int) -> str:
     return encode(text, -key)
 
-def main() -> None:
+def main():
     text = "The quick brown fox Jumped over the lazy Dog"
     encoded = encode(text, 11)
     print(encoded)

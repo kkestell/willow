@@ -19,7 +19,7 @@ class Server:
     def enter(self) -> Server:
         return self
 
-    def exit(self, error: Exception | None) -> None:
+    def exit(self, error: Exception | None):
         _stop(self)
 
 def _server_path() -> str:
@@ -42,7 +42,7 @@ def _start() -> Server:
         time.sleep(0.05)
     return Server(process, port_file, int(fs.read_file(port_file)))
 
-def _stop(server: Server) -> None:
+def _stop(server: Server):
     server.process.terminate()
     server.process.wait(timeout=5.0)
     fs.remove(server.port_file)
@@ -51,7 +51,7 @@ def _ask(channel: framing.Channel, request: json.Json) -> str:
     channel.send(request)
     return json.dump(channel.receive(timeout=5.0))
 
-def test_set_get_and_keys() -> None:
+def test_set_get_and_keys():
     with _start() as server, framing.channel(net.connect("127.0.0.1", server.port)) as channel:
         assert _ask(channel, {"op": "set", "key": "b", "value": [1, 2]}) == '{"ok":true}'
         assert _ask(channel, {"op": "set", "key": "a", "value": "x"}) == '{"ok":true}'
@@ -60,7 +60,7 @@ def test_set_get_and_keys() -> None:
         assert _ask(channel, {"op": "keys"}) == '{"keys":["a","b"]}'
         assert _ask(channel, {"op": "nope"}) == '{"error":"unknown request"}'
 
-def test_split_code_point_is_reassembled() -> None:
+def test_split_code_point_is_reassembled():
     with _start() as server, framing.channel(net.connect("127.0.0.1", server.port)) as channel:
         message = '{"op": "set", "key": "café", "value": "naïve"}\n'.encode()
         # Split inside the two bytes of "é".
@@ -72,7 +72,7 @@ def test_split_code_point_is_reassembled() -> None:
         assert json.dump(reply) == '{"ok":true}', json.dump(reply)
         assert _ask(channel, {"op": "get", "key": "café"}) == '{"value":"naïve"}'
 
-def test_clients_are_served_in_turn() -> None:
+def test_clients_are_served_in_turn():
     with _start() as server:
         with framing.channel(net.connect("127.0.0.1", server.port)) as first:
             assert _ask(first, {"op": "set", "key": "k", "value": 1}) == '{"ok":true}'

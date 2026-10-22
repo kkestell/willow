@@ -1,7 +1,7 @@
 # Numbers: exact integers, IEEE 754 floats, the three division operators, and
 # explicit conversions. An `int` never converts to `float` implicitly.
 
-def main() -> None:
+def main():
     print(7 / 2)
     print(7 // 2)
     print(-7 // 2)

@@ -1,15 +1,15 @@
 import aio
 
-async def failing() -> None:
+async def failing():
     await aio.sleep(0.01)
     raise ValueError("child failed")
 
-async def serve(connection: aio.Connection) -> None:
+async def serve(connection: aio.Connection):
     with connection:
         print("serving")
         await connection.sendall("hello".encode())
 
-async def main() -> None:
+async def main():
     # A child's failure wakes the body suspended in accept, and the listener's
     # cleanup runs as the body unwinds.
     listener = aio.listen("127.0.0.1", 0)

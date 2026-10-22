@@ -11,7 +11,7 @@ def factorial_iterative(n: int) -> int:
         result = result * k
     return result
 
-def main() -> None:
+def main():
     for n in range(11):
         print(f"{n}! = {factorial_iterative(n)}")
     # 18! is the largest factorial in Willow's integer range.

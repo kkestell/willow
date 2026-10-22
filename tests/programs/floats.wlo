@@ -1,17 +1,17 @@
-def show_int_division(a: int, b: int) -> None:
+def show_int_division(a: int, b: int):
     print(a // b)
     print(a % b)
     print(a / b)
 
-def show_float_division(a: float, b: float) -> None:
+def show_float_division(a: float, b: float):
     print(a // b)
     print(a % b)
     print(a / b)
 
-def show_product(a: float, b: float) -> None:
+def show_product(a: float, b: float):
     print(a * b)
 
-def main() -> None:
+def main():
     print(7 / 2)
     print(7 // 2)
     print(-7 % 3)

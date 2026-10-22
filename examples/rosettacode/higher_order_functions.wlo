@@ -6,6 +6,6 @@ def first(f: (int) -> int) -> int:
 def second(n: int) -> int:
     return n * n
 
-def main() -> None:
+def main():
     print(first(second))
     print(first(lambda n: n + 1))

@@ -1,6 +1,6 @@
 # https://rosettacode.org/wiki/Associative_array/Iteration
 
-def main() -> None:
+def main():
     ages = {"Ada": 36, "Alan": 41, "Grace": 85}
     for name in ages:
         print(f"{name}: {ages[name]}")
