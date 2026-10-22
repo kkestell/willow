@@ -994,6 +994,38 @@ return {
     end)
   end,
 
+  bundled_compiler_commands = function()
+    in_temp_dir(function(dir)
+      eq(0, sh(ROOT, quote(LUAJIT) .. " compiler/bundle.lua runtime/stub " .. quote(dir .. "/willow")))
+      eq(0, sh(dir, "chmod 755 willow && ./willow init"))
+      eq(0, sh(dir, "./willow build -o hello"))
+      local status, stdout, stderr = sh(dir, "./hello")
+      eq(0, status)
+      eq("Hello, Willow!\n", stdout)
+      eq("", stderr)
+
+      local launcher = capture("cd " .. quote(dir) .. " && pwd -P"):gsub("\n$", "") .. "/willow"
+      write(dir .. "/src/main.wlo", "import sys\ndef main():\n    print(sys.getenv('WILLOW'))\n")
+      write(dir .. "/tests/test_main.wlo", "import sys\ndef test_launcher():\n"
+        .. "    assert sys.getenv('WILLOW') == " .. string.format("%q", launcher) .. "\n")
+      for _, prefix in ipairs({ "env -u WILLOW", "WILLOW=wrong" }) do
+        status, stdout, stderr = sh(dir, prefix .. " ./willow run")
+        eq(0, status)
+        eq(launcher .. "\n", stdout)
+        eq("", stderr)
+      end
+      status, stdout, stderr = sh(dir, "WILLOW=wrong ./willow test")
+      eq(0, status)
+      eq("PASS tests/test_main.wlo test_launcher\n1 passed, 0 failed\n", stdout)
+      eq("", stderr)
+
+      eq(0, sh(dir, "./willow build -o env-program"))
+      status, stdout = sh(dir, "env -u WILLOW ./env-program")
+      eq(0, status)
+      eq("None\n", stdout)
+    end)
+  end,
+
   init_command = function()
     in_temp_dir(function(dir)
       local status, stdout, stderr = willow(dir, "init")

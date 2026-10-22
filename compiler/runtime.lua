@@ -3,6 +3,10 @@
 local M = {}
 
 local function read_runtime(name)
+  local embedded = package.preload["willow.source." .. name]
+  if embedded then
+    return embedded()
+  end
   local file = assert(io.open(assert(package.searchpath(name, package.path)), "rb"))
   local text = file:read("*a")
   file:close()

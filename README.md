@@ -24,6 +24,8 @@ The tests pass on macOS 26 (arm64) and on Linux arm64 with glibc 2.36.
 
 The `willow` command is the `willow` script at the root of the checkout. You can
 run it as `./willow`, or put a symlink to it in a directory on your `PATH`.
+To build a standalone Willow compiler and copy it to `~/.local/bin/willow`, run
+`make install`. Add `~/.local/bin` to your `PATH` if needed.
 
 ## Usage
 

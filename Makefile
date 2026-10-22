@@ -3,6 +3,8 @@ LUAJIT_REV  := 634daf2453559fd5e0ec282f3b7aedaa09e9f344
 LUAJIT_DIR  := vendor/luajit
 LUAJIT      := $(LUAJIT_DIR)/src/luajit
 STUB        := runtime/stub
+BUILD_DIR   := build
+WILLOW      := $(BUILD_DIR)/willow
 
 ifeq ($(shell uname -s),Darwin)
 LUAJIT_FLAGS := MACOSX_DEPLOYMENT_TARGET=11.0
@@ -10,7 +12,7 @@ else
 STUB_LIBS := -lm -ldl
 endif
 
-.PHONY: all test clean
+.PHONY: all test install clean
 
 all: $(LUAJIT) $(STUB)
 
@@ -23,6 +25,16 @@ $(LUAJIT): | $(LUAJIT_DIR)
 
 $(STUB): runtime/stub.c $(LUAJIT)
 	$(LUAJIT_FLAGS) $(CC) -O2 -I$(LUAJIT_DIR)/src -o $@ runtime/stub.c $(LUAJIT_DIR)/src/libluajit.a $(STUB_LIBS)
+
+$(WILLOW): compiler/bundle.lua $(wildcard compiler/*.lua) $(wildcard runtime/*.lua) $(STUB) $(LUAJIT)
+	mkdir -p $(BUILD_DIR)
+	$(LUAJIT) compiler/bundle.lua $(STUB) $@
+	chmod 755 $@
+
+install: $(WILLOW)
+	mkdir -p "$(HOME)/.local/bin"
+	cp $(WILLOW) "$(HOME)/.local/bin/.willow.tmp"
+	mv -f "$(HOME)/.local/bin/.willow.tmp" "$(HOME)/.local/bin/willow"
 
 test: $(LUAJIT) $(STUB)
 	$(LUAJIT) tests/run.lua $(wildcard tests/unit/*_test.lua) $(wildcard tests/programs/*.wlo) $(wildcard tests/modules/*/main.wlo)

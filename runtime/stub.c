@@ -32,9 +32,7 @@ static void executable_path(char *path, size_t size) {
 #endif
 }
 
-static char *read_payload(size_t *length) {
-    char path[4096];
-    executable_path(path, sizeof path);
+static char *read_payload(const char *path, size_t *length) {
     FILE *file = fopen(path, "rb");
     if (!file) die("cannot open executable");
     unsigned char trailer[16];
@@ -54,11 +52,20 @@ static char *read_payload(size_t *length) {
 }
 
 int main(int argc, char **argv) {
+    char path[4096], resolved[4096];
+    executable_path(path, sizeof path);
+    if (!realpath(path, resolved)) die("cannot resolve executable path");
     size_t length;
-    char *text = read_payload(&length);
+    char *text = read_payload(resolved, &length);
     lua_State *L = luaL_newstate();
     if (!L) die("cannot create Lua state");
     luaL_openlibs(L);
+    lua_createtable(L, argc - 1, 1);
+    for (int i = 0; i < argc; i++) {
+        lua_pushstring(L, i == 0 ? resolved : argv[i]);
+        lua_rawseti(L, -2, i);
+    }
+    lua_setglobal(L, "arg");
     if (luaL_loadbuffer(L, text, length, "=program") != 0) {
         fprintf(stderr, "error: %s\n", lua_tostring(L, -1));
         return 1;

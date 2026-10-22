@@ -28,14 +28,14 @@ function M.discover(path, recursive)
   return files
 end
 
--- Runs test `name` of the test chunk at `lua_path` with no arguments and empty
+-- Runs test `name` of the executable at `path` with no arguments and empty
 -- stdin. Returns whether it returned normally, its exit status, and its
 -- combined output.
-local function run_test(luajit, lua_path, name)
+local function run_test(path, name)
   local result = os.tmpname()
   os.remove(result)
-  local shell = io.popen(string.format("%s %s %s %s </dev/null 2>&1; printf '\\n%%d' $?",
-    quote(luajit), quote(lua_path), quote(name), quote(result)))
+  local shell = io.popen(string.format("%s %s %s </dev/null 2>&1; printf '\\n%%d' $?",
+    quote(path), quote(name), quote(result)))
   local text = shell:read("*a")
   shell:close()
   local output, status = text:match("^(.*)\n(%d+)$")
@@ -44,7 +44,8 @@ end
 
 -- Runs the test command and returns its exit status. `compile(file)` returns
 -- the file's test chunk and its test names, or false and its diagnostics.
-function M.test(luajit, path, check_only, compile, recursive)
+-- `write_program(path, text)` writes the chunk as a standalone executable.
+function M.test(write_program, path, check_only, compile, recursive)
   local files = M.discover(path, recursive)
   local chunks, names, failed_checks, count = {}, {}, false, 0
   for i, file in ipairs(files) do
@@ -68,12 +69,10 @@ function M.test(luajit, path, check_only, compile, recursive)
 
   local passed, failed = 0, 0
   for i, file in ipairs(files) do
-    local lua_path = os.tmpname()
-    local out = assert(io.open(lua_path, "wb"))
-    out:write(chunks[i])
-    out:close()
+    local program_path = os.tmpname()
+    write_program(program_path, chunks[i])
     for _, name in ipairs(names[i]) do
-      local returned, status, output = run_test(luajit, lua_path, name)
+      local returned, status, output = run_test(program_path, name)
       if returned and status == "0" then
         passed = passed + 1
         io.stdout:write("PASS ", file, " ", name, "\n")
@@ -91,7 +90,7 @@ function M.test(luajit, path, check_only, compile, recursive)
       end
       io.stdout:flush()
     end
-    os.remove(lua_path)
+    os.remove(program_path)
   end
   io.stdout:write(passed, " passed, ", failed, " failed\n")
   return failed == 0 and 0 or 1

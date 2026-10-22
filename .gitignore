@@ -1,3 +1,4 @@
 /vendor/luajit/
 /runtime/stub
+/build/
 /benchmarks/build/

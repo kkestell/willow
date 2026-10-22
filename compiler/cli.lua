@@ -13,6 +13,7 @@ local lower = require("compiler.lower")
 local emit = require("compiler.emit")
 local runner = require("compiler.runner")
 
+ffi.cdef([[int setenv(const char *name, const char *value, int overwrite);]])
 if ffi.os == "OSX" then
   ffi.cdef([[int chmod(const char *path, uint16_t mode);]])
 else
@@ -153,13 +154,16 @@ end
 -- The stub, then the Lua, an 8-byte little-endian length, and the magic the
 -- stub looks for at the end of its own file.
 local function executable(text)
-  local stub_path = root .. "/runtime/stub"
-  local stub_file, err = io.open(stub_path, "rb")
-  if not stub_file then
-    fail("error: " .. err)
+  local stub = package.preload["willow.stub"] and require("willow.stub")
+  if not stub then
+    local stub_path = root .. "/runtime/stub"
+    local stub_file, err = io.open(stub_path, "rb")
+    if not stub_file then
+      fail("error: " .. err)
+    end
+    stub = stub_file:read("*a")
+    stub_file:close()
   end
-  local stub = stub_file:read("*a")
-  stub_file:close()
   local length, bytes = #text, {}
   for i = 1, 8 do
     bytes[i] = string.char(length % 256)
@@ -233,6 +237,12 @@ local function compile_test(path, project)
   return text, names
 end
 
+if package.preload["willow.stub"] and (arg[1] == "run" or arg[1] == "test") then
+  if ffi.C.setenv("WILLOW", arg[0], 1) ~= 0 then
+    fail("error: cannot set WILLOW")
+  end
+end
+
 if arg[1] == "init" then
   if arg[2] then
     usage_error("unexpected argument '" .. arg[2] .. "'")
@@ -247,7 +257,10 @@ if arg[1] == "test" then
   local function compile(file)
     return compile_test(file, project)
   end
-  os.exit(runner.test(root .. "/vendor/luajit/src/luajit", test_path or project and project.tests or ".", check_only,
+  local function write_program(path, text)
+    write_output(path, executable(text), 493) -- 0755
+  end
+  os.exit(runner.test(write_program, test_path or project and project.tests or ".", check_only,
     compile, project ~= nil))
 end
 
