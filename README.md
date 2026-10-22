@@ -113,34 +113,36 @@ other languages, and `--readme` times every language and updates the table
 below. Both need `cc` on the `PATH`. The runner checks the SHA-256 digest of
 each program's output against `benchmarks/expected`.
 
-The table below comes from the Benchmarks workflow in `.github/workflows`,
-which runs on a GitHub-hosted runner and commits the result. It runs when a
-push to `main` changes the compiler, the runtime, or the benchmarks, and it can
-be started by hand from the Actions tab.
+Run benchmarks locally on your Mac. To refresh the table below with results
+from your machine, run:
+
+```sh
+python3 benchmarks/run.py --readme
+```
 
 <!-- benchmarks:start -->
-Seconds of wall-clock time, best of 3 runs, on AMD EPYC 7763 64-Core Processor, Linux. In
+Seconds of wall-clock time, best of 3 runs, on Apple M4, Darwin. In
 parentheses is how many times faster Willow is than Python.
 
 | Benchmark (size) | C | LuaJIT | Python | Willow (vs Python) |
 |---|---:|---:|---:|---:|
-| n-body (5,000,000) | 0.34 | 0.81 | 26.90 | 1.28 (21.0x) |
-| spectral-norm (2,000) | 0.23 | 0.26 | 27.64 | 1.01 (27.4x) |
-| fannkuch-redux (10) | 0.22 | 0.51 | 6.57 | 0.76 (8.7x) |
-| binary-trees (18) | 1.15 | 5.79 | 35.14 | 6.91 (5.1x) |
-| fasta (2,500,000) | 0.43 | 1.02 | 5.72 | 4.03 (1.4x) |
-| mandelbrot (2,500) | 0.45 | 0.48 | 18.98 | 0.70 (27.2x) |
-| k-nucleotide (2,500,000) | 0.38 | 0.62 | 3.71 | 1.38 (2.7x) |
-| reverse-complement (5,000,000) | 0.12 | 2.89 | 0.55 | 7.59 (0.1x) |
-| recursive (9) | 0.08 | 0.31 | 10.17 | 0.40 (25.2x) |
-| nsieve (11) | 0.12 | 0.55 | 3.84 | 0.66 (5.8x) |
-| matrix (10,000) | 0.12 | 0.54 | 16.64 | 1.54 (10.8x) |
-| methcall (50,000,000) | 0.31 | 0.67 | 9.67 | 1.20 (8.0x) |
-| except (1,000,000) | 0.04 | 1.75 | 0.73 | 10.25 (0.1x) |
-| heapsort (2,000,000) | 0.37 | 0.76 | 8.35 | 1.15 (7.3x) |
-| hash2 (5,000) | 0.96 | 0.47 | 7.82 | 3.13 (2.5x) |
-| sumcol (10,000,000) | 0.30 | 0.82 | 1.40 | 3.48 (0.4x) |
-| raytracer (200) | 0.21 | 0.75 | 17.32 | 0.96 (18.0x) |
+| n-body (5,000,000) | 0.15 | 0.31 | 12.04 | 0.36 (33.2x) |
+| spectral-norm (2,000) | 0.11 | 0.11 | 12.33 | 0.53 (23.1x) |
+| fannkuch-redux (10) | 0.13 | 0.21 | 2.66 | 0.33 (8.2x) |
+| binary-trees (18) | 1.12 | 2.86 | 11.50 | 2.23 (5.2x) |
+| fasta (2,500,000) | 0.22 | 0.48 | 2.54 | 2.09 (1.2x) |
+| mandelbrot (2,500) | 0.19 | 0.33 | 8.48 | 0.45 (18.9x) |
+| k-nucleotide (2,500,000) | 0.18 | 0.27 | 1.56 | 0.62 (2.5x) |
+| reverse-complement (5,000,000) | 0.10 | 1.23 | 0.28 | 3.50 (0.1x) |
+| recursive (9) | 0.17 | 0.14 | 2.74 | 0.17 (16.5x) |
+| nsieve (11) | 0.09 | 0.40 | 2.79 | 0.45 (6.3x) |
+| matrix (10,000) | 0.06 | 0.32 | 6.18 | 0.68 (9.1x) |
+| methcall (50,000,000) | 0.18 | 0.30 | 4.18 | 0.60 (7.0x) |
+| except (1,000,000) | 0.56 | 24.22 | 0.31 | 28.69 (0.0x) |
+| heapsort (2,000,000) | 0.19 | 0.43 | 3.61 | 0.49 (7.4x) |
+| hash2 (5,000) | 0.51 | 0.21 | 4.10 | 1.08 (3.8x) |
+| sumcol (10,000,000) | 0.30 | 0.90 | 0.62 | 1.85 (0.3x) |
+| raytracer (200) | 0.05 | 0.29 | 7.54 | 0.41 (18.5x) |
 <!-- benchmarks:end -->
 
 ## Editor support

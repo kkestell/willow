@@ -6,8 +6,12 @@ STUB        := runtime/stub
 BUILD_DIR   := build
 WILLOW      := $(BUILD_DIR)/willow
 
+# LuaJIT's own unwinder throws errors far faster than the system unwinder,
+# which takes tens of microseconds per error on macOS.
+LUAJIT_FLAGS := XCFLAGS=-DLUAJIT_UNWIND_INTERNAL
+
 ifeq ($(shell uname -s),Darwin)
-LUAJIT_FLAGS := MACOSX_DEPLOYMENT_TARGET=11.0
+LUAJIT_FLAGS += MACOSX_DEPLOYMENT_TARGET=11.0
 else
 STUB_LIBS := -lm -ldl
 endif
