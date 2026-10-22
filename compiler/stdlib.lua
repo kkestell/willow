@@ -42,6 +42,8 @@ local builtins = builtins_of({
     keyword_only = { [3] = true },
   },
   bytes = { params = { types.list(types.int) }, result = types.bytes },
+  -- `bytes.fromhex(text)`, which the binder resolves; the name is not an identifier.
+  ["bytes.fromhex"] = { params = { types.str }, names = { "text" }, result = types.bytes, helper = "bytes_fromhex" },
 })
 M.builtins = builtins
 

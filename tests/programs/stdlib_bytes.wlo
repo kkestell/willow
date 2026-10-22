@@ -1,0 +1,35 @@
+def show(items: list[bytes]) -> str:
+    parts: list[str] = []
+    for item in items:
+        parts.append("[" + item.hex() + "]")
+    return ", ".join(parts)
+
+def main():
+    data = "a,b,,c".encode()
+    comma = ",".encode()
+    print(f"{data.find(comma)} {data.find('z'.encode())} {data.find(bytes([]))} {data[2:].find(comma)}")
+    print(f"{data.startswith('a,'.encode())} {data.startswith(bytes([]))} {data.startswith('b'.encode())}")
+    print(f"{data.endswith(',c'.encode())} {data.endswith(bytes([]))} {data.endswith(data + data)}")
+    print(show(data.split(comma)))
+    print(show(data.split(sep=comma, maxsplit=1)))
+    print(show(data.split(comma, 0)))
+    print(show(data.split(comma, maxsplit=-5)))
+    print(show(bytes([]).split(comma)))
+    print(show(",a,".encode().split(comma)))
+    print(show("a--b-c".encode().split("--".encode())))
+    try:
+        data.split(bytes([]))
+    except ValueError as error:
+        print(error.message)
+
+    binary = bytes([0, 15, 16, 255, 171])
+    print(f"{binary.hex()} [{bytes([]).hex()}]")
+    print(bytes.fromhex("000f10ffAB") == binary)
+    print(bytes.fromhex(" 00 0F\n10\tFf aB ") == binary)
+    print(len(bytes.fromhex("")))
+    print(bytes.fromhex(text="48 69").decode())
+    for text in ["abc", "0g", "0 f", "é1", "a b"]:
+        try:
+            bytes.fromhex(text)
+        except ValueError as error:
+            print(f"{text}: {error.message}")
