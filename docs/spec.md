@@ -2247,6 +2247,7 @@ def main():
 | Declaration | Meaning |
 | --- | --- |
 | `run(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Result` | Run a command and wait for it to finish |
+| `run_async(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Coroutine[Result]` | `run` for a task, without blocking other tasks |
 | `spawn(args: list[str], cwd: str \| None = None, env: dict[str, str] \| None = None, stdin: io.File \| None = None, stdout: io.File \| None = None, stderr: io.File \| None = None) -> Process` | Start a command and return without waiting for it |
 | `class Result` | A class with the fields `returncode: int`, `stdout: bytes \| None`, and `stderr: bytes \| None` |
 | `class Process` | A native type with the methods below |
@@ -2255,6 +2256,7 @@ def main():
 | --- | --- |
 | `poll() -> int \| None` | The exit status if the child has exited, otherwise `None` |
 | `wait(timeout: float \| None = None) -> int` | Wait for the child to exit and return its status |
+| `wait_async(timeout: float \| None = None) -> Coroutine[int]` | `wait` for a task, without blocking other tasks |
 | `terminate() -> None` | Send `SIGTERM` to the child |
 | `kill() -> None` | Send `SIGKILL` to the child |
 
@@ -2296,6 +2298,20 @@ Once a child's exit status has been collected, the `Process` remembers it, so
 `wait` with a `timeout` raises `TimeoutError` with the message
 `process did not exit within <timeout> seconds` and leaves the child running.
 Children are not stopped or waited for automatically.
+
+`run_async` and `wait_async` take the same arguments and give the same results
+and errors as `run` and `wait`, but only when the coroutine is awaited, and they
+suspend the calling task instead of blocking the program (§15). Each begins with
+an await checkpoint. `run_async` writes the input and collects the output
+without blocking, so other tasks run even while a command moves large amounts of
+data. It does not use threads: while the child runs, the task checks its pipes
+and its exit status at intervals of at most 10 ms, so the child's exit can be
+noticed up to 10 ms late. A `timeout` is a deadline for the whole operation.
+If `run_async` times out, is cancelled, or fails, it kills the child with
+`SIGKILL`, waits for it to exit, and closes its pipes before the original
+`TimeoutError` or cancellation continues; processes started by the child are
+not killed. `wait_async` is cancelled or times out like `wait`: it leaves the
+child running and owned by the caller.
 
 Before a child starts, stdout, stderr, and any `io.File` handles passed to
 `spawn` for writing are flushed. If flushing fails, the call raises `OSError` and
