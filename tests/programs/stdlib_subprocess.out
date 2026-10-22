@@ -1,0 +1,18 @@
+0 a b|$HOME * 0
+3 out err
+-15 -1
+hello
+0
+/
+A=1
+0 1048576 1048576
+True
+done True
+0 True
+timeout must be finite and positive
+cannot run /nonexistent/program: No such file or directory
+command timed out after 0.2 seconds True
+True
+process did not exit within 0.1 seconds
+None
+-15 -15

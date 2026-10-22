@@ -516,8 +516,9 @@ local function __wlo_drain(fd, parts, buffer)
   end
 end
 
-function __wlo_process_run(args, input, capture_output, cwd, env, timeout, site)
-  __wlo_check_timeout(timeout, site)
+-- The pipes of a `run` or `run_async` and the child that uses them. Returns the
+-- state the other run functions take; the child's ends of the pipes are closed.
+function __wlo_run_start(args, input, capture_output, cwd, env, site)
   local redirects, stdin, stdout, stderr = {}, nil, nil, nil
   if input then
     stdin = __wlo_pipe(site)
@@ -531,48 +532,125 @@ function __wlo_process_run(args, input, capture_output, cwd, env, timeout, site)
   for _, fd in pairs(redirects) do
     __wlo_C.__wlo_c_close(fd)
   end
-  local input_fd = stdin and stdin[2]
-  local readers = {}
+  local run = { input_fd = stdin and stdin[2], readers = {}, open = {}, offset = 0,
+    buffer = __wlo_ffi.new("char[65536]") }
   if capture_output then
-    readers[stdout[1]], readers[stderr[1]] = {}, {}
+    run.stdout, run.stderr = stdout[1], stderr[1]
+    run.readers[run.stdout], run.readers[run.stderr] = {}, {}
   end
   if not ok then
-    __wlo_close_fd(input_fd)
-    for fd in pairs(readers) do
-      __wlo_C.__wlo_c_close(fd)
-    end
+    __wlo_run_close(run)
     error(pid, 0)
   end
-
-  local octets, offset = input and input.__wlo_octets, 0
-  if input_fd then
-    __wlo_nonblocking(input_fd)
+  run.pid, run.octets = pid, input and input.__wlo_octets
+  if run.input_fd then
+    __wlo_nonblocking(run.input_fd)
   end
-  for fd in pairs(readers) do
+  for fd in pairs(run.readers) do
     __wlo_nonblocking(fd)
+    run.open[fd] = true
   end
-  local open = {}
-  for fd in pairs(readers) do
-    open[fd] = true
+  -- Empty input ends at once; the rest of it waits for the pipe to drain.
+  __wlo_run_write(run)
+  return run
+end
+
+-- Closes the parent's ends of the pipes of `run`.
+function __wlo_run_close(run)
+  __wlo_close_fd(run.input_fd)
+  run.input_fd = nil
+  for fd in pairs(run.readers) do
+    __wlo_C.__wlo_c_close(fd)
   end
-  local buffer = __wlo_ffi.new("char[65536]")
+  run.readers = {}
+end
+
+-- Kills and reaps the child of `run`, then closes its pipes.
+function __wlo_run_abort(run)
+  __wlo_C.__wlo_c_kill(run.pid, __wlo_SIGKILL)
+  __wlo_reap(run.pid, true)
+  __wlo_run_close(run)
+end
+
+-- Writes the next chunk of input to the child if its pipe accepts one, and
+-- closes the pipe after the last. Returns whether it did either.
+function __wlo_run_write(run)
+  local fd, octets = run.input_fd, run.octets
+  if not fd then
+    return false
+  end
+  local progress = false
+  if run.offset < #octets then
+    local rest = octets:sub(run.offset + 1, run.offset + 65536)
+    local written = tonumber(__wlo_C.__wlo_c_write(fd, rest, #rest))
+    if written > 0 then
+      run.offset = run.offset + written
+      progress = true
+    elseif __wlo_ffi.errno() ~= __wlo_EAGAIN and __wlo_ffi.errno() ~= __wlo_EINTR then
+      -- The child closed its input, so the rest is dropped.
+      run.offset = #octets
+    end
+  end
+  if run.offset >= #octets then
+    __wlo_C.__wlo_c_close(fd)
+    run.input_fd = nil
+    progress = true
+  end
+  return progress
+end
+
+-- Reads what the pipe `fd` of `run` holds. Returns whether that was any data
+-- or the end of the pipe.
+function __wlo_run_read(run, fd)
+  local parts = run.readers[fd]
+  local before = #parts
+  if not __wlo_drain(fd, parts, run.buffer) then
+    run.open[fd] = nil
+    return true
+  end
+  return #parts > before
+end
+
+-- Closes the pipes of `run` after its child exited and returns its result.
+-- Descendants that inherited the pipes are not waited for.
+function __wlo_run_finish(run, code)
+  __wlo_close_fd(run.input_fd)
+  local captured = {}
+  for fd, parts in pairs(run.readers) do
+    if run.open[fd] then
+      __wlo_drain(fd, parts, run.buffer)
+    end
+    __wlo_C.__wlo_c_close(fd)
+    captured[fd] = { __wlo_octets = table.concat(parts) }
+  end
+  return {
+    "subprocess.Result",
+    returncode = code,
+    stdout = run.stdout and captured[run.stdout] or nil,
+    stderr = run.stderr and captured[run.stderr] or nil,
+  }
+end
+
+function __wlo_run_timed_out(timeout, site)
+  __wlo_fail("TimeoutError", "command timed out after " .. __wlo_format_float(timeout) .. " seconds", site)
+end
+
+function __wlo_process_run(args, input, capture_output, cwd, env, timeout, site)
+  __wlo_check_timeout(timeout, site)
+  local run = __wlo_run_start(args, input, capture_output, cwd, env, site)
   local deadline = timeout and __wlo_monotonic() + timeout
   local code
   while code == nil do
-    if input_fd and offset >= #octets then
-      __wlo_C.__wlo_c_close(input_fd)
-      input_fd = nil
-    end
     local fds, count = __wlo_ffi.new("__wlo_pollfd_t[3]"), 0
     local function watch(fd, events)
       fds[count].fd = fd
       fds[count].events = events
       count = count + 1
     end
-    if input_fd then
-      watch(input_fd, 4) -- POLLOUT
+    if run.input_fd then
+      watch(run.input_fd, 4) -- POLLOUT
     end
-    for fd in pairs(open) do
+    for fd in pairs(run.open) do
       watch(fd, 1) -- POLLIN
     end
     -- Without pipes to watch, only the child's exit or the deadline matters.
@@ -583,53 +661,25 @@ function __wlo_process_run(args, input, capture_output, cwd, env, timeout, site)
     if count > 0 then
       __wlo_C.__wlo_c_poll(fds, count, wait)
     elseif not deadline then
-      code = __wlo_reap(pid, true)
+      code = __wlo_reap(run.pid, true)
     else
       __wlo_sleep(wait / 1000)
     end
     for i = 0, count - 1 do
       local fd, revents = fds[i].fd, fds[i].revents
-      if fd == input_fd and revents ~= 0 then
-        local rest = octets:sub(offset + 1, offset + 65536)
-        local written = tonumber(__wlo_C.__wlo_c_write(fd, rest, #rest))
-        if written > 0 then
-          offset = offset + written
-        elseif __wlo_ffi.errno() ~= __wlo_EAGAIN and __wlo_ffi.errno() ~= __wlo_EINTR then
-          -- The child closed its input, so the rest is dropped.
-          offset = #octets
-        end
-      elseif open[fd] and revents ~= 0 and not __wlo_drain(fd, readers[fd], buffer) then
-        open[fd] = nil
+      if fd == run.input_fd and revents ~= 0 then
+        __wlo_run_write(run)
+      elseif run.open[fd] and revents ~= 0 then
+        __wlo_run_read(run, fd)
       end
     end
-    code = code or __wlo_reap(pid, false)
+    code = code or __wlo_reap(run.pid, false)
     if code == nil and deadline and __wlo_monotonic() >= deadline then
-      __wlo_C.__wlo_c_kill(pid, __wlo_SIGKILL)
-      __wlo_reap(pid, true)
-      __wlo_close_fd(input_fd)
-      for fd in pairs(readers) do
-        __wlo_C.__wlo_c_close(fd)
-      end
-      __wlo_fail("TimeoutError", "command timed out after " .. __wlo_format_float(timeout) .. " seconds", site)
+      __wlo_run_abort(run)
+      __wlo_run_timed_out(timeout, site)
     end
   end
-  -- The child has exited; take what the pipes hold without waiting for any
-  -- descendant that inherited them.
-  __wlo_close_fd(input_fd)
-  local captured = {}
-  for fd, parts in pairs(readers) do
-    if open[fd] then
-      __wlo_drain(fd, parts, buffer)
-    end
-    __wlo_C.__wlo_c_close(fd)
-    captured[fd] = { __wlo_octets = table.concat(parts) }
-  end
-  return {
-    "subprocess.Result",
-    returncode = code,
-    stdout = capture_output and captured[stdout[1]] or nil,
-    stderr = capture_output and captured[stderr[1]] or nil,
-  }
+  return __wlo_run_finish(run, code)
 end
 
 -- The descriptor of `handle` for the child's `name` stream, after checking it.
