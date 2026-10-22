@@ -182,7 +182,7 @@ Rules that differ from Python:
 | `aio` | `sleep`, `task_group`, and async TCP |
 | `time` | `time()`, `monotonic()`, `sleep(seconds)`, `utc(timestamp)` |
 | `terminal` | `isatty`, `color_enabled`, `style`, `progress` |
-| `math` | `sqrt` |
+| `math` | `sqrt`, `floor`, `ceil`, `pow`, `log`, trigonometry, `isnan`, and constants `pi`, `e`, `tau` |
 
 Library functions raise `OSError`, `ValueError`, or `TimeoutError` with a
 `message` field when they fail.

@@ -498,7 +498,7 @@ local function resolve_signature(fn, module)
 end
 
 -- The declaration kinds that name no function or class to call.
-local CANNOT_CALL = { Alias = true, Enum = true, Protocol = true }
+local CANNOT_CALL = { Alias = true, Constant = true, Enum = true, Protocol = true }
 
 local function is_generic(declaration)
   return declaration and (declaration.kind == "Function" or declaration.kind == "Record")
@@ -524,6 +524,8 @@ local function resolve_function(fn, scope, module)
       -- A qualified name reaches the function even where a local hides it.
       node.qualified = node.kind == "Field"
       node.kind, node.target, node.object = "FunctionValue", declaration, nil
+    elseif declaration.kind == "Constant" then
+      node.kind, node.value, node.object = "Float", declaration.value, nil
     elseif declaration.kind == "Record" then
       diag.error(node.span, "class '" .. name .. "' cannot be used as a value")
     elseif declaration.kind == "Builtin" and declaration.params then

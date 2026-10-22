@@ -2024,9 +2024,28 @@ the message `cannot encode <value>`, as in `cannot encode inf`.
 | Function | Meaning |
 | --- | --- |
 | `sqrt(x: float) -> float` | The square root of `x`, correctly rounded |
+| `floor(x: float) -> int` | The largest integer not greater than `x` |
+| `ceil(x: float) -> int` | The smallest integer not less than `x` |
+| `isfinite(x: float) -> bool` | Whether `x` is neither infinite nor NaN |
+| `isnan(x: float) -> bool` | Whether `x` is NaN |
+| `isinf(x: float) -> bool` | Whether `x` is positive or negative infinity |
+| `pow(x: float, y: float) -> float` | `x` raised to the power `y` |
+| `exp(x: float) -> float` | `e` raised to the power `x` |
+| `log(x: float) -> float` | The natural logarithm of `x` |
+| `log10(x: float) -> float` | The base-10 logarithm of `x` |
+| `sin(x: float)`, `cos(x: float)`, `tan(x: float) -> float` | Trigonometric functions of `x` in radians |
+| `asin(x: float)`, `acos(x: float)`, `atan(x: float) -> float` | Inverse trigonometric functions, in radians |
+| `atan2(y: float, x: float) -> float` | The angle in radians of the point `(x, y)` |
+
+`math` also provides the `float` constants `pi`, `e`, and `tau` (`2 * pi`).
+They are values, not functions, and cannot be assigned.
 
 `sqrt` follows IEEE 754: `sqrt(-0.0)` is `-0.0`, and the square root of a
-negative number or NaN is NaN.
+negative number or NaN is NaN. The other functions that return `float` follow
+the host's C math library in the same way: a domain error such as `log(-1.0)`
+is NaN, an overflow such as `exp(1000.0)` is infinity, and a result that is a
+zero keeps its sign. `floor` and `ceil` raise `ValueError` if `x` is NaN or
+infinite or the result is outside the range of `int`.
 
 ### `net`
 
