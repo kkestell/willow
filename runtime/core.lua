@@ -1110,24 +1110,6 @@ local function __wlo_str_strip(text, site)
   return text:match("^[ \t\n\v\f\r]*(.-)[ \t\n\v\f\r]*$")
 end
 
-local function __wlo_str_split(text, sep, site)
-  if sep == "" then
-    __wlo_fail("ValueError", "empty separator", site)
-  end
-  local items = __wlo_list({}, 0)
-  local start = 1
-  while true do
-    local i, j = text:find(sep, start, true)
-    if not i then
-      break
-    end
-    __wlo_list_append(items, text:sub(start, i - 1))
-    start = j + 1
-  end
-  __wlo_list_append(items, text:sub(start))
-  return items
-end
-
 local function __wlo_str_join(sep, items, site)
   return table.concat(items, sep, 1, items.n)
 end

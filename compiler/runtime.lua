@@ -49,6 +49,7 @@ local optional_runtimes = {
   host_runtime,
   optional_runtime(read_runtime("runtime.bytes")),
   optional_runtime(read_runtime("runtime.math")),
+  optional_runtime(read_runtime("runtime.str")),
   optional_runtime(read_runtime("runtime.io")),
   optional_runtime(read_runtime("runtime.cli")),
   optional_runtime(read_runtime("runtime.http")),

@@ -94,14 +94,28 @@ local function advancement(t)
   end
 end
 
--- Parameter types, result types, and parameter names of the string methods.
+local SPLIT_DEFAULTS = { { kind = "None" }, { kind = "Int", value = -1 } }
+
+-- Parameter types, result types, parameter names, and defaults of the string
+-- methods.
 local STRING_METHODS = {
   startswith = { { types.str }, types.bool, { "prefix" } },
   endswith = { { types.str }, types.bool, { "suffix" } },
   find = { { types.str }, types.int, { "sub" } },
   replace = { { types.str, types.str }, types.str, { "old", "new" } },
   strip = { {}, types.str },
-  split = { { types.str }, types.list(types.str), { "sep" } },
+  split = { { optional_of(types.str), types.int }, types.list(types.str), { "sep", "maxsplit" }, SPLIT_DEFAULTS },
+  rsplit = { { optional_of(types.str), types.int }, types.list(types.str), { "sep", "maxsplit" }, SPLIT_DEFAULTS },
+  splitlines = { { types.bool }, types.list(types.str), { "keepends" }, { { kind = "Bool", value = false } } },
+  lstrip = { {}, types.str },
+  rstrip = { {}, types.str },
+  removeprefix = { { types.str }, types.str, { "prefix" } },
+  removesuffix = { { types.str }, types.str, { "suffix" } },
+  isascii = { {}, types.bool },
+  isspace = { {}, types.bool },
+  isdigit = { {}, types.bool },
+  isalpha = { {}, types.bool },
+  isalnum = { {}, types.bool },
   join = { { types.list(types.str) }, types.str, { "items" } },
   encode = { {}, types.bytes },
   lower = { {}, types.str },
@@ -135,7 +149,7 @@ local function method_signature(type, name)
   elseif type == types.str then
     local method = STRING_METHODS[name]
     if method then
-      return method[1], method[2], method[3]
+      return method[1], method[2], method[3], method[4]
     end
     return nil
   end
