@@ -1,0 +1,18 @@
+import fs
+import subprocess
+
+# walk lists a symlink to a directory as a file and does not enter it.
+def main():
+    root = fs.temp_dir()
+    fs.mkdir(fs.join(root, "real"))
+    fs.write_file(fs.join(root, "real/inside"), "x")
+    subprocess.run(["ln", "-s", "real", fs.join(root, "link")])
+    subprocess.run(["ln", "-s", "..", fs.join(root, "real/up")])
+    for path, dirs, files in fs.walk(root):
+        print(f"{path[len(root):]} {len(dirs)} {','.join(dirs)} {','.join(files)}")
+    print(fs.realpath(fs.join(root, "link/up/link")) == fs.realpath(fs.join(root, "real")))
+    for name in ["real/up", "link"]:
+        fs.remove(fs.join(root, name))
+    fs.remove(fs.join(root, "real/inside"))
+    fs.rmdir(fs.join(root, "real"))
+    fs.rmdir(root)
