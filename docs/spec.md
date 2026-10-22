@@ -1619,10 +1619,12 @@ async def main():
 | `task_group() -> TaskGroup` | Create an inactive, single-use task group |
 | `connect(host: str, port: int, timeout: float \| None = 30.0) -> Coroutine[Connection]` | Open a TCP connection |
 | `listen(host: str, port: int, backlog: int = 16) -> Listener` | Listen for TCP connections on `host` |
+| `semaphore(value: int = 1) -> Semaphore` | Create a semaphore with `value` permits |
 | `class Task[T]` | A handle to a scheduled task (§15) |
 | `class TaskGroup` | A scope owning concurrent tasks, entered with `async with` (§15) |
 | `class Connection` | A native type with the methods below |
 | `class Listener` | A native type with the methods below |
+| `class Semaphore` | A native type with the methods below |
 
 | Method | Meaning |
 | --- | --- |
@@ -1636,6 +1638,8 @@ async def main():
 | `Connection.exit(error: Exception \| None) -> None` | Close the connection |
 | `Listener.enter() -> Listener` | Return this open listener for scoped use |
 | `Listener.exit(error: Exception \| None) -> None` | Close the listener |
+| `Semaphore.acquire() -> Coroutine[None]` | Take a permit, waiting until one is available |
+| `Semaphore.release() -> None` | Return a permit |
 
 `sleep` validates its argument as `time.sleep` does. `await aio.sleep(0.0)`
 always suspends the current task, so other ready tasks run before it continues.
@@ -1657,6 +1661,27 @@ connection may run at the same time.
 Closing a handle wakes its pending operations, which raise `ValueError` with
 that handle's closed-handle message. An operation never acts on a handle other
 than its own.
+
+A semaphore limits how many tasks hold a permit at once. `semaphore` raises
+`ValueError` if `value` is not positive; `value` is also the most permits the
+semaphore can hold. `acquire` is a cancellation checkpoint even when a permit
+is free, but it suspends only when none is. Waiting tasks receive permits in
+the order they began waiting, and a task that arrives later never overtakes
+them. A task cancelled while waiting stops waiting without taking a permit; if
+the cancellation arrives after a `release` handed it a permit, the permit goes
+to the next waiter or back to the semaphore. `release` raises `ValueError` when
+every permit is already available. A permit belongs to no task: scope one with
+`try` and `finally`, releasing only after a successful `acquire`. A semaphore
+whose waiters can never be woken is reported as a deadlock (§10).
+
+```python
+async def fetch(limit: aio.Semaphore):
+    await limit.acquire()
+    try:
+        ...
+    finally:
+        limit.release()
+```
 
 ### `cli`
 

@@ -1,0 +1,101 @@
+import aio
+
+# Tasks take permits in the order they began waiting.
+async def worker(sem: aio.Semaphore, name: str, log: list[str]):
+    await sem.acquire()
+    try:
+        log.append(name + " in")
+        await aio.sleep(0.01)
+        log.append(name + " out")
+    finally:
+        sem.release()
+
+async def wait_then_note(sem: aio.Semaphore, name: str):
+    try:
+        await sem.acquire()
+        print(name + " acquired")
+    finally:
+        print(name + " done")
+
+async def stopper(group: aio.TaskGroup):
+    await aio.sleep(0.02)
+    group.cancel()
+
+async def hold(sem: aio.Semaphore):
+    await sem.acquire()
+    try:
+        await aio.sleep(10.0)
+    finally:
+        sem.release()
+
+async def main():
+    # Two permits: the third task waits for the first release, in order.
+    sem = aio.semaphore(2)
+    log: list[str] = []
+    async with aio.task_group() as group:
+        group.start(worker(sem, "a", log))
+        group.start(worker(sem, "b", log))
+        group.start(worker(sem, "c", log))
+        group.start(worker(sem, "d", log))
+    for entry in log:
+        print(entry)
+
+    # The default is one permit, and every permit is back after the work.
+    one = aio.semaphore()
+    await one.acquire()
+    one.release()
+    try:
+        one.release()
+    except ValueError as error:
+        print(error.message)
+    try:
+        aio.semaphore(0)
+    except ValueError as error:
+        print(error.message)
+    try:
+        aio.semaphore(value=-1)
+    except ValueError as error:
+        print(error.message)
+
+    # Cancelling a waiter removes it; the permit goes to the next waiter.
+    sem = aio.semaphore(1)
+    await sem.acquire()
+    async with aio.task_group() as group:
+        group.start(stopper(group))
+        group.start(wait_then_note(sem, "waiter"))
+    sem.release()
+    await sem.acquire()
+    print("permit intact")
+    sem.release()
+
+    # A cancellation racing a handoff returns the permit instead of leaking it.
+    sem = aio.semaphore(1)
+    async with aio.task_group() as group:
+        group.start(hold(sem))
+        await aio.sleep(0.0)
+        group.start(wait_then_note(sem, "late"))
+        await aio.sleep(0.0)
+        group.cancel()
+    await sem.acquire()
+    print("permit restored")
+    sem.release()
+
+    # The same when the cancellation follows the release that handed over the permit.
+    sem = aio.semaphore(1)
+    await sem.acquire()
+    async with aio.task_group() as group:
+        group.start(wait_then_note(sem, "granted"))
+        await aio.sleep(0.0)
+        sem.release()
+        group.cancel()
+    await sem.acquire()
+    print("permit returned")
+    sem.release()
+
+    # An acquire is a checkpoint even when a permit is free.
+    async with aio.task_group() as group:
+        group.cancel()
+        await sem.acquire()
+        print("not reached")
+    await sem.acquire()
+    print("end")
