@@ -445,32 +445,37 @@ local response = provided_record("http", "Response", {
 local download = provided_record("http", "Download", {
   { "status", types.int }, { "headers", headers }, { "url", types.str }, { "bytes_written", types.int },
 })
+local request_signature = {
+  params = { types.str, types.str, optional_headers, optional_bytes, types.float, types.bool, optional_str },
+  names = { "method", "url", "headers", "body", "timeout", "follow_redirects", "ca_file" },
+  defaults = {
+    [3] = { kind = "None" },
+    [4] = { kind = "None" },
+    [5] = { kind = "Float", value = 30.0 },
+    [6] = { kind = "Bool", value = true },
+    [7] = { kind = "None" },
+  },
+}
+local download_signature = {
+  params = { types.str, types.str, optional_headers, types.float, types.bool, optional_str },
+  names = { "url", "path", "headers", "timeout", "follow_redirects", "ca_file" },
+  defaults = {
+    [3] = { kind = "None" },
+    [4] = { kind = "Float", value = 30.0 },
+    [5] = { kind = "Bool", value = true },
+    [6] = { kind = "None" },
+  },
+}
+-- A signature of `base` with another result and helper.
+local function with_result(base, result, helper)
+  return { params = base.params, names = base.names, defaults = base.defaults, result = result, helper = helper }
+end
 local http = provided("http", {
-  request = {
-    params = { types.str, types.str, optional_headers, optional_bytes, types.float, types.bool, optional_str },
-    names = { "method", "url", "headers", "body", "timeout", "follow_redirects", "ca_file" },
-    defaults = {
-      [3] = { kind = "None" },
-      [4] = { kind = "None" },
-      [5] = { kind = "Float", value = 30.0 },
-      [6] = { kind = "Bool", value = true },
-      [7] = { kind = "None" },
-    },
-    result = response.type,
-    helper = "http_request",
-  },
-  download = {
-    params = { types.str, types.str, optional_headers, types.float, types.bool, optional_str },
-    names = { "url", "path", "headers", "timeout", "follow_redirects", "ca_file" },
-    defaults = {
-      [3] = { kind = "None" },
-      [4] = { kind = "Float", value = 30.0 },
-      [5] = { kind = "Bool", value = true },
-      [6] = { kind = "None" },
-    },
-    result = download.type,
-    helper = "http_download",
-  },
+  request = with_result(request_signature, response.type, "http_request"),
+  request_async = with_result(request_signature, types.generic(M.coroutine, { response.type }), "http_request_async"),
+  download = with_result(download_signature, download.type, "http_download"),
+  download_async = with_result(download_signature, types.generic(M.coroutine, { download.type }),
+    "http_download_async"),
   header = {
     params = { headers, types.str },
     names = { "headers", "name" },

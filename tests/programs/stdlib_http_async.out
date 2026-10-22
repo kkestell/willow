@@ -1,0 +1,16 @@
+late
+200 late True
+True
+True
+POST /echo HTTP/1.1
+302 /delay
+invalid URL 'ftp://example.com/'
+invalid URL 'http://example.com:x/'
+request timed out after 0.3 seconds
+200 9 file body
+404 0 file body
+request timed out after 0.3 seconds
+False 0
+1
+0 False
+client left /cancel-download, client left /cancel-request, client left /stall, client left /stall

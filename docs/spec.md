@@ -1821,6 +1821,8 @@ def main():
 | --- | --- |
 | `request(method: str, url: str, headers: list[Header] \| None = None, body: bytes \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Response` | Make a request and read the whole response |
 | `download(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Download` | Send a `GET` request and save the response body to the file at `path` |
+| `request_async(method: str, url: str, headers: list[Header] \| None = None, body: bytes \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Coroutine[Response]` | `request` for tasks |
+| `download_async(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Coroutine[Download]` | `download` for tasks |
 | `header(headers: list[Header], name: str) -> str \| None` | The value of the first header named `name`, compared case-insensitively, or `None` |
 | `urlencode(values: dict[str, str]) -> str` | `values` encoded as `key=value` pairs joined with `&`, in insertion order |
 | `class Header` | A class with the fields `name: str` and `value: str` |
@@ -1888,6 +1890,15 @@ final response is not 2xx, `download` returns its status with `bytes_written`
 set to 0 and does not change `path`. If the download fails, the temporary file is
 removed. The body is written to the file as it arrives instead of being held in
 memory.
+
+`request_async` and `download_async` take the same parameters and defaults as
+`request` and `download`, return the same results, and raise the same errors,
+which are raised when the coroutine is awaited. The transfer advances in steps
+of at most 10 ms, between which other tasks run. A request that is cancelled
+releases its connection as a failed request does, and a cancelled download
+removes its temporary file and leaves `path` unchanged. Host name lookup is
+synchronous unless the system's libcurl resolves names in the background, and
+blocks every task while it runs. `timeout` applies as for `request`.
 
 ### `io`
 
