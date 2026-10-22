@@ -61,6 +61,7 @@ local optional_runtimes = {
   optional_runtime(read_runtime("runtime.bytes")),
   optional_runtime(read_runtime("runtime.math")),
   optional_runtime(read_runtime("runtime.str")),
+  optional_runtime(read_runtime("runtime.collections")),
   optional_runtime(read_runtime("runtime.io")),
   optional_runtime(read_runtime("runtime.cli")),
   http_runtime,

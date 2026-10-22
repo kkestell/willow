@@ -160,8 +160,20 @@ local function method_signature(type, name)
     return {}, element
   elseif element and name == "sort" then
     return { types.bool }, types.None
+  elseif element and name == "extend" then
+    return { types.protocol(stdlib.protocols.Iterable, { element }) }, types.None, { "items" }
+  elseif element and name == "reverse" then
+    return {}, types.None
   elseif type.kind == "dict" and name == "get" then
-    return { type.key }, optional_of(types.expand(type.value)), { "k" }
+    -- The result type follows the default's type, which check_method decides.
+    local value = optional_of(types.expand(type.value))
+    return { type.key, value }, value, { "k", "default" }, { [2] = { kind = "None" } }
+  elseif type.kind == "dict" and name == "keys" then
+    return {}, types.iterator(type.key)
+  elseif type.kind == "dict" and name == "values" then
+    return {}, types.iterator(types.expand(type.value))
+  elseif type.kind == "dict" and name == "items" then
+    return {}, types.iterator(types.tuple({ type.key, types.expand(type.value) }))
   elseif type.kind == "dict" and name == "pop" then
     return { type.key }, types.expand(type.value), { "k" }
   elseif type == types.bytes and BYTES_METHODS[name] then
@@ -828,7 +840,9 @@ local function check_function(fn, entry)
       key.infer_result = true
       key_type = check_expression(key, state, types.callable({ item }, types.None))
     elseif key.kind == "BuiltinValue" then
-      key_type = check_expression(key, state, types.callable({ item }, key.target.result or types.None))
+      -- `abs` returns the type of its argument.
+      local result = key.target.result or key.target.name == "abs" and item or types.None
+      key_type = check_expression(key, state, types.callable({ item }, result))
     end
     local result = key_type.kind == "callable" and key_type.result or key_type.kind == "function" and key_type.fn.return_type
     if not result then
@@ -837,6 +851,20 @@ local function check_function(fn, entry)
       diag.error(key.span, "cannot sort by a key of type " .. result.name)
     end
     expect_type(key, types.callable({ item }, result), key_type)
+  end
+
+  -- Checks the argument of `extend` call `node` on a list `object`: any
+  -- iterable of items the list can hold. The call iterates it through the
+  -- holder in `node.iterables`.
+  local function check_extension(node, object, state)
+    local arg, element = node.args[1], types.expand(object.element)
+    local holder = { span = arg.span }
+    local arg_type = check_expression(arg, state, types.list(element))
+    local item = check_iterable(arg, arg_type, holder, state)
+    if not (types.assignable(element, item) and not types.converts(item, element)) then
+      diag.error(arg.span, "expected Iterable[" .. element.name .. "], received " .. arg_type.name)
+    end
+    node.iterables = { holder }
   end
 
   -- Checks method call `node` on an object of type `object`, whose expression
@@ -849,6 +877,7 @@ local function check_function(fn, entry)
     end
     local method = class_method(object, node.name)
     local sorting = object.kind == "list" and node.name == "sort"
+    local extending = object.kind == "list" and node.name == "extend"
     local params, result, names, defaults, inferred
     if object.kind == "protocol" then
       -- A protocol value exposes only its declared methods.
@@ -917,17 +946,82 @@ local function check_function(fn, entry)
     for _, i in ipairs(evaluation_order(node)) do
       local arg = node.args[i]
       -- A deferred key is checked against the elements below.
-      if not (sorting and i == 2 and deferred_key(arg)) then
+      if extending then
+        check_extension(node, object, state)
+      elseif not (sorting and i == 2 and deferred_key(arg)) then
         local arg_type = inferred and arg.type or check_expression(arg, state, params[i])
         if params[i] then
           expect_type(arg, params[i], arg_type)
         end
       end
     end
+    if object.kind == "dict" and node.name == "get" then
+      -- A default that is not None gives a value; only None may be absent.
+      local value = types.expand(object.value)
+      if types.assignable(value, node.args[2].type) then
+        result = value
+      end
+    end
     if sorting then
       check_sort_key(node, object, list_element(object), node.args[2], state)
     end
     return result
+  end
+
+  -- The iterables each of these built-ins takes, by parameter.
+  local ITERABLE_PARAMS = {
+    min = { true }, max = { true }, sum = { true }, any = { true }, all = { true }, list = { true },
+    enumerate = { true }, zip = { true, true },
+  }
+
+  -- Checks call `node` of built-in `name` whose arguments are checked, and
+  -- returns its type. An iterable argument is iterated through the holder in
+  -- `node.iterables`, like the items of `sorted`; `min` and `max` take
+  -- operands of one orderable type instead when given two arguments.
+  local function check_builtin(node, name, state)
+    local iterables, items = {}, {}
+    local params = ITERABLE_PARAMS[name]
+    if name == "min" or name == "max" then
+      params = #node.args == 1 and params or nil
+    end
+    for i, arg in ipairs(node.args) do
+      if params and params[i] then
+        iterables[i] = { span = arg.span }
+        items[i] = check_iterable(arg, arg.type, iterables[i], state)
+      end
+    end
+    node.iterables = params and iterables
+    local first = node.args[1].type
+    local item = items[1]
+    if name == "abs" then
+      if first ~= types.int and first ~= types.float then
+        diag.error(node.span, "'abs' cannot be applied to " .. first.name)
+      end
+      return first
+    elseif name == "min" or name == "max" then
+      local second = node.args[2] and node.args[2].type
+      if item and not types.ordered(item, item) then
+        diag.error(node.span, "'" .. name .. "' cannot be applied to " .. first.name)
+      elseif second and not types.ordered(first, second) then
+        diag.error(node.span, "'" .. name .. "' cannot be applied to " .. first.name .. " and " .. second.name)
+      end
+      return item or first
+    elseif name == "sum" then
+      if item ~= types.int and item ~= types.float then
+        diag.error(node.span, "'sum' cannot be applied to " .. first.name)
+      end
+      return item
+    elseif name == "any" or name == "all" then
+      if item ~= types.bool then
+        diag.error(node.span, "'" .. name .. "' cannot be applied to " .. first.name)
+      end
+      return types.bool
+    elseif name == "list" then
+      return types.list(item)
+    elseif name == "enumerate" then
+      return types.iterator(types.tuple({ types.int, item }))
+    end
+    return types.iterator(types.tuple({ item, items[2] }))
   end
 
   -- Returns the type of `node` in `state`, then the facts that hold when it is
@@ -1037,7 +1131,11 @@ local function check_function(fn, entry)
       local params = target.kind == "Record" and target.fields or target.params
       local generic = (target.kind == "Function" or target.kind == "Record") and target.typevars
       local map = generic and specialize(node, node.name, target)
-      if builtin then
+      if builtin and (builtin.name == "min" or builtin.name == "max") then
+        -- One iterable or two operands.
+        check_arity(node, builtin.name, 1, 2)
+        bind_args(node, node.name, builtin_params({ params = { unpack(builtin.params, 1, #node.args) } }))
+      elseif builtin then
         bind_args(node, node.name, builtin_params(builtin), builtin.names and "parameter")
       else
         bind_args(node, node.name, params, target.kind == "Record" and "field" or "parameter")
@@ -1088,6 +1186,8 @@ local function check_function(fn, entry)
         local item = check_iterable(node.args[1], arg_type, node, state)
         check_sort_key(node.args[1], arg_type, item, node.args[3], state)
         type = types.list(item)
+      elseif builtin and (name == "abs" or ITERABLE_PARAMS[name]) then
+        type = check_builtin(node, name, state)
       elseif builtin then
         type = builtin.result
       elseif target.kind == "Record" then

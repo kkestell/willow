@@ -1,0 +1,81 @@
+# abs, round, min, max, sum, any, all, list, enumerate, zip, and the list and
+# dictionary methods added with them.
+
+def numbers(n: int) -> Generator[int]:
+    for i in range(n):
+        print(f"yield {i}")
+        yield i
+
+def failing() -> Generator[int]:
+    yield 1
+    raise ValueError("stopped")
+
+def noisy(label: str, value: int) -> int:
+    print(label)
+    return value
+
+def show(items: list[int]) -> str:
+    text = ""
+    for item in items:
+        text = text + str(item) + " "
+    return text
+
+def main():
+    print(f"{abs(-3)} {abs(0)} {abs(-9007199254740991)} {abs(-2.5)} {abs(-0.0)}")
+    print(f"{round(0.5)} {round(1.5)} {round(2.5)} {round(-2.5)} {round(-0.4)} {round(2.6)}")
+
+    nums = [3, 1, 2]
+    print(f"{min(nums)} {max(nums)} {min(2, 5)} {max(2.5, 1.5)} {max('a', 'b')}")
+    print(f"{min((1, 'b'), (1, 'a'))[1]} {max(nums[0:2])} {min((4, 2, 3))}")
+    print(f"{min(noisy('left', 3), noisy('right', 1))}")
+    pairs = [(1, "first"), (1, "second")]
+    print(f"{min(pairs)[1]} {max(pairs)[1]}")
+
+    print(f"{sum(nums)} {sum([0.5, 0.25])} {sum([1.5][:0])} {sum(numbers(3))}")
+    print(f"{any([False, True])} {all([True, False])} {all([True][:0])} {any([True][:0])}")
+
+    copy = list(nums)
+    copy.append(9)
+    print(f"{len(nums)} {len(copy)} {len(list('abc'))} {len(list({'k': 1}))}")
+    print(show(list(range(4))))
+
+    # Iterators are lazy and advance their sources left to right.
+    for index, item in enumerate(numbers(2), 10):
+        print(f"{index} {item}")
+    for left, right in zip(numbers(2), "abc"):
+        print(f"{left} {right}")
+
+    items = [1, 2]
+    items.extend(items)
+    items.extend((7, 8))
+    items.reverse()
+    print(show(items))
+    try:
+        items.extend(failing())
+    except ValueError as error:
+        print(f"{error.message} {len(items)}")
+
+    scores = {"ada": 1, "grace": 2}
+    for name in scores.keys():
+        print(name)
+    for score in scores.values():
+        print(score)
+    for name, score in scores.items():
+        print(f"{name}={score}")
+    print(f"{scores.get('ada', 0)} {scores.get('zoe', 0)} {scores.get('zoe')}")
+    missing: int | None = scores.get("zoe", None)
+    print(missing is None)
+
+    stored: dict[str, int | None] = {"a": None}
+    print(f"{stored.get('a', 5) is None} {stored.get('b', 5)}")
+
+    scores_iter = scores.items()
+    scores["new"] = 3
+    try:
+        next(scores_iter)
+    except RuntimeError as failure:
+        print(failure.message)
+
+    total: (list[int]) -> int = sum
+    print(show(sorted([-3, 2, -1], key=abs)))
+    print(total(nums))
