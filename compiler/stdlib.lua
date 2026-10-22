@@ -228,6 +228,30 @@ local fs = provided("fs", {
   remove = { params = { types.str }, names = { "path" }, result = types.None },
   rmdir = { params = { types.str }, names = { "path" }, result = types.None },
   rename = { params = { types.str, types.str }, names = { "source", "destination" }, result = types.None },
+  read_bytes = { params = { types.str }, names = { "path" }, result = types.bytes },
+  write_bytes = { params = { types.str, types.bytes }, names = { "path", "data" }, result = types.None },
+  copy_file = { params = { types.str, types.str }, names = { "source", "destination" }, result = types.None },
+  normpath = { params = { types.str }, names = { "path" }, result = types.str },
+  abspath = { params = { types.str }, names = { "path" }, result = types.str },
+  realpath = { params = { types.str }, names = { "path" }, result = types.str },
+  glob = { params = { types.str }, names = { "pattern" }, result = types.list(types.str) },
+  walk = {
+    params = { types.str },
+    names = { "path" },
+    result = iterator_of(types.tuple({ types.str, types.list(types.str), types.list(types.str) })),
+  },
+  temp_file = {
+    params = { types.str, optional_str },
+    names = { "prefix", "directory" },
+    defaults = { [1] = { kind = "String", value = "willow-" }, [2] = { kind = "None" } },
+    result = types.str,
+  },
+  temp_dir = {
+    params = { types.str, optional_str },
+    names = { "prefix", "directory" },
+    defaults = { [1] = { kind = "String", value = "willow-" }, [2] = { kind = "None" } },
+    result = types.str,
+  },
 }, { Stat = stat })
 
 -- `aio.Task[T]`, an opaque generic handle like `Coroutine[T]`. A native
