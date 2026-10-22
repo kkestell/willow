@@ -1,0 +1,6 @@
+import aio
+
+async def main():
+    sem = aio.semaphore()
+    await sem.acquire()
+    await sem.acquire()
