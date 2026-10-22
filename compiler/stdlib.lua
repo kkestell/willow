@@ -278,6 +278,11 @@ local aio_listener = native_record("aio", "Listener", "aio_listener", {
 scoped(aio_connection)
 scoped(aio_listener)
 
+local semaphore = native_record("aio", "Semaphore", "aio_semaphore", {
+  acquire = { params = {}, result = types.generic(M.coroutine, { types.None }) },
+  release = { params = {}, result = types.None },
+})
+
 local aio = provided("aio", {
   sleep = {
     params = { types.float }, names = { "seconds" }, result = types.generic(M.coroutine, { types.None }),
@@ -298,7 +303,13 @@ local aio = provided("aio", {
     result = aio_listener.type,
     helper = "aio_listen",
   },
-}, { Task = task, TaskGroup = task_group, Connection = aio_connection, Listener = aio_listener })
+  semaphore = {
+    params = { types.int }, names = { "value" }, defaults = { { kind = "Int", value = 1 } },
+    result = semaphore.type, helper = "aio_semaphore",
+  },
+}, {
+  Task = task, TaskGroup = task_group, Connection = aio_connection, Listener = aio_listener, Semaphore = semaphore,
+})
 
 local math = provided("math", {
   sqrt = { params = { types.float }, names = { "x" }, result = types.float },

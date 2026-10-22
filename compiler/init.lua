@@ -179,7 +179,7 @@ Rules that differ from Python:
 | `subprocess` | `run(args, capture_output=True)` returning a `Result` with `stdout`, `stderr`, and the exit status |
 | `http` | `request(method, url, headers=..., body=...)` returning a `Response` with `status`, `headers`, and `body` |
 | `net` | TCP `listen`, `connect`, and `accept` |
-| `aio` | `sleep`, `task_group`, and async TCP |
+| `aio` | `sleep`, `task_group`, `semaphore`, and async TCP |
 | `time` | `time()`, `monotonic()`, `sleep(seconds)`, `utc(timestamp)` |
 | `terminal` | `isatty`, `color_enabled`, `style`, `progress` |
 | `math` | `sqrt` |
