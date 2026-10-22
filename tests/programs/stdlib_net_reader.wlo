@@ -1,0 +1,99 @@
+import net
+
+def pair(listener: net.Listener) -> list[net.Connection]:
+    client = net.connect("127.0.0.1", listener.local_port(), timeout=5.0)
+    return [client, listener.accept(timeout=5.0)]
+
+def main():
+    listener = net.listen("127.0.0.1", 0)
+    ends = pair(listener)
+    client = ends[0]
+    reader = net.reader(ends[1])
+
+    # Excess bytes stay buffered for the next call.
+    client.sendall("GET /\r\nHost: x\r\n\r\nbodyEXTRA".encode())
+    print(reader.read_until("\r\n".encode()).decode().strip())
+    print(reader.read_until("\r\n\r\n".encode()).decode().strip())
+    print(reader.read_exactly(4).decode())
+    print(len(reader.read_exactly(0)))
+    print(reader.read_exactly(5, timeout=5.0).decode())
+
+    # A separator split across receives, and one ending exactly at the limit.
+    client.sendall("ab".encode())
+    client.sendall("c;".encode())
+    print(reader.read_until(";".encode(), max_bytes=4, timeout=5.0).decode())
+
+    # Size limit and timeout errors keep the buffered bytes.
+    client.sendall("0123456789;".encode())
+    try:
+        reader.read_until(";".encode(), max_bytes=5)
+    except ValueError as error:
+        print(error.message)
+    print(reader.read_exactly(3).decode())
+    print(reader.read_until(";".encode()).decode())
+    client.sendall("xy".encode())
+    try:
+        reader.read_exactly(5, timeout=0.2)
+    except TimeoutError as timeout_error:
+        print(timeout_error.message)
+    try:
+        reader.read_until(";".encode(), timeout=0.2)
+    except TimeoutError as timeout_error:
+        print(timeout_error.message)
+    client.sendall("z".encode())
+    print(reader.read_exactly(3).decode())
+
+    # Received bytes survive a timeout.
+    client.sendall("p".encode())
+    try:
+        reader.read_exactly(2, timeout=0.3)
+    except TimeoutError:
+        print("partial read timed out")
+    client.sendall("q".encode())
+    print(reader.read_exactly(2).decode())
+
+    # End of stream.
+    client.sendall("tail".encode())
+    client.close()
+    try:
+        reader.read_exactly(10)
+    except OSError as os_error:
+        print(os_error.message)
+    print(reader.read_until("\n".encode()).decode())
+    print(len(reader.read_until("\n".encode())))
+
+    for kind in ["size", "separator", "max_bytes", "timeout"]:
+        try:
+            if kind == "size":
+                reader.read_exactly(-1)
+            elif kind == "separator":
+                reader.read_until(bytes([]))
+            elif kind == "max_bytes":
+                reader.read_until("x".encode(), max_bytes=0)
+            else:
+                reader.read_exactly(1, timeout=0.0)
+        except ValueError as error:
+            print(f"{kind}: {error.message}")
+
+    # The reader owns the connection.
+    reader.close()
+    reader.close()
+    try:
+        reader.read_exactly(1)
+    except ValueError as error:
+        print(error.message)
+    try:
+        net.reader(client)
+    except ValueError as error:
+        print(error.message)
+
+    second = pair(listener)
+    with net.reader(second[1]) as scoped:
+        second[0].sendall("scoped\n".encode())
+        print(scoped.read_until("\n".encode()).decode().strip())
+    try:
+        second[1].recv(1)
+    except ValueError as error:
+        print(error.message)
+    second[0].close()
+    listener.close()

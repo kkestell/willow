@@ -1,0 +1,25 @@
+GET /
+Host: x
+body
+0
+EXTRA
+abc;
+separator not found within 5 bytes
+012
+3456789;
+read_exactly timed out after 0.2 seconds
+read_until timed out after 0.2 seconds
+xyz
+partial read timed out
+pq
+unexpected end of stream: expected 10 bytes, received 4
+tail
+0
+size: size must not be negative
+separator: separator must not be empty
+max_bytes: max_bytes must be positive
+timeout: timeout must be finite and positive
+I/O operation on closed reader
+I/O operation on closed connection
+scoped
+I/O operation on closed connection
