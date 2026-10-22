@@ -1,0 +1,60 @@
+import random
+
+def show(items: list[int]) -> str:
+    parts: list[str] = []
+    for item in items:
+        parts.append(str(item))
+    return ", ".join(parts)
+
+def main():
+    a = random.generator(42)
+    b = random.generator(42)
+    c = random.generator(-7)
+    print(f"{a.random()} {a.randint(1, 6)} {a.randint(-5, 5)}")
+    # Interleaved use of other handles does not disturb a stream.
+    c.random()
+    b.random()
+    c.randint(0, 1)
+    print(f"{b.randint(1, 6)} {b.randint(-5, 5)}")
+    print(c.random() != a.random())
+
+    low = 9007199254740991
+    seen: list[int] = []
+    for _ in range(300):
+        x = a.random()
+        assert x >= 0.0 and x < 1.0
+        n = a.randint(3, 5)
+        assert n >= 3 and n <= 5
+        seen.append(n)
+    assert 3 in seen and 4 in seen and 5 in seen
+    assert a.randint(7, 7) == 7
+    for _ in range(20):
+        big = a.randint(-low, low)
+        assert big >= -low and big <= low
+    print(a.randint(-low, low) != a.randint(-low, low))
+
+    items = [1, 2, 3, 4, 5, 6, 7, 8]
+    a.shuffle(items)
+    assert show(sorted(items)) == "1, 2, 3, 4, 5, 6, 7, 8"
+    print(show(random.generator(1).choice([[1, 2], [3, 4]])))
+    print(show(items))
+    words = ["x", "y"]
+    assert a.choice(words) in words
+    one: list[str] = []
+    a.shuffle(one)
+
+    try:
+        a.randint(2, 1)
+    except ValueError as error:
+        print(error.message)
+    try:
+        a.choice(one)
+    except ValueError as error:
+        print(error.message)
+    try:
+        random.secure_bytes(-1)
+    except ValueError as error:
+        print(error.message)
+    assert len(random.secure_bytes(0)) == 0
+    assert len(random.secure_bytes(100000)) == 100000
+    assert random.secure_bytes(16) != random.secure_bytes(16)

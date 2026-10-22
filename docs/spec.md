@@ -2098,6 +2098,42 @@ inherit connections or listeners.
 `enter` rejects a closed or unusable handle with the same error as its other
 operations. `exit` has the same behavior as `close`.
 
+### `random`
+
+```python
+import random
+
+def main():
+    rng = random.generator(42)
+    print(rng.randint(1, 6))
+    items = ["a", "b", "c"]
+    rng.shuffle(items)
+    print(rng.choice(items))
+    key = random.secure_bytes(16)
+```
+
+| Declaration | Meaning |
+| --- | --- |
+| `generator(seed: int) -> Random` | A new pseudo-random generator started from `seed` |
+| `secure_bytes(size: int) -> bytes` | `size` bytes from the operating system's random source |
+| `class Random` | A native type with the methods below |
+
+| Method | Meaning |
+| --- | --- |
+| `Random.random() -> float` | The next float in `[0, 1)` |
+| `Random.randint(a: int, b: int) -> int` | The next integer from `a` through `b`, inclusive |
+| `Random.choice[T](items: list[T]) -> T` | A uniformly chosen element of `items` |
+| `Random.shuffle[T](items: list[T]) -> None` | Reorder `items` in place, uniformly at random |
+
+Each `Random` has its own state, so the same seed always produces the same
+sequence of results from the same calls, in this version of Willow. The
+sequence is not compatible with Python's. The generator is a small 32-bit PRNG
+for simulations, tests, and games. It is not secure; use `secure_bytes` for
+secrets. `randint` accepts any `a <= b` in the `int` range. `choice` of an empty
+list and `randint` with `a > b` raise `ValueError`. `secure_bytes` with a
+negative `size` raises `ValueError`, and a failure to read the random source
+raises `OSError`.
+
 ### `subprocess`
 
 ```python

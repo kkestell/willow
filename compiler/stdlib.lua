@@ -304,6 +304,21 @@ local math = provided("math", {
   sqrt = { params = { types.float }, names = { "x" }, result = types.float },
 })
 
+local random_T = types.typevar("T")
+local random = native_record("random", "Random", "random", {
+  random = { params = {}, result = types.float },
+  randint = { params = { types.int, types.int }, names = { "a", "b" }, result = types.int },
+  choice = { params = { types.list(random_T) }, names = { "items" }, result = random_T, typevars = { random_T } },
+  shuffle = {
+    params = { types.list(random_T) }, names = { "items" }, result = types.None, typevars = { random_T },
+  },
+})
+
+local random_module = provided("random", {
+  generator = { params = { types.int }, names = { "seed" }, result = random.type, helper = "random_generator" },
+  secure_bytes = { params = { types.int }, names = { "size" }, result = types.bytes, helper = "random_secure_bytes" },
+}, { Random = random })
+
 local time = provided("time", {
   time = { params = {}, result = types.float },
   monotonic = { params = {}, result = types.float },
@@ -583,6 +598,7 @@ M.modules = {
   json = json,
   math = math,
   net = net,
+  random = random_module,
   subprocess = subprocess,
   sys = sys,
   terminal = terminal,
