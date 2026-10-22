@@ -1,0 +1,10 @@
+0.13970312565808485 3 -5
+3 -5
+True
+True
+True
+3, 4
+6, 2, 3, 8, 7, 1, 4, 5
+randint range is empty
+cannot choose from an empty list
+size must be nonnegative
