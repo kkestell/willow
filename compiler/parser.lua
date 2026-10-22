@@ -271,7 +271,7 @@ function M.parse(tokens)
       else
         node = ast.node("Name", token.span, { name = token.value })
       end
-    elseif kind == "int" or kind == "float" or kind == "str" or kind == "bytes" then
+    elseif kind == "int" or kind == "float" or kind == "str" or kind == "bytes" or kind == "list" then
       -- Conversions are called, or named as values of a callable type.
       advance()
       if accept("(") then

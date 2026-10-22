@@ -8,13 +8,13 @@ class Options:
     upper: bool = False
 
 def frame(text: str, *, width: int = 0, border: str = "*") -> str:
-    inner = max(width - 4, len(text))
+    inner = wider(width - 4, len(text))
     edge = ""
     for i in range(inner + 4):
         edge = edge + border
     return edge + "\n" + border + " " + text.ljust(inner) + " " + border + "\n" + edge
 
-def max(a: int, b: int) -> int:
+def wider(a: int, b: int) -> int:
     if a > b:
         return a
     return b
