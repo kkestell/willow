@@ -300,8 +300,33 @@ local aio = provided("aio", {
   },
 }, { Task = task, TaskGroup = task_group, Connection = aio_connection, Listener = aio_listener })
 
-local math = provided("math", {
-  sqrt = { params = { types.float }, names = { "x" }, result = types.float },
+local function math_function(params, names, result)
+  return { params = params, names = names, result = result }
+end
+
+local math_functions = {
+  sqrt = math_function({ types.float }, { "x" }, types.float),
+  floor = math_function({ types.float }, { "x" }, types.int),
+  ceil = math_function({ types.float }, { "x" }, types.int),
+  isfinite = math_function({ types.float }, { "x" }, types.bool),
+  isnan = math_function({ types.float }, { "x" }, types.bool),
+  isinf = math_function({ types.float }, { "x" }, types.bool),
+  pow = math_function({ types.float, types.float }, { "x", "y" }, types.float),
+  atan2 = math_function({ types.float, types.float }, { "y", "x" }, types.float),
+}
+for _, name in ipairs({ "exp", "log", "log10", "sin", "cos", "tan", "asin", "acos", "atan" }) do
+  math_functions[name] = math_function({ types.float }, { "x" }, types.float)
+end
+-- sqrt is a core helper; the rest are in runtime/math.lua.
+for name, target in pairs(math_functions) do
+  target.helper = name ~= "sqrt" and "math_" .. name or nil
+end
+
+-- A constant is a float value that binding replaces with its literal.
+local math = provided("math", math_functions, {
+  pi = { kind = "Constant", value = 3.141592653589793 },
+  e = { kind = "Constant", value = 2.718281828459045 },
+  tau = { kind = "Constant", value = 6.283185307179586 },
 })
 
 local time = provided("time", {
