@@ -1,5 +1,15 @@
 import random
 
+protocol RandomSource:
+    def random(self) -> float
+
+def draw(source: RandomSource) -> float:
+    return source.random()
+
+def checked_draw(source: random.Random | None) -> float:
+    assert isinstance(source, random.Random)
+    return draw(source)
+
 def show(items: list[int]) -> str:
     parts: list[str] = []
     for item in items:
@@ -7,6 +17,7 @@ def show(items: list[int]) -> str:
     return ", ".join(parts)
 
 def main():
+    assert checked_draw(random.generator(7)) == random.generator(7).random()
     a = random.generator(42)
     b = random.generator(42)
     c = random.generator(-7)

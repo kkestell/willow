@@ -1,6 +1,6 @@
 -- Random number helpers, inlined after runtime/core.lua into programs that use
 -- them. The helpers are the functions declared without `local`. A generator is
--- { s0, s1, s2, s3 }, the state of xoshiro128**, a 32-bit PRNG that is not
+-- { "random.Random", s0, s1, s2, s3 }, with the state of xoshiro128**, which is not
 -- suitable for security.
 
 local __wlo_bit = require("bit")
@@ -17,7 +17,7 @@ end
 
 -- The next unsigned 32-bit output of `generator`.
 local function __wlo_random_next(generator)
-  local s0, s1, s2, s3 = generator[1], generator[2], generator[3], generator[4]
+  local s0, s1, s2, s3 = generator[2], generator[3], generator[4], generator[5]
   local result = __wlo_random_rotl(__wlo_bit.tobit(s1 * 5), 7)
   result = __wlo_bit.tobit(result * 9)
   local t = __wlo_bit.lshift(s1, 9)
@@ -27,7 +27,7 @@ local function __wlo_random_next(generator)
   s0 = __wlo_bit.bxor(s0, s3)
   s2 = __wlo_bit.bxor(s2, t)
   s3 = __wlo_random_rotl(s3, 11)
-  generator[1], generator[2], generator[3], generator[4] = s0, s1, s2, s3
+  generator[2], generator[3], generator[4], generator[5] = s0, s1, s2, s3
   return result % 4294967296
 end
 
@@ -53,19 +53,19 @@ end
 function __wlo_random_generator(seed, site)
   local state = __wlo_bit.tobit(seed % 4294967296)
   local high = __wlo_bit.tobit(math.floor(seed / 4294967296))
-  local generator = {}
+  local generator = { "random.Random" }
   for i = 1, 4 do
     state = __wlo_bit.tobit(state + 0x9e3779b9)
     local z = state
     z = __wlo_random_mul(__wlo_bit.bxor(z, __wlo_bit.rshift(z, 16)), 0x85ebca6b)
     z = __wlo_random_mul(__wlo_bit.bxor(z, __wlo_bit.rshift(z, 13)), 0xc2b2ae35)
-    generator[i] = __wlo_bit.bxor(z, __wlo_bit.rshift(z, 16))
+    generator[i + 1] = __wlo_bit.bxor(z, __wlo_bit.rshift(z, 16))
     if i == 1 then
       state = __wlo_bit.tobit(state + high)
     end
   end
-  if generator[1] == 0 and generator[2] == 0 and generator[3] == 0 and generator[4] == 0 then
-    generator[1] = 1
+  if generator[2] == 0 and generator[3] == 0 and generator[4] == 0 and generator[5] == 0 then
+    generator[2] = 1
   end
   return generator
 end
