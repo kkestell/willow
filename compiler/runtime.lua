@@ -36,6 +36,9 @@ local function optional_runtime(text)
 end
 
 local host_runtime = optional_runtime(read_runtime("runtime.host"))
+-- fs.lua uses host.lua's C declarations and exports.
+local fs_runtime = optional_runtime(read_runtime("runtime.fs"))
+fs_runtime.needs = { host_runtime }
 local aio_runtime = optional_runtime(read_runtime("runtime.aio"))
 -- `aio`'s TCP handles wait through host.lua's socket bodies.
 local aio_net_runtime = optional_runtime(read_runtime("runtime.aio_net"))
@@ -44,6 +47,7 @@ aio_net_runtime.needs = { aio_runtime, host_runtime }
 local optional_runtimes = {
   optional_runtime(read_runtime("runtime.case_data") .. read_runtime("runtime.case")),
   host_runtime,
+  fs_runtime,
   optional_runtime(read_runtime("runtime.bytes")),
   optional_runtime(read_runtime("runtime.io")),
   optional_runtime(read_runtime("runtime.cli")),
