@@ -1,0 +1,36 @@
+# Failures of the built-ins added for collections, reported by message.
+
+def nan() -> float:
+    return float("nan")
+
+def main():
+    empty: list[int] = []
+    try:
+        min(empty)
+    except ValueError as error:
+        print(error.message)
+    try:
+        max([1.0, nan()])
+    except ValueError as error:
+        print(error.message)
+    try:
+        min(nan(), 1.0)
+    except ValueError as error:
+        print(error.message)
+    try:
+        round(float("inf"))
+    except ValueError as error:
+        print(error.message)
+    try:
+        round(1e300)
+    except ValueError as error:
+        print(error.message)
+    try:
+        sum([9007199254740991, 1])
+    except OverflowError as overflow:
+        print(overflow.message)
+    try:
+        for index, item in enumerate("ab", 9007199254740991):
+            print(index)
+    except OverflowError as counter:
+        print(counter.message)
