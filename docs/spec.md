@@ -822,6 +822,12 @@ print(data[:3].decode())    # caf
 | `data[i:j]` | `bytes` | The octets from index `i` up to `j` |
 | `s.encode()` | `bytes` | The UTF-8 encoding of the string `s` |
 | `data.decode()` | `str` | The text whose UTF-8 encoding is `data` |
+| `data.find(sub: bytes)` | `int` | The offset of the first occurrence of `sub`, or -1 |
+| `data.startswith(prefix: bytes)` | `bool` | Whether `data` begins with `prefix` |
+| `data.endswith(suffix: bytes)` | `bool` | Whether `data` ends with `suffix` |
+| `data.split(sep: bytes, maxsplit: int = -1)` | `list[bytes]` | The fields between occurrences of `sep` |
+| `data.hex()` | `str` | Two lowercase hex digits per octet |
+| `bytes.fromhex(text: str)` | `bytes` | The octets written as hex digit pairs in `text` |
 
 A `for` loop over a bytes value produces each octet as an `int`. Indexes and
 slices follow the same rules as for strings and lists. `bytes` raises
