@@ -95,6 +95,15 @@ async def main():
             except TimeoutError as expired:
                 print(expired.message)
 
+            # Concurrent downloads to one destination keep separate temporary files.
+            async with aio.task_group() as downloads:
+                slow = downloads.start(http.download_async(base + "/delay", "stdlib_http_shared.bin"))
+                fast = downloads.start(http.download_async(base + "/file", "stdlib_http_shared.bin"))
+            assert slow.result().status == 200 and fast.result().status == 200
+            assert fs.read_file("stdlib_http_shared.bin") == "late"
+            fs.remove("stdlib_http_shared.bin")
+            assert len(await partial_files()) == 0
+
             # Downloads.
             download = await http.download_async(base + "/file", "stdlib_http_async.bin")
             print(f"{download.status} {download.bytes_written} {fs.read_file('stdlib_http_async.bin')}")

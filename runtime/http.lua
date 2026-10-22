@@ -27,6 +27,7 @@ int __wlo_curl_getpid(void) __asm__("getpid");
 
 local __wlo_CURL_NAME = __wlo_ffi.os == "OSX" and "libcurl.4.dylib" or "libcurl.so.4"
 local __wlo_curl_library
+local __wlo_download_id = 0
 
 local __wlo_OPT = {
   url = 10002, errorbuffer = 10010, postfieldsize_large = 30120, copypostfields = 10165,
@@ -379,8 +380,9 @@ end
 function __wlo_http_download(url, path, headers, timeout, follow_redirects, ca_file, site, sleep)
   __wlo_check_path(path, site)
   local directory, name = path:match("^(.-)([^/]*)$")
-  -- The process id keeps concurrent downloads to one path apart.
-  local temp = string.format("%s.%s.%d.part", directory, name, __wlo_ffi.C.__wlo_curl_getpid())
+  -- The counter distinguishes concurrent tasks within the same process.
+  __wlo_download_id = __wlo_download_id + 1
+  local temp = string.format("%s.%s.%d.%d.part", directory, name, __wlo_ffi.C.__wlo_curl_getpid(), __wlo_download_id)
   local file, open_error = io.open(temp, "wb")
   if not file then
     __wlo_fail("OSError", "cannot write " .. path .. ": " .. __wlo_open_reason(open_error, temp), site)
