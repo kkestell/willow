@@ -142,9 +142,11 @@ Rules that differ from Python:
 - `+=`, `**`, bitwise operators, chained comparisons, conditional expressions,
   and `x = y = 0` are not supported.
 - Strings are immutable code-point sequences with `len`, indexing, slicing,
-  `in`, `startswith`, `endswith`, `find`, `replace`, `strip`, `split`, `lower`,
-  `upper`, `ljust`, `rjust`, and `sep.join(items)`. f-strings accept format
-  specifications such as `{value:>8.2f}`.
+  `in`, `startswith`, `endswith`, `find`, `replace`, `strip`, `lstrip`,
+  `rstrip`, `split`, `rsplit`, `splitlines`, `removeprefix`, `removesuffix`,
+  `lower`, `upper`, `ljust`, `rjust`, `sep.join(items)`, and ASCII-only
+  `isascii`, `isspace`, `isdigit`, `isalpha`, and `isalnum`. f-strings accept
+  format specifications such as `{value:>8.2f}`.
 - Lists have `append`, `pop`, `sort`, indexing, slicing, and `in`.
   Dictionaries keep insertion order and have `get`, `pop`, indexing, and `in`.
   Dictionary keys are `int`, `str`, or an enum. `sorted(items, key=...)`

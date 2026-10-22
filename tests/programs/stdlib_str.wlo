@@ -1,0 +1,49 @@
+def show(items: list[str]) -> str:
+    parts: list[str] = []
+    for item in items:
+        parts.append("<" + item + ">")
+    return str(len(items)) + " " + "".join(parts)
+
+def main():
+    print(show("  a b\t\nc  ".split()))
+    print(show("  a b  c ".split(None, 1)))
+    print(show("  a b ".split(maxsplit=0)))
+    print(show("   ".split()))
+    print(show("".split()))
+    print(show("".split(",")))
+    print(show("a,,b,".split(",")))
+    print(show("a,b,c".split(",", 1)))
+    print(show("a,b,c".split(sep=",", maxsplit=0)))
+    print(show("a--b".split("--")))
+    print(show("  a b  c ".rsplit(None, 1)))
+    print(show("  a b ".rsplit(maxsplit=0)))
+    print(show("a,b,c".rsplit(",", 1)))
+    print(show("a,b,c".rsplit(",", 0)))
+    print(show("a,,b,".rsplit(",")))
+    print(show("aaa".rsplit("aa")))
+    print(show("aaa".split("aa")))
+    print(show("é-ü".split("-")))
+    print(show("a\nb\r\nc\rd\n".splitlines()))
+    print(show("a\n\nb\r\n".splitlines(True)))
+    print(show("".splitlines()))
+    print(show("\n".splitlines()))
+    print("[" + " \t a b \n".lstrip() + "]")
+    print("[" + " \t a b \n".rstrip() + "]")
+    print("[" + " \t\n".rstrip() + "]")
+    print("foobar".removeprefix("foo") + " " + "foobar".removeprefix("bar") + " " + "foobar".removeprefix(""))
+    print("foobar".removesuffix("bar") + " " + "foobar".removesuffix("foo") + " " + "foobar".removesuffix(""))
+    print("foofoo".removeprefix("foo") + " " + "barbar".removesuffix("bar"))
+    print(f"{''.isascii()} {'abc'.isascii()} {'é'.isascii()}")
+    blanks = " \t\n\x0b\x0c\r"
+    print(f"{''.isspace()} {blanks.isspace()} {' a'.isspace()}")
+    print(f"{''.isdigit()} {'0123'.isdigit()} {'12a'.isdigit()} {'²'.isdigit()}")
+    print(f"{''.isalpha()} {'aZ'.isalpha()} {'a1'.isalpha()} {'é'.isalpha()}")
+    print(f"{''.isalnum()} {'aZ9'.isalnum()} {'a-1'.isalnum()}")
+    try:
+        "abc".split("")
+    except ValueError as e:
+        print(e.message)
+    try:
+        "abc".rsplit("", 1)
+    except ValueError as e:
+        print(e.message)

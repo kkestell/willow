@@ -686,7 +686,18 @@ Length, ordering, indexing, slicing, iteration, and the indexes returned by
 | `s.find(sub)` | `int` | Index of the first occurrence of `sub`, or `-1` |
 | `s.replace(old, new)` | `str` | `s` with every non-overlapping occurrence of `old`, from left to right, replaced by `new` |
 | `s.strip()` | `str` | `s` without leading and trailing ASCII whitespace |
-| `s.split(sep)` | `list[str]` | The pieces of `s` between occurrences of `sep` |
+| `s.lstrip()` | `str` | `s` without leading ASCII whitespace |
+| `s.rstrip()` | `str` | `s` without trailing ASCII whitespace |
+| `s.split(sep=None, maxsplit=-1)` | `list[str]` | The pieces of `s` between occurrences of `sep`, or between runs of ASCII whitespace when `sep` is `None` |
+| `s.rsplit(sep=None, maxsplit=-1)` | `list[str]` | Like `split`, but `maxsplit` limits the splits made from the right |
+| `s.splitlines(keepends=False)` | `list[str]` | The lines of `s`, ended by LF, CR, or CRLF, with the line endings kept if `keepends` is true |
+| `s.removeprefix(prefix)` | `str` | `s` without a leading `prefix`, removed at most once |
+| `s.removesuffix(suffix)` | `str` | `s` without a trailing `suffix`, removed at most once |
+| `s.isascii()` | `bool` | Every code point of `s` is below 128; true for the empty string |
+| `s.isspace()` | `bool` | `s` is not empty and has only ASCII whitespace |
+| `s.isdigit()` | `bool` | `s` is not empty and has only `0` through `9` |
+| `s.isalpha()` | `bool` | `s` is not empty and has only `A` through `Z` and `a` through `z` |
+| `s.isalnum()` | `bool` | `s` is not empty and has only ASCII letters and digits |
 | `s.lower()` | `str` | `s` converted to Unicode lowercase |
 | `s.upper()` | `str` | `s` converted to Unicode uppercase |
 | `s.ljust(width)` | `str` | `s` padded on the right with spaces to at least `width` code points |
@@ -697,13 +708,20 @@ Length, ordering, indexing, slicing, iteration, and the indexes returned by
 | `chr(n)` | `str` | The single-code-point string for code point `n` |
 
 These operations return the same results as in Python, except that `strip`
-removes only space, tab, LF, VT, FF, and CR. `split` with an empty separator
-raises `ValueError` with the message `empty separator`. `ord` of a string whose
+removes only space, tab, LF, VT, FF, and CR, as do `lstrip`, `rstrip`, and the
+`sep=None` form of `split` and `rsplit`. `split` and `rsplit` with an empty
+separator raise `ValueError` with the message `empty separator`. A negative
+`maxsplit` places no limit on the splits. `ord` of a string whose
 length is not 1 raises `ValueError` with the message `expected one character`.
 `chr` of a surrogate, or of a value outside the range 0 through 0x10FFFF, raises
 `ValueError` with the message `invalid code point`. An index outside the string
 raises `IndexError` with the message `string index out of range`. Strings cannot
 be modified by assigning to an index.
+
+The classification methods are ASCII only: `isdigit`, `isalpha`, `isalnum`, and
+`isspace` are false for any non-ASCII code point, as they are for the empty
+string. This differs from Python for characters such as `é` and `²`. Case
+conversion and code-point indexing are unchanged.
 
 `lower` and `upper` use the default full case mappings of Unicode 17.0,
 including the Final_Sigma rule for `Σ`. They apply no locale-specific rules and
