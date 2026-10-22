@@ -849,11 +849,17 @@ A stored `None` counts toward the collection's length, and a key whose value is
 | `xs.append(v)` | `None` | Add `v` to the end |
 | `xs.pop()` | `T` | Remove and return the last element |
 | `xs.sort(reverse=False, *, key=None)` | `None` | Sort the list in place |
+| `xs.extend(items)` | `None` | Add the elements of an `Iterable[T]` to the end |
+| `xs.reverse()` | `None` | Reverse the list in place |
 | `v in xs` | `bool` | Some element equals `v` |
 | `len(d)` | `int` | Number of entries |
 | `d[k]` | `V` | Value for key `k` |
 | `d[k] = v` | | Insert or replace the entry for `k` |
 | `d.get(k)` | `V \| None` | Value for `k`, or `None` if `k` is missing |
+| `d.get(k, default)` | `V`, or `V \| None` | Value for `k`, or `default` if `k` is missing |
+| `d.keys()` | `Iterator[K]` | The keys in insertion order |
+| `d.values()` | `Iterator[V]` | The values in key order |
+| `d.items()` | `Iterator[tuple[K, V]]` | The keys and values in key order |
 | `d.pop(k)` | `V` | Remove the entry for `k` and return its value |
 | `k in d` | `bool` | `k` is a key |
 
@@ -865,8 +871,22 @@ message `key not found` when `k` is missing. When `V` is already an optional
 type, `d.get(k)` has type `V`. `v in xs` requires an element type that supports
 `==`.
 
+`d.get(k, default)` takes a `default` of type `V` or `None`. It has type `V` when
+`default` is assignable to `V` and `V | None` otherwise, so a `None` default
+gives `V | None`. The default is used only for a missing key: a key whose stored
+value is `None` is present, and `get` returns that `None`. `get` does not accept
+other default types.
+
 Replacing the value of an existing key keeps the entry in its current position.
 A key that is removed and then inserted again moves to the end.
+
+`xs.extend(items)` takes an `Iterable[T]` of the list's element type `T`. It
+iterates `items` completely before changing `xs`, so `xs.extend(xs)` appends a
+copy of the original elements, and a failure while iterating leaves `xs`
+unchanged. `d.keys()`, `d.values()`, and `d.items()` return iterators over the
+dictionary, which follow the rules for iterating a dictionary directly: adding
+or removing a key before the iterator is exhausted raises `RuntimeError` with
+the message `dictionary changed size during iteration` at its next step.
 
 `sorted(items, reverse=False, *, key=None)` returns a new sorted list from an
 `Iterable[T]` (§3), and `xs.sort(reverse=False, *, key=None)` sorts a list in
@@ -887,6 +907,44 @@ Infinities and signed zeros follow the usual comparisons. NaN anywhere in a
 comparison key raises `ValueError` with the message `cannot sort NaN`. Key
 evaluation and validation failures do not reorder the input; other effects of
 callbacks are not undone.
+
+### Numeric and iterable functions
+
+These built-in functions work on numbers and on iterables (§3), which they
+iterate as `for` does. Parameters are named as written below; `min` and `max`
+take no keyword arguments. No function treats a value as true or false.
+
+| Function | Meaning |
+| --- | --- |
+| `abs(x)` | The absolute value of an `int` or `float`, of the same type |
+| `round(x: float) -> int` | The nearest integer, with ties to the even integer |
+| `min(items)`, `max(items)` | The least or greatest item of an `Iterable[T]` |
+| `min(a, b)`, `max(a, b)` | The lesser or greater of two operands of type `T` |
+| `sum(items)` | The total of an `Iterable[int]` as an `int`, or of an `Iterable[float]` as a `float` |
+| `any(items)`, `all(items)` | Whether some, or every, item of an `Iterable[bool]` is `True` |
+| `list(items) -> list[T]` | A new list of the items of an `Iterable[T]` |
+| `enumerate(items, start=0)` | An `Iterator[tuple[int, T]]` of positions and items |
+| `zip(a, b)` | An `Iterator[tuple[T, U]]` of pairs from an `Iterable[T]` and an `Iterable[U]` |
+
+`abs` of an `int` cannot overflow, since the `int` range is symmetric. `round`
+raises `ValueError` with the message `cannot round float to int` when `x` is NaN
+or infinite or the result is outside the `int` range.
+
+For `min` and `max`, `T` is one type that `sorted` accepts without a key: `int`,
+`float`, `str`, or a comparable tuple. Two operands must have the same type. The
+iterable form raises `ValueError` with the message `min() of an empty iterable`
+(or `max()`) when it has no items. NaN in any compared value, including a tuple
+position, raises `ValueError` with the message `cannot compare NaN`. Of equal
+values the first is returned. Arguments are evaluated once, from left to right.
+
+`sum` returns `0` or `0.0` for no items, and `int` addition raises
+`OverflowError` as `+` does. `any` and `all` stop at the first item that decides
+the result; their results for no items are `False` and `True`.
+
+`list` iterates its argument once. `enumerate` and `zip` are lazy: `enumerate`
+counts from `start`, which raises `OverflowError` if the count leaves the `int`
+range, and `zip` takes the next item of `a` and then of `b`, stopping when either
+is exhausted.
 
 ### Tuples and unpacking
 
@@ -1383,6 +1441,7 @@ the program reports `deadlock: all tasks are waiting` and exits with status 1.
 | `print(value) -> None` | Write a printable value and `\n` to stdout |
 | `input() -> str \| None` | The next line of stdin without its line ending, or `None` at end of input |
 | `len`, `range`, `int`, `float`, `str`, `bytes`, `ord`, `chr`, `isinstance`, `sorted` | See §4, §6, §7, and §8 |
+| `abs`, `round`, `min`, `max`, `sum`, `any`, `all`, `list`, `enumerate`, `zip` | See §7 |
 | `iter(value)` | Obtain the iterator of an iterable (§3) |
 | `next(iterator)` | Obtain its next value, or raise `StopIteration` (§3) |
 

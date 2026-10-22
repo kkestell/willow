@@ -301,20 +301,6 @@ local function lower_function(fn, sites, helpers, protocols)
     return pure("pad", args)
   end
 
-  -- The arguments of a checked call in parameter order, evaluated in written
-  -- order. The arguments left are defaults: literals, enum members, or tuples of
-  -- them.
-  local function lower_args(node)
-    local args = {}
-    for _, i in ipairs(node.order) do
-      args[i] = lower_operand(node.args[i])
-    end
-    for i, arg in ipairs(node.args) do
-      args[i] = args[i] or lower_operand(arg)
-    end
-    return args
-  end
-
   -- The Lua iterator over the items of `iterable`, whose checked `iter` and
   -- `next` calls `holder` keeps when it iterates through them.
   local function items_iterator(holder, iterable, span)
@@ -338,6 +324,24 @@ local function lower_function(fn, sites, helpers, protocols)
       value = convert(value, iterable.type, items_tuple(iterable.type))
     end
     return helper(prefix(iterable.type) .. "items", { value }, span)
+  end
+
+  -- The arguments of a checked call in parameter order, evaluated in written
+  -- order. The arguments left are defaults: literals, enum members, or tuples of
+  -- them. An iterable argument becomes the Lua iterator over its items.
+  local function lower_args(node)
+    local args = {}
+    local function lower_arg(i)
+      local holder = node.iterables and node.iterables[i]
+      return holder and items_iterator(holder, node.args[i], node.span) or lower_operand(node.args[i])
+    end
+    for _, i in ipairs(node.order) do
+      args[i] = lower_arg(i)
+    end
+    for i in ipairs(node.args) do
+      args[i] = args[i] or lower_arg(i)
+    end
+    return args
   end
 
   -- The start, stop, and step of `range` call `node`, evaluated in order.
@@ -498,6 +502,12 @@ local function lower_function(fn, sites, helpers, protocols)
           name = "parse_" .. name
         elseif name == "len" and node.args[1].type.kind == "tuple" then
           return { kind = "Literal", value = #node.args[1].type.elements }
+        elseif name == "min" or name == "max" then
+          name = name .. (node.iterables and "_items" or "2")
+        elseif name == "sum" and node.type == types.float then
+          name = "sum_float"
+        elseif name == "list" then
+          name = "list_from"
         end
         return helper(name, args, node.span)
       end
@@ -589,7 +599,12 @@ local function lower_function(fn, sites, helpers, protocols)
       if node.method then
         return { kind = "Call", target = node.method, args = args, span = node.span }
       end
-      return helper(prefix(node.receiver or node.object.type) .. node.name, args, node.span)
+      -- `dict_items` is the step function `for` uses.
+      local name = node.name
+      if (node.receiver or node.object.type).kind == "dict" and name == "items" then
+        name = "entries"
+      end
+      return helper(prefix(node.receiver or node.object.type) .. name, args, node.span)
     elseif kind == "Await" then
       local name = node.operand.type.record == stdlib.task and "aio_await_task" or "await"
       return helper(name, { lower_operand(node.operand) }, node.span)

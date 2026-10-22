@@ -938,8 +938,12 @@ local function __wlo_dict_index(dict, key, site)
   return dict.values[key]
 end
 
-local function __wlo_dict_get(dict, key, site)
-  return dict.values[key]
+-- The default stands in only for a missing key; a stored None is a value.
+local function __wlo_dict_get(dict, key, default, site)
+  if dict.positions[key] then
+    return dict.values[key]
+  end
+  return default
 end
 
 local function __wlo_dict_pop(dict, key, site)

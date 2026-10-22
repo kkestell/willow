@@ -42,6 +42,22 @@ local builtins = builtins_of({
     keyword_only = { [3] = true },
   },
   bytes = { params = { types.list(types.int) }, result = types.bytes },
+  -- These are checked by name in check.lua: the result depends on the
+  -- argument types, and `min` and `max` take one or two arguments.
+  abs = { params = { "any" }, names = { "x" } },
+  round = { params = { types.float }, names = { "x" }, result = types.int },
+  min = { params = { "any", "any" } },
+  max = { params = { "any", "any" } },
+  sum = { params = { "any" }, names = { "items" } },
+  any = { params = { "any" }, names = { "items" }, result = types.bool },
+  all = { params = { "any" }, names = { "items" }, result = types.bool },
+  list = { params = { "any" }, names = { "items" } },
+  enumerate = {
+    params = { "any", types.int },
+    names = { "items", "start" },
+    defaults = { [2] = { kind = "Int", value = 0 } },
+  },
+  zip = { params = { "any", "any" }, names = { "a", "b" } },
 })
 M.builtins = builtins
 
