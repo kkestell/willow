@@ -53,6 +53,7 @@ local optional_runtimes = {
   optional_runtime(read_runtime("runtime.cli")),
   optional_runtime(read_runtime("runtime.http")),
   optional_runtime(read_runtime("runtime.json")),
+  optional_runtime(read_runtime("runtime.random")),
   aio_runtime,
   aio_net_runtime,
   net_reader_runtime,
