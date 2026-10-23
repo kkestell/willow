@@ -1,0 +1,1 @@
+type_intrinsic_outside_core.wlo:2:14: error: intrinsic '__type' is only available in core
