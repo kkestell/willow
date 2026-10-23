@@ -1,0 +1,4 @@
+import app.util
+
+def main():
+    print(app.util.f())

@@ -14,6 +14,8 @@ extern def open(path: ptr, flags: cint, ...) -> cint
 extern def read(fd: cint, buf: ptr, count: int) -> int
 extern def close(fd: cint) -> cint
 extern def strerror(code: cint) -> ptr
+extern def access(path: ptr, mode: cint) -> cint
+extern def realpath(path: ptr, resolved: ptr) -> ptr
 extern def __errno_location() -> ptr
 extern def __error() -> ptr
 extern def strtod(s: ptr, end: ptr) -> float
@@ -697,6 +699,23 @@ def fs_write_file(path: str, text: str):
         done = done + written
     if close(fd) < 0:
         fail_os("write", path)
+
+# ENOENT and ENOTDIR are 2 and 20 on both systems. access with F_OK, 0,
+# fails as stat would.
+def fs_exists(path: str) -> bool:
+    if access(path_bytes(path), 0) == 0:
+        return True
+    code = errno()
+    if code != 2 and code != 20:
+        fail_os("stat", path)
+    return False
+
+# PATH_MAX is 4096 on Linux and 1024 on macOS, so 4096 bytes hold any result.
+def fs_realpath(path: str) -> str:
+    buf = __alloc_atomic(4096)
+    if __addr_is_null(realpath(path_bytes(path), buf)):
+        fail_os("resolve", path)
+    return str_from_bytes(buf, strlen(buf))
 
 # An optional sign and one or more decimal digits (spec §6). The magnitude is
 # checked before each step so it never leaves the int range, which is
