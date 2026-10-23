@@ -3,14 +3,25 @@
 # same place; the node's class says what it is. Lists stand in for optional
 # blocks: an `if` without `else` has an empty `else_body`. An empty string
 # stands in for an optional name.
+#
+# The binder fills in the fields marked as its own and replaces some nodes:
+# a name of a function becomes a FunctionValue, a field of an enum an
+# EnumMember, and a call through a local or a module a CallValue or Call.
 
 import diagnostic
 
 class Module:
     path: str
+    # Set by the loader.
+    name: str
     imports: list[Import]
     # In source order.
     declarations: list[Decl]
+    # The binder's: declarations by name, imported modules by full name, and
+    # the names imports bind.
+    names: dict[str, Decl]
+    imported: dict[str, Module]
+    roots: dict[str, bool]
 
 # `import a.b.c` has the name "a.b.c" and the root "a", which it binds.
 class Import:
@@ -38,6 +49,19 @@ class FunctionDecl:
     return_type: TypeExpr
     body: list[Stmt]
     is_async: bool
+    # The binder's: the symbols assigned in the body in order of first
+    # assignment, the enclosing functions' variables it uses, an id that
+    # tells functions apart, given where the binder first declares the
+    # function, the enclosing function, the class or protocol of a method,
+    # the name types write ("f", "module.f", "Class.m", "f.g",
+    # "f.<lambda>"), and whether it yields.
+    locals: list[Symbol]
+    captures: list[Capture]
+    id: int = 0
+    parent: FunctionDecl | None = None
+    owner: ClassDecl | ProtocolDecl | None = None
+    type_name: str = ""
+    generator: bool = False
 
 # A method's `self` and a lambda's parameters have no annotation.
 class Param:
@@ -47,6 +71,7 @@ class Param:
     annotation: TypeExpr | None
     default: Expr | None
     keyword_only: bool
+    symbol: Symbol | None = None
 
 # An exception class's first field is `message: str`, at the class name.
 class ClassDecl:
@@ -57,6 +82,8 @@ class ClassDecl:
     fields: list[FieldDecl]
     methods: list[FunctionDecl]
     exception: bool
+    # The binder's: the name types write, qualified outside the entry module.
+    type_name: str = ""
 
 class FieldDecl:
     line: int
@@ -71,12 +98,14 @@ class ProtocolDecl:
     name: str
     type_params: list[TypeParam]
     methods: list[FunctionDecl]
+    type_name: str = ""
 
 class EnumDecl:
     line: int
     col: int
     name: str
     members: list[Ident]
+    type_name: str = ""
 
 class AliasDecl:
     line: int
@@ -84,6 +113,7 @@ class AliasDecl:
     name: str
     type_params: list[TypeParam]
     value: TypeExpr
+    type_name: str = ""
 
 # A name with its position: an enum member or a `nonlocal` name.
 class Ident:
@@ -105,6 +135,8 @@ class TypeName:
     module: str
     args: list[TypeExpr]
     has_args: bool
+    # The binder's, for `isinstance` and `except`: the class or enum named.
+    declaration: Decl | None = None
 
 # At its first member.
 class UnionType:
@@ -125,13 +157,14 @@ class Target:
     col: int
     name: str
     elements: list[Target]
+    symbol: Symbol | None = None
 
 class Expr:
     line: int
     col: int
     node: ExprNode
 
-type ExprNode = Int | Float | String | FString | Constant | Name | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay
+type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay
 
 # The decimal digits, with "-" before a negative default. The lexer has
 # checked the range.
@@ -159,19 +192,37 @@ enum Constant:
 class Name:
     name: str
     reserved: bool
+    symbol: Symbol | None = None
+
+# The binder's: a function named as a value. `qualified` when named through
+# its module, which reaches it even where a local hides the name.
+class FunctionValue:
+    target: FunctionDecl
+    qualified: bool
+    type_args: list[TypeExpr]
+    symbol: Symbol | None = None
+
+# The binder's: `E.MEMBER`.
+class EnumMember:
+    decl: EnumDecl
+    name: str
 
 # A call by bare name, at the name. Keyword arguments follow the positional
-# ones in the source, so the two lists keep the written order.
+# ones in the source, so the two lists keep the written order. The binder
+# makes `module.f(...)` a Call too, named "module.f", and sets the target.
 class Call:
     name: str
     args: list[Expr]
     keywords: list[Keyword]
+    type_args: list[TypeExpr]
+    target: FunctionDecl | ClassDecl | None = None
 
 # A call of any other callee, at its `(`.
 class CallValue:
     callee: Expr
     args: list[Expr]
     keywords: list[Keyword]
+    type_args: list[TypeExpr]
 
 # At the method name.
 class MethodCall:
@@ -245,6 +296,8 @@ class Await:
 class Lambda:
     params: list[Param]
     body: Expr
+    # The binder's: a function whose body returns `body`.
+    function: FunctionDecl | None = None
 
 # At the `(`, or at the first element of an unparenthesized assignment target.
 class TupleDisplay:
@@ -270,6 +323,7 @@ class Assign:
     name: str
     annotation: TypeExpr | None
     value: Expr
+    symbol: Symbol | None = None
 
 class Unpack:
     target: Target
@@ -295,14 +349,17 @@ class If:
     body: list[Stmt]
     else_body: list[Stmt]
 
+# The binder's `calls`: whether a call can run before a later iteration.
 class While:
     condition: Expr
     body: list[Stmt]
+    calls: bool = False
 
 class For:
     target: Target
     iterable: Expr
     body: list[Stmt]
+    calls: bool = False
 
 class With:
     items: list[WithItem]
@@ -329,9 +386,11 @@ class Handler:
     type_name: TypeName
     name: str
     body: list[Stmt]
+    symbol: Symbol | None = None
 
 class FunctionDef:
     function: FunctionDecl
+    symbol: Symbol | None = None
 
 class Nonlocal:
     names: list[Ident]
@@ -343,8 +402,11 @@ class Assert:
     condition: Expr
     message: Expr | None
 
+# The binder's `handler`: the innermost `try` with an `except` clause whose
+# handler holds a bare `raise`.
 class Raise:
     value: Expr | None
+    handler: Try | None = None
 
 class Yield:
     value: Expr
@@ -353,3 +415,22 @@ enum SimpleStatement:
     PASS
     BREAK
     CONTINUE
+
+# The binder's: a parameter, or a variable assigned in a function body, at its
+# first assignment. `id` tells symbols apart. A local that a nested `def`
+# assigns has the function a call of it reaches.
+class Symbol:
+    id: int
+    name: str
+    line: int
+    col: int
+    is_param: bool
+    owner: FunctionDecl
+    captured: bool = False
+    function: FunctionDecl | None = None
+
+# A use of an enclosing function's variable, at its first use.
+class Capture:
+    symbol: Symbol
+    line: int
+    col: int

@@ -289,7 +289,7 @@ class Parser:
                     expr = ast.Expr(name.line, name.col, ast.Field(expr, name.text))
             elif token.kind == tokens.Kind.LPAREN:
                 self.advance()
-                call_value = ast.CallValue(expr, [], [])
+                call_value = ast.CallValue(expr, [], [], [])
                 self.parse_args(call_value.args, call_value.keywords)
                 expr = ast.Expr(token.line, token.col, call_value)
             else:
@@ -398,7 +398,7 @@ class Parser:
             # Conversions are called, or named as values of a callable type.
             self.advance()
             if self.accept(tokens.Kind.LPAREN):
-                call = ast.Call(token.text, [], [])
+                call = ast.Call(token.text, [], [], [])
                 self.parse_args(call.args, call.keywords)
                 return ast.Expr(token.line, token.col, call)
             return ast.Expr(token.line, token.col, ast.Name(token.text, kind != tokens.Kind.NAME))
@@ -868,7 +868,7 @@ class Parser:
             self.expect(tokens.Kind.NEWLINE, "end of line")
         else:
             body = self.parse_block()
-        return ast.FunctionDecl(name.line, name.col, name.text, type_params, params, return_type, body, is_async)
+        return ast.FunctionDecl(name.line, name.col, name.text, type_params, params, return_type, body, is_async, [], [])
 
     # Reads a declaration's `:`, end of line, and indent.
     def start_body(self):
@@ -963,7 +963,7 @@ class Parser:
         return decl
 
     def parse_module(self) -> ast.Module:
-        module = ast.Module(self.path, [], [])
+        module = ast.Module(self.path, "", [], [], {}, {}, {})
         while self.peek().kind == tokens.Kind.IMPORT:
             self.advance()
             name = self.expect(tokens.Kind.NAME, "a module name")
