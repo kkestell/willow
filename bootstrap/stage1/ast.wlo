@@ -62,6 +62,10 @@ class FunctionDecl:
     owner: ClassDecl | ProtocolDecl | None = None
     type_name: str = ""
     generator: bool = False
+    # `extern def`, which only core may declare: a C function with no body,
+    # variadic when its parameters end with `...`.
+    external: bool = False
+    variadic: bool = False
 
 # A method's `self` and a lambda's parameters have no annotation.
 class Param:
@@ -164,7 +168,7 @@ class Expr:
     col: int
     node: ExprNode
 
-type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay
+type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay | TypeOf
 
 # The decimal digits, with "-" before a negative default. The lexer has
 # checked the range.
@@ -298,6 +302,11 @@ class Lambda:
     body: Expr
     # The binder's: a function whose body returns `body`.
     function: FunctionDecl | None = None
+
+# The `__type(T)` intrinsic, which only core may use: the descriptor of the
+# built-in type T.
+class TypeOf:
+    target: TypeExpr
 
 # At the `(`, or at the first element of an unparenthesized assignment target.
 class TupleDisplay:
