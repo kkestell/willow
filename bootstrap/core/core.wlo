@@ -1,10 +1,15 @@
 # The core module: the Willow runtime, written in L0 over the intrinsic layer
 # described in agents/bootstrap.md §5. Stage 0 compiles this module into every
-# program. Only this module may use intrinsics.
+# program. Only this module may use intrinsics. bootstrap/core/API.md lists the
+# functions stage 0 calls.
+#
+# Stage 0 does not parse `and`, `or`, `not`, `break`, `//`, or `%` yet, so core
+# writes them as nested `if`s, `== False`, and early returns for now.
 
 extern def write(fd: cint, buf: ptr, count: int) -> int
 extern def exit(status: cint)
 extern def memcpy(dest: ptr, src: ptr, count: int) -> ptr
+extern def memcmp(a: ptr, b: ptr, count: int) -> cint
 extern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint
 extern def signal(sig: cint, handler: ptr) -> ptr
 
@@ -17,47 +22,40 @@ def init():
 def offset(p: ptr, n: int) -> ptr:
     return __ptr(__word(__int(__word(p)) + n))
 
-# A string is a header word pointing at the str descriptor, the byte length,
-# the UTF-8 bytes, and a zero byte so the bytes can be passed to libc.
+# Failing to write stdout or stderr ends the program with status 1 (spec §10).
+def write_all(fd: int, buf: ptr, count: int):
+    done = 0
+    while done < count:
+        written = write(fd, offset(buf, done), count - done)
+        if written < 0:
+            exit(1)
+        done = done + written
 
-def str_len(s: str) -> int:
-    return __int(__load8(__ptr(__word(s)), 8))
+def write_str(fd: int, s: str):
+    write_all(fd, str_bytes(s), str_size(s))
 
-def str_bytes(s: str) -> ptr:
-    return offset(__ptr(__word(s)), 16)
+# Reports a fatal L0 failure (agents/bootstrap.md §3).
+def fail(class_name: str, message: str):
+    write_str(2, "error: ")
+    write_str(2, class_name)
+    write_str(2, ": ")
+    write_str(2, message)
+    write_str(2, "\n")
+    exit(1)
 
-# A string of `length` bytes whose contents the caller fills in.
-def str_alloc(length: int) -> ptr:
-    s = __alloc_atomic(17 + length)
-    __store8(s, 0, __word(__type(str)))
-    __store8(s, 8, __word(length))
-    __store1(s, 16 + length, 0)
-    return s
+def print_str(s: str):
+    write_str(1, s)
+    write_str(1, "\n")
 
-def str_concat(a: str, b: str) -> str:
-    a_len = str_len(a)
-    b_len = str_len(b)
-    s = str_alloc(a_len + b_len)
-    memcpy(offset(s, 16), str_bytes(a), a_len)
-    memcpy(offset(s, 16 + a_len), str_bytes(b), b_len)
-    return __str(__word(s))
+def eprint_str(s: str):
+    write_str(2, s)
+    write_str(2, "\n")
 
-# Negative when a sorts before b, zero when they are equal, and positive
-# otherwise. Byte order is code point order in UTF-8.
-def str_compare(a: str, b: str) -> int:
-    a_len = str_len(a)
-    b_len = str_len(b)
-    a_bytes = str_bytes(a)
-    b_bytes = str_bytes(b)
-    i = 0
-    while i < a_len:
-        if i == b_len:
-            return 1
-        difference = __load1(a_bytes, i) - __load1(b_bytes, i)
-        if difference != 0:
-            return difference
-        i = i + 1
-    return a_len - b_len
+def print_int(n: int):
+    print_str(int_to_str(n))
+
+def print_bool(b: bool):
+    print_str(bool_to_str(b))
 
 def int_to_str(n: int) -> str:
     # 21 bytes hold the longest int and the zero byte snprintf writes.
@@ -67,24 +65,415 @@ def int_to_str(n: int) -> str:
     __store8(s, 8, __word(length))
     return __str(__word(s))
 
-# Failing to write stdout ends the program with status 1 (spec §10).
-def write_all(fd: int, buf: ptr, count: int):
-    done = 0
-    while done < count:
-        written = write(fd, offset(buf, done), count - done)
-        if written < 0:
-            exit(1)
-        done = done + written
-
-def print_str(s: str):
-    write_all(1, str_bytes(s), str_len(s))
-    write_all(1, str_bytes("\n"), 1)
-
-def print_int(n: int):
-    print_str(int_to_str(n))
-
-def print_bool(b: bool):
+def bool_to_str(b: bool) -> str:
     if b:
-        print_str("True")
+        return "True"
+    return "False"
+
+# A string is a header word pointing at the str descriptor, the byte length,
+# the UTF-8 bytes, and a zero byte so the bytes can be passed to libc. Strings
+# are always valid UTF-8, so a code point starts at every byte that is not a
+# continuation byte (128 through 191), and a valid needle can only match at a
+# code point boundary.
+
+def str_size(s: str) -> int:
+    return __int(__load8(__ptr(__word(s)), 8))
+
+def str_bytes(s: str) -> ptr:
+    return offset(__ptr(__word(s)), 16)
+
+def str_byte(s: str, i: int) -> int:
+    return __load1(str_bytes(s), i)
+
+# A string of `length` bytes whose contents the caller fills in.
+def str_alloc(length: int) -> ptr:
+    s = __alloc_atomic(17 + length)
+    __store8(s, 0, __word(__type(str)))
+    __store8(s, 8, __word(length))
+    __store1(s, 16 + length, 0)
+    return s
+
+# The string holding bytes `start` up to `stop` of `s`.
+def str_sub(s: str, start: int, stop: int) -> str:
+    result = str_alloc(stop - start)
+    memcpy(offset(result, 16), offset(str_bytes(s), start), stop - start)
+    return __str(__word(result))
+
+def is_continuation(b: int) -> bool:
+    if b < 128:
+        return False
+    return b < 192
+
+# The number of bytes in the code point whose first byte is `b`.
+def char_size(b: int) -> int:
+    if b < 128:
+        return 1
+    elif b < 224:
+        return 2
+    elif b < 240:
+        return 3
+    return 4
+
+# The number of code points in bytes `start` up to `stop` of `s`.
+def count_chars(s: str, start: int, stop: int) -> int:
+    count = 0
+    i = start
+    while i < stop:
+        if is_continuation(str_byte(s, i)) == False:
+            count = count + 1
+        i = i + 1
+    return count
+
+# The byte offset `count` code points after byte offset `at`, which stays
+# within `s`.
+def advance(s: str, at: int, count: int) -> int:
+    while count > 0:
+        at = at + char_size(str_byte(s, at))
+        count = count - 1
+    return at
+
+# The first byte offset at or after `start` where `sub` occurs, or -1.
+def find_bytes(s: str, sub: str, start: int) -> int:
+    last = str_size(s) - str_size(sub)
+    i = start
+    while i <= last:
+        if memcmp(offset(str_bytes(s), i), str_bytes(sub), str_size(sub)) == 0:
+            return i
+        i = i + 1
+    return -1
+
+def bytes_equal_at(s: str, at: int, sub: str) -> bool:
+    if at < 0:
+        return False
+    if at + str_size(sub) > str_size(s):
+        return False
+    return memcmp(offset(str_bytes(s), at), str_bytes(sub), str_size(sub)) == 0
+
+# Space, tab, LF, VT, FF, and CR (spec §7).
+def is_space(b: int) -> bool:
+    if b == 32:
+        return True
+    if b < 9:
+        return False
+    return b <= 13
+
+def is_digit(b: int) -> bool:
+    if b < 48:
+        return False
+    return b <= 57
+
+def is_alpha(b: int) -> bool:
+    if b >= 97:
+        return b <= 122
+    if b >= 65:
+        return b <= 90
+    return False
+
+# `index` made non-negative by adding `length` once, as spec §7 says, then
+# clamped to the sequence.
+def clamp(index: int, length: int) -> int:
+    if index < 0:
+        index = index + length
+        if index < 0:
+            return 0
+    if index > length:
+        return length
+    return index
+
+def str_concat(a: str, b: str) -> str:
+    a_size = str_size(a)
+    b_size = str_size(b)
+    s = str_alloc(a_size + b_size)
+    memcpy(offset(s, 16), str_bytes(a), a_size)
+    memcpy(offset(s, 16 + a_size), str_bytes(b), b_size)
+    return __str(__word(s))
+
+def str_eq(a: str, b: str) -> bool:
+    if str_size(a) != str_size(b):
+        return False
+    return memcmp(str_bytes(a), str_bytes(b), str_size(a)) == 0
+
+# Negative when a sorts before b, zero when they are equal, and positive
+# otherwise. Byte order is code point order in UTF-8.
+def str_compare(a: str, b: str) -> int:
+    a_size = str_size(a)
+    b_size = str_size(b)
+    i = 0
+    while i < a_size:
+        if i == b_size:
+            return 1
+        difference = str_byte(a, i) - str_byte(b, i)
+        if difference != 0:
+            return difference
+        i = i + 1
+    return a_size - b_size
+
+def str_len(s: str) -> int:
+    return count_chars(s, 0, str_size(s))
+
+def str_char_at(s: str, at: int) -> str:
+    return str_sub(s, at, at + char_size(str_byte(s, at)))
+
+def str_index(s: str, i: int) -> str:
+    length = str_len(s)
+    if i < 0:
+        i = i + length
+    if i < 0:
+        fail("IndexError", "string index out of range")
+    if i >= length:
+        fail("IndexError", "string index out of range")
+    return str_char_at(s, advance(s, 0, i))
+
+def str_slice(s: str, start: int, stop: int) -> str:
+    length = str_len(s)
+    start = clamp(start, length)
+    stop = clamp(stop, length)
+    if stop <= start:
+        return ""
+    first = advance(s, 0, start)
+    return str_sub(s, first, advance(s, first, stop - start))
+
+def str_contains(s: str, sub: str) -> bool:
+    return find_bytes(s, sub, 0) >= 0
+
+def str_find(s: str, sub: str) -> int:
+    at = find_bytes(s, sub, 0)
+    if at < 0:
+        return -1
+    return count_chars(s, 0, at)
+
+def str_startswith(s: str, prefix: str) -> bool:
+    return bytes_equal_at(s, 0, prefix)
+
+def str_endswith(s: str, suffix: str) -> bool:
+    return bytes_equal_at(s, str_size(s) - str_size(suffix), suffix)
+
+# An empty `old` matches before every code point and at the end, as in Python.
+def str_replace(s: str, old: str, new: str) -> str:
+    result = ""
+    start = 0
+    if str_size(old) == 0:
+        while start < str_size(s):
+            result = result + new + str_char_at(s, start)
+            start = start + char_size(str_byte(s, start))
+        return result + new
+    at = find_bytes(s, old, 0)
+    while at >= 0:
+        result = result + str_sub(s, start, at) + new
+        start = at + str_size(old)
+        at = find_bytes(s, old, start)
+    return result + str_sub(s, start, str_size(s))
+
+def str_strip(s: str) -> str:
+    start = 0
+    stop = str_size(s)
+    while start < stop:
+        if is_space(str_byte(s, start)) == False:
+            while is_space(str_byte(s, stop - 1)):
+                stop = stop - 1
+            return str_sub(s, start, stop)
+        start = start + 1
+    return ""
+
+def str_removeprefix(s: str, prefix: str) -> str:
+    if str_startswith(s, prefix):
+        return str_sub(s, str_size(prefix), str_size(s))
+    return s
+
+def str_removesuffix(s: str, suffix: str) -> str:
+    if str_endswith(s, suffix):
+        return str_sub(s, 0, str_size(s) - str_size(suffix))
+    return s
+
+# The classification methods are ASCII only, and false for the empty string.
+
+def str_isdigit(s: str) -> bool:
+    if str_size(s) == 0:
+        return False
+    i = 0
+    while i < str_size(s):
+        if is_digit(str_byte(s, i)) == False:
+            return False
+        i = i + 1
+    return True
+
+def str_isalpha(s: str) -> bool:
+    if str_size(s) == 0:
+        return False
+    i = 0
+    while i < str_size(s):
+        if is_alpha(str_byte(s, i)) == False:
+            return False
+        i = i + 1
+    return True
+
+def str_isalnum(s: str) -> bool:
+    if str_size(s) == 0:
+        return False
+    i = 0
+    while i < str_size(s):
+        b = str_byte(s, i)
+        if is_alpha(b) == False:
+            if is_digit(b) == False:
+                return False
+        i = i + 1
+    return True
+
+def str_isspace(s: str) -> bool:
+    if str_size(s) == 0:
+        return False
+    i = 0
+    while i < str_size(s):
+        if is_space(str_byte(s, i)) == False:
+            return False
+        i = i + 1
+    return True
+
+def spaces(count: int) -> str:
+    s = str_alloc(count)
+    i = 0
+    while i < count:
+        __store1(s, 16 + i, 32)
+        i = i + 1
+    return __str(__word(s))
+
+def str_ljust(s: str, width: int) -> str:
+    length = str_len(s)
+    if width <= length:
+        return s
+    return s + spaces(width - length)
+
+def str_rjust(s: str, width: int) -> str:
+    length = str_len(s)
+    if width <= length:
+        return s
+    return spaces(width - length) + s
+
+# Decodes the code point from its UTF-8 bytes: the lead byte keeps its low
+# 7, 5, 4, or 3 bits and each continuation byte adds 6 more.
+def str_ord(s: str) -> int:
+    if str_len(s) != 1:
+        fail("ValueError", "expected one character")
+    size = str_size(s)
+    lead = str_byte(s, 0)
+    if size == 1:
+        return lead
+    elif size == 2:
+        code = lead - 192
+    elif size == 3:
+        code = lead - 224
     else:
-        print_str("False")
+        code = lead - 240
+    i = 1
+    while i < size:
+        code = code * 64 + str_byte(s, i) - 128
+        i = i + 1
+    return code
+
+# A list is a header word pointing at the list descriptor, the length, the
+# capacity, and a pointer to an array of `capacity` slots. Slots may hold
+# pointers, so the array is scanned memory.
+
+def list_slots(xs: ptr) -> ptr:
+    return __ptr(__load8(xs, 24))
+
+def list_capacity(xs: ptr) -> int:
+    return __int(__load8(xs, 16))
+
+def set_list_len(xs: ptr, length: int):
+    __store8(xs, 8, __word(length))
+
+def list_new(capacity: int) -> ptr:
+    if capacity < 4:
+        capacity = 4
+    xs = __alloc(32)
+    __store8(xs, 0, __word(__type(list)))
+    __store8(xs, 8, __word(0))
+    __store8(xs, 16, __word(capacity))
+    __store8(xs, 24, __word(__alloc(capacity * 8)))
+    return xs
+
+def list_len(xs: ptr) -> int:
+    return __int(__load8(xs, 8))
+
+# `i` made non-negative by adding the length once, which must then be a valid
+# index (spec §7).
+def list_index(xs: ptr, i: int) -> int:
+    if i < 0:
+        i = i + list_len(xs)
+    if i < 0:
+        fail("IndexError", "list index out of range")
+    if i >= list_len(xs):
+        fail("IndexError", "list index out of range")
+    return i
+
+def list_get(xs: ptr, i: int) -> word:
+    return __load8(list_slots(xs), list_index(xs, i) * 8)
+
+def list_set(xs: ptr, i: int, value: word):
+    __store8(list_slots(xs), list_index(xs, i) * 8, value)
+
+def list_append(xs: ptr, value: word):
+    length = list_len(xs)
+    if length == list_capacity(xs):
+        slots = __alloc(length * 2 * 8)
+        memcpy(slots, list_slots(xs), length * 8)
+        __store8(xs, 16, __word(length * 2))
+        __store8(xs, 24, __word(slots))
+    __store8(list_slots(xs), length * 8, value)
+    set_list_len(xs, length + 1)
+
+def list_pop(xs: ptr) -> word:
+    length = list_len(xs)
+    if length == 0:
+        fail("IndexError", "pop from empty list")
+    value = __load8(list_slots(xs), (length - 1) * 8)
+    # Clear the slot so the collector does not keep its value alive.
+    __store8(list_slots(xs), (length - 1) * 8, __word(0))
+    set_list_len(xs, length - 1)
+    return value
+
+# Copying `items` first makes `xs.extend(xs)` append the original elements
+# once (spec §7).
+def list_extend(xs: ptr, items: ptr):
+    copy = list_slice(items, 0, list_len(items))
+    i = 0
+    while i < list_len(copy):
+        list_append(xs, list_get(copy, i))
+        i = i + 1
+
+def list_reverse(xs: ptr):
+    low = 0
+    high = list_len(xs) - 1
+    while low < high:
+        value = list_get(xs, low)
+        list_set(xs, low, list_get(xs, high))
+        list_set(xs, high, value)
+        low = low + 1
+        high = high - 1
+
+def list_slice(xs: ptr, start: int, stop: int) -> ptr:
+    start = clamp(start, list_len(xs))
+    stop = clamp(stop, list_len(xs))
+    if stop < start:
+        stop = start
+    result = list_new(stop - start)
+    memcpy(list_slots(result), offset(list_slots(xs), start * 8), (stop - start) * 8)
+    set_list_len(result, stop - start)
+    return result
+
+# Equality of two slots by the equality kinds in API.md. Kind 1 (float) and
+# kind 3 (union) arrive with float comparisons and unions in stage 0; until
+# then they compare slots.
+def slots_equal(a: word, b: word, kind: int) -> bool:
+    if kind == 2:
+        return str_eq(__str(a), __str(b))
+    return __int(a) == __int(b)
+
+def list_contains(xs: ptr, value: word, kind: int) -> bool:
+    i = 0
+    while i < list_len(xs):
+        if slots_equal(list_get(xs, i), value, kind):
+            return True
+        i = i + 1
+    return False
