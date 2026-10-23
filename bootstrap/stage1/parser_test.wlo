@@ -124,6 +124,14 @@ def main():
         ["enum Mode:\n    AUTO\n    NEVER\n", "enum Mode { AUTO; NEVER }"],
         ["enum Mode:\n    AUTO = 1\n", "2:5: enum bodies hold only member names"],
         ["def f(enum: int):\n    pass\n", "1:7: expected a parameter name, found 'enum'"],
+        # Core's C functions, with stage 0's syntax and diagnostics.
+        ["extern def write(fd: cint, buf: ptr, count: int) -> int\nextern def exit(status: cint)\nextern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint\n", "extern def write(fd: cint, buf: ptr, count: int) -> int\nextern def exit(status: cint) -> None\nextern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint"],
+        ["extern def f(x: int):\n    pass\n", "1:21: expected end of line, found ':'"],
+        ["extern def f(..., x: int)\n", "1:17: expected ')', found ','"],
+        ["extern def f(x: int = 1)\n", "1:21: expected ',' or ')', found '='"],
+        ["extern def f(. . .)\n", "1:14: expected a parameter name, found '.'"],
+        ["def f(...):\n    pass\n", "1:7: expected a parameter name, found '.'"],
+        ["def extern(extern: int) -> int:\n    return extern\n", "def extern(extern: int) -> int { return extern }"],
     ]
     bodies = [
         ["x = 1\ny: int = x + 2\nf(x, y)\nif x == 1:\n    return\nwhile y > 0:\n    pass\n    break\n    continue\nreturn f(y)", "{ x = 1; y: int = (x + 2); f(x, y); if (x == 1) { return }; while (y > 0) { pass; break; continue }; return f(y) }"],
@@ -246,6 +254,11 @@ def main():
         ["f(lambda x: x, 1)", "f((lambda x: x), 1)"],
         ["-await c.m(1)", "(- (await c.m(1)))"],
         ["await f() + 1", "((await f()) + 1)"],
+        ["__type(str) == __type(dict)", "(__type(str) == __type(dict))"],
+        ["__word(__type(list))", "__word(__type(list))"],
+        ["__type(Box)", "__type(Box)"],
+        ["__type(list[int])", "2:20: expected ')', found '['"],
+        ["__type", "__type"],
     ]
     ok = True
     for pair in modules:
