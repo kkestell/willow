@@ -32,6 +32,31 @@ pub enum Op {
     Eval(Value),
     If(Value, Vec<Op>, Vec<Op>),
     While(Value, Vec<Op>),
+    /// `object[index] = value` through core's `function`, evaluating the
+    /// value first, then the object, then the index.
+    SetItem {
+        function: &'static str,
+        object: Value,
+        index: Value,
+        value: Value,
+    },
+    /// A loop over a list; `store` assigns `Value::Item` to the loop
+    /// variable.
+    ForList {
+        list: Value,
+        store: Box<Op>,
+        body: Vec<Op>,
+    },
+    /// A loop over `range(start, stop, step)`, which calls `fail` for a zero
+    /// step.
+    ForRange {
+        start: Value,
+        stop: Value,
+        step: Value,
+        fail: Value,
+        store: Box<Op>,
+        body: Vec<Op>,
+    },
     Break,
     Continue,
     Return(Option<Value>),
@@ -82,8 +107,20 @@ pub enum Value {
         right: Box<Value>,
         fail: Box<Value>,
     },
+    /// A new list holding the values.
+    ListDisplay(Vec<Value>),
+    /// The current item of the innermost `for` loop.
+    Item,
     /// The first value, evaluated for its effects, then the second.
     Seq(Box<Value>, Box<Value>),
+    /// Core's `function(container, item, extra...)`, evaluating `item` first
+    /// as the source order requires.
+    In {
+        function: &'static str,
+        item: Box<Value>,
+        container: Box<Value>,
+        extra: Vec<Value>,
+    },
     /// A QBE load instruction, the pointer, and the byte offset.
     Load(&'static str, Box<Value>, Box<Value>),
     /// A QBE store instruction, the pointer, the byte offset, and the value.
@@ -281,6 +318,23 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
 }
 
 fn resolve_name(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
+    let fail = |message: String| Err(Diag::new(&module.path, ty.pos, message));
+    let expected = if ty.name == "list" { 1 } else { 0 };
+    if ty.args.len() != expected {
+        let plural = if expected == 1 { "" } else { "s" };
+        return fail(format!(
+            "'{}' expects {expected} type argument{plural}, received {}",
+            ty.name,
+            ty.args.len()
+        ));
+    }
+    if ty.name == "list" {
+        let element = resolve(module, &ty.args[0])?;
+        if matches!(element, Type::Ptr | Type::Word) {
+            return fail(format!("{} cannot be a list element", element.name()));
+        }
+        return Ok(Type::List(Box::new(element)));
+    }
     Ok(match ty.name.as_str() {
         "int" => Type::Int,
         "float" => Type::Float,
@@ -311,7 +365,11 @@ fn resolve(module: &Module, ty: &TypeExpr) -> Result<Type, Diag> {
             return fail(format!("{} cannot be a union member", member.name()));
         }
         if members.contains(&member) {
-            return fail(format!("type {} appears twice in a union", member.name()));
+            let name = member.name();
+            return fail(format!("union members {name} and {name} overlap"));
+        }
+        if matches!(member, Type::List(_)) && members.iter().any(|m| matches!(m, Type::List(_))) {
+            return fail("a union can have only one list member".into());
         }
         members.push(member);
     }
@@ -425,7 +483,12 @@ fn assigned_names(stmts: &[Stmt], names: &mut HashSet<String>) {
                 }
             }
             StmtKind::While { body, .. } => assigned_names(body, names),
+            StmtKind::For { target, body, .. } => {
+                names.insert(target.clone());
+                assigned_names(body, names);
+            }
             StmtKind::Expr(_)
+            | StmtKind::SetIndex { .. }
             | StmtKind::Assert { .. }
             | StmtKind::Return(_)
             | StmtKind::Pass
@@ -463,6 +526,12 @@ struct Checker<'a> {
 /// The locals definitely assigned at a point, each with the type narrowing
 /// gives it there: its declared type, or some of its members.
 type State = HashMap<String, Type>;
+
+/// What a `for` loop iterates: range bounds, or a list and its element type.
+enum ForSource {
+    Range(Value, Value, Value),
+    List(Value, Type),
+}
 
 /// Narrowed types a condition proves for locals, applied in order.
 type Facts = Vec<(String, Type)>;
@@ -559,17 +628,25 @@ fn narrowed(value: Value, declared: &Type, current: &Type) -> Value {
 }
 
 /// The scalar type `expr` names as the class of an isinstance test.
-fn isinstance_type(expr: &Expr) -> Option<Type> {
-    match &expr.kind {
-        ExprKind::Name(name) => match name.as_str() {
-            "int" => Some(Type::Int),
-            "float" => Some(Type::Float),
-            "bool" => Some(Type::Bool),
-            "str" => Some(Type::Str),
-            _ => None,
-        },
-        _ => None,
-    }
+/// The class an isinstance test names, as written, and the member of `ty`
+/// it selects, if any; `list` selects the list member.
+fn isinstance_type<'e>(expr: &'e Expr, ty: &Type) -> Option<(&'e str, Option<Type>)> {
+    let ExprKind::Name(name) = &expr.kind else {
+        return None;
+    };
+    let class = match name.as_str() {
+        "int" => Type::Int,
+        "float" => Type::Float,
+        "bool" => Type::Bool,
+        "str" => Type::Str,
+        "list" => {
+            let member = ty.members().iter().find(|m| matches!(m, Type::List(_)));
+            return Some((name, member.cloned()));
+        }
+        _ => return None,
+    };
+    let member = ty.members().contains(&class).then_some(class);
+    Some((name, member))
 }
 
 fn core_call(name: &str, args: Vec<Value>, returns: bool) -> Value {
@@ -628,6 +705,121 @@ impl Checker<'_> {
         Ok(value)
     }
 
+    /// Assigns `value` of type `ty` to the local `target`, whose first
+    /// assignment sets its type to `annotated` or `ty`.
+    fn assign(
+        &mut self,
+        target: &str,
+        pos: Pos,
+        value: Value,
+        ty: &Type,
+        annotated: Option<Type>,
+        state: &mut State,
+    ) -> Result<Op, Diag> {
+        let declared = match &self.locals[target] {
+            Some(declared) => declared.clone(),
+            None => {
+                let declared = annotated.unwrap_or_else(|| ty.clone());
+                self.locals
+                    .insert(target.to_string(), Some(declared.clone()));
+                self.order.push(target.to_string());
+                declared
+            }
+        };
+        let value = self.coerce(pos, value, ty, &declared)?;
+        // A single member other than None narrows the local to it.
+        let current = if declared.is_union() && !ty.is_union() && *ty != Type::None {
+            ty.clone()
+        } else {
+            declared
+        };
+        state.insert(target.to_string(), current);
+        Ok(Op::Assign(target.to_string(), value))
+    }
+
+    /// Narrowing from before a loop holds in and after it only for the
+    /// locals its body does not assign.
+    fn forget_narrowing(&self, assigned: &HashSet<String>, state: &mut State) {
+        for name in assigned {
+            if let (Some(Some(declared)), true) = (self.locals.get(name), state.contains_key(name))
+            {
+                state.insert(name.clone(), declared.clone());
+            }
+        }
+    }
+
+    fn for_source(&mut self, iterable: &Expr, state: &State) -> Result<ForSource, Diag> {
+        if let ExprKind::Call(callee, args) = &iterable.kind {
+            if self.is_builtin(callee, "range") {
+                if args.is_empty() || args.len() > 3 {
+                    return self.fail(
+                        callee.pos,
+                        format!("'range' expects 1 to 3 arguments, received {}", args.len()),
+                    );
+                }
+                let mut bounds = Vec::new();
+                for arg in args {
+                    let (value, ty) = self.expr(arg, state)?;
+                    self.expect(arg.pos, &Type::Int, &ty)?;
+                    bounds.push(value);
+                }
+                let mut bounds = bounds.into_iter();
+                let first = bounds.next().unwrap();
+                let (start, stop) = match bounds.next() {
+                    Some(stop) => (first, stop),
+                    None => (Value::Const(0), first),
+                };
+                let step = bounds.next().unwrap_or(Value::Const(1));
+                return Ok(ForSource::Range(start, stop, step));
+            }
+        }
+        let (value, ty) = self.expr(iterable, state)?;
+        match ty {
+            Type::List(element) => Ok(ForSource::List(value, *element)),
+            _ => self.fail(iterable.pos, format!("cannot iterate over {}", ty.name())),
+        }
+    }
+
+    /// Checks `expr`, giving a display `expected` as its type when there is
+    /// one (spec §7, Displays).
+    fn expr_expect(
+        &mut self,
+        expr: &Expr,
+        state: &State,
+        expected: Option<&Type>,
+    ) -> Result<(Value, Type), Diag> {
+        match &expr.kind {
+            ExprKind::List(items) => self.list_display(items, expr.pos, state, expected),
+            _ => self.expr(expr, state),
+        }
+    }
+
+    fn list_display(
+        &mut self,
+        items: &[Expr],
+        pos: Pos,
+        state: &State,
+        expected: Option<&Type>,
+    ) -> Result<(Value, Type), Diag> {
+        let mut values = Vec::new();
+        let element = match expected.and_then(Type::list_element) {
+            Some(element) => element.clone(),
+            None => {
+                let Some(first) = items.first() else {
+                    return self.fail(pos, "cannot infer the element type of an empty list");
+                };
+                let (value, ty) = self.expr(first, state)?;
+                values.push(value);
+                ty
+            }
+        };
+        for item in &items[values.len()..] {
+            let (value, ty) = self.expr_expect(item, state, Some(&element))?;
+            values.push(self.coerce(item.pos, value, &ty, &element)?);
+        }
+        Ok((Value::ListDisplay(values), Type::List(Box::new(element))))
+    }
+
     /// The facts `cond` proves when it is true and when it is false (spec
     /// §9, Narrowing).
     fn facts(&self, cond: &Expr, state: &State) -> (Facts, Facts) {
@@ -653,12 +845,13 @@ impl Checker<'_> {
                 let [value, class] = args.as_slice() else {
                     return (Vec::new(), Vec::new());
                 };
-                let (Some((name, ty)), Some(class)) =
-                    (self.narrowable(value, state), isinstance_type(class))
-                else {
+                let Some((name, ty)) = self.narrowable(value, state) else {
                     return (Vec::new(), Vec::new());
                 };
-                if !ty.is_union() || !ty.members().contains(&class) {
+                let Some((_, Some(class))) = isinstance_type(class, &ty) else {
+                    return (Vec::new(), Vec::new());
+                };
+                if !ty.is_union() {
                     return (Vec::new(), Vec::new());
                 }
                 let other = ty.without(&class);
@@ -709,7 +902,6 @@ impl Checker<'_> {
                 annotation,
                 value,
             } => {
-                let (value_ir, ty) = self.expr(value, state)?;
                 if annotation.is_some() {
                     if self.params.contains(target) {
                         return self
@@ -724,27 +916,90 @@ impl Checker<'_> {
                         );
                     }
                 }
-                let declared = match &self.locals[target] {
-                    Some(declared) => declared.clone(),
-                    None => {
-                        let declared = match annotation {
-                            Some(a) => resolve(self.module, a)?,
-                            None => ty.clone(),
-                        };
-                        self.locals.insert(target.clone(), Some(declared.clone()));
-                        self.order.push(target.clone());
-                        declared
+                let annotated = match annotation {
+                    Some(a) => Some(resolve(self.module, a)?),
+                    None => None,
+                };
+                let expected = self.locals[target].clone().or(annotated.clone());
+                let (value_ir, ty) = self.expr_expect(value, state, expected.as_ref())?;
+                let op = self.assign(target, value.pos, value_ir, &ty, annotated, state)?;
+                ops.push(op);
+                Ok(false)
+            }
+            StmtKind::SetIndex {
+                bracket,
+                object,
+                index,
+                value,
+            } => {
+                let (object_ir, object_ty) = self.expr(object, state)?;
+                let Type::List(element) = &object_ty else {
+                    return self.fail(
+                        *bracket,
+                        format!(
+                            "cannot assign to an index of a value of type {}",
+                            object_ty.name()
+                        ),
+                    );
+                };
+                let (index_ir, index_ty) = self.expr(index, state)?;
+                self.expect(index.pos, &Type::Int, &index_ty)?;
+                let (value_ir, value_ty) = self.expr_expect(value, state, Some(element))?;
+                let value_ir = self.coerce(value.pos, value_ir, &value_ty, element)?;
+                ops.push(Op::SetItem {
+                    function: "W.core.list_set",
+                    object: object_ir,
+                    index: index_ir,
+                    value: value_ir,
+                });
+                Ok(false)
+            }
+            StmtKind::For {
+                target,
+                iterable,
+                body,
+            } => {
+                let mut assigned = HashSet::new();
+                assigned_names(body, &mut assigned);
+                assigned.insert(target.clone());
+                self.forget_narrowing(&assigned, state);
+                let source = self.for_source(iterable, state)?;
+                let item_ty = match &source {
+                    ForSource::Range(..) => Type::Int,
+                    ForSource::List(_, element) => element.clone(),
+                };
+                let mut body_state = state.clone();
+                let store = self.assign(
+                    target,
+                    iterable.pos,
+                    Value::Item,
+                    &item_ty,
+                    None,
+                    &mut body_state,
+                )?;
+                self.loops += 1;
+                let (body_ops, _) = self.block(body, &mut body_state)?;
+                self.loops -= 1;
+                let store = Box::new(store);
+                ops.push(match source {
+                    ForSource::Range(start, stop, step) => {
+                        let message = self.strings.intern("range step must not be zero");
+                        let fail = self.fail_call("ValueError", message);
+                        Op::ForRange {
+                            start,
+                            stop,
+                            step,
+                            fail,
+                            store,
+                            body: body_ops,
+                        }
                     }
-                };
-                let value_ir = self.coerce(value.pos, value_ir, &ty, &declared)?;
-                // A single member other than None narrows the local to it.
-                let current = if declared.is_union() && !ty.is_union() && ty != Type::None {
-                    ty
-                } else {
-                    declared
-                };
-                state.insert(target.clone(), current);
-                ops.push(Op::Assign(target.clone(), value_ir));
+                    ForSource::List(list, _) => Op::ForList {
+                        list,
+                        store,
+                        body: body_ops,
+                    },
+                });
                 Ok(false)
             }
             StmtKind::Expr(expr) => {
@@ -826,13 +1081,7 @@ impl Checker<'_> {
                 // for the locals its body does not assign.
                 let mut assigned = HashSet::new();
                 assigned_names(body, &mut assigned);
-                for name in &assigned {
-                    if let (Some(Some(declared)), true) =
-                        (self.locals.get(name), state.contains_key(name))
-                    {
-                        state.insert(name.clone(), declared.clone());
-                    }
-                }
+                self.forget_narrowing(&assigned, state);
                 let cond_ir = self.condition(cond, state)?;
                 let (yes, _) = self.facts(cond, state);
                 self.loops += 1;
@@ -845,7 +1094,7 @@ impl Checker<'_> {
                 let ret = self.ret.clone();
                 let value_ir = match value {
                     Some(value) => {
-                        let (value_ir, ty) = self.expr(value, state)?;
+                        let (value_ir, ty) = self.expr_expect(value, state, Some(&ret))?;
                         Some(self.coerce(value.pos, value_ir, &ty, &ret)?)
                     }
                     None => {
@@ -932,6 +1181,48 @@ impl Checker<'_> {
                 self.fail(expr.pos, format!("unknown name '{name}'"))
             }
             ExprKind::Call(callee, args) => self.call(callee, args, state),
+            ExprKind::List(items) => self.list_display(items, expr.pos, state, None),
+            ExprKind::Index(object, index) => {
+                let (object_ir, object_ty) = self.expr(object, state)?;
+                let (index_ir, index_ty) = self.expr(index, state)?;
+                self.expect(index.pos, &Type::Int, &index_ty)?;
+                let args = vec![object_ir, index_ir];
+                match object_ty {
+                    Type::List(element) => Ok((core_call("list_get", args, true), *element)),
+                    Type::Str => Ok((core_call("str_index", args, true), Type::Str)),
+                    _ => self.fail(
+                        expr.pos,
+                        format!("cannot index a value of type {}", object_ty.name()),
+                    ),
+                }
+            }
+            ExprKind::Slice(object, start, stop) => {
+                let (object_ir, object_ty) = self.expr(object, state)?;
+                // An omitted stop is the largest int, which clamping makes
+                // the length (core/API.md).
+                let mut bounds = vec![object_ir];
+                for (bound, omitted) in [(start, 0), (stop, i64::MAX)] {
+                    match bound {
+                        Some(bound) => {
+                            let (value, ty) = self.expr(bound, state)?;
+                            self.expect(bound.pos, &Type::Int, &ty)?;
+                            bounds.push(value);
+                        }
+                        None => bounds.push(Value::Const(omitted)),
+                    }
+                }
+                let function = match &object_ty {
+                    Type::List(_) => "list_slice",
+                    Type::Str => "str_slice",
+                    _ => {
+                        return self.fail(
+                            expr.pos,
+                            format!("cannot slice a value of type {}", object_ty.name()),
+                        );
+                    }
+                };
+                Ok((core_call(function, bounds, true), object_ty))
+            }
             ExprKind::Attr(object, _, name) => match self.module_of(object) {
                 Some(module) => self.fail(
                     expr.pos,
@@ -1018,8 +1309,15 @@ impl Checker<'_> {
             ">=" => "cged",
             _ => "",
         };
+        if matches!(op, "in" | "not in") {
+            return self.contains(op, pos, l, &lt, r, &rt);
+        }
         let union_operands = |t: &Type| t.is_union() || *t == Type::None;
-        if matches!(op, "==" | "!=") && (union_operands(&lt) || union_operands(&rt)) {
+        if matches!(op, "==" | "!=")
+            && (union_operands(&lt) || union_operands(&rt))
+            && lt.is_comparable()
+            && rt.is_comparable()
+        {
             let target = if lt.assignable_to(&rt) {
                 rt.clone()
             } else if rt.assignable_to(&lt) {
@@ -1153,6 +1451,67 @@ impl Checker<'_> {
         Some((text == target_os()) == (*op == "=="))
     }
 
+    /// `item in container`, or `not in`.
+    fn contains(
+        &mut self,
+        op: &str,
+        pos: Pos,
+        item: Value,
+        item_ty: &Type,
+        container: Value,
+        container_ty: &Type,
+    ) -> Result<(Value, Type), Diag> {
+        let found = match container_ty {
+            Type::List(element) if element.is_comparable() && item_ty.assignable_to(element) => {
+                let kind = Value::Const(element.equality_kind());
+                Value::In {
+                    function: "W.core.list_contains",
+                    item: Box::new(widen(item, item_ty, element)),
+                    container: Box::new(container),
+                    extra: vec![kind],
+                }
+            }
+            Type::Str if *item_ty == Type::Str => Value::In {
+                function: "W.core.str_contains",
+                item: Box::new(item),
+                container: Box::new(container),
+                extra: Vec::new(),
+            },
+            _ => {
+                return self.fail(
+                    pos,
+                    format!(
+                        "operator '{op}' cannot be applied to {} and {}",
+                        item_ty.name(),
+                        container_ty.name()
+                    ),
+                );
+            }
+        };
+        if op == "in" {
+            return Ok((found, Type::Bool));
+        }
+        let missing = Value::Binary("ceql", Box::new(found), Box::new(Value::Const(0)));
+        Ok((missing, Type::Bool))
+    }
+
+    /// The text `print` and `str` give a value of type `ty`, if it is
+    /// printable.
+    fn to_str(&mut self, value: Value, ty: &Type) -> Option<Value> {
+        Some(match ty {
+            Type::Int => core_call("int_to_str", vec![value], true),
+            Type::Float => core_call("float_to_str", vec![value], true),
+            Type::Bool => core_call("bool_to_str", vec![value], true),
+            Type::Str => value,
+            Type::None => {
+                let text = self.strings.intern("None");
+                Value::Seq(Box::new(value), Box::new(text))
+            }
+            Type::Union(_) if ty.is_comparable() => core_call("union_to_str", vec![value], true),
+            _ => return None,
+        })
+    }
+
     /// A call to `core.fail` with a class name and a message.
     fn fail_call(&mut self, class: &str, message: Value) -> Value {
         let class = self.strings.intern(class);
@@ -1185,7 +1544,7 @@ impl Checker<'_> {
         let pos = callee.pos;
         if let ExprKind::Attr(object, name_pos, name) = &callee.kind {
             let Some(module) = self.module_of(object) else {
-                return self.fail(pos, "field access is not supported");
+                return self.method(object, *name_pos, name, args, state);
             };
             let table = self.imported[module];
             let Some(sig) = table.get(name) else {
@@ -1195,7 +1554,7 @@ impl Checker<'_> {
                 );
             };
             let display = format!("{module}.{name}");
-            let checked = self.args(args, state)?;
+            let checked = self.args(args, state, &sig.params)?;
             return self.call_sig(pos, &display, name, sig, checked);
         }
         let name = match &callee.kind {
@@ -1209,7 +1568,11 @@ impl Checker<'_> {
         if name == "isinstance" && !globals.contains_key(name) {
             return self.isinstance(pos, args, state);
         }
-        if !globals.contains_key(name) && !matches!(name, "print" | "int" | "float") {
+        if name == "range" && !globals.contains_key(name) {
+            return self.fail(pos, "'range' can only be the source of a for loop");
+        }
+        if !globals.contains_key(name) && !matches!(name, "print" | "int" | "float" | "str" | "len")
+        {
             if !is_intrinsic(name) {
                 if BUILTINS.contains(&name) {
                     return self.fail(pos, format!("'{name}' is not supported"));
@@ -1220,38 +1583,38 @@ impl Checker<'_> {
                 return self.fail(pos, format!("intrinsic '{name}' is only available in core"));
             }
         }
-        let mut checked = self.args(args, state)?;
         if let Some(sig) = globals.get(name) {
+            let checked = self.args(args, state, &sig.params)?;
             return self.call_sig(pos, name, name, sig, checked);
         }
-        if name == "print" {
+        let mut checked = self.args(args, state, &[])?;
+        if name == "print" || name == "str" {
             self.arity(pos, name, 1, checked.len())?;
             let (arg_pos, value, ty) = checked.pop().unwrap();
-            let value = match ty {
-                Type::Int => core_call("print_int", vec![value], false),
-                Type::Bool => core_call("print_bool", vec![value], false),
-                Type::Str => core_call("print_str", vec![value], false),
-                Type::Float => {
-                    let text = core_call("float_to_str", vec![value], true);
-                    core_call("print_str", vec![text], false)
-                }
-                Type::None => {
-                    let text = self.strings.intern("None");
-                    let print = core_call("print_str", vec![text], false);
-                    Value::Seq(Box::new(value), Box::new(print))
-                }
-                Type::Union(_) => {
-                    let text = core_call("union_to_str", vec![value], true);
-                    core_call("print_str", vec![text], false)
-                }
+            let Some(text) = self.to_str(value, &ty) else {
+                let message = if name == "print" {
+                    format!("cannot print a value of type {}", ty.name())
+                } else {
+                    format!("cannot convert a value of type {} to str", ty.name())
+                };
+                return self.fail(arg_pos, message);
+            };
+            if name == "str" {
+                return Ok((text, Type::Str));
+            }
+            return Ok((core_call("print_str", vec![text], false), Type::None));
+        }
+        if name == "len" {
+            self.arity(pos, name, 1, checked.len())?;
+            let (_, value, ty) = checked.pop().unwrap();
+            let function = match ty {
+                Type::List(_) => "list_len",
+                Type::Str => "str_len",
                 _ => {
-                    return self.fail(
-                        arg_pos,
-                        format!("cannot print a value of type {}", ty.name()),
-                    );
+                    return self.fail(pos, format!("'len' cannot be applied to {}", ty.name()));
                 }
             };
-            return Ok((value, Type::None));
+            return Ok((core_call(function, vec![value], true), Type::Int));
         }
         if name == "int" || name == "float" {
             self.arity(pos, name, 1, checked.len())?;
@@ -1331,13 +1694,25 @@ impl Checker<'_> {
     ) -> Result<(Value, Type), Diag> {
         self.arity(pos, "isinstance", 2, args.len())?;
         let (value, ty) = self.expr(&args[0], state)?;
-        let Some(class) = isinstance_type(&args[1]) else {
-            return self.fail(args[1].pos, "isinstance takes int, float, bool, or str");
+        let Some((class_name, member)) = isinstance_type(&args[1], &ty) else {
+            let found = match &args[1].kind {
+                ExprKind::Name(name) => {
+                    return self.fail(args[1].pos, format!("unknown type '{name}'"));
+                }
+                ExprKind::None => "'None'",
+                ExprKind::Bool(true) => "'True'",
+                ExprKind::Bool(false) => "'False'",
+                ExprKind::Int(_) => "integer",
+                ExprKind::Float(_) => "float",
+                ExprKind::Str(_) => "string",
+                _ => "an expression",
+            };
+            return self.fail(args[1].pos, format!("expected a class name, found {found}"));
         };
-        if !ty.members().contains(&class) {
+        if member.is_none() {
             return self.fail(
                 args[1].pos,
-                format!("type {} has no member {}", ty.name(), class.name()),
+                format!("type {} has no member {class_name}", ty.name()),
             );
         }
         if !ty.is_union() {
@@ -1346,19 +1721,73 @@ impl Checker<'_> {
                 Type::Bool,
             ));
         }
-        let descriptor = Value::Global(format!("W.{}.type", class.name()));
+        let descriptor = Value::Global(format!("W.{class_name}.type"));
         Ok((
             core_call("is_instance", vec![value, descriptor], true),
             Type::Bool,
         ))
     }
-    fn args(&mut self, args: &[Expr], state: &State) -> Result<Vec<(Pos, Value, Type)>, Diag> {
+    /// The arguments, each display given its parameter's type.
+    fn args(
+        &mut self,
+        args: &[Expr],
+        state: &State,
+        params: &[Type],
+    ) -> Result<Vec<(Pos, Value, Type)>, Diag> {
         let mut checked = Vec::new();
-        for arg in args {
-            let (value, ty) = self.expr(arg, state)?;
+        for (i, arg) in args.iter().enumerate() {
+            let (value, ty) = self.expr_expect(arg, state, params.get(i))?;
             checked.push((arg.pos, value, ty));
         }
         Ok(checked)
+    }
+
+    /// A call of the method `name` of `object`.
+    fn method(
+        &mut self,
+        object: &Expr,
+        name_pos: Pos,
+        name: &str,
+        args: &[Expr],
+        state: &State,
+    ) -> Result<(Value, Type), Diag> {
+        let (object_ir, object_ty) = self.expr(object, state)?;
+        let Type::List(element) = &object_ty else {
+            return self.fail(
+                name_pos,
+                format!("type {} has no method '{name}'", object_ty.name()),
+            );
+        };
+        let element = (**element).clone();
+        let (params, ret) = match name {
+            "append" => (vec![element.clone()], Type::None),
+            "pop" => (Vec::new(), element.clone()),
+            "extend" => (vec![object_ty.clone()], Type::None),
+            "reverse" => (Vec::new(), Type::None),
+            _ => {
+                return self.fail(
+                    name_pos,
+                    format!("type {} has no method '{name}'", object_ty.name()),
+                );
+            }
+        };
+        let display = format!("{}.{name}", object_ty.name());
+        self.arity(name_pos, &display, params.len(), args.len())?;
+        let mut call_args = vec![object_ir];
+        for (arg, param) in args.iter().zip(&params) {
+            let (value, ty) = self.expr_expect(arg, state, Some(param))?;
+            // extend takes only a list of the same type in L0, since core
+            // copies its slots as they are.
+            let value = if name == "extend" {
+                self.expect(arg.pos, param, &ty)?;
+                value
+            } else {
+                self.coerce(arg.pos, value, &ty, param)?
+            };
+            call_args.push(value);
+        }
+        let function = format!("list_{name}");
+        Ok((core_call(&function, call_args, ret != Type::None), ret))
     }
 
     /// A call to a declared function; `name` is its name in its module and
