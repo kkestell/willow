@@ -1,6 +1,7 @@
 #!/bin/sh
 # Runs the bootstrap program tests, bootstrap/tests/programs/*.wlo, and core's
 # own tests, bootstrap/tests/core/*.wlo, or the files named on the command line.
+# Modules the programs import live in subdirectories, which are not run.
 #
 # Each program is built with willow0 and run from its own directory, so
 # diagnostics name the bare file. Optional NAME.out and NAME.err hold the

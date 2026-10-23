@@ -31,9 +31,11 @@ pub fn emit(program: &Program) -> String {
     // The entry saves the arguments for sys.args (core/API.md).
     writeln!(out, "data $W.argc = {{ l 0 }}").unwrap();
     writeln!(out, "data $W.argv = {{ l 0 }}").unwrap();
-    // Every heap object's header points at a descriptor holding its type's name.
-    for (symbol, name) in &program.descriptors {
-        writeln!(out, "data ${symbol} = {{ l $W.str.{name} }}").unwrap();
+    // Every heap object's header points at a descriptor holding its type's
+    // name, and an enum's descriptor continues with its members' texts.
+    for (symbol, texts) in &program.descriptors {
+        let items: Vec<String> = texts.iter().map(|n| format!("l $W.str.{n}")).collect();
+        writeln!(out, "data ${symbol} = {{ {} }}", items.join(", ")).unwrap();
     }
     for (n, text) in program.strings.iter().enumerate() {
         writeln!(
@@ -201,6 +203,17 @@ impl Emitter<'_> {
                 self.loops.pop();
                 self.jump(format!("jmp {test}"));
                 self.label(&end);
+            }
+            Op::SetField {
+                object,
+                offset,
+                value,
+            } => {
+                let v = self.value(value);
+                let o = self.value(object);
+                let address = self.temp();
+                self.line(format!("{address} =l add {o}, {offset}"));
+                self.line(format!("storel {v}, {address}"));
             }
             Op::SetItem {
                 function,
@@ -532,6 +545,20 @@ impl Emitter<'_> {
                 self.line(format!("{result} =l copy {otherwise}"));
                 self.label(&done);
                 result
+            }
+            Value::Construct { descriptor, fields } => {
+                let values: Vec<String> = fields.iter().map(|f| self.value(f)).collect();
+                let object = self.temp();
+                self.line(format!(
+                    "{object} =l call $W.core.object_new(l ${descriptor}, l {})",
+                    values.len()
+                ));
+                for (i, v) in values.iter().enumerate() {
+                    let address = self.temp();
+                    self.line(format!("{address} =l add {object}, {}", 8 + 8 * i));
+                    self.line(format!("storel {v}, {address}"));
+                }
+                object
             }
             Value::ListDisplay(items) => {
                 let list = self.temp();

@@ -1,0 +1,6 @@
+out -2 3 None
+0.5
+True
+out -2 None Kind.FANCY
+True
+other 7 3 None

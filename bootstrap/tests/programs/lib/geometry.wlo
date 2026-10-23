@@ -1,0 +1,21 @@
+import qualified_names
+
+enum Unit:
+    CM
+    INCH
+
+class Point:
+    x: int
+    y: int
+    unit: Unit
+
+    def label(self) -> str:
+        return str(self.x) + "," + str(self.y) + " " + qualified_names.unit_name(self.unit)
+
+type Points = list[Point]
+
+def origin() -> Point:
+    return Point(0, 0, Unit.CM)
+
+def _scale(n: int) -> int:
+    return n * 10

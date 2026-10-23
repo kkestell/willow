@@ -4,16 +4,17 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::parser::{Expr, ExprKind, Func, Module, Stmt, StmtKind, TypeExpr, TypeName};
-use crate::types::Type;
+use crate::parser::{Class, Expr, ExprKind, Func, Module, Stmt, StmtKind, TypeExpr, TypeName};
+use crate::types::{Named, Type};
 use crate::{Diag, Pos};
 
 pub struct Program {
     pub funcs: Vec<Function>,
     /// String literal contents; literal `n` is the data symbol `$W.str.n`.
     pub strings: Vec<String>,
-    /// Each descriptor's symbol and the literal holding its type's name.
-    pub descriptors: Vec<(String, usize)>,
+    /// Each descriptor's symbol and the literals it holds: its type's name,
+    /// then an enum's member texts.
+    pub descriptors: Vec<(String, Vec<usize>)>,
     /// The symbol of the entry module's `main`.
     pub main: String,
 }
@@ -32,6 +33,13 @@ pub enum Op {
     Eval(Value),
     If(Value, Vec<Op>, Vec<Op>),
     While(Value, Vec<Op>),
+    /// Stores `value` in the field at byte `offset` of `object`, evaluating
+    /// the value first.
+    SetField {
+        object: Value,
+        offset: i64,
+        value: Value,
+    },
     /// `object[index] = value` through core's `function`, evaluating the
     /// value first, then the object, then the index.
     SetItem {
@@ -123,6 +131,12 @@ pub enum Value {
     },
     /// A new list holding the values.
     ListDisplay(Vec<Value>),
+    /// A new object with the descriptor holding the field values, which are
+    /// evaluated first.
+    Construct {
+        descriptor: String,
+        fields: Vec<Value>,
+    },
     /// A new dict with keys of the equality kind, holding the entries.
     DictDisplay {
         kind: i64,
@@ -298,13 +312,79 @@ fn host_tables() -> HashMap<&'static str, HashMap<String, Sig>> {
     HashMap::from([("sys", sys), ("fs", fs)])
 }
 
+/// A module's declarations, which `name` and `module.name` refer to.
+struct Namespace {
+    /// Every name the module declares.
+    declared: HashSet<String>,
+    funcs: HashMap<String, Sig>,
+    types: HashMap<String, TypeDecl>,
+    /// Whether this is the host module `sys` or `fs`, which core implements.
+    host: bool,
+}
+
+enum TypeDecl {
+    Class(Type),
+    Enum(Type),
+    /// An alias, with the type it names once that is resolved.
+    Alias(Option<Type>),
+}
+
+/// A class's fields and methods.
+struct ClassInfo<'a> {
+    decl: &'a Class,
+    /// Each field's type, in declaration order.
+    fields: Vec<Type>,
+    methods: HashMap<String, Sig>,
+}
+
+/// Every module's declarations, and the classes and enums they declare by
+/// symbol.
+#[derive(Default)]
+struct Names<'a> {
+    modules: HashMap<&'a str, Namespace>,
+    classes: HashMap<String, ClassInfo<'a>>,
+    enums: HashMap<String, &'a [(Pos, String)]>,
+}
+
 pub fn check(modules: &[Module]) -> Result<Program, Diag> {
-    let mut tables = HashMap::new();
-    for module in modules {
-        tables.insert(module.name.as_str(), declare(module)?);
-    }
-    let host = host_tables();
     let entry = &modules[0];
+    let mut names = Names::default();
+    for (name, funcs) in host_tables() {
+        if !modules.iter().any(|m| m.name == name) {
+            let mut declared: HashSet<String> = funcs.keys().cloned().collect();
+            if name == "sys" {
+                declared.extend(["eprint".to_string(), "args".to_string()]);
+            }
+            let namespace = Namespace {
+                declared,
+                funcs,
+                types: HashMap::new(),
+                host: true,
+            };
+            names.modules.insert(name, namespace);
+        }
+    }
+    for module in modules {
+        let namespace = declare_types(module, &entry.name, &mut names)?;
+        names.modules.insert(&module.name, namespace);
+    }
+    for module in modules {
+        for alias in &module.aliases {
+            resolve_alias(modules, &mut names, module, &alias.name, &mut Vec::new())?;
+        }
+    }
+    for module in modules {
+        let funcs = declare_funcs(&names, module)?;
+        names.modules.get_mut(module.name.as_str()).unwrap().funcs = funcs;
+    }
+    for module in modules {
+        for class in &module.classes {
+            let info = declare_class(&names, module, class)?;
+            names
+                .classes
+                .insert(format!("W.{}.{}", module.name, class.name), info);
+        }
+    }
     let main = match entry.funcs.iter().find(|f| f.name == "main") {
         None => {
             return Err(Diag::new(
@@ -328,40 +408,63 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
         ));
     }
     let mut strings = Strings::default();
-    let descriptors = BUILTIN_TYPES
+    let mut descriptors: Vec<(String, Vec<usize>)> = BUILTIN_TYPES
         .iter()
-        .map(|t| (format!("W.{t}.type"), strings.index_of(t)))
+        .map(|t| (format!("W.{t}.type"), vec![strings.index_of(t)]))
         .collect();
+    for module in modules {
+        for class in &module.classes {
+            let symbol = format!("W.{}.{}.type", module.name, class.name);
+            descriptors.push((symbol, vec![strings.index_of(&class.name)]));
+        }
+        // An enum's descriptor continues with its members' texts (core/API.md).
+        for decl in &module.enums {
+            let mut texts = vec![strings.index_of(&decl.name)];
+            for (_, member) in &decl.members {
+                texts.push(strings.index_of(&format!("{}.{member}", decl.name)));
+            }
+            descriptors.push((format!("W.{}.{}.type", module.name, decl.name), texts));
+        }
+    }
     let mut funcs = Vec::new();
     for module in modules {
         let mut imported = HashMap::new();
         for import in &module.imports {
-            // Besides the host modules, only core can be imported so far.
-            // Core's tests import it to call its functions; nothing stops
-            // another program from doing so.
-            let Some(table) = host.get(import.name.as_str()).or_else(|| {
-                tables
-                    .get(import.name.as_str())
-                    .filter(|_| import.name == "core")
-            }) else {
+            let Some((name, namespace)) = names.modules.get_key_value(import.name.as_str()) else {
                 let message = format!("unknown module '{}'", import.name);
                 return Err(Diag::new(&module.path, import.pos, message));
             };
-            if imported.insert(import.name.as_str(), table).is_some() {
+            if imported.insert(*name, namespace).is_some() {
                 let message = format!("duplicate import '{}'", import.name);
                 return Err(Diag::new(&module.path, import.pos, message));
             }
         }
-        let globals = &tables[module.name.as_str()];
+        let globals = &names.modules[module.name.as_str()];
+        let scope = Scope {
+            module,
+            globals,
+            imported: &imported,
+            names: &names,
+        };
         for func in &module.funcs {
             if let Some(body) = &func.body {
-                let sig = &globals[&func.name];
-                let scope = Scope {
-                    module,
-                    globals,
-                    imported: &imported,
-                };
-                funcs.push(check_function(scope, &mut strings, func, sig, body)?);
+                let sig = &globals.funcs[&func.name];
+                funcs.push(check_function(scope, &mut strings, func, sig, body, false)?);
+            }
+        }
+        for class in &module.classes {
+            let info = &names.classes[&format!("W.{}.{}", module.name, class.name)];
+            for method in &class.methods {
+                let sig = &info.methods[&method.name];
+                let body = method.body.as_ref().unwrap();
+                funcs.push(check_function(
+                    scope,
+                    &mut strings,
+                    method,
+                    sig,
+                    body,
+                    true,
+                )?);
             }
         }
     }
@@ -373,7 +476,177 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
     })
 }
 
-fn resolve_name(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
+/// The type names `module` declares. Every name it declares, and the first
+/// name of every module it imports, must be distinct and not a built-in.
+fn declare_types<'a>(
+    module: &'a Module,
+    entry: &str,
+    names: &mut Names<'a>,
+) -> Result<Namespace, Diag> {
+    let fail = |pos, message: String| Err(Diag::new(&module.path, pos, message));
+    let mut decls: Vec<(Pos, &str, &str)> = Vec::new();
+    decls.extend(
+        module
+            .funcs
+            .iter()
+            .map(|f| (f.pos, "function", f.name.as_str())),
+    );
+    decls.extend(
+        module
+            .classes
+            .iter()
+            .map(|c| (c.pos, "class", c.name.as_str())),
+    );
+    decls.extend(
+        module
+            .enums
+            .iter()
+            .map(|e| (e.pos, "enum", e.name.as_str())),
+    );
+    decls.extend(
+        module
+            .aliases
+            .iter()
+            .map(|a| (a.pos, "alias", a.name.as_str())),
+    );
+    decls.sort_by_key(|(pos, ..)| (pos.line, pos.col));
+    let declared = decls.iter().map(|(_, _, name)| name.to_string()).collect();
+    let mut seen: HashSet<&str> = module
+        .imports
+        .iter()
+        .map(|i| i.name.split('.').next().unwrap())
+        .collect();
+    for (pos, kind, name) in decls {
+        if BUILTINS.contains(&name) {
+            return fail(pos, format!("cannot redefine built-in function '{name}'"));
+        }
+        if !seen.insert(name) {
+            return fail(pos, format!("duplicate {kind} '{name}'"));
+        }
+    }
+    let named = |name: &str| Named {
+        display: if module.name == entry {
+            name.to_string()
+        } else {
+            format!("{}.{name}", module.name)
+        },
+        symbol: format!("W.{}.{name}", module.name),
+    };
+    let mut types = HashMap::new();
+    for class in &module.classes {
+        types.insert(
+            class.name.clone(),
+            TypeDecl::Class(Type::Class(named(&class.name))),
+        );
+    }
+    for decl in &module.enums {
+        let mut members = HashSet::new();
+        for (pos, member) in &decl.members {
+            if !members.insert(member) {
+                return fail(*pos, format!("duplicate enum member '{member}'"));
+            }
+        }
+        let named = named(&decl.name);
+        names.enums.insert(named.symbol.clone(), &decl.members);
+        types.insert(decl.name.clone(), TypeDecl::Enum(Type::Enum(named)));
+    }
+    for alias in &module.aliases {
+        types.insert(alias.name.clone(), TypeDecl::Alias(None));
+    }
+    Ok(Namespace {
+        declared,
+        funcs: HashMap::new(),
+        types,
+        host: false,
+    })
+}
+
+/// Resolves the alias `name` of `module` after the aliases it refers to;
+/// `stack` holds the aliases being resolved around it.
+fn resolve_alias(
+    modules: &[Module],
+    names: &mut Names,
+    module: &Module,
+    name: &str,
+    stack: &mut Vec<(String, String)>,
+) -> Result<(), Diag> {
+    if matches!(
+        names.modules[module.name.as_str()].types[name],
+        TypeDecl::Alias(Some(_))
+    ) {
+        return Ok(());
+    }
+    let alias = module.aliases.iter().find(|a| a.name == name).unwrap();
+    stack.push((module.name.clone(), name.to_string()));
+    let mut refs = Vec::new();
+    type_refs(&alias.ty, false, &mut refs);
+    for (ty, nested) in refs {
+        let target = match lookup_type(names, module, ty)? {
+            Some((owner, TypeDecl::Alias(None))) => owner.to_string(),
+            _ => continue,
+        };
+        let target_name = ty.name.rsplit('.').next().unwrap();
+        if stack.contains(&(target.clone(), target_name.to_string())) {
+            // A recursive alias needs a named type, which stage 0 lacks.
+            let message = if nested {
+                "recursive type aliases are not supported".to_string()
+            } else {
+                format!("alias '{}' expands to itself", ty.name)
+            };
+            return Err(Diag::new(&module.path, ty.pos, message));
+        }
+        let target = modules.iter().find(|m| m.name == target).unwrap();
+        resolve_alias(modules, names, target, target_name, stack)?;
+    }
+    stack.pop();
+    let ty = resolve(names, module, &alias.ty)?;
+    let types = &mut names.modules.get_mut(module.name.as_str()).unwrap().types;
+    types.insert(name.to_string(), TypeDecl::Alias(Some(ty)));
+    Ok(())
+}
+
+/// Every type name in `ty`, with whether it is inside a type argument.
+fn type_refs<'t>(ty: &'t TypeExpr, nested: bool, refs: &mut Vec<(&'t TypeName, bool)>) {
+    for name in &ty.members {
+        refs.push((name, nested));
+        for arg in &name.args {
+            type_refs(arg, true, refs);
+        }
+    }
+}
+
+/// The module that declares the type `ty` names in `module`, with the
+/// declaration, or None when the name is not a declared type.
+fn lookup_type<'n>(
+    names: &'n Names,
+    module: &Module,
+    ty: &TypeName,
+) -> Result<Option<(&'n str, &'n TypeDecl)>, Diag> {
+    let fail = |message: String| Err(Diag::new(&module.path, ty.pos, message));
+    let (owner, name) = match ty.name.rsplit_once('.') {
+        None => (module.name.as_str(), ty.name.as_str()),
+        Some((prefix, name)) => {
+            if !module.imports.iter().any(|i| i.name == prefix) {
+                return fail(format!("unknown module '{prefix}'"));
+            }
+            (prefix, name)
+        }
+    };
+    let (owner, namespace) = names.modules.get_key_value(owner).unwrap();
+    if *owner != module.name {
+        if !namespace.declared.contains(name) {
+            return fail(format!(
+                "module '{owner}' has no function, class, enum, or alias '{name}'"
+            ));
+        }
+        if name.starts_with('_') {
+            return fail(format!("'{name}' is private to module '{owner}'"));
+        }
+    }
+    Ok(namespace.types.get(name).map(|decl| (*owner, decl)))
+}
+
+fn resolve_name(names: &Names, module: &Module, ty: &TypeName) -> Result<Type, Diag> {
     let fail = |message: String| Err(Diag::new(&module.path, ty.pos, message));
     let expected = match ty.name.as_str() {
         "list" => 1,
@@ -389,15 +662,15 @@ fn resolve_name(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
         ));
     }
     if ty.name == "list" {
-        let element = resolve(module, &ty.args[0])?;
+        let element = resolve(names, module, &ty.args[0])?;
         if matches!(element, Type::Ptr | Type::Word) {
             return fail(format!("{} cannot be a list element", element.name()));
         }
         return Ok(Type::List(Box::new(element)));
     }
     if ty.name == "dict" {
-        let key = resolve(module, &ty.args[0])?;
-        let value = resolve(module, &ty.args[1])?;
+        let key = resolve(names, module, &ty.args[0])?;
+        let value = resolve(names, module, &ty.args[1])?;
         if !is_key_type(&key) {
             return Err(Diag::new(
                 &module.path,
@@ -418,55 +691,64 @@ fn resolve_name(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
         "None" => Type::None,
         "ptr" if module.name == "core" => Type::Ptr,
         "word" if module.name == "core" => Type::Word,
-        name => {
-            return Err(Diag::new(
-                &module.path,
-                ty.pos,
-                format!("unknown type '{name}'"),
-            ));
-        }
+        name => match lookup_type(names, module, ty)? {
+            Some((_, TypeDecl::Class(t) | TypeDecl::Enum(t) | TypeDecl::Alias(Some(t)))) => {
+                t.clone()
+            }
+            Some((_, TypeDecl::Alias(None))) => unreachable!("alias resolved out of order"),
+            None => return fail(format!("unknown type '{name}'")),
+        },
     })
 }
 
-/// Dict keys hash by kind, which core knows for int and str (and enums).
+/// Dict keys hash by kind, which core knows for int, str, and enums.
 fn is_key_type(ty: &Type) -> bool {
-    matches!(ty, Type::Int | Type::Str)
+    matches!(ty, Type::Int | Type::Str | Type::Enum(_))
 }
 
-fn resolve(module: &Module, ty: &TypeExpr) -> Result<Type, Diag> {
+fn resolve(names: &Names, module: &Module, ty: &TypeExpr) -> Result<Type, Diag> {
     if let [only] = ty.members.as_slice() {
-        return resolve_name(module, only);
+        return resolve_name(names, module, only);
     }
-    let mut members = Vec::new();
+    let mut members: Vec<Type> = Vec::new();
     for name in &ty.members {
-        let member = resolve_name(module, name)?;
         let fail = |message: String| Err(Diag::new(&module.path, name.pos, message));
-        if matches!(member, Type::Ptr | Type::Word) {
-            return fail(format!("{} cannot be a union member", member.name()));
+        // An alias for a union contributes its members.
+        for member in resolve_name(names, module, name)?.members() {
+            if matches!(member, Type::Ptr | Type::Word) {
+                return fail(format!("{} cannot be a union member", member.name()));
+            }
+            if members.contains(member) {
+                let name = member.name();
+                return fail(format!("union members {name} and {name} overlap"));
+            }
+            if matches!(member, Type::List(_)) && members.iter().any(|m| matches!(m, Type::List(_)))
+            {
+                return fail("a union can have only one list member".into());
+            }
+            if matches!(member, Type::Dict(..))
+                && members.iter().any(|m| matches!(m, Type::Dict(..)))
+            {
+                return fail("a union can have only one dict member".into());
+            }
+            members.push(member.clone());
         }
-        if members.contains(&member) {
-            let name = member.name();
-            return fail(format!("union members {name} and {name} overlap"));
-        }
-        if matches!(member, Type::List(_)) && members.iter().any(|m| matches!(m, Type::List(_))) {
-            return fail("a union can have only one list member".into());
-        }
-        if matches!(member, Type::Dict(..)) && members.iter().any(|m| matches!(m, Type::Dict(..))) {
-            return fail("a union can have only one dict member".into());
-        }
-        members.push(member);
     }
     Ok(Type::union(members))
 }
 
 /// The Willow type and QBE type of an extern parameter or return type.
-fn resolve_extern(module: &Module, ty: &TypeExpr) -> Result<(Type, Option<&'static str>), Diag> {
+fn resolve_extern(
+    names: &Names,
+    module: &Module,
+    ty: &TypeExpr,
+) -> Result<(Type, Option<&'static str>), Diag> {
     if let [only] = ty.members.as_slice() {
         if only.name == "cint" {
             return Ok((Type::Int, Some("w")));
         }
     }
-    match resolve(module, ty)? {
+    match resolve(names, module, ty)? {
         t @ (Type::Int | Type::Ptr) => Ok((t, Some("l"))),
         Type::Float => Ok((Type::Float, Some("d"))),
         Type::None => Ok((Type::None, None)),
@@ -478,42 +760,48 @@ fn resolve_extern(module: &Module, ty: &TypeExpr) -> Result<(Type, Option<&'stat
     }
 }
 
+/// The signature of the function or method `func`, whose symbol is `symbol`;
+/// a method's `receiver` is the type of its `self`.
+fn signature(
+    names: &Names,
+    module: &Module,
+    func: &Func,
+    symbol: String,
+    receiver: Option<Type>,
+) -> Result<Sig, Diag> {
+    let mut seen = HashSet::new();
+    if receiver.is_some() {
+        seen.insert("self");
+    }
+    for param in &func.params {
+        if !seen.insert(&param.name) {
+            let message = format!("duplicate parameter '{}'", param.name);
+            return Err(Diag::new(&module.path, param.pos, message));
+        }
+    }
+    let mut params: Vec<Type> = receiver.into_iter().collect();
+    for param in &func.params {
+        params.push(resolve(names, module, &param.ty)?);
+    }
+    let ret = match &func.ret {
+        Some(ty) => resolve(names, module, ty)?,
+        None => Type::None,
+    };
+    Ok(Sig {
+        params,
+        ret,
+        target: Target::Willow(symbol),
+    })
+}
+
 /// The signatures of the functions `module` declares.
-fn declare(module: &Module) -> Result<HashMap<String, Sig>, Diag> {
+fn declare_funcs(names: &Names, module: &Module) -> Result<HashMap<String, Sig>, Diag> {
     let mut table = HashMap::new();
     let fail = |pos, message: String| Err(Diag::new(&module.path, pos, message));
     for func in &module.funcs {
-        if BUILTINS.contains(&func.name.as_str()) {
-            return fail(
-                func.pos,
-                format!("cannot redefine built-in function '{}'", func.name),
-            );
-        }
-        if table.contains_key(&func.name) {
-            return fail(func.pos, format!("duplicate declaration '{}'", func.name));
-        }
-        let mut seen = HashSet::new();
-        for param in &func.params {
-            if !seen.insert(&param.name) {
-                return fail(param.pos, format!("duplicate parameter '{}'", param.name));
-            }
-        }
         let sig = if func.body.is_some() {
-            let params = func
-                .params
-                .iter()
-                .map(|p| resolve(module, &p.ty))
-                .collect::<Result<_, _>>()?;
-            let ret = match &func.ret {
-                Some(ty) => resolve(module, ty)?,
-                None => Type::None,
-            };
-            let target = Target::Willow(format!("W.{}.{}", module.name, func.name));
-            Sig {
-                params,
-                ret,
-                target,
-            }
+            let symbol = format!("W.{}.{}", module.name, func.name);
+            signature(names, module, func, symbol, None)?
         } else {
             if module.name != "core" {
                 return fail(func.pos, "extern functions are only allowed in core".into());
@@ -521,7 +809,7 @@ fn declare(module: &Module) -> Result<HashMap<String, Sig>, Diag> {
             let mut params = Vec::new();
             let mut cparams = Vec::new();
             for param in &func.params {
-                match resolve_extern(module, &param.ty)? {
+                match resolve_extern(names, module, &param.ty)? {
                     (t, Some(c)) => {
                         params.push(t);
                         cparams.push(c);
@@ -532,7 +820,7 @@ fn declare(module: &Module) -> Result<HashMap<String, Sig>, Diag> {
                 }
             }
             let (ret, cret) = match &func.ret {
-                Some(ty) => resolve_extern(module, ty)?,
+                Some(ty) => resolve_extern(names, module, ty)?,
                 None => (Type::None, None),
             };
             Sig {
@@ -548,6 +836,78 @@ fn declare(module: &Module) -> Result<HashMap<String, Sig>, Diag> {
         table.insert(func.name.clone(), sig);
     }
     Ok(table)
+}
+
+/// The type of a literal default.
+fn literal_type(expr: &Expr) -> Type {
+    match &expr.kind {
+        ExprKind::Int(_) => Type::Int,
+        ExprKind::Float(_) => Type::Float,
+        ExprKind::Str(_) => Type::Str,
+        ExprKind::Bool(_) => Type::Bool,
+        ExprKind::Unary(_, operand) => literal_type(operand),
+        _ => Type::None,
+    }
+}
+
+fn declare_class<'a>(
+    names: &Names,
+    module: &Module,
+    class: &'a Class,
+) -> Result<ClassInfo<'a>, Diag> {
+    let fail = |pos, message: String| Err(Diag::new(&module.path, pos, message));
+    let TypeDecl::Class(ty) = &names.modules[module.name.as_str()].types[&class.name] else {
+        unreachable!()
+    };
+    let mut fields = Vec::new();
+    let mut defaulted = false;
+    for (i, field) in class.fields.iter().enumerate() {
+        if class.fields[..i].iter().any(|f| f.name == field.name) {
+            return fail(field.pos, format!("duplicate field '{}'", field.name));
+        }
+        let field_ty = resolve(names, module, &field.ty)?;
+        match &field.default {
+            Some(default) => {
+                let default_ty = literal_type(default);
+                if !default_ty.assignable_to(&field_ty) {
+                    let message = format!(
+                        "expected {}, received {}",
+                        field_ty.name(),
+                        default_ty.name()
+                    );
+                    return fail(default.pos, message);
+                }
+                defaulted = true;
+            }
+            None if defaulted => {
+                let message = format!(
+                    "field '{}' without a default follows one with a default",
+                    field.name
+                );
+                return fail(field.pos, message);
+            }
+            None => {}
+        }
+        fields.push(field_ty);
+    }
+    let mut methods = HashMap::new();
+    for method in &class.methods {
+        if class.fields.iter().any(|f| f.name == method.name) {
+            let message = format!("method '{}' has the same name as a field", method.name);
+            return fail(method.pos, message);
+        }
+        if methods.contains_key(&method.name) {
+            return fail(method.pos, format!("duplicate method '{}'", method.name));
+        }
+        let symbol = format!("W.{}.{}.{}", module.name, class.name, method.name);
+        let sig = signature(names, module, method, symbol, Some(ty.clone()))?;
+        methods.insert(method.name.clone(), sig);
+    }
+    Ok(ClassInfo {
+        decl: class,
+        fields,
+        methods,
+    })
 }
 
 /// The names `stmts` assign to, at any depth.
@@ -571,6 +931,7 @@ fn assigned_names(stmts: &[Stmt], names: &mut HashSet<String>) {
                 assigned_names(body, names);
             }
             StmtKind::Expr(_)
+            | StmtKind::SetField { .. }
             | StmtKind::SetIndex { .. }
             | StmtKind::Assert { .. }
             | StmtKind::Return(_)
@@ -585,15 +946,17 @@ fn assigned_names(stmts: &[Stmt], names: &mut HashSet<String>) {
 #[derive(Clone, Copy)]
 struct Scope<'a> {
     module: &'a Module,
-    globals: &'a HashMap<String, Sig>,
-    /// The function tables of the modules this module imports.
-    imported: &'a HashMap<&'a str, &'a HashMap<String, Sig>>,
+    globals: &'a Namespace,
+    /// The modules this module imports, by full name.
+    imported: &'a HashMap<&'a str, &'a Namespace>,
+    names: &'a Names<'a>,
 }
 
 struct Checker<'a> {
     module: &'a Module,
-    globals: &'a HashMap<String, Sig>,
-    imported: &'a HashMap<&'a str, &'a HashMap<String, Sig>>,
+    globals: &'a Namespace,
+    imported: &'a HashMap<&'a str, &'a Namespace>,
+    names: &'a Names<'a>,
     intrinsics: bool,
     strings: &'a mut Strings,
     ret: Type,
@@ -662,24 +1025,26 @@ fn check_function(
     func: &Func,
     sig: &Sig,
     body: &[Stmt],
+    method: bool,
 ) -> Result<Function, Diag> {
     let mut names = HashSet::new();
     assigned_names(body, &mut names);
     let mut locals: HashMap<String, Option<Type>> = names.into_iter().map(|n| (n, None)).collect();
     let mut state = State::new();
-    for (param, ty) in func.params.iter().zip(&sig.params) {
-        locals.insert(param.name.clone(), Some(ty.clone()));
-        state.insert(param.name.clone(), ty.clone());
+    let mut params = Vec::new();
+    if method {
+        params.push("self".to_string());
     }
-    let params = func
-        .params
-        .iter()
-        .map(|p| p.name.clone())
-        .collect::<Vec<_>>();
+    params.extend(func.params.iter().map(|p| p.name.clone()));
+    for (param, ty) in params.iter().zip(&sig.params) {
+        locals.insert(param.clone(), Some(ty.clone()));
+        state.insert(param.clone(), ty.clone());
+    }
     let mut checker = Checker {
         module: scope.module,
         globals: scope.globals,
         imported: scope.imported,
+        names: scope.names,
         intrinsics: scope.module.name == "core",
         strings,
         ret: sig.ret.clone(),
@@ -690,9 +1055,14 @@ fn check_function(
     };
     let (ops, transfers) = checker.block(body, &mut state)?;
     if sig.ret != Type::None && !transfers {
+        let name = if method {
+            format!("method '{}.{}'", sig.params[0].name(), func.name)
+        } else {
+            format!("function '{}'", func.name)
+        };
         return checker.fail(
             func.pos,
-            format!("function '{}' must return a value on every path", func.name),
+            format!("{name} must return a value on every path"),
         );
     }
     let Target::Willow(symbol) = &sig.target else {
@@ -712,7 +1082,7 @@ fn check_function(
 fn widen(value: Value, from: &Type, to: &Type) -> Value {
     match from.box_descriptor() {
         Some(descriptor) if to.is_union() => {
-            core_call("box", vec![Value::Global(descriptor.into()), value], true)
+            core_call("box", vec![Value::Global(descriptor), value], true)
         }
         _ => value,
     }
@@ -728,7 +1098,6 @@ fn narrowed(value: Value, declared: &Type, current: &Type) -> Value {
     }
 }
 
-/// The scalar type `expr` names as the class of an isinstance test.
 /// A call of a dict method: the dict, its key and value types, and where
 /// and how the call names the method.
 struct DictCall<'a> {
@@ -779,29 +1148,43 @@ fn method_signature(ty: &Type, name: &str) -> Option<(&'static str, Vec<Type>, V
     })
 }
 
-/// The class an isinstance test names, as written, and the member of `ty`
-/// it selects, if any; `list` selects the list member.
-fn isinstance_type<'e>(expr: &'e Expr, ty: &Type) -> Option<(&'e str, Option<Type>)> {
-    let ExprKind::Name(name) = &expr.kind else {
-        return None;
+/// What an imported module or a namespace of them names.
+enum Ns<'a> {
+    /// An imported module, by full name.
+    Module(&'a str),
+    /// The first names of imported modules, as `app` for `app.util`.
+    Prefix(String),
+}
+
+/// A function or type declaration.
+enum Decl<'a> {
+    Func(&'a Sig),
+    Type(&'a TypeDecl),
+}
+
+/// How diagnostics name a type declaration, as in `class 'Point'`.
+fn describe(decl: &TypeDecl, written: &str) -> String {
+    match decl {
+        TypeDecl::Class(ty) => format!("class '{}'", ty.name()),
+        TypeDecl::Enum(ty) => format!("enum '{}'", ty.name()),
+        TypeDecl::Alias(_) => format!("alias '{written}'"),
+    }
+}
+
+/// The position and message of the diagnostic for a module or namespace
+/// `expr` used as a value, which name its first name.
+fn module_as_value(expr: &Expr) -> (Pos, String) {
+    let mut root = expr;
+    while let ExprKind::Attr(object, ..) = &root.kind {
+        root = object;
+    }
+    let ExprKind::Name(name) = &root.kind else {
+        unreachable!()
     };
-    let class = match name.as_str() {
-        "int" => Type::Int,
-        "float" => Type::Float,
-        "bool" => Type::Bool,
-        "str" => Type::Str,
-        "list" => {
-            let member = ty.members().iter().find(|m| matches!(m, Type::List(_)));
-            return Some((name, member.cloned()));
-        }
-        "dict" => {
-            let member = ty.members().iter().find(|m| matches!(m, Type::Dict(..)));
-            return Some((name, member.cloned()));
-        }
-        _ => return None,
-    };
-    let member = ty.members().contains(&class).then_some(class);
-    Some((name, member))
+    (
+        root.pos,
+        format!("module '{name}' cannot be used as a value"),
+    )
 }
 
 fn core_call(name: &str, args: Vec<Value>, returns: bool) -> Value {
@@ -813,7 +1196,7 @@ fn core_call(name: &str, args: Vec<Value>, returns: bool) -> Value {
     })
 }
 
-impl Checker<'_> {
+impl<'a> Checker<'a> {
     fn fail<T>(&self, pos: Pos, message: impl Into<String>) -> Result<T, Diag> {
         Err(Diag::new(&self.module.path, pos, message))
     }
@@ -1066,7 +1449,7 @@ impl Checker<'_> {
                 let Some((name, ty)) = self.narrowable(value, state) else {
                     return (Vec::new(), Vec::new());
                 };
-                let Some((_, Some(class))) = isinstance_type(class, &ty) else {
+                let Ok(Some((_, Some(class)))) = self.isinstance_type(class, &ty) else {
                     return (Vec::new(), Vec::new());
                 };
                 if !ty.is_union() {
@@ -1135,13 +1518,34 @@ impl Checker<'_> {
                     }
                 }
                 let annotated = match annotation {
-                    Some(a) => Some(resolve(self.module, a)?),
+                    Some(a) => Some(resolve(self.names, self.module, a)?),
                     None => None,
                 };
                 let expected = self.locals[target].clone().or(annotated.clone());
                 let (value_ir, ty) = self.expr_expect(value, state, expected.as_ref())?;
                 let op = self.assign(target, value.pos, value_ir, &ty, annotated, state)?;
                 ops.push(op);
+                Ok(false)
+            }
+            StmtKind::SetField {
+                object,
+                name_pos,
+                name,
+                value,
+            } => {
+                if let Some((_, Decl::Type(TypeDecl::Enum(ty)))) = self.decl_of(object)? {
+                    let message = format!("cannot assign to a member of enum '{}'", ty.name());
+                    return self.fail(*name_pos, message);
+                }
+                let (object_ir, object_ty) = self.expr(object, state)?;
+                let (offset, field_ty) = self.field(&object_ty, *name_pos, name)?;
+                let (value_ir, value_ty) = self.expr_expect(value, state, Some(&field_ty))?;
+                let value_ir = self.coerce(value.pos, value_ir, &value_ty, &field_ty)?;
+                ops.push(Op::SetField {
+                    object: object_ir,
+                    offset,
+                    value: value_ir,
+                });
                 Ok(false)
             }
             StmtKind::SetIndex {
@@ -1420,7 +1824,17 @@ impl Checker<'_> {
                 if name == "__os" {
                     return Ok((self.strings.intern(target_os()), Type::Str));
                 }
-                if self.globals.contains_key(name)
+                if let Some(decl) = self.globals.types.get(name) {
+                    let message = format!("{} cannot be used as a value", describe(decl, name));
+                    return self.fail(expr.pos, message);
+                }
+                if self.namespace_of(expr)?.is_some() {
+                    return self.fail(
+                        expr.pos,
+                        format!("module '{name}' cannot be used as a value"),
+                    );
+                }
+                if self.globals.funcs.contains_key(name)
                     || BUILTINS.contains(&name.as_str())
                     || is_intrinsic(name)
                 {
@@ -1476,13 +1890,46 @@ impl Checker<'_> {
                 };
                 Ok((core_call(function, bounds, true), object_ty))
             }
-            ExprKind::Attr(object, _, name) => match self.module_of(object) {
-                Some(module) => self.fail(
-                    expr.pos,
-                    format!("cannot use function '{module}.{name}' as a value"),
-                ),
-                None => self.fail(expr.pos, "field access is not supported"),
-            },
+            ExprKind::Attr(object, name_pos, name) => {
+                if self.namespace_of(expr)?.is_some() {
+                    let (pos, message) = module_as_value(expr);
+                    return self.fail(pos, message);
+                }
+                match self.decl_of(expr)? {
+                    Some((written, Decl::Func(_))) => {
+                        let message = format!("cannot use function '{written}' as a value");
+                        return self.fail(expr.pos, message);
+                    }
+                    Some((written, Decl::Type(decl))) => {
+                        let message =
+                            format!("{} cannot be used as a value", describe(decl, &written));
+                        return self.fail(*name_pos, message);
+                    }
+                    None => {}
+                }
+                if let Some(module) = self.module_of(object) {
+                    let message = format!("cannot use function '{module}.{name}' as a value");
+                    return self.fail(expr.pos, message);
+                }
+                if let Some((_, Decl::Type(TypeDecl::Enum(ty)))) = self.decl_of(object)? {
+                    let Type::Enum(named) = ty else {
+                        unreachable!()
+                    };
+                    let members = self.names.enums[&named.symbol];
+                    return match members.iter().position(|(_, m)| m == name) {
+                        Some(ordinal) => Ok((Value::Const(ordinal as i64), ty.clone())),
+                        None => self.fail(
+                            *name_pos,
+                            format!("enum '{}' has no member '{name}'", ty.name()),
+                        ),
+                    };
+                }
+                let (object_ir, object_ty) = self.expr(object, state)?;
+                let (offset, ty) = self.field(&object_ty, *name_pos, name)?;
+                let load =
+                    Value::Load("loadl", Box::new(object_ir), Box::new(Value::Const(offset)));
+                Ok((load, ty))
+            }
             ExprKind::TypeOf(ty) => {
                 if !self.intrinsics {
                     return self.fail(expr.pos, "intrinsic '__type' is only available in core");
@@ -1661,6 +2108,7 @@ impl Checker<'_> {
             ("==" | "!=", Type::Bool, Type::Bool) | ("==" | "!=", Type::Ptr, Type::Ptr) => {
                 (compare, Type::Bool)
             }
+            ("==" | "!=", Type::Enum(a), Type::Enum(b)) if a == b => (compare, Type::Bool),
             ("+", Type::Str, Type::Str) => {
                 return Ok((core_call("str_concat", vec![*l, *r], true), Type::Str));
             }
@@ -1766,6 +2214,10 @@ impl Checker<'_> {
                 let text = self.strings.intern("None");
                 Value::Seq(Box::new(value), Box::new(text))
             }
+            Type::Enum(_) => {
+                let descriptor = Value::Global(ty.descriptor());
+                core_call("enum_to_str", vec![descriptor, value], true)
+            }
             Type::Union(_) if ty.is_comparable() => core_call("union_to_str", vec![value], true),
             _ => return None,
         })
@@ -1778,14 +2230,128 @@ impl Checker<'_> {
     }
 
     /// The name of the imported module `expr` names, unless a local hides it.
-    fn module_of(&self, expr: &Expr) -> Option<&str> {
-        match &expr.kind {
-            ExprKind::Name(name) if !self.locals.contains_key(name) => self
-                .imported
-                .get_key_value(name.as_str())
-                .map(|(module, _)| *module),
+    fn module_of(&self, expr: &Expr) -> Option<&'a str> {
+        match self.namespace_of(expr) {
+            Ok(Some(Ns::Module(module))) => Some(module),
             _ => None,
         }
+    }
+
+    /// The imported module, or the namespace of imported modules, that a
+    /// name or dotted name `expr` names, unless a local hides its first name.
+    fn namespace_of(&self, expr: &Expr) -> Result<Option<Ns<'a>>, Diag> {
+        let path = match &expr.kind {
+            ExprKind::Name(name) if !self.locals.contains_key(name) => name.clone(),
+            ExprKind::Attr(object, _, name) => match self.namespace_of(object)? {
+                Some(Ns::Prefix(prefix)) => format!("{prefix}.{name}"),
+                _ => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        if let Some((module, _)) = self.imported.get_key_value(path.as_str()) {
+            return Ok(Some(Ns::Module(module)));
+        }
+        let prefix = format!("{path}.");
+        if self.imported.keys().any(|m| m.starts_with(&prefix)) {
+            return Ok(Some(Ns::Prefix(path)));
+        }
+        match &expr.kind {
+            ExprKind::Attr(_, name_pos, _) => {
+                self.fail(*name_pos, format!("unknown module '{path}'"))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// The function or type a name or a module member `expr` names, with
+    /// the name as written, unless a local hides it.
+    fn decl_of(&self, expr: &Expr) -> Result<Option<(String, Decl<'a>)>, Diag> {
+        let (namespace, written, name) = match &expr.kind {
+            ExprKind::Name(name) if !self.locals.contains_key(name) => {
+                (self.globals, name.clone(), name)
+            }
+            ExprKind::Attr(object, name_pos, name) => match self.namespace_of(object)? {
+                Some(Ns::Module(module)) => {
+                    let namespace = self.imported[module];
+                    if !namespace.declared.contains(name) {
+                        return self.fail(
+                            *name_pos,
+                            format!(
+                                "module '{module}' has no function, class, enum, or alias '{name}'"
+                            ),
+                        );
+                    }
+                    if name.starts_with('_') && module != self.module.name {
+                        let message = format!("'{name}' is private to module '{module}'");
+                        return self.fail(*name_pos, message);
+                    }
+                    (namespace, format!("{module}.{name}"), name)
+                }
+                _ => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        if let Some(sig) = namespace.funcs.get(name) {
+            return Ok(Some((written, Decl::Func(sig))));
+        }
+        Ok(namespace.types.get(name).map(|t| (written, Decl::Type(t))))
+    }
+
+    /// The byte offset and type of the field `name` of a value of `ty`.
+    fn field(&self, ty: &Type, pos: Pos, name: &str) -> Result<(i64, Type), Diag> {
+        let Type::Class(named) = ty else {
+            return self.fail(pos, format!("type {} has no field '{name}'", ty.name()));
+        };
+        let info = &self.names.classes[&named.symbol];
+        if let Some(i) = info.decl.fields.iter().position(|f| f.name == name) {
+            return Ok((8 + 8 * i as i64, info.fields[i].clone()));
+        }
+        if info.methods.contains_key(name) {
+            let message = format!("cannot use method '{}.{name}' as a value", ty.name());
+            return self.fail(pos, message);
+        }
+        self.fail(pos, format!("class {} has no field '{name}'", ty.name()))
+    }
+
+    /// The type an isinstance test names, as written, and the member of `ty`
+    /// it selects, if any; `list` selects the list member. None when `expr`
+    /// does not name a type.
+    fn isinstance_type(
+        &self,
+        expr: &Expr,
+        ty: &Type,
+    ) -> Result<Option<(String, Option<Type>)>, Diag> {
+        let (written, class) = match &expr.kind {
+            ExprKind::Name(name) if matches!(name.as_str(), "list" | "dict") => {
+                let member = ty.members().iter().find(|m| match m {
+                    Type::List(_) => name == "list",
+                    Type::Dict(..) => name == "dict",
+                    _ => false,
+                });
+                return Ok(Some((name.clone(), member.cloned())));
+            }
+            ExprKind::Name(name) if matches!(name.as_str(), "int" | "float" | "bool" | "str") => {
+                let class = match name.as_str() {
+                    "int" => Type::Int,
+                    "float" => Type::Float,
+                    "bool" => Type::Bool,
+                    _ => Type::Str,
+                };
+                (name.clone(), class)
+            }
+            _ => match self.decl_of(expr)? {
+                Some((written, Decl::Type(TypeDecl::Class(t) | TypeDecl::Enum(t)))) => {
+                    (written, t.clone())
+                }
+                Some((written, Decl::Type(TypeDecl::Alias(_)))) => {
+                    let message = format!("alias '{written}' cannot be used in isinstance");
+                    return self.fail(expr.pos, message);
+                }
+                _ => return Ok(None),
+            },
+        };
+        let member = ty.members().contains(&class).then_some(class);
+        Ok(Some((written, member)))
     }
 
     fn arity(&self, pos: Pos, name: &str, expected: usize, received: usize) -> Result<(), Diag> {
@@ -1804,37 +2370,34 @@ impl Checker<'_> {
             return false;
         };
         matches!(&callee.kind, ExprKind::Attr(object, _, name)
-            if name == "exit" && self.module_of(object) == Some("sys"))
-    }
-
-    /// The text that `str(value)` gives for a printable value.
-    fn text_of(&mut self, pos: Pos, value: Value, ty: &Type) -> Result<Value, Diag> {
-        Ok(match ty {
-            Type::Str => value,
-            Type::Int => core_call("int_to_str", vec![value], true),
-            Type::Bool => core_call("bool_to_str", vec![value], true),
-            Type::Float => core_call("float_to_str", vec![value], true),
-            Type::None => Value::Seq(Box::new(value), Box::new(self.strings.intern("None"))),
-            Type::Union(_) => core_call("union_to_str", vec![value], true),
-            _ => return self.fail(pos, format!("cannot print a value of type {}", ty.name())),
-        })
+            if name == "exit" && self.module_of(object) == Some("sys") && self.imported["sys"].host)
     }
 
     fn call(&mut self, callee: &Expr, args: &[Expr], state: &State) -> Result<(Value, Type), Diag> {
         let pos = callee.pos;
         if let ExprKind::Attr(object, name_pos, name) = &callee.kind {
-            let Some(module) = self.module_of(object) else {
-                return self.method(object, *name_pos, name, args, state);
+            // Only the host `sys` lowers `eprint` and `args` specially.
+            let host = match self.namespace_of(object)? {
+                None => return self.method(object, *name_pos, name, args, state),
+                Some(Ns::Prefix(_)) => {
+                    self.namespace_of(callee)?;
+                    let (pos, message) = module_as_value(callee);
+                    return self.fail(pos, message);
+                }
+                Some(Ns::Module(module)) => self.imported[module].host.then_some(module),
             };
-            if module == "sys" && name == "eprint" {
+            if host == Some("sys") && name == "eprint" {
                 let mut checked = self.args(args, state, &[])?;
                 self.arity(pos, "sys.eprint", 1, checked.len())?;
                 let (arg_pos, value, ty) = checked.pop().unwrap();
-                let text = self.text_of(arg_pos, value, &ty)?;
+                let Some(text) = self.to_str(value, &ty) else {
+                    let message = format!("cannot print a value of type {}", ty.name());
+                    return self.fail(arg_pos, message);
+                };
                 return Ok((core_call("eprint_str", vec![text], false), Type::None));
             }
             // The entry saves argc and argv for this (core/API.md).
-            if module == "sys" && name == "args" {
+            if host == Some("sys") && name == "args" {
                 self.arity(pos, "sys.args", 0, args.len())?;
                 let load = |symbol: &str| {
                     let address = Box::new(Value::Global(symbol.into()));
@@ -1843,16 +2406,20 @@ impl Checker<'_> {
                 let call = core_call("sys_args", vec![load("W.argc"), load("W.argv")], true);
                 return Ok((call, Type::List(Box::new(Type::Str))));
             }
-            let table = self.imported[module];
-            let Some(sig) = table.get(name) else {
-                return self.fail(
-                    *name_pos,
-                    format!("module '{module}' has no function '{name}'"),
-                );
+        }
+        if let Some((written, decl)) = self.decl_of(callee)? {
+            return match decl {
+                Decl::Func(sig) => {
+                    let checked = self.args(args, state, &sig.params)?;
+                    let name = written.rsplit('.').next().unwrap();
+                    self.call_sig(pos, &written, name, sig, checked)
+                }
+                Decl::Type(TypeDecl::Class(ty)) => self.construct(pos, ty, args, state),
+                Decl::Type(decl) => self.fail(
+                    pos,
+                    format!("{} cannot be called", describe(decl, &written)),
+                ),
             };
-            let display = format!("{module}.{name}");
-            let checked = self.args(args, state, &sig.params)?;
-            return self.call_sig(pos, &display, name, sig, checked);
         }
         let name = match &callee.kind {
             ExprKind::Name(name) if !self.locals.contains_key(name) => name.as_str(),
@@ -1861,19 +2428,16 @@ impl Checker<'_> {
                 return self.fail(pos, format!("cannot call a value of type {}", ty.name()));
             }
         };
-        let globals = self.globals;
-        if name == "isinstance" && !globals.contains_key(name) {
+        if name == "isinstance" {
             return self.isinstance(pos, args, state);
         }
-        if name == "range" && !globals.contains_key(name) {
+        if name == "range" {
             return self.fail(pos, "'range' can only be the source of a for loop");
         }
-        if !globals.contains_key(name)
-            && !matches!(
-                name,
-                "print" | "int" | "float" | "str" | "len" | "ord" | "chr"
-            )
-        {
+        if !matches!(
+            name,
+            "print" | "int" | "float" | "str" | "len" | "ord" | "chr"
+        ) {
             if !is_intrinsic(name) {
                 if BUILTINS.contains(&name) {
                     return self.fail(pos, format!("'{name}' is not supported"));
@@ -1883,10 +2447,6 @@ impl Checker<'_> {
             if !self.intrinsics {
                 return self.fail(pos, format!("intrinsic '{name}' is only available in core"));
             }
-        }
-        if let Some(sig) = globals.get(name) {
-            let checked = self.args(args, state, &sig.params)?;
-            return self.call_sig(pos, name, name, sig, checked);
         }
         let mut checked = self.args(args, state, &[])?;
         if name == "print" || name == "str" {
@@ -2007,7 +2567,7 @@ impl Checker<'_> {
     ) -> Result<(Value, Type), Diag> {
         self.arity(pos, "isinstance", 2, args.len())?;
         let (value, ty) = self.expr(&args[0], state)?;
-        let Some((class_name, member)) = isinstance_type(&args[1], &ty) else {
+        let Some((class_name, member)) = self.isinstance_type(&args[1], &ty)? else {
             let found = match &args[1].kind {
                 ExprKind::Name(name) => {
                     return self.fail(args[1].pos, format!("unknown type '{name}'"));
@@ -2022,19 +2582,19 @@ impl Checker<'_> {
             };
             return self.fail(args[1].pos, format!("expected a class name, found {found}"));
         };
-        if member.is_none() {
+        let Some(member) = member else {
             return self.fail(
                 args[1].pos,
                 format!("type {} has no member {class_name}", ty.name()),
             );
-        }
+        };
         if !ty.is_union() {
             return Ok((
                 Value::Seq(Box::new(value), Box::new(Value::Const(1))),
                 Type::Bool,
             ));
         }
-        let descriptor = Value::Global(format!("W.{class_name}.type"));
+        let descriptor = Value::Global(member.descriptor());
         Ok((
             core_call("is_instance", vec![value, descriptor], true),
             Type::Bool,
@@ -2065,6 +2625,20 @@ impl Checker<'_> {
         state: &State,
     ) -> Result<(Value, Type), Diag> {
         let (object_ir, object_ty) = self.expr(object, state)?;
+        if let Type::Class(named) = &object_ty {
+            let names = self.names;
+            let Some(sig) = names.classes[&named.symbol].methods.get(name) else {
+                return self.fail(
+                    name_pos,
+                    format!("type {} has no method '{name}'", object_ty.name()),
+                );
+            };
+            // The receiver is evaluated first and passed as `self`.
+            let mut checked = vec![(object.pos, object_ir, object_ty.clone())];
+            checked.extend(self.args(args, state, &sig.params[1..])?);
+            self.arity(name_pos, name, sig.params.len() - 1, checked.len() - 1)?;
+            return self.call_sig(name_pos, name, name, sig, checked);
+        }
         let display = format!("{}.{name}", object_ty.name());
         if let Type::Dict(key, value) = &object_ty {
             match name {
@@ -2124,6 +2698,57 @@ impl Checker<'_> {
             call_args.push(value);
         }
         Ok((core_call(function, call_args, ret != Type::None), ret))
+    }
+
+    /// A new instance of the class `ty`, with an argument or a default for
+    /// each field in order.
+    fn construct(
+        &mut self,
+        pos: Pos,
+        ty: &Type,
+        args: &[Expr],
+        state: &State,
+    ) -> Result<(Value, Type), Diag> {
+        let Type::Class(named) = ty else {
+            unreachable!()
+        };
+        let names = self.names;
+        let info = &names.classes[&named.symbol];
+        let fields = &info.decl.fields;
+        let required = fields.iter().filter(|f| f.default.is_none()).count();
+        let display = ty.name();
+        if required == fields.len() {
+            self.arity(pos, &display, fields.len(), args.len())?;
+        } else if args.len() < required || args.len() > fields.len() {
+            return self.fail(
+                pos,
+                format!(
+                    "'{display}' expects {required} to {}, received {}",
+                    count(fields.len()),
+                    args.len()
+                ),
+            );
+        }
+        let mut values = Vec::new();
+        for (field, field_ty) in fields.iter().zip(&info.fields) {
+            let (value_pos, value, value_ty) = match args.get(values.len()) {
+                Some(arg) => {
+                    let (value, value_ty) = self.expr_expect(arg, state, Some(field_ty))?;
+                    (arg.pos, value, value_ty)
+                }
+                None => {
+                    let default = field.default.as_ref().unwrap();
+                    let (value, value_ty) = self.expr(default, &State::new())?;
+                    (default.pos, value, value_ty)
+                }
+            };
+            values.push(self.coerce(value_pos, value, &value_ty, field_ty)?);
+        }
+        let construct = Value::Construct {
+            descriptor: ty.descriptor(),
+            fields: values,
+        };
+        Ok((construct, ty.clone()))
     }
 
     /// `d.get(key)` or `d.get(key, default)` (spec §7). The result is the

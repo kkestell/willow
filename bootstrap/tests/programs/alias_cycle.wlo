@@ -1,0 +1,4 @@
+type Loop = int | Loop
+
+def main():
+    pass
