@@ -1597,15 +1597,21 @@ impl Checker<'_> {
                 return self.method(object, *name_pos, name, args, state);
             };
             if module == "sys" && name == "eprint" {
-                let mut checked = self.args(args, state)?;
+                let mut checked = self.args(args, state, &[])?;
                 self.arity(pos, "sys.eprint", 1, checked.len())?;
                 let (arg_pos, value, ty) = checked.pop().unwrap();
                 let text = self.text_of(arg_pos, value, &ty)?;
                 return Ok((core_call("eprint_str", vec![text], false), Type::None));
             }
-            // sys.args() returns a list[str], which waits for lists in stage 0.
+            // The entry saves argc and argv for this (core/API.md).
             if module == "sys" && name == "args" {
-                return self.fail(pos, "'sys.args' is not supported");
+                self.arity(pos, "sys.args", 0, args.len())?;
+                let load = |symbol: &str| {
+                    let address = Box::new(Value::Global(symbol.into()));
+                    Value::Load("loadl", address, Box::new(Value::Const(0)))
+                };
+                let call = core_call("sys_args", vec![load("W.argc"), load("W.argv")], true);
+                return Ok((call, Type::List(Box::new(Type::Str))));
             }
             let table = self.imported[module];
             let Some(sig) = table.get(name) else {

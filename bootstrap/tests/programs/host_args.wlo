@@ -1,0 +1,9 @@
+import sys
+
+# The runner passes no arguments. Each call returns a new list.
+def main():
+    args = sys.args()
+    print(len(args))
+    args.append("added")
+    print(len(args))
+    print(len(sys.args()))
