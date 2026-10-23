@@ -1,1 +1,1 @@
-alias_cycle.wlo:1:19: error: alias 'Loop' expands to itself
+alias_cycle.wlo:2:21: error: alias 'Shape' expands to itself

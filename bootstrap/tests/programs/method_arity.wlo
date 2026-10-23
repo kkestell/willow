@@ -1,0 +1,2 @@
+def main():
+    print("text".find("t", 1))

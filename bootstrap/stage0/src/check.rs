@@ -4,7 +4,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::parser::{Class, Expr, ExprKind, Func, Module, Stmt, StmtKind, TypeExpr, TypeName};
+use crate::parser::{
+    Alias, Class, Expr, ExprKind, Func, Module, Stmt, StmtKind, TypeExpr, TypeName,
+};
 use crate::types::{Named, Type};
 use crate::{Diag, Pos};
 
@@ -325,8 +327,8 @@ struct Namespace {
 enum TypeDecl {
     Class(Type),
     Enum(Type),
-    /// An alias, with the type it names once that is resolved.
-    Alias(Option<Type>),
+    /// An alias, which is expanded where it is used.
+    Alias,
 }
 
 /// A class's fields and methods.
@@ -342,6 +344,8 @@ struct ClassInfo<'a> {
 #[derive(Default)]
 struct Names<'a> {
     modules: HashMap<&'a str, Namespace>,
+    /// Each module's syntax, where its aliases are expanded.
+    sources: HashMap<&'a str, &'a Module>,
     classes: HashMap<String, ClassInfo<'a>>,
     enums: HashMap<String, &'a [(Pos, String)]>,
 }
@@ -367,10 +371,12 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
     for module in modules {
         let namespace = declare_types(module, &entry.name, &mut names)?;
         names.modules.insert(&module.name, namespace);
+        names.sources.insert(&module.name, module);
     }
+    // Expand every alias so that an unused one is still checked.
     for module in modules {
         for alias in &module.aliases {
-            resolve_alias(modules, &mut names, module, &alias.name, &mut Vec::new())?;
+            resolve_in(&names, module, &alias.ty, &mut vec![Some(alias)])?;
         }
     }
     for module in modules {
@@ -395,11 +401,7 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
         }
         Some(f) => f,
     };
-    if !main.params.is_empty()
-        || main
-            .ret
-            .as_ref()
-            .is_some_and(|r| r.members.len() != 1 || r.members[0].name != "None")
+    if !main.params.is_empty() || names.modules[entry.name.as_str()].funcs["main"].ret != Type::None
     {
         return Err(Diag::new(
             &entry.path,
@@ -551,7 +553,7 @@ fn declare_types<'a>(
         types.insert(decl.name.clone(), TypeDecl::Enum(Type::Enum(named)));
     }
     for alias in &module.aliases {
-        types.insert(alias.name.clone(), TypeDecl::Alias(None));
+        types.insert(alias.name.clone(), TypeDecl::Alias);
     }
     Ok(Namespace {
         declared,
@@ -559,60 +561,6 @@ fn declare_types<'a>(
         types,
         host: false,
     })
-}
-
-/// Resolves the alias `name` of `module` after the aliases it refers to;
-/// `stack` holds the aliases being resolved around it.
-fn resolve_alias(
-    modules: &[Module],
-    names: &mut Names,
-    module: &Module,
-    name: &str,
-    stack: &mut Vec<(String, String)>,
-) -> Result<(), Diag> {
-    if matches!(
-        names.modules[module.name.as_str()].types[name],
-        TypeDecl::Alias(Some(_))
-    ) {
-        return Ok(());
-    }
-    let alias = module.aliases.iter().find(|a| a.name == name).unwrap();
-    stack.push((module.name.clone(), name.to_string()));
-    let mut refs = Vec::new();
-    type_refs(&alias.ty, false, &mut refs);
-    for (ty, nested) in refs {
-        let target = match lookup_type(names, module, ty)? {
-            Some((owner, TypeDecl::Alias(None))) => owner.to_string(),
-            _ => continue,
-        };
-        let target_name = ty.name.rsplit('.').next().unwrap();
-        if stack.contains(&(target.clone(), target_name.to_string())) {
-            // A recursive alias needs a named type, which stage 0 lacks.
-            let message = if nested {
-                "recursive type aliases are not supported".to_string()
-            } else {
-                format!("alias '{}' expands to itself", ty.name)
-            };
-            return Err(Diag::new(&module.path, ty.pos, message));
-        }
-        let target = modules.iter().find(|m| m.name == target).unwrap();
-        resolve_alias(modules, names, target, target_name, stack)?;
-    }
-    stack.pop();
-    let ty = resolve(names, module, &alias.ty)?;
-    let types = &mut names.modules.get_mut(module.name.as_str()).unwrap().types;
-    types.insert(name.to_string(), TypeDecl::Alias(Some(ty)));
-    Ok(())
-}
-
-/// Every type name in `ty`, with whether it is inside a type argument.
-fn type_refs<'t>(ty: &'t TypeExpr, nested: bool, refs: &mut Vec<(&'t TypeName, bool)>) {
-    for name in &ty.members {
-        refs.push((name, nested));
-        for arg in &name.args {
-            type_refs(arg, true, refs);
-        }
-    }
 }
 
 /// The module that declares the type `ty` names in `module`, with the
@@ -646,7 +594,14 @@ fn lookup_type<'n>(
     Ok(namespace.types.get(name).map(|decl| (*owner, decl)))
 }
 
-fn resolve_name(names: &Names, module: &Module, ty: &TypeName) -> Result<Type, Diag> {
+/// The type `ty` names in `module`. `expanding` holds the aliases being
+/// expanded, with None for each list or dict argument entered since.
+fn resolve_name<'m>(
+    names: &Names<'m>,
+    module: &'m Module,
+    ty: &TypeName,
+    expanding: &mut Vec<Option<&'m Alias>>,
+) -> Result<Type, Diag> {
     let fail = |message: String| Err(Diag::new(&module.path, ty.pos, message));
     let expected = match ty.name.as_str() {
         "list" => 1,
@@ -662,15 +617,19 @@ fn resolve_name(names: &Names, module: &Module, ty: &TypeName) -> Result<Type, D
         ));
     }
     if ty.name == "list" {
-        let element = resolve(names, module, &ty.args[0])?;
+        expanding.push(None);
+        let element = resolve_in(names, module, &ty.args[0], expanding)?;
+        expanding.pop();
         if matches!(element, Type::Ptr | Type::Word) {
             return fail(format!("{} cannot be a list element", element.name()));
         }
         return Ok(Type::List(Box::new(element)));
     }
     if ty.name == "dict" {
-        let key = resolve(names, module, &ty.args[0])?;
-        let value = resolve(names, module, &ty.args[1])?;
+        expanding.push(None);
+        let key = resolve_in(names, module, &ty.args[0], expanding)?;
+        let value = resolve_in(names, module, &ty.args[1], expanding)?;
+        expanding.pop();
         if !is_key_type(&key) {
             return Err(Diag::new(
                 &module.path,
@@ -692,10 +651,29 @@ fn resolve_name(names: &Names, module: &Module, ty: &TypeName) -> Result<Type, D
         "ptr" if module.name == "core" => Type::Ptr,
         "word" if module.name == "core" => Type::Word,
         name => match lookup_type(names, module, ty)? {
-            Some((_, TypeDecl::Class(t) | TypeDecl::Enum(t) | TypeDecl::Alias(Some(t)))) => {
-                t.clone()
+            Some((_, TypeDecl::Class(t) | TypeDecl::Enum(t))) => t.clone(),
+            Some((owner, TypeDecl::Alias)) => {
+                let source = names.sources[owner];
+                let alias_name = name.rsplit('.').next().unwrap();
+                let alias = source
+                    .aliases
+                    .iter()
+                    .find(|a| a.name == alias_name)
+                    .unwrap();
+                let open = |a: &Option<&Alias>| a.is_some_and(|a| std::ptr::eq(a, alias));
+                if let Some(at) = expanding.iter().position(open) {
+                    // The spec allows recursion through list and dict, but
+                    // stage 0's types cannot represent it.
+                    if expanding[at..].iter().any(Option::is_none) {
+                        return fail("recursive type aliases are not supported".into());
+                    }
+                    return fail(format!("alias '{name}' expands to itself"));
+                }
+                expanding.push(Some(alias));
+                let resolved = resolve_in(names, source, &alias.ty, expanding)?;
+                expanding.pop();
+                resolved
             }
-            Some((_, TypeDecl::Alias(None))) => unreachable!("alias resolved out of order"),
             None => return fail(format!("unknown type '{name}'")),
         },
     })
@@ -707,14 +685,23 @@ fn is_key_type(ty: &Type) -> bool {
 }
 
 fn resolve(names: &Names, module: &Module, ty: &TypeExpr) -> Result<Type, Diag> {
+    resolve_in(names, module, ty, &mut Vec::new())
+}
+
+fn resolve_in<'m>(
+    names: &Names<'m>,
+    module: &'m Module,
+    ty: &TypeExpr,
+    expanding: &mut Vec<Option<&'m Alias>>,
+) -> Result<Type, Diag> {
     if let [only] = ty.members.as_slice() {
-        return resolve_name(names, module, only);
+        return resolve_name(names, module, only, expanding);
     }
     let mut members: Vec<Type> = Vec::new();
     for name in &ty.members {
         let fail = |message: String| Err(Diag::new(&module.path, name.pos, message));
-        // An alias for a union contributes its members.
-        for member in resolve_name(names, module, name)?.members() {
+        // An alias for a union contributes each of its members.
+        for member in resolve_name(names, module, name, expanding)?.members() {
             if matches!(member, Type::Ptr | Type::Word) {
                 return fail(format!("{} cannot be a union member", member.name()));
             }
@@ -722,13 +709,12 @@ fn resolve(names: &Names, module: &Module, ty: &TypeExpr) -> Result<Type, Diag> 
                 let name = member.name();
                 return fail(format!("union members {name} and {name} overlap"));
             }
-            if matches!(member, Type::List(_)) && members.iter().any(|m| matches!(m, Type::List(_)))
-            {
+            let lists = |m: &Type| matches!(m, Type::List(_));
+            if lists(member) && members.iter().any(lists) {
                 return fail("a union can have only one list member".into());
             }
-            if matches!(member, Type::Dict(..))
-                && members.iter().any(|m| matches!(m, Type::Dict(..)))
-            {
+            let dicts = |m: &Type| matches!(m, Type::Dict(..));
+            if dicts(member) && members.iter().any(dicts) {
                 return fail("a union can have only one dict member".into());
             }
             members.push(member.clone());
@@ -927,7 +913,7 @@ fn assigned_names(stmts: &[Stmt], names: &mut HashSet<String>) {
             }
             StmtKind::While { body, .. } => assigned_names(body, names),
             StmtKind::For { targets, body, .. } => {
-                names.extend(targets.iter().cloned());
+                names.extend(targets.iter().map(|(_, name)| name.clone()));
                 assigned_names(body, names);
             }
             StmtKind::Expr(_)
@@ -1105,7 +1091,7 @@ struct DictCall<'a> {
     key: &'a Type,
     value: &'a Type,
     pos: Pos,
-    display: &'a str,
+    name: &'a str,
 }
 
 /// The core function, parameter types, defaults for the trailing optional
@@ -1167,17 +1153,22 @@ fn describe(decl: &TypeDecl, written: &str) -> String {
     match decl {
         TypeDecl::Class(ty) => format!("class '{}'", ty.name()),
         TypeDecl::Enum(ty) => format!("enum '{}'", ty.name()),
-        TypeDecl::Alias(_) => format!("alias '{written}'"),
+        TypeDecl::Alias => format!("alias '{written}'"),
+    }
+}
+
+/// The first name of a dotted name such as `app.util.Item`.
+fn root(expr: &Expr) -> &Expr {
+    match &expr.kind {
+        ExprKind::Attr(object, ..) => root(object),
+        _ => expr,
     }
 }
 
 /// The position and message of the diagnostic for a module or namespace
 /// `expr` used as a value, which name its first name.
 fn module_as_value(expr: &Expr) -> (Pos, String) {
-    let mut root = expr;
-    while let ExprKind::Attr(object, ..) = &root.kind {
-        root = object;
-    }
+    let root = root(expr);
     let ExprKind::Name(name) = &root.kind else {
         unreachable!()
     };
@@ -1317,14 +1308,13 @@ impl<'a> Checker<'a> {
                     && self.module_of(object).is_none()
                 {
                     let (dict, ty) = self.expr(object, state)?;
-                    let display = format!("{}.{name}", ty.name());
                     let Type::Dict(key, value) = ty else {
                         return self.fail(
                             *name_pos,
                             format!("type {} has no method '{name}'", ty.name()),
                         );
                     };
-                    self.arity(*name_pos, &display, 0, args.len())?;
+                    self.arity(*name_pos, name, 0, args.len())?;
                     let part = match name.as_str() {
                         "keys" => "keys",
                         "values" => "values",
@@ -1587,7 +1577,7 @@ impl<'a> Checker<'a> {
             } => {
                 let mut assigned = HashSet::new();
                 assigned_names(body, &mut assigned);
-                assigned.extend(targets.iter().cloned());
+                assigned.extend(targets.iter().map(|(_, name)| name.clone()));
                 self.forget_narrowing(&assigned, state);
                 let source = self.for_source(iterable, state)?;
                 let items = source.items();
@@ -1596,23 +1586,18 @@ impl<'a> Checker<'a> {
                         [(_, item)] => format!("cannot unpack a value of type {}", item.name()),
                         _ => "'items' gives a key and a value, so it needs two targets".into(),
                     };
-                    return self.fail(stmt.pos, message);
+                    return self.fail(targets[0].0, message);
                 }
-                if targets.len() == 2 && targets[0] == targets[1] {
-                    return self.fail(stmt.pos, format!("duplicate target '{}'", targets[0]));
+                if let [(_, first), (pos, second)] = targets.as_slice() {
+                    if first == second {
+                        return self.fail(*pos, format!("duplicate target '{second}'"));
+                    }
                 }
                 let mut body_state = state.clone();
                 let mut stores = Vec::new();
-                for (target, (slot, ty)) in targets.iter().zip(items) {
+                for ((_, target), (slot, ty)) in targets.iter().zip(items) {
                     let item = Value::Item(slot);
-                    stores.push(self.assign(
-                        target,
-                        iterable.pos,
-                        item,
-                        &ty,
-                        None,
-                        &mut body_state,
-                    )?);
+                    stores.push(self.assign(target, stmt.pos, item, &ty, None, &mut body_state)?);
                 }
                 self.loops += 1;
                 let (body, _) = self.block(body, &mut body_state)?;
@@ -2343,9 +2328,10 @@ impl<'a> Checker<'a> {
                 Some((written, Decl::Type(TypeDecl::Class(t) | TypeDecl::Enum(t)))) => {
                     (written, t.clone())
                 }
-                Some((written, Decl::Type(TypeDecl::Alias(_)))) => {
-                    let message = format!("alias '{written}' cannot be used in isinstance");
-                    return self.fail(expr.pos, message);
+                Some((written, Decl::Type(TypeDecl::Alias))) => {
+                    let name = written.rsplit('.').next().unwrap();
+                    let message = format!("alias '{name}' cannot be used in isinstance");
+                    return self.fail(root(expr).pos, message);
                 }
                 _ => return Ok(None),
             },
@@ -2442,7 +2428,7 @@ impl<'a> Checker<'a> {
                 if BUILTINS.contains(&name) {
                     return self.fail(pos, format!("'{name}' is not supported"));
                 }
-                return self.fail(pos, format!("unknown name '{name}'"));
+                return self.fail(pos, format!("unknown function '{name}'"));
             }
             if !self.intrinsics {
                 return self.fail(pos, format!("intrinsic '{name}' is only available in core"));
@@ -2584,7 +2570,7 @@ impl<'a> Checker<'a> {
         };
         let Some(member) = member else {
             return self.fail(
-                args[1].pos,
+                root(&args[1]).pos,
                 format!("type {} has no member {class_name}", ty.name()),
             );
         };
@@ -2648,7 +2634,7 @@ impl<'a> Checker<'a> {
                         key,
                         value,
                         pos: name_pos,
-                        display: &display,
+                        name,
                     };
                     return self.dict_get(call, args, state);
                 }
@@ -2669,12 +2655,12 @@ impl<'a> Checker<'a> {
         };
         let required = params.len() - defaults.len();
         if defaults.is_empty() {
-            self.arity(name_pos, &display, params.len(), args.len())?;
+            self.arity(name_pos, name, params.len(), args.len())?;
         } else if args.len() < required || args.len() > params.len() {
             return self.fail(
                 name_pos,
                 format!(
-                    "'{display}' expects {required} to {}, received {}",
+                    "'{name}' expects {required} to {}, received {}",
                     count(params.len()),
                     args.len()
                 ),
@@ -2765,15 +2751,12 @@ impl<'a> Checker<'a> {
             key,
             value,
             pos,
-            display,
+            name,
         } = call;
         if args.is_empty() || args.len() > 2 {
             return self.fail(
                 pos,
-                format!(
-                    "'{display}' expects 1 to 2 arguments, received {}",
-                    args.len()
-                ),
+                format!("'{name}' expects 1 to 2 arguments, received {}", args.len()),
             );
         }
         let (key_ir, key_ty) = self.expr(&args[0], state)?;
