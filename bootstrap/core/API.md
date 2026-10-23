@@ -196,6 +196,7 @@ Only core may use these.
 | `__int(w: word) -> int`, `__float(w: word) -> float`, `__bool(w: word) -> bool`, `__ptr(w: word) -> ptr`, `__str(w: word) -> str` | Reinterprets a slot |
 | `__type(T) -> ptr` | The descriptor of `T`: `int`, `float`, `bool`, `str`, `list`, or `dict` |
 | `__addr_is_null(p: ptr) -> bool` | `p` is 0 |
+| `a == b`, `a != b` on two `ptr` | Address equality, as in comparing a header with `__type(T)` |
 | `__dtosi(x: float) -> int` | QBE `dtosi`: `x` truncated toward zero, unspecified outside the `int` range; `float_to_int` checks the range first |
 | `__os` | `"linux"` or `"darwin"`, folded at compile time |
 | `extern def name(params) -> R` | A C function; parameters and results are `int` or `ptr` (QBE `l`), `float` (`d`), or `cint` (`w`); a trailing `...` makes it variadic |
