@@ -339,6 +339,10 @@ impl Emitter<'_> {
                 self.line(format!("{d} =d div {l}, {r}"));
                 self.float_bits(&d)
             }
+            Value::Seq(first, second) => {
+                self.value(first);
+                self.value(second)
+            }
             Value::Load(instr, ptr, offset) => {
                 let address = self.address(ptr, offset);
                 let t = self.temp();
