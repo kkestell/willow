@@ -278,6 +278,20 @@ impl Emitter<'_> {
                 self.line(format!("{t} =l phi {left_block} {l}, {right_block} {r}"));
                 t
             }
+            Value::CheckedInt {
+                instr,
+                left,
+                right,
+                fail,
+            } => {
+                let l = self.value(left);
+                let r = self.value(right);
+                let t = self.temp();
+                self.line(format!("{t} =l {instr} {l}, {r}"));
+                let overflow = self.overflow(instr, &l, &r, &t);
+                self.guard(&overflow, fail);
+                t
+            }
             Value::FloorDivide {
                 modulo,
                 left,
@@ -291,8 +305,8 @@ impl Emitter<'_> {
                 self.guard(&zero, fail);
                 // QBE truncates; a nonzero remainder whose sign differs from
                 // the divisor's moves the quotient down one and the remainder
-                // up by the divisor. The range is symmetric, so the quotient
-                // cannot overflow.
+                // up by the divisor. Checked arithmetic never produces -2^63,
+                // so dividing by -1 cannot overflow, and cannot trap on amd64.
                 let [q, m, signs, differ, nonzero, adjust] = [(); 6].map(|_| self.temp());
                 self.line(format!("{q} =l div {l}, {r}"));
                 self.line(format!("{m} =l rem {l}, {r}"));
@@ -473,6 +487,50 @@ impl Emitter<'_> {
         self.line(format!("{result} =d neg {d}"));
         self.label(&done);
         result
+    }
+
+    /// A temporary that is 1 when `t`, the wrapped result of `l instr r`, is
+    /// not the exact result or is -2^63, which the symmetric int range treats
+    /// as overflow too.
+    fn overflow(&mut self, instr: &str, l: &str, r: &str, t: &str) -> String {
+        let [a, b, wrapped, min] = std::array::from_fn(|_| self.temp());
+        match instr {
+            // The sum wrapped when its sign differs from both operands'; the
+            // difference, when the operands' signs differ and its sign
+            // differs from the left operand's.
+            "add" | "sub" => {
+                if instr == "add" {
+                    self.line(format!("{a} =l xor {l}, {t}"));
+                    self.line(format!("{b} =l xor {r}, {t}"));
+                } else {
+                    self.line(format!("{a} =l xor {l}, {r}"));
+                    self.line(format!("{b} =l xor {l}, {t}"));
+                }
+                self.line(format!("{a} =l and {a}, {b}"));
+                self.line(format!("{wrapped} =l csltl {a}, 0"));
+            }
+            // The product wrapped when dividing it by a nonzero left operand
+            // does not give the right one back. The divisor becomes 1 when
+            // that operand is 0 or the product is -2^63, so the division can
+            // neither fail nor trap.
+            _ => {
+                let [zero, skip, divisor] = std::array::from_fn(|_| self.temp());
+                self.line(format!("{zero} =l ceql {l}, 0"));
+                self.line(format!("{min} =l ceql {t}, -9223372036854775808"));
+                self.line(format!("{skip} =l or {zero}, {min}"));
+                self.line(format!("{a} =l sub 0, {skip}"));
+                self.line(format!("{b} =l xor {l}, 1"));
+                self.line(format!("{b} =l and {b}, {a}"));
+                self.line(format!("{divisor} =l xor {l}, {b}"));
+                self.line(format!("{a} =l div {t}, {divisor}"));
+                self.line(format!("{a} =l cnel {a}, {r}"));
+                self.line(format!("{b} =l ceql {zero}, 0"));
+                self.line(format!("{wrapped} =l and {a}, {b}"));
+            }
+        }
+        self.line(format!("{min} =l ceql {t}, -9223372036854775808"));
+        self.line(format!("{wrapped} =l or {wrapped}, {min}"));
+        wrapped
     }
 
     /// Computes a float value and returns it as a QBE `d` operand.
