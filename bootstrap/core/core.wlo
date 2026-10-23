@@ -369,3 +369,111 @@ def str_ord(s: str) -> int:
         code = code * 64 + str_byte(s, i) - 128
         i = i + 1
     return code
+
+# A list is a header word pointing at the list descriptor, the length, the
+# capacity, and a pointer to an array of `capacity` slots. Slots may hold
+# pointers, so the array is scanned memory.
+
+def list_slots(xs: ptr) -> ptr:
+    return __ptr(__load8(xs, 24))
+
+def list_capacity(xs: ptr) -> int:
+    return __int(__load8(xs, 16))
+
+def set_list_len(xs: ptr, length: int):
+    __store8(xs, 8, __word(length))
+
+def list_new(capacity: int) -> ptr:
+    if capacity < 4:
+        capacity = 4
+    xs = __alloc(32)
+    __store8(xs, 0, __word(__type(list)))
+    __store8(xs, 8, __word(0))
+    __store8(xs, 16, __word(capacity))
+    __store8(xs, 24, __word(__alloc(capacity * 8)))
+    return xs
+
+def list_len(xs: ptr) -> int:
+    return __int(__load8(xs, 8))
+
+# `i` made non-negative by adding the length once, which must then be a valid
+# index (spec §7).
+def list_index(xs: ptr, i: int) -> int:
+    if i < 0:
+        i = i + list_len(xs)
+    if i < 0:
+        fail("IndexError", "list index out of range")
+    if i >= list_len(xs):
+        fail("IndexError", "list index out of range")
+    return i
+
+def list_get(xs: ptr, i: int) -> word:
+    return __load8(list_slots(xs), list_index(xs, i) * 8)
+
+def list_set(xs: ptr, i: int, value: word):
+    __store8(list_slots(xs), list_index(xs, i) * 8, value)
+
+def list_append(xs: ptr, value: word):
+    length = list_len(xs)
+    if length == list_capacity(xs):
+        slots = __alloc(length * 2 * 8)
+        memcpy(slots, list_slots(xs), length * 8)
+        __store8(xs, 16, __word(length * 2))
+        __store8(xs, 24, __word(slots))
+    __store8(list_slots(xs), length * 8, value)
+    set_list_len(xs, length + 1)
+
+def list_pop(xs: ptr) -> word:
+    length = list_len(xs)
+    if length == 0:
+        fail("IndexError", "pop from empty list")
+    value = __load8(list_slots(xs), (length - 1) * 8)
+    # Clear the slot so the collector does not keep its value alive.
+    __store8(list_slots(xs), (length - 1) * 8, __word(0))
+    set_list_len(xs, length - 1)
+    return value
+
+# Copying `items` first makes `xs.extend(xs)` append the original elements
+# once (spec §7).
+def list_extend(xs: ptr, items: ptr):
+    copy = list_slice(items, 0, list_len(items))
+    i = 0
+    while i < list_len(copy):
+        list_append(xs, list_get(copy, i))
+        i = i + 1
+
+def list_reverse(xs: ptr):
+    low = 0
+    high = list_len(xs) - 1
+    while low < high:
+        value = list_get(xs, low)
+        list_set(xs, low, list_get(xs, high))
+        list_set(xs, high, value)
+        low = low + 1
+        high = high - 1
+
+def list_slice(xs: ptr, start: int, stop: int) -> ptr:
+    start = clamp(start, list_len(xs))
+    stop = clamp(stop, list_len(xs))
+    if stop < start:
+        stop = start
+    result = list_new(stop - start)
+    memcpy(list_slots(result), offset(list_slots(xs), start * 8), (stop - start) * 8)
+    set_list_len(result, stop - start)
+    return result
+
+# Equality of two slots by the equality kinds in API.md. Kind 1 (float) and
+# kind 3 (union) arrive with float comparisons and unions in stage 0; until
+# then they compare slots.
+def slots_equal(a: word, b: word, kind: int) -> bool:
+    if kind == 2:
+        return str_eq(__str(a), __str(b))
+    return __int(a) == __int(b)
+
+def list_contains(xs: ptr, value: word, kind: int) -> bool:
+    i = 0
+    while i < list_len(xs):
+        if slots_equal(list_get(xs, i), value, kind):
+            return True
+        i = i + 1
+    return False
