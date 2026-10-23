@@ -333,7 +333,7 @@ call, `GC_init`, and `GC_malloc` was assembled, linked, and run.
 
 Dependencies for compiling programs: `qbe`, `cc`, libgc. Dependency for
 rebuilding the bootstrap: `cargo`. Linux uses `amd64_sysv` or `arm64` and the
-distribution's libgc. `bootstrap/Dockerfile` extends the gnat agent image with
+distribution's libgc. `Dockerfile.gnat` extends the gnat agent image with
 QBE 1.3 built from the release tarball, `libgc-dev`, `pkg-config`, and a Rust
 toolchain; the agents that do this work run in it, on arm64 Debian. Each
 change is therefore tested on Linux arm64 by its agent and on macOS arm64 by
@@ -341,7 +341,6 @@ the operator before it merges. `amd64_sysv` has no test machine yet.
 
 ```text
 bootstrap/
-  Dockerfile   agent image with the native toolchain
   stage0/      Rust crate willow0
   core/        core module in L0
   stage1/      stage 1 compiler in L0
