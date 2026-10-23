@@ -1,0 +1,75 @@
+def describe(value: int | float | str | bool | None) -> str:
+    if value is None:
+        return "nothing"
+    elif isinstance(value, bool):
+        if value:
+            return "yes"
+        return "no"
+    elif isinstance(value, int):
+        return "int " + describe_int(value + 1)
+    elif isinstance(value, float):
+        if value * 2.0 == 2.5:
+            return "float 2.5"
+        return "float"
+    else:
+        return "str " + value
+
+def describe_int(n: int) -> str:
+    if n == 42:
+        return "42"
+    return "other"
+
+def length(text: str | None) -> int:
+    if text is not None and text != "":
+        return 1
+    if text is None or text == "":
+        return 0
+    return -1
+
+def positive(value: int | None) -> bool:
+    if not (value is None or value <= 0):
+        return value > 0
+    return False
+
+def first(a: int | None, b: int | None) -> int:
+    if a is not None:
+        return a
+    assert b is not None, "both None"
+    return b
+
+def maybe(flag: bool) -> str | None:
+    if flag:
+        return "some"
+    return None
+
+def main():
+    print(describe(None))
+    print(describe(True))
+    print(describe(41))
+    print(describe(1.25))
+    print(describe("hi"))
+    print(length("abcd"))
+    print(length(None))
+    print(positive(3))
+    print(positive(-3))
+    print(positive(None))
+    print(first(None, 7))
+    print(first(5, None))
+    value: int | str = 5
+    value = value + 1
+    print(value)
+    value = "six"
+    print(value + "!")
+    found = maybe(True)
+    if found is not None:
+        print(found)
+    print(maybe(False) is None)
+    count: int | None = None
+    i = 0
+    while i < 3:
+        if count is None:
+            count = 0
+        count = count + i
+        i = i + 1
+    if count is not None:
+        print(count)

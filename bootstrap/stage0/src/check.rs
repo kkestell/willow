@@ -4,7 +4,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::parser::{Expr, ExprKind, Func, Module, Stmt, StmtKind, TypeName};
+use crate::parser::{Expr, ExprKind, Func, Module, Stmt, StmtKind, TypeExpr, TypeName};
+use crate::types::Type;
 use crate::{Diag, Pos};
 
 pub struct Program {
@@ -73,6 +74,8 @@ pub enum Value {
         right: Box<Value>,
         fail: Box<Value>,
     },
+    /// The first value, evaluated for its effects, then the second.
+    Seq(Box<Value>, Box<Value>),
     /// A QBE load instruction, the pointer, and the byte offset.
     Load(&'static str, Box<Value>, Box<Value>),
     /// A QBE store instruction, the pointer, the byte offset, and the value.
@@ -88,31 +91,6 @@ pub struct Call {
     pub variadic_at: Option<usize>,
     /// The QBE return type, or `None` for no result.
     pub ret: Option<&'static str>,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Type {
-    Int,
-    Float,
-    Bool,
-    Str,
-    None,
-    Ptr,
-    Word,
-}
-
-impl Type {
-    fn name(self) -> &'static str {
-        match self {
-            Type::Int => "int",
-            Type::Float => "float",
-            Type::Bool => "bool",
-            Type::Str => "str",
-            Type::None => "None",
-            Type::Ptr => "ptr",
-            Type::Word => "word",
-        }
-    }
 }
 
 struct Sig {
@@ -237,7 +215,12 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
         }
         Some(f) => f,
     };
-    if !main.params.is_empty() || main.ret.as_ref().is_some_and(|r| r.name != "None") {
+    if !main.params.is_empty()
+        || main
+            .ret
+            .as_ref()
+            .is_some_and(|r| r.members.len() != 1 || r.members[0].name != "None")
+    {
         return Err(Diag::new(
             &entry.path,
             main.pos,
@@ -287,7 +270,7 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
     })
 }
 
-fn resolve(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
+fn resolve_name(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
     Ok(match ty.name.as_str() {
         "int" => Type::Int,
         "float" => Type::Float,
@@ -306,10 +289,31 @@ fn resolve(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
     })
 }
 
+fn resolve(module: &Module, ty: &TypeExpr) -> Result<Type, Diag> {
+    if let [only] = ty.members.as_slice() {
+        return resolve_name(module, only);
+    }
+    let mut members = Vec::new();
+    for name in &ty.members {
+        let member = resolve_name(module, name)?;
+        let fail = |message: String| Err(Diag::new(&module.path, name.pos, message));
+        if matches!(member, Type::Ptr | Type::Word) {
+            return fail(format!("{} cannot be a union member", member.name()));
+        }
+        if members.contains(&member) {
+            return fail(format!("type {} appears twice in a union", member.name()));
+        }
+        members.push(member);
+    }
+    Ok(Type::union(members))
+}
+
 /// The Willow type and QBE type of an extern parameter or return type.
-fn resolve_extern(module: &Module, ty: &TypeName) -> Result<(Type, Option<&'static str>), Diag> {
-    if ty.name == "cint" {
-        return Ok((Type::Int, Some("w")));
+fn resolve_extern(module: &Module, ty: &TypeExpr) -> Result<(Type, Option<&'static str>), Diag> {
+    if let [only] = ty.members.as_slice() {
+        if only.name == "cint" {
+            return Ok((Type::Int, Some("w")));
+        }
     }
     match resolve(module, ty)? {
         t @ (Type::Int | Type::Ptr) => Ok((t, Some("l"))),
@@ -446,8 +450,31 @@ struct Checker<'a> {
     loops: u32,
 }
 
-/// The locals definitely assigned at a point.
-type State = HashSet<String>;
+/// The locals definitely assigned at a point, each with the type narrowing
+/// gives it there: its declared type, or some of its members.
+type State = HashMap<String, Type>;
+
+/// Narrowed types a condition proves for locals, applied in order.
+type Facts = Vec<(String, Type)>;
+
+fn narrow(state: &State, facts: &Facts) -> State {
+    let mut result = state.clone();
+    for (name, ty) in facts {
+        result.insert(name.clone(), ty.clone());
+    }
+    result
+}
+
+/// The state after two paths meet: the locals both assign, with the members
+/// either path allows.
+fn join(a: &State, b: &State) -> State {
+    a.iter()
+        .filter_map(|(name, ty)| {
+            let other = b.get(name)?;
+            Some((name.clone(), Type::union([ty.clone(), other.clone()])))
+        })
+        .collect()
+}
 
 fn check_function(
     scope: Scope,
@@ -460,9 +487,9 @@ fn check_function(
     assigned_names(body, &mut names);
     let mut locals: HashMap<String, Option<Type>> = names.into_iter().map(|n| (n, None)).collect();
     let mut state = State::new();
-    for (param, &ty) in func.params.iter().zip(&sig.params) {
-        locals.insert(param.name.clone(), Some(ty));
-        state.insert(param.name.clone());
+    for (param, ty) in func.params.iter().zip(&sig.params) {
+        locals.insert(param.name.clone(), Some(ty.clone()));
+        state.insert(param.name.clone(), ty.clone());
     }
     let params = func
         .params
@@ -475,7 +502,7 @@ fn check_function(
         imported: scope.imported,
         intrinsics: scope.module.name == "core",
         strings,
-        ret: sig.ret,
+        ret: sig.ret.clone(),
         locals,
         params: params.iter().cloned().collect(),
         order: Vec::new(),
@@ -500,6 +527,41 @@ fn check_function(
     })
 }
 
+/// `value` of type `from` as a value of `to`, boxed when a scalar enters a
+/// union. A sub-union and `str` have the same representation as the union.
+fn widen(value: Value, from: &Type, to: &Type) -> Value {
+    match from.box_descriptor() {
+        Some(descriptor) if to.is_union() => {
+            core_call("box", vec![Value::Global(descriptor.into()), value], true)
+        }
+        _ => value,
+    }
+}
+
+/// The value of a local declared `declared` that narrowing has made
+/// `current`, unboxed when it is a single boxed member of a union.
+fn narrowed(value: Value, declared: &Type, current: &Type) -> Value {
+    if declared.is_union() && current.box_descriptor().is_some() {
+        core_call("unbox", vec![value], true)
+    } else {
+        value
+    }
+}
+
+/// The scalar type `expr` names as the class of an isinstance test.
+fn isinstance_type(expr: &Expr) -> Option<Type> {
+    match &expr.kind {
+        ExprKind::Name(name) => match name.as_str() {
+            "int" => Some(Type::Int),
+            "float" => Some(Type::Float),
+            "bool" => Some(Type::Bool),
+            "str" => Some(Type::Str),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 fn core_call(name: &str, args: Vec<Value>, returns: bool) -> Value {
     Value::Call(Call {
         symbol: format!("W.core.{name}"),
@@ -514,7 +576,7 @@ impl Checker<'_> {
         Err(Diag::new(&self.module.path, pos, message))
     }
 
-    fn expect(&self, pos: Pos, expected: Type, actual: Type) -> Result<(), Diag> {
+    fn expect(&self, pos: Pos, expected: &Type, actual: &Type) -> Result<(), Diag> {
         if expected == actual {
             Ok(())
         } else {
@@ -523,6 +585,18 @@ impl Checker<'_> {
                 format!("expected {}, received {}", expected.name(), actual.name()),
             )
         }
+    }
+
+    /// `value` of type `from` at a point that needs a `to`, boxed when a
+    /// scalar enters a union.
+    fn coerce(&self, pos: Pos, value: Value, from: &Type, to: &Type) -> Result<Value, Diag> {
+        if !from.assignable_to(to) {
+            return self.fail(
+                pos,
+                format!("expected {}, received {}", to.name(), from.name()),
+            );
+        }
+        Ok(widen(value, from, to))
     }
 
     /// Checks `stmts` and reports whether the block transfers control.
@@ -540,8 +614,77 @@ impl Checker<'_> {
 
     fn condition(&mut self, cond: &Expr, state: &State) -> Result<Value, Diag> {
         let (value, ty) = self.expr(cond, state)?;
-        self.expect(cond.pos, Type::Bool, ty)?;
+        self.expect(cond.pos, &Type::Bool, &ty)?;
         Ok(value)
+    }
+
+    /// The facts `cond` proves when it is true and when it is false (spec
+    /// §9, Narrowing).
+    fn facts(&self, cond: &Expr, state: &State) -> (Facts, Facts) {
+        match &cond.kind {
+            ExprKind::IsNone {
+                operand, negated, ..
+            } => {
+                let Some((name, ty)) = self.narrowable(operand, state) else {
+                    return (Vec::new(), Vec::new());
+                };
+                if !ty.is_optional() {
+                    return (Vec::new(), Vec::new());
+                }
+                // Only the outcome that rules out None narrows.
+                let some = vec![(name, ty.without(&Type::None))];
+                if *negated {
+                    (some, Vec::new())
+                } else {
+                    (Vec::new(), some)
+                }
+            }
+            ExprKind::Call(callee, args) if self.is_builtin(callee, "isinstance") => {
+                let [value, class] = args.as_slice() else {
+                    return (Vec::new(), Vec::new());
+                };
+                let (Some((name, ty)), Some(class)) =
+                    (self.narrowable(value, state), isinstance_type(class))
+                else {
+                    return (Vec::new(), Vec::new());
+                };
+                if !ty.is_union() || !ty.members().contains(&class) {
+                    return (Vec::new(), Vec::new());
+                }
+                let other = ty.without(&class);
+                (vec![(name.clone(), class)], vec![(name, other)])
+            }
+            ExprKind::Unary("not", operand) => {
+                let (yes, no) = self.facts(operand, state);
+                (no, yes)
+            }
+            ExprKind::Binary("and", _, left, right) => {
+                let (mut yes, _) = self.facts(left, state);
+                let (right_yes, _) = self.facts(right, &narrow(state, &yes));
+                yes.extend(right_yes);
+                (yes, Vec::new())
+            }
+            ExprKind::Binary("or", _, left, right) => {
+                let (_, mut no) = self.facts(left, state);
+                let (_, right_no) = self.facts(right, &narrow(state, &no));
+                no.extend(right_no);
+                (Vec::new(), no)
+            }
+            _ => (Vec::new(), Vec::new()),
+        }
+    }
+
+    /// A local that a condition can narrow, with its type at this point.
+    fn narrowable(&self, expr: &Expr, state: &State) -> Option<(String, Type)> {
+        match &expr.kind {
+            ExprKind::Name(name) => state.get(name).map(|ty| (name.clone(), ty.clone())),
+            _ => None,
+        }
+    }
+
+    /// Whether `callee` names the built-in `name`, which no local hides.
+    fn is_builtin(&self, callee: &Expr, name: &str) -> bool {
+        matches!(&callee.kind, ExprKind::Name(n) if n == name && !self.locals.contains_key(n))
     }
 
     fn statement(
@@ -571,20 +714,26 @@ impl Checker<'_> {
                         );
                     }
                 }
-                let declared = match self.locals[target] {
-                    Some(declared) => declared,
+                let declared = match &self.locals[target] {
+                    Some(declared) => declared.clone(),
                     None => {
                         let declared = match annotation {
                             Some(a) => resolve(self.module, a)?,
-                            None => ty,
+                            None => ty.clone(),
                         };
-                        self.locals.insert(target.clone(), Some(declared));
+                        self.locals.insert(target.clone(), Some(declared.clone()));
                         self.order.push(target.clone());
                         declared
                     }
                 };
-                self.expect(value.pos, declared, ty)?;
-                state.insert(target.clone());
+                let value_ir = self.coerce(value.pos, value_ir, &ty, &declared)?;
+                // A single member other than None narrows the local to it.
+                let current = if declared.is_union() && !ty.is_union() && ty != Type::None {
+                    ty
+                } else {
+                    declared
+                };
+                state.insert(target.clone(), current);
                 ops.push(Op::Assign(target.clone(), value_ir));
                 Ok(false)
             }
@@ -594,49 +743,55 @@ impl Checker<'_> {
             }
             StmtKind::Assert { cond, message } => {
                 let cond_ir = self.condition(cond, state)?;
+                let (yes, no) = self.facts(cond, state);
                 let message_ir = match message {
                     Some(message) => {
-                        let (message_ir, ty) = self.expr(message, state)?;
-                        self.expect(message.pos, Type::Str, ty)?;
+                        let (message_ir, ty) = self.expr(message, &narrow(state, &no))?;
+                        self.expect(message.pos, &Type::Str, &ty)?;
                         message_ir
                     }
                     None => self.strings.intern("assertion failed"),
                 };
                 let fail = self.fail_call("AssertionError", message_ir);
                 ops.push(Op::If(cond_ir, Vec::new(), vec![Op::Eval(fail)]));
+                *state = narrow(state, &yes);
                 Ok(false)
             }
             StmtKind::If { arms, otherwise } => {
                 // Lower the arms from the last, so each `elif` nests in the
                 // `else` of the arm before it.
+                // Each arm starts with its condition's true facts and the
+                // false facts of the conditions before it.
                 let mut after: Option<State> = None;
                 let mut all_transfer = true;
-                let mut join = |branch: State, transfers: bool| {
+                let mut merge = |branch: State, transfers: bool| {
                     if !transfers {
                         all_transfer = false;
                         after = Some(match after.take() {
                             None => branch,
-                            Some(prev) => prev.intersection(&branch).cloned().collect(),
+                            Some(prev) => join(&prev, &branch),
                         });
                     }
                 };
+                let mut base = state.clone();
                 let mut lowered = Vec::new();
                 for (cond, body) in arms {
-                    let cond_ir = self.condition(cond, state)?;
-                    let mut branch = state.clone();
+                    let cond_ir = self.condition(cond, &base)?;
+                    let (yes, no) = self.facts(cond, &base);
+                    let mut branch = narrow(&base, &yes);
                     let (body_ops, transfers) = self.block(body, &mut branch)?;
-                    join(branch, transfers);
+                    merge(branch, transfers);
                     lowered.push((cond_ir, body_ops, self.os_test(cond)));
+                    base = narrow(&base, &no);
                 }
                 let mut tail = match otherwise {
                     Some(body) => {
-                        let mut branch = state.clone();
-                        let (body_ops, transfers) = self.block(body, &mut branch)?;
-                        join(branch, transfers);
+                        let (body_ops, transfers) = self.block(body, &mut base)?;
+                        merge(base, transfers);
                         body_ops
                     }
                     None => {
-                        join(state.clone(), false);
+                        merge(base, false);
                         Vec::new()
                     }
                 };
@@ -657,22 +812,34 @@ impl Checker<'_> {
                 Ok(all_transfer)
             }
             StmtKind::While { cond, body } => {
+                // Narrowing from before the loop holds in and after it only
+                // for the locals its body does not assign.
+                let mut assigned = HashSet::new();
+                assigned_names(body, &mut assigned);
+                for name in &assigned {
+                    if let (Some(Some(declared)), true) =
+                        (self.locals.get(name), state.contains_key(name))
+                    {
+                        state.insert(name.clone(), declared.clone());
+                    }
+                }
                 let cond_ir = self.condition(cond, state)?;
+                let (yes, _) = self.facts(cond, state);
                 self.loops += 1;
-                let (body_ops, _) = self.block(body, &mut state.clone())?;
+                let (body_ops, _) = self.block(body, &mut narrow(state, &yes))?;
                 self.loops -= 1;
                 ops.push(Op::While(cond_ir, body_ops));
                 Ok(false)
             }
             StmtKind::Return(value) => {
+                let ret = self.ret.clone();
                 let value_ir = match value {
                     Some(value) => {
                         let (value_ir, ty) = self.expr(value, state)?;
-                        self.expect(value.pos, self.ret, ty)?;
-                        Some(value_ir)
+                        Some(self.coerce(value.pos, value_ir, &ty, &ret)?)
                     }
                     None => {
-                        self.expect(stmt.pos, self.ret, Type::None)?;
+                        self.coerce(stmt.pos, Value::Const(0), &Type::None, &ret)?;
                         None
                     }
                 };
@@ -705,16 +872,37 @@ impl Checker<'_> {
             ExprKind::Int(n) => Ok((Value::Const(*n), Type::Int)),
             ExprKind::Float(x) => Ok((Value::Const(x.to_bits() as i64), Type::Float)),
             ExprKind::Bool(b) => Ok((Value::Const(*b as i64), Type::Bool)),
+            ExprKind::None => Ok((Value::Const(0), Type::None)),
+            ExprKind::IsNone {
+                operand,
+                negated,
+                op_pos,
+            } => {
+                let (value, ty) = self.expr(operand, state)?;
+                if !ty.is_optional() {
+                    let op = if *negated { "is not" } else { "is" };
+                    return self.fail(
+                        *op_pos,
+                        format!("operator '{op}' cannot be applied to {}", ty.name()),
+                    );
+                }
+                let instr = if *negated { "cnel" } else { "ceql" };
+                Ok((
+                    Value::Binary(instr, Box::new(value), Box::new(Value::Const(0))),
+                    Type::Bool,
+                ))
+            }
             ExprKind::Str(text) => Ok((self.strings.intern(text), Type::Str)),
             ExprKind::Name(name) => {
-                if let Some(&ty) = self.locals.get(name) {
-                    return match ty {
-                        Some(ty) if state.contains(name) => Ok((Value::Local(name.clone()), ty)),
-                        _ => self.fail(
+                if let Some(declared) = self.locals.get(name) {
+                    let (Some(declared), Some(current)) = (declared, state.get(name)) else {
+                        return self.fail(
                             expr.pos,
                             format!("variable '{name}' may be used before assignment"),
-                        ),
+                        );
                     };
+                    let value = narrowed(Value::Local(name.clone()), declared, current);
+                    return Ok((value, current.clone()));
                 }
                 if is_intrinsic(name) && !self.intrinsics {
                     return self.fail(
@@ -755,8 +943,8 @@ impl Checker<'_> {
             }
             ExprKind::Unary(op, operand) => {
                 let (value, ty) = self.expr(operand, state)?;
-                match (*op, ty) {
-                    ("+", Type::Int | Type::Float) => Ok((value, ty)),
+                match (*op, &ty) {
+                    ("+", Type::Int | Type::Float) => Ok((value, ty.clone())),
                     ("-", Type::Int) => Ok((
                         Value::Binary("sub", Box::new(Value::Const(0)), Box::new(value)),
                         Type::Int,
@@ -774,7 +962,14 @@ impl Checker<'_> {
             }
             ExprKind::Binary(op, op_pos, left, right) => {
                 let (l, lt) = self.expr(left, state)?;
-                let (r, rt) = self.expr(right, state)?;
+                // The right operand of `and` and `or` sees the facts that hold
+                // when it is evaluated.
+                let right_state = match *op {
+                    "and" => narrow(state, &self.facts(left, state).0),
+                    "or" => narrow(state, &self.facts(left, state).1),
+                    _ => state.clone(),
+                };
+                let (r, rt) = self.expr(right, &right_state)?;
                 self.binary(op, *op_pos, l, lt, r, rt)
             }
         }
@@ -813,8 +1008,32 @@ impl Checker<'_> {
             ">=" => "cged",
             _ => "",
         };
+        let union_operands = |t: &Type| t.is_union() || *t == Type::None;
+        if matches!(op, "==" | "!=") && (union_operands(&lt) || union_operands(&rt)) {
+            let target = if lt.assignable_to(&rt) {
+                rt.clone()
+            } else if rt.assignable_to(&lt) {
+                lt.clone()
+            } else {
+                return self.fail(
+                    pos,
+                    format!(
+                        "operator '{op}' cannot be applied to {} and {}",
+                        lt.name(),
+                        rt.name()
+                    ),
+                );
+            };
+            let args = vec![widen(l, &lt, &target), widen(r, &rt, &target)];
+            let equal = core_call("union_eq", args, true);
+            if op == "==" {
+                return Ok((equal, Type::Bool));
+            }
+            let unequal = Value::Binary("ceql", Box::new(equal), Box::new(Value::Const(0)));
+            return Ok((unequal, Type::Bool));
+        }
         let (l, r) = (Box::new(l), Box::new(r));
-        let (instr, ty) = match (op, lt, rt) {
+        let (instr, ty) = match (op, &lt, &rt) {
             ("and" | "or", Type::Bool, Type::Bool) => {
                 let logic = Value::Logic {
                     and: op == "and",
@@ -846,6 +1065,7 @@ impl Checker<'_> {
                 let message = self.strings.intern("division by zero");
                 let fail = Box::new(self.fail_call("ZeroDivisionError", message));
                 let ints = lt == Type::Int;
+
                 let divide = Value::Divide {
                     ints,
                     left: l,
@@ -963,6 +1183,9 @@ impl Checker<'_> {
             }
         };
         let globals = self.globals;
+        if name == "isinstance" && !globals.contains_key(name) {
+            return self.isinstance(pos, args, state);
+        }
         if !globals.contains_key(name) && !matches!(name, "print" | "int" | "float") {
             if !is_intrinsic(name) {
                 if BUILTINS.contains(&name) {
@@ -989,6 +1212,15 @@ impl Checker<'_> {
                     let text = core_call("float_to_str", vec![value], true);
                     core_call("print_str", vec![text], false)
                 }
+                Type::None => {
+                    let text = self.strings.intern("None");
+                    let print = core_call("print_str", vec![text], false);
+                    Value::Seq(Box::new(value), Box::new(print))
+                }
+                Type::Union(_) => {
+                    let text = core_call("union_to_str", vec![value], true);
+                    core_call("print_str", vec![text], false)
+                }
                 _ => {
                     return self.fail(
                         arg_pos,
@@ -1001,7 +1233,7 @@ impl Checker<'_> {
         if name == "int" || name == "float" {
             self.arity(pos, name, 1, checked.len())?;
             let (arg_pos, value, ty) = checked.pop().unwrap();
-            return match (name, ty) {
+            return match (name, &ty) {
                 ("int", Type::Float) => {
                     Ok((core_call("float_to_int", vec![value], true), Type::Int))
                 }
@@ -1024,7 +1256,7 @@ impl Checker<'_> {
             let (arg_pos, value, ty) = checked.pop().unwrap();
             if !matches!(
                 ty,
-                Type::Int | Type::Float | Type::Bool | Type::Ptr | Type::Str
+                Type::Int | Type::Float | Type::Bool | Type::Ptr | Type::Str | Type::Union(_)
             ) {
                 return self.fail(
                     arg_pos,
@@ -1033,10 +1265,10 @@ impl Checker<'_> {
             }
             return Ok((value, Type::Word));
         }
-        let &(_, params, ret) = INTRINSICS.iter().find(|i| i.0 == name).unwrap();
+        let (_, params, ret) = INTRINSICS.iter().find(|i| i.0 == name).unwrap();
         self.arity(pos, name, params.len(), checked.len())?;
-        for ((arg_pos, _, ty), &param) in checked.iter().zip(params) {
-            self.expect(*arg_pos, param, *ty)?;
+        for ((arg_pos, _, ty), param) in checked.iter().zip(params.iter()) {
+            self.expect(*arg_pos, param, ty)?;
         }
         let mut values = checked.into_iter().map(|(_, v, _)| Box::new(v));
         let mut next = || values.next().unwrap();
@@ -1063,7 +1295,37 @@ impl Checker<'_> {
             // Reinterpretations change only the static type.
             _ => *next(),
         };
-        Ok((value, ret))
+        Ok((value, ret.clone()))
+    }
+
+    fn isinstance(
+        &mut self,
+        pos: Pos,
+        args: &[Expr],
+        state: &State,
+    ) -> Result<(Value, Type), Diag> {
+        self.arity(pos, "isinstance", 2, args.len())?;
+        let (value, ty) = self.expr(&args[0], state)?;
+        let Some(class) = isinstance_type(&args[1]) else {
+            return self.fail(args[1].pos, "isinstance takes int, float, bool, or str");
+        };
+        if !ty.members().contains(&class) {
+            return self.fail(
+                args[1].pos,
+                format!("type {} has no member {}", ty.name(), class.name()),
+            );
+        }
+        if !ty.is_union() {
+            return Ok((
+                Value::Seq(Box::new(value), Box::new(Value::Const(1))),
+                Type::Bool,
+            ));
+        }
+        let descriptor = Value::Global(format!("W.{}.type", class.name()));
+        Ok((
+            core_call("is_instance", vec![value, descriptor], true),
+            Type::Bool,
+        ))
     }
     fn args(&mut self, args: &[Expr], state: &State) -> Result<Vec<(Pos, Value, Type)>, Diag> {
         let mut checked = Vec::new();
@@ -1088,25 +1350,31 @@ impl Checker<'_> {
         if !variadic || checked.len() < sig.params.len() {
             self.arity(pos, display, sig.params.len(), checked.len())?;
         }
-        for ((arg_pos, _, ty), &param) in checked.iter().zip(&sig.params) {
-            self.expect(*arg_pos, param, *ty)?;
-        }
         let call = match &sig.target {
-            Target::Willow(symbol) => Call {
-                symbol: symbol.clone(),
-                args: checked.into_iter().map(|(_, v, _)| ("l", v)).collect(),
-                variadic_at: None,
-                ret: if sig.ret == Type::None {
-                    None
-                } else {
-                    Some("l")
-                },
-            },
+            Target::Willow(symbol) => {
+                let mut args = Vec::new();
+                for ((arg_pos, value, ty), param) in checked.into_iter().zip(&sig.params) {
+                    args.push(("l", self.coerce(arg_pos, value, &ty, param)?));
+                }
+                Call {
+                    symbol: symbol.clone(),
+                    args,
+                    variadic_at: None,
+                    ret: if sig.ret == Type::None {
+                        None
+                    } else {
+                        Some("l")
+                    },
+                }
+            }
             Target::Extern {
                 cparams,
                 variadic,
                 cret,
             } => {
+                for ((arg_pos, _, ty), param) in checked.iter().zip(&sig.params) {
+                    self.expect(*arg_pos, param, ty)?;
+                }
                 let mut call_args = Vec::new();
                 for (i, (arg_pos, value, ty)) in checked.into_iter().enumerate() {
                     let extra = match ty {
@@ -1128,6 +1396,6 @@ impl Checker<'_> {
                 }
             }
         };
-        Ok((Value::Call(call), sig.ret))
+        Ok((Value::Call(call), sig.ret.clone()))
     }
 }

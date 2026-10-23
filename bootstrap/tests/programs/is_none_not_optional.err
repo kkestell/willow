@@ -1,0 +1,1 @@
+is_none_not_optional.wlo:3:13: error: operator 'is' cannot be applied to int
