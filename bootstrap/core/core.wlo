@@ -378,11 +378,6 @@ def str_ord(s: str) -> int:
         i = i + 1
     return code
 
-# A list is a header word pointing at the list descriptor, the length, the
-# capacity, and a pointer to an array of `capacity` slots. Slots may hold
-# pointers, so the array is scanned memory.
-
-
 # Encodes the code point as UTF-8: the lead byte carries the high bits and
 # each continuation byte, filled from the end, carries 6 more.
 def str_chr(n: int) -> str:
@@ -408,6 +403,11 @@ def str_chr(n: int) -> str:
         rest = rest // 64
         i = i - 1
     return __str(__word(s))
+
+# A list is a header word pointing at the list descriptor, the length, the
+# capacity, and a pointer to an array of `capacity` slots. Slots may hold
+# pointers, so the array is scanned memory.
+
 def list_slots(xs: ptr) -> ptr:
     return __ptr(__load8(xs, 24))
 
