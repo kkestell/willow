@@ -253,8 +253,11 @@ demonstrated problem.
 The async event loop is written in Willow over `poll` or `kqueue` through
 `extern`. The existing design in `runtime/aio.lua` carries over.
 
-Float formatting is Python `repr`: try `%.15g`, `%.16g`, and `%.17g` through
-`snprintf` and take the shortest that round-trips through `strtod`. Unicode
+Float formatting is Python `repr`: take the shortest `%.<n>g` through
+`snprintf`, from 1 digit up, that round-trips through `strtod`. Starting at 15
+digits is not enough for subnormals. At an exact power of two the `%.<n>g`
+result can fail to round-trip while the next `n`-digit decimal up succeeds,
+and Python picks that one, so both are tried at each length. Unicode
 case mapping tables are generated once from Unicode 17.0 as Willow data.
 
 ## 7. Stage 0 in Rust
