@@ -1,0 +1,299 @@
+# Writes syntax trees compactly, with every operation parenthesized, for the
+# parser's tests and for comparing trees with the Lua implementation's. With
+# positions, each expression, statement, type, parameter, and declaration is
+# followed by @line:col.
+
+import ast
+
+class Printer:
+    positions: bool
+
+    def at(self, text: str, line: int, col: int) -> str:
+        if self.positions:
+            return f"{text}@{line}:{col}"
+        return text
+
+    def module(self, module: ast.Module) -> str:
+        lines: list[str] = []
+        for imported in module.imports:
+            lines.append(self.at(f"import {imported.name}", imported.line, imported.col))
+        for decl in module.declarations:
+            lines.append(self.decl(decl))
+        return "\n".join(lines)
+
+    def decl(self, decl: ast.Decl) -> str:
+        if isinstance(decl, ast.FunctionDecl):
+            return self.function(decl)
+        if isinstance(decl, ast.ClassDecl):
+            parts: list[str] = []
+            for field in decl.fields:
+                text = self.at(field.name, field.line, field.col) + ": " + self.annotation(field.annotation)
+                default = field.default
+                if default is not None:
+                    text = text + " = " + self.expr(default)
+                parts.append(text)
+            for method in decl.methods:
+                parts.append(self.function(method))
+            return self.at(f"class {decl.name}{self.type_params(decl.type_params)}", decl.line, decl.col) + " { " + "; ".join(parts) + " }"
+        if isinstance(decl, ast.ProtocolDecl):
+            methods: list[str] = []
+            for method in decl.methods:
+                methods.append(self.function(method))
+            return self.at(f"protocol {decl.name}{self.type_params(decl.type_params)}", decl.line, decl.col) + " { " + "; ".join(methods) + " }"
+        if isinstance(decl, ast.EnumDecl):
+            members: list[str] = []
+            for member in decl.members:
+                members.append(self.at(member.name, member.line, member.col))
+            return self.at(f"enum {decl.name}", decl.line, decl.col) + " { " + "; ".join(members) + " }"
+        return self.at(f"type {decl.name}{self.type_params(decl.type_params)}", decl.line, decl.col) + " = " + self.annotation(decl.value)
+
+    def type_params(self, params: list[ast.TypeParam]) -> str:
+        if len(params) == 0:
+            return ""
+        parts: list[str] = []
+        for param in params:
+            text = self.at(param.name, param.line, param.col)
+            bound = param.bound
+            if bound is not None:
+                text = text + ": " + self.annotation(bound)
+            parts.append(text)
+        return "[" + ", ".join(parts) + "]"
+
+    # A function, or a protocol method signature when its body is empty.
+    def function(self, function: ast.FunctionDecl) -> str:
+        params: list[str] = []
+        for param in function.params:
+            params.append(self.param(param))
+        text = f"def {function.name}{self.type_params(function.type_params)}"
+        if function.is_async:
+            text = "async " + text
+        text = self.at(text, function.line, function.col) + "(" + ", ".join(params) + ") -> " + self.annotation(function.return_type)
+        if len(function.body) == 0:
+            return text
+        return text + " " + self.block(function.body)
+
+    def param(self, param: ast.Param) -> str:
+        text = param.name
+        if param.keyword_only:
+            text = "*" + text
+        text = self.at(text, param.line, param.col)
+        annotation = param.annotation
+        if annotation is not None:
+            text = text + ": " + self.annotation(annotation)
+        default = param.default
+        if default is not None:
+            text = text + " = " + self.expr(default)
+        return text
+
+    def annotation(self, t: ast.TypeExpr) -> str:
+        if isinstance(t, ast.TypeName):
+            return self.type_name(t)
+        if isinstance(t, ast.UnionType):
+            members: list[str] = []
+            for member in t.members:
+                members.append(self.annotation(member))
+            return self.at(" | ".join(members), t.line, t.col)
+        params: list[str] = []
+        for param in t.params:
+            params.append(self.annotation(param))
+        return self.at("((" + ", ".join(params) + ") -> " + self.annotation(t.result) + ")", t.line, t.col)
+
+    def type_name(self, t: ast.TypeName) -> str:
+        text = t.name
+        if t.module != "":
+            text = t.module + "." + text
+        if t.has_args:
+            args: list[str] = []
+            for arg in t.args:
+                args.append(self.annotation(arg))
+            text = text + "[" + ", ".join(args) + "]"
+        return self.at(text, t.line, t.col)
+
+    def target(self, target: ast.Target) -> str:
+        if target.name != "":
+            return target.name
+        elements: list[str] = []
+        for element in target.elements:
+            elements.append(self.target(element))
+        return "<" + ", ".join(elements) + ">"
+
+    def exprs(self, exprs: list[ast.Expr]) -> str:
+        parts: list[str] = []
+        for expr in exprs:
+            parts.append(self.expr(expr))
+        return ", ".join(parts)
+
+    def args(self, args: list[ast.Expr], keywords: list[ast.Keyword]) -> str:
+        parts: list[str] = []
+        for arg in args:
+            parts.append(self.expr(arg))
+        for keyword in keywords:
+            parts.append(self.at(keyword.name, keyword.line, keyword.col) + "=" + self.expr(keyword.value))
+        return ", ".join(parts)
+
+    def type_args(self, types: list[ast.TypeExpr]) -> str:
+        parts: list[str] = []
+        for t in types:
+            parts.append(self.annotation(t))
+        return ", ".join(parts)
+
+    def expr(self, expr: ast.Expr) -> str:
+        return self.at(self.expr_node(expr.node), expr.line, expr.col)
+
+    def expr_node(self, node: ast.ExprNode) -> str:
+        if isinstance(node, ast.Int):
+            return node.text
+        if isinstance(node, ast.Float):
+            return str(node.value)
+        if isinstance(node, ast.String):
+            return "\"" + node.value + "\""
+        if isinstance(node, ast.FString):
+            return "f[" + self.exprs(node.parts) + "]"
+        if isinstance(node, ast.Constant):
+            if node == ast.Constant.TRUE:
+                return "True"
+            if node == ast.Constant.FALSE:
+                return "False"
+            return "None"
+        if isinstance(node, ast.Name):
+            return node.name
+        if isinstance(node, ast.Call):
+            return node.name + "(" + self.args(node.args, node.keywords) + ")"
+        if isinstance(node, ast.CallValue):
+            return "(" + self.expr(node.callee) + ")(" + self.args(node.args, node.keywords) + ")"
+        if isinstance(node, ast.MethodCall):
+            return self.expr(node.object) + "." + node.name + "(" + self.args(node.args, node.keywords) + ")"
+        if isinstance(node, ast.Field):
+            return self.expr(node.object) + "." + node.name
+        if isinstance(node, ast.Index):
+            return self.expr(node.object) + "[" + self.expr(node.index) + "]"
+        if isinstance(node, ast.Slice):
+            text = self.expr(node.object) + "["
+            start = node.start
+            if start is not None:
+                text = text + self.expr(start)
+            text = text + ":"
+            stop = node.stop
+            if stop is not None:
+                text = text + self.expr(stop)
+            return text + "]"
+        if isinstance(node, ast.Specialized):
+            return self.expr(node.callee) + "[" + self.type_args(node.type_args) + "]"
+        if isinstance(node, ast.SpecializedCall):
+            return self.expr(node.callee) + "[" + self.type_args(node.type_args) + "](" + self.args(node.args, node.keywords) + ")"
+        if isinstance(node, ast.Unary):
+            return "(" + node.op + " " + self.expr(node.operand) + ")"
+        if isinstance(node, ast.Binary):
+            return "(" + self.expr(node.left) + " " + node.op + " " + self.expr(node.right) + ")"
+        if isinstance(node, ast.Is):
+            if node.negated:
+                return "(" + self.expr(node.operand) + " is not None)"
+            return "(" + self.expr(node.operand) + " is None)"
+        if isinstance(node, ast.IsInstance):
+            return "isinstance(" + self.expr(node.operand) + ", " + self.type_name(node.type_name) + ")"
+        if isinstance(node, ast.Await):
+            return "(await " + self.expr(node.operand) + ")"
+        if isinstance(node, ast.Lambda):
+            names: list[str] = []
+            for param in node.params:
+                names.append(self.at(param.name, param.line, param.col))
+            return "(lambda " + ", ".join(names) + ": " + self.expr(node.body) + ")"
+        if isinstance(node, ast.TupleDisplay):
+            return "tuple(" + self.exprs(node.elements) + ")"
+        if isinstance(node, ast.ListDisplay):
+            return "[" + self.exprs(node.elements) + "]"
+        entries: list[str] = []
+        i = 0
+        while i < len(node.keys):
+            entries.append(self.expr(node.keys[i]) + ": " + self.expr(node.values[i]))
+            i = i + 1
+        return "{" + ", ".join(entries) + "}"
+
+    def block(self, body: list[ast.Stmt]) -> str:
+        parts: list[str] = []
+        for statement in body:
+            parts.append(self.stmt(statement))
+        return "{ " + "; ".join(parts) + " }"
+
+    def stmt(self, statement: ast.Stmt) -> str:
+        return self.at(self.stmt_node(statement.node), statement.line, statement.col)
+
+    def stmt_node(self, node: ast.StmtNode) -> str:
+        if isinstance(node, ast.Assign):
+            text = node.name
+            annotation = node.annotation
+            if annotation is not None:
+                text = text + ": " + self.annotation(annotation)
+            return text + " = " + self.expr(node.value)
+        if isinstance(node, ast.Unpack):
+            return self.target(node.target) + " = " + self.expr(node.value)
+        if isinstance(node, ast.IndexAssign):
+            return self.expr(node.object) + "[" + self.expr(node.index) + "] = " + self.expr(node.value)
+        if isinstance(node, ast.FieldAssign):
+            return self.expr(node.object) + "." + node.name + " = " + self.expr(node.value)
+        if isinstance(node, ast.CallStmt):
+            return self.expr(node.call)
+        if isinstance(node, ast.If):
+            text = "if " + self.expr(node.condition) + " " + self.block(node.body)
+            if len(node.else_body) > 0:
+                text = text + " else " + self.block(node.else_body)
+            return text
+        if isinstance(node, ast.While):
+            return "while " + self.expr(node.condition) + " " + self.block(node.body)
+        if isinstance(node, ast.For):
+            return "for " + self.target(node.target) + " in " + self.expr(node.iterable) + " " + self.block(node.body)
+        if isinstance(node, ast.With):
+            items: list[str] = []
+            for item in node.items:
+                text = self.expr(item.manager)
+                target = item.target
+                if target is not None:
+                    text = text + " as " + self.target(target)
+                items.append(text)
+            return "with " + ", ".join(items) + " " + self.block(node.body)
+        if isinstance(node, ast.AsyncWith):
+            text = "async with " + self.expr(node.manager)
+            scope_target = node.target
+            if scope_target is not None:
+                text = text + " as " + self.target(scope_target)
+            return text + " " + self.block(node.body)
+        if isinstance(node, ast.Try):
+            text = "try " + self.block(node.body)
+            for handler in node.handlers:
+                text = text + " " + self.at("except", handler.line, handler.col) + " " + self.type_name(handler.type_name)
+                if handler.name != "":
+                    text = text + " as " + handler.name
+                text = text + " " + self.block(handler.body)
+            if len(node.finally_body) > 0:
+                text = text + " finally " + self.block(node.finally_body)
+            return text
+        if isinstance(node, ast.FunctionDef):
+            return self.function(node.function)
+        if isinstance(node, ast.Nonlocal):
+            names: list[str] = []
+            for name in node.names:
+                names.append(self.at(name.name, name.line, name.col))
+            return "nonlocal " + ", ".join(names)
+        if isinstance(node, ast.Return):
+            value = node.value
+            if value is None:
+                return "return"
+            return "return " + self.expr(value)
+        if isinstance(node, ast.Assert):
+            text = "assert " + self.expr(node.condition)
+            message = node.message
+            if message is not None:
+                text = text + ", " + self.expr(message)
+            return text
+        if isinstance(node, ast.Raise):
+            raised = node.value
+            if raised is None:
+                return "raise"
+            return "raise " + self.expr(raised)
+        if isinstance(node, ast.Yield):
+            return "yield " + self.expr(node.value)
+        if node == ast.SimpleStatement.PASS:
+            return "pass"
+        if node == ast.SimpleStatement.BREAK:
+            return "break"
+        return "continue"

@@ -338,26 +338,18 @@ class Lexer:
         return chr(code)
 
     # Reads the f-string field whose `{` is at `pos`, in an f-string delimited
-    # by `quote`.
+    # by `quote`. As in the Lua implementation, the field's text is checked
+    # and its end found before its tokens are read, which decides which error
+    # comes first.
     def read_field(self, quote: str, triple: bool):
         brace = self.pos
-        self.pos = brace + 1
-        count = len(self.tokens)
+        p = brace + 1
         nesting = 0
         while True:
-            p = self.pos
             c = self.at(p)
-            if c == "":
+            if c == "" or not triple and (c == "\n" or c == "\r"):
                 self.fail(brace, "unterminated f-string field")
                 return
-            if c == "\n" or c == "\r":
-                if not triple:
-                    self.fail(brace, "unterminated f-string field")
-                    return
-                if c == "\n":
-                    self.newline(p)
-                self.pos = p + 1
-                continue
             if c == "\\":
                 self.fail(p, "f-string fields cannot contain a backslash")
                 return
@@ -367,34 +359,43 @@ class Lexer:
             if c == quote:
                 self.fail(p, "f-string fields cannot contain the f-string's quote character")
                 return
-            if nesting == 0 and (c == "}" or c == ":"):
+            if is_quote(c):
+                # A string in the other quote character may hold braces.
+                close = p + 1
+                while self.at(close) != c:
+                    if self.at(close) == "" or self.at(close) == "\n" or self.at(close) == "\r":
+                        self.fail(p, "unterminated string literal")
+                        return
+                    close = close + 1
+                i = p + 1
+                while i < close:
+                    inner = self.chars[i]
+                    if inner == "\\" or inner == "#" or inner == quote:
+                        self.fail(i, f"f-string fields cannot contain '{inner}'")
+                        return
+                    i = i + 1
+                p = close
+            elif c == "(" or c == "[" or c == "{":
+                nesting = nesting + 1
+            elif c == ")" or c == "]":
+                nesting = nesting - 1
+            elif c == "}":
+                if nesting == 0:
+                    break
+                nesting = nesting - 1
+            elif nesting == 0 and c == ":":
                 break
-            if nesting == 0 and c == "!" and self.at(p + 1) != "=":
+            elif nesting == 0 and c == "!" and self.at(p + 1) != "=":
                 self.fail(p, "conversions are not supported")
                 return
-            # A string inside a field is lexed as usual once its text is known
-            # to keep to the field's rules.
-            if is_quote(c) and not self.check_field_string(p, quote):
-                return
-            if c == "f" and is_quote(self.at(p + 1)) and not self.check_field_string(p + 1, quote):
-                return
-            before = len(self.tokens)
-            self.lex_token()
-            if len(self.tokens) > before:
-                kind = self.tokens[len(self.tokens) - 1].kind
-                if opens(kind):
-                    nesting = nesting + 1
-                elif closes(kind) and nesting > 0:
-                    nesting = nesting - 1
-        if len(self.tokens) == count:
-            self.fail(brace, "empty f-string field")
-            return
-        stop = self.pos
+            p = p + 1
+        stop = p
+        close = stop
         spec = ""
         if self.chars[stop] == ":":
             close = stop + 1
             while self.at(close) != "}":
-                if self.at(close) == "" or self.at(close) == "\n" or self.at(close) == "\r":
+                if self.at(close) == "" or not triple and (self.at(close) == "\n" or self.at(close) == "\r"):
                     self.fail(brace, "unterminated f-string field")
                     return
                 close = close + 1
@@ -403,27 +404,27 @@ class Lexer:
             if message != "":
                 self.fail(stop, message)
                 return
-            self.pos = close
+        empty = True
+        i = brace + 1
+        while i < stop:
+            if self.chars[i] != " " and self.chars[i] != "\n" and self.chars[i] != "\r":
+                empty = False
+            i = i + 1
+        if empty:
+            self.fail(brace, "empty f-string field")
+            return
+        self.pos = brace + 1
+        while self.pos < stop:
+            c = self.chars[self.pos]
+            if c == "\n":
+                self.newline(self.pos)
+                self.pos = self.pos + 1
+            elif c == "\r":
+                self.pos = self.pos + 1
+            else:
+                self.lex_token()
         self.add(tokens.Kind.FIELD_END, spec, stop)
-        self.pos = self.pos + 1
-
-    # Checks the text of the string whose quote is at `pos` inside an f-string
-    # field delimited by `quote`.
-    def check_field_string(self, pos: int, quote: str) -> bool:
-        if self.chars[pos] == quote:
-            self.fail(pos, "f-string fields cannot contain the f-string's quote character")
-            return False
-        p = pos + 1
-        while self.at(p) != self.chars[pos]:
-            c = self.at(p)
-            if c == "" or c == "\n" or c == "\r":
-                self.fail(pos, "unterminated string literal")
-                return False
-            if c == "\\" or c == "#" or c == quote:
-                self.fail(p, f"f-string fields cannot contain '{c}'")
-                return False
-            p = p + 1
-        return True
+        self.pos = close + 1
 
 # The tokens of `source`, or its first lexical error.
 def lex(path: str, source: str) -> list[tokens.Token] | diagnostic.Diagnostic:
