@@ -297,9 +297,12 @@ through the escape hatch in §2.
   already guarantee.
 - `bootstrap/tests/run.sh` drives the L0 programs: it builds each with
   `willow0`, runs it from its own directory, and compares stdout, stderr, and
-  exit status with the same conventions as `tests/run.lua`. `make bootstrap`
-  builds stage 0 and `make bootstrap-test` runs the programs. The runner moves
-  to a Willow program once stage 2 exists.
+  exit status with the same conventions as `tests/run.lua`.
+  `bootstrap/tests/stage1.sh` builds stage 1's tests and drivers with
+  `willow0` and runs them natively, the drivers over every `.wlo` file in
+  `tests/` and `examples/`; `--lua` runs them under the Lua implementation
+  instead. `make bootstrap` builds stage 0 and `make bootstrap-test` runs both
+  without LuaJIT. The runners move to a Willow program once stage 2 exists.
 
 ## 9. Specification changes
 
@@ -337,7 +340,7 @@ bootstrap/
   stage0/      Rust crate willow0
   core/        core module in L0
   stage1/      stage 1 compiler in L0
-  tests/       run.sh and programs/ with L0 programs and core tests
+  tests/       run.sh, stage1.sh, and programs/ with L0 programs and core tests
 compiler/      stage 2 in full Willow (replaces the Lua compiler when ready)
 lib/           standard library in Willow (replaces runtime/*.lua)
 ```
