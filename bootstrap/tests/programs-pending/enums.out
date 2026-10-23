@@ -1,0 +1,21 @@
+Color.GREEN
+Color.BLUE
+[Mode.QUIET]
+True
+True
+blue
+color red
+mode Mode.RED
+text Color.RED
+nothing
+False
+True
+Color.BLUE
+False
+Color.RED
+True
+False
+Color.BLUE 3
+Color.RED 1
+None
+False

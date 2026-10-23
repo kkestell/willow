@@ -1,0 +1,52 @@
+def first_negative(values: list[int]) -> int:
+    for v in values:
+        if v < 0:
+            return v
+    return 0
+
+def main():
+    found = -1
+    for v in [3, -1, 4, 0, 5]:
+        if v < 0:
+            continue
+        if v == 0:
+            break
+        found = v
+    print(found)
+
+    ages = {"ada": 36, "bob": 0, "alan": 41, "eve": 29}
+    for name in ages:
+        if ages[name] == 0:
+            continue
+        if name == "eve":
+            break
+        print(name)
+
+    odd = 0
+    for i in range(10):
+        if i % 2 == 0:
+            continue
+        if i > 7:
+            break
+        odd = odd + i
+    print(odd)
+
+    n = 0
+    while True:
+        n = n + 1
+        if n % 2 == 0:
+            pass
+        elif n > 5:
+            break
+    print(n)
+
+    outer = 0
+    while outer < 3:
+        outer = outer + 1
+        for j in range(5):
+            if j == outer:
+                break
+            print(f"{outer} {j}")
+
+    print(first_negative([1, -2, -3]))
+    print(first_negative([]))

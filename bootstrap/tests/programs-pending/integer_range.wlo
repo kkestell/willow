@@ -1,0 +1,12 @@
+def main():
+    big = 9223372036854775807
+    print(big)
+    print(-big)
+    print(big - 1 + 1)
+    print(-big + big)
+    print(big // 2)
+    print(-big % 10)
+    print(int("9223372036854775807"))
+    print(int("-9223372036854775807"))
+    print(float(big))
+    print(int(-9.2e18))

@@ -1,0 +1,17 @@
+import sys
+
+def check(count: int):
+    if count < 2:
+        sys.eprint(f"need 2 arguments, got {count}")
+        sys.exit(1)
+    print("enough")
+
+def main():
+    args = sys.args()
+    print(len(args))
+    sys.eprint("starting")
+    sys.eprint(42)
+    sys.eprint(None)
+    check(3)
+    check(len(args))
+    print("unreachable")
