@@ -1,0 +1,1 @@
+module_and_namespace.wlo:2:8: error: 'lib.tools' is imported as a module and as a namespace
