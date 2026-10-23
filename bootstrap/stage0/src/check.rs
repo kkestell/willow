@@ -365,10 +365,11 @@ fn resolve(module: &Module, ty: &TypeExpr) -> Result<Type, Diag> {
             return fail(format!("{} cannot be a union member", member.name()));
         }
         if members.contains(&member) {
-            return fail(format!("type {} appears twice in a union", member.name()));
+            let name = member.name();
+            return fail(format!("union members {name} and {name} overlap"));
         }
         if matches!(member, Type::List(_)) && members.iter().any(|m| matches!(m, Type::List(_))) {
-            return fail("a union may have at most one list member".into());
+            return fail("a union can have only one list member".into());
         }
         members.push(member);
     }
@@ -1694,10 +1695,19 @@ impl Checker<'_> {
         self.arity(pos, "isinstance", 2, args.len())?;
         let (value, ty) = self.expr(&args[0], state)?;
         let Some((class_name, member)) = isinstance_type(&args[1], &ty) else {
-            return self.fail(
-                args[1].pos,
-                "isinstance takes int, float, bool, str, or list",
-            );
+            let found = match &args[1].kind {
+                ExprKind::Name(name) => {
+                    return self.fail(args[1].pos, format!("unknown type '{name}'"));
+                }
+                ExprKind::None => "'None'",
+                ExprKind::Bool(true) => "'True'",
+                ExprKind::Bool(false) => "'False'",
+                ExprKind::Int(_) => "integer",
+                ExprKind::Float(_) => "float",
+                ExprKind::Str(_) => "string",
+                _ => "an expression",
+            };
+            return self.fail(args[1].pos, format!("expected a class name, found {found}"));
         };
         if member.is_none() {
             return self.fail(
