@@ -354,6 +354,28 @@ def str_rjust(s: str, width: int) -> str:
         return s
     return spaces(width - length) + s
 
+def str_join(sep: str, items: ptr) -> str:
+    count = list_len(items)
+    if count == 0:
+        return ""
+    size = str_size(sep) * (count - 1)
+    i = 0
+    while i < count:
+        size = size + str_size(__str(list_get(items, i)))
+        i = i + 1
+    s = str_alloc(size)
+    at = 16
+    i = 0
+    while i < count:
+        if i > 0:
+            memcpy(offset(s, at), str_bytes(sep), str_size(sep))
+            at = at + str_size(sep)
+        item = __str(list_get(items, i))
+        memcpy(offset(s, at), str_bytes(item), str_size(item))
+        at = at + str_size(item)
+        i = i + 1
+    return __str(__word(s))
+
 # Decodes the code point from its UTF-8 bytes: the lead byte keeps its low
 # 7, 5, 4, or 3 bits and each continuation byte adds 6 more.
 def str_ord(s: str) -> int:
@@ -618,3 +640,61 @@ def fs_write_file(path: str, text: str):
         done = done + written
     if close(fd) < 0:
         fail_os("write", path)
+
+# An optional sign and one or more decimal digits (spec §6). The magnitude is
+# checked before each step so it never leaves the int range, which is
+# symmetric, so both signs share the limit 9223372036854775807.
+def str_to_int(s: str) -> int:
+    size = str_size(s)
+    i = 0
+    negative = False
+    if size > 0:
+        if str_byte(s, 0) == 45:
+            negative = True
+            i = 1
+        elif str_byte(s, 0) == 43:
+            i = 1
+    if i == size:
+        fail("ValueError", "cannot convert str to int")
+    value = 0
+    while i < size:
+        b = str_byte(s, i)
+        if is_digit(b) == False:
+            fail("ValueError", "cannot convert str to int")
+        digit = b - 48
+        if value > 922337203685477580:
+            fail("ValueError", "cannot convert str to int")
+        if value == 922337203685477580:
+            if digit > 7:
+                fail("ValueError", "cannot convert str to int")
+        value = value * 10 + digit
+        i = i + 1
+    if negative:
+        return 0 - value
+    return value
+
+# An enum's descriptor holds its name and then one str per member, in
+# declaration order.
+def enum_to_str(descriptor: ptr, ordinal: int) -> str:
+    return __str(__load8(descriptor, 8 + ordinal * 8))
+
+# A box is a header word and a payload word, which may hold a pointer.
+def box(descriptor: ptr, value: word) -> ptr:
+    b = __alloc(16)
+    __store8(b, 0, __word(descriptor))
+    __store8(b, 8, value)
+    return b
+
+def unbox(value: ptr) -> word:
+    return __load8(value, 8)
+
+def is_instance(value: ptr, descriptor: ptr) -> bool:
+    if __addr_is_null(value):
+        return False
+    return __int(__load8(value, 0)) == __int(__word(descriptor))
+
+# __alloc returns zeroed memory, so the fields start as zero.
+def object_new(descriptor: ptr, fields: int) -> ptr:
+    object = __alloc(8 + fields * 8)
+    __store8(object, 0, __word(descriptor))
+    return object
