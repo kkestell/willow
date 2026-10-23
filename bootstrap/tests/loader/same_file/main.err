@@ -1,0 +1,1 @@
+main.wlo:2:8: error: module 'alias' is the same file as module 'real'
