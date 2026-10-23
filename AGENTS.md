@@ -2,9 +2,12 @@ Keep this document accurate and short.
 
 ## Purpose and scope
 
-Willow is a small, statically typed language with Python-like syntax that compiles
-to readable Lua for LuaJIT. Source files use `.wlo`. `docs/spec.md` specifies the
-language.
+Willow is a small, statically typed language with Python-like syntax. Source
+files use `.wlo`. `docs/spec.md` specifies the language.
+
+The implementation in `compiler/` and `runtime/` compiles to Lua for LuaJIT. It
+is being replaced by a self-hosting native compiler under `bootstrap/`, designed
+in `agents/bootstrap.md`. Read that document before working under `bootstrap/`.
 
 - Build the small language we need now. This is an early implementation, not a
   production-hardening exercise.
@@ -14,7 +17,9 @@ language.
 
 - Do less. Keep correct code simple, ordinary, and cheap to change. Follow KISS
   and YAGNI.
-- Write idiomatic Lua. Prefer plain tables, direct functions, and explicit control
+- Write idiomatic code for each part: Lua in `compiler/` and `runtime/`, Rust
+  in `bootstrap/stage0/`, and the L0 subset of Willow in `bootstrap/core/` and
+  `bootstrap/stage1/`. Prefer plain data, direct functions, and explicit control
   flow. Keep responsibilities clear without turning every step into an abstraction.
 - Solve the actual problem. Do not build frameworks, extension points,
   configuration systems, or fallback paths for hypothetical future needs.
@@ -37,8 +42,10 @@ language.
   Do not enumerate every permutation, mirror implementation details, or pursue
   exhaustive coverage of hypothetical edge cases.
 - Match verification to the change. Use focused tests while working; run
-  `make test` for compiler, runtime, or build behavior changes before delivery.
-  Broaden checks only when a concrete risk or failure warrants it.
+  `make test` for Lua compiler, runtime, or build behavior changes and
+  `make bootstrap-test` for changes under `bootstrap/` before delivery. Bootstrap
+  changes must build and pass on both Linux and macOS. Broaden checks only when a
+  concrete risk or failure warrants it.
 - For documentation, comments, and filename-only changes, inspect the relevant
   text and diff. Do not run full tests, builds, linters, or formatters unless
   explicitly required. A normal filesystem rename needs no content hashing.

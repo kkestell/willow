@@ -275,9 +275,11 @@ through the escape hatch in §2.
 
 ## 8. Testing
 
-- `bootstrap/tests/` holds L0 programs with expected stdout, exit status, and
-  stderr, in the same `.wlo`/`.out`/`.err` layout as `tests/programs/`. They
-  exercise L0 and `core` under stage 0 before anything is built on them.
+- `bootstrap/tests/programs/` holds L0 programs with expected stdout, exit
+  status, and stderr, in the same `.wlo`/`.out`/`.err` layout as
+  `tests/programs/`. They exercise L0 and `core` under stage 0 before anything
+  is built on them. `sum_to.wlo` is there now and is milestone 1's done
+  condition.
 - `core` has its own tests in L0, using `assert`, run under stage 0. Because a
   failure in core could be in core or in the compiler that compiled it, and
   the Lua implementation has no intrinsics to adjudicate, core stays boring:
@@ -289,12 +291,15 @@ through the escape hatch in §2.
   its own source. Emission is therefore deterministic: no hash-ordered
   iteration anywhere in the compiler, which Willow's insertion-ordered dicts
   already guarantee.
-- The test runner moves from `tests/run.lua` to a Willow program once stage 2
-  exists. Until then a shell script drives stage 0 and stage 1 tests.
+- `bootstrap/tests/run.sh` drives the L0 programs: it builds each with
+  `willow0`, runs it from its own directory, and compares stdout, stderr, and
+  exit status with the same conventions as `tests/run.lua`. `make bootstrap`
+  builds stage 0 and `make bootstrap-test` runs the programs. The runner moves
+  to a Willow program once stage 2 exists.
 
 ## 9. Specification changes
 
-Made on the `bootstrap` branch on 2026-10-23, ahead of the implementation:
+Made on 2026-10-23, ahead of the implementation:
 
 - §4: `int` becomes the symmetric 64-bit range.
 - §1: remove "Programs cannot access Lua globals or `require`".
@@ -316,25 +321,55 @@ call, `GC_init`, and `GC_malloc` was assembled, linked, and run.
 
 Dependencies for compiling programs: `qbe`, `cc`, libgc. Dependency for
 rebuilding the bootstrap: `cargo`. Linux uses `amd64_sysv` or `arm64` and the
-distribution's libgc, and is tested in a Docker container.
+distribution's libgc. `bootstrap/Dockerfile` extends the gnat agent image with
+QBE 1.3 built from the release tarball, `libgc-dev`, `pkg-config`, and a Rust
+toolchain; the agents that do this work run in it, on arm64 Debian. Each
+change is therefore tested on Linux arm64 by its agent and on macOS arm64 by
+the operator before it merges. `amd64_sysv` has no test machine yet.
 
 ```text
 bootstrap/
+  Dockerfile   agent image with the native toolchain
   stage0/      Rust crate willow0
   core/        core module in L0
   stage1/      stage 1 compiler in L0
-  tests/       L0 programs and core tests
+  tests/       run.sh and programs/ with L0 programs and core tests
 compiler/      stage 2 in full Willow (replaces the Lua compiler when ready)
 lib/           standard library in Willow (replaces runtime/*.lua)
 ```
+
+### Portability
+
+Every change must build and pass on both Linux and macOS. The rules that keep
+that from being rediscovered per task:
+
+- The driver picks the QBE target from the host: `arm64_apple` or
+  `amd64_apple` on Darwin, `arm64` or `amd64_sysv` on Linux. It finds libgc
+  with `pkg-config --cflags --libs bdw-gc` and falls back to `-lgc`.
+- QBE handles symbol prefixing, so core never spells a C symbol differently
+  per platform.
+- The compiler exposes the target operating system to `core` as the intrinsic
+  constant `__os`, which is `"linux"` or `"darwin"` and is folded at compile
+  time. Core keeps one table of libc constants per operating system: `open`
+  flags, `errno` values, and the layouts of `pollfd`, `stat`, and `dirent`.
+  `errno` itself is read through `__errno_location` on Linux and `__error` on
+  Darwin, behind one core function.
+- The event loop uses `poll`, which both platforms provide, not `kqueue` or
+  `epoll`.
+- Integer-typed `extern` parameters that are C `int`, `mode_t`, or `socklen_t`
+  are declared `cint`. `size_t`, `ssize_t`, `off_t`, and pointers are `int`
+  or `ptr`.
 
 The Lua `compiler/` and `runtime/` stay in place until stage 2 passes
 `tests/programs/`, then are deleted along with the LuaJIT vendor tree.
 
 ## 11. Milestones
 
-1. Stage 0 compiles functions over `int` and `bool` with `if`, `while`, and
-   `print` through `extern write`. `sum_to` from spec §1 runs natively.
+1. A vertical slice: stage 0 compiles functions over `int`, `bool`, and `str`
+   literals and concatenation with `if`, `while`, and `print`, through the
+   intrinsic layer and a first `core` that provides string objects, `+` on
+   strings, and `print` over `extern write`. `sum_to` from spec §1 runs
+   natively, which is `bootstrap/tests/programs/sum_to.wlo`.
 2. Intrinsics and the first `core`: strings, lists, dicts, boxing and unions,
    f-strings, slicing, conversions, file I/O, `sys`. All of §3. L0 test suite
    and core tests pass.

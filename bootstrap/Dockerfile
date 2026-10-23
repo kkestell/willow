@@ -1,0 +1,16 @@
+# Agent image for the bootstrap work: the gnat base image plus the native
+# toolchain from agents/bootstrap.md. QBE is built from the pinned release
+# because Debian's package is older.
+FROM gnat-agent
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgc-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://c9x.me/compile/release/qbe-1.3.tar.xz | tar -xJ -C /tmp \
+    && make -C /tmp/qbe-1.3 -j4 PREFIX=/usr/local install \
+    && rm -rf /tmp/qbe-1.3
+
+USER agent
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+ENV PATH=/home/agent/.cargo/bin:$PATH

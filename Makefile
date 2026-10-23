@@ -16,7 +16,7 @@ else
 STUB_LIBS := -lm -ldl
 endif
 
-.PHONY: all test install clean
+.PHONY: all test install clean bootstrap bootstrap-test
 
 all: $(LUAJIT) $(STUB)
 
@@ -42,6 +42,12 @@ install: $(WILLOW)
 
 test: $(LUAJIT) $(STUB)
 	$(LUAJIT) tests/run.lua $(wildcard tests/unit/*_test.lua) $(wildcard tests/programs/*.wlo) $(wildcard tests/modules/*/main.wlo)
+
+bootstrap:
+	cargo build --release --manifest-path bootstrap/stage0/Cargo.toml
+
+bootstrap-test: bootstrap
+	bootstrap/tests/run.sh
 
 clean:
 	rm -f $(STUB)
