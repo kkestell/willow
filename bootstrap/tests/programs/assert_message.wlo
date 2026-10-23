@@ -1,0 +1,7 @@
+def main():
+    count = 2
+    assert count > 0
+    assert count == 2, "not reached"
+    print(count)
+    assert count == 3, "count is not " + "3"
+    print("unreachable")

@@ -1,0 +1,11 @@
+# Core's own tests import core and call its functions directly. They cannot
+# use intrinsics; a representation worth testing gets a core function. A test
+# passes by printing nothing and exiting with status 0.
+import core
+
+def main():
+    assert core.str_concat("ab", "c") == "abc"
+    assert core.str_compare("a", "b") < 0
+    assert core.str_compare("b", "a") > 0
+    assert core.str_compare("ab", "ab") == 0
+    assert core.int_to_str(-42) == "-42"
