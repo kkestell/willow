@@ -48,6 +48,7 @@ bootstrap:
 
 bootstrap-test: bootstrap
 	bootstrap/tests/run.sh
+	bootstrap/tests/stage1.sh
 
 clean:
 	rm -f $(STUB)
