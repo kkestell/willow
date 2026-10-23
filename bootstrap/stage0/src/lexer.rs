@@ -289,10 +289,15 @@ impl Lexer<'_> {
             }
         }
         let text: String = self.chars[start..end].iter().collect();
+        // The rest of a malformed literal, including the sign of an exponent
+        // without digits, as in `1e+`.
         let mut rest = end;
-        while matches!(self.peek(rest), Some(c) if c.is_ascii_alphanumeric() || c == '_' || c == '.')
-        {
-            rest += 1;
+        loop {
+            match self.peek(rest) {
+                Some(c) if c.is_ascii_alphanumeric() || c == '_' || c == '.' => rest += 1,
+                Some('+' | '-') if matches!(self.peek(rest - 1), Some('e' | 'E')) => rest += 1,
+                _ => break,
+            }
         }
         if rest > end {
             let all: String = self.chars[start..rest].iter().collect();

@@ -21,19 +21,25 @@ pub struct Func {
     pub name: String,
     pub params: Vec<Param>,
     pub variadic: bool,
-    pub ret: Option<TypeName>,
+    pub ret: Option<TypeExpr>,
     pub body: Option<Vec<Stmt>>,
 }
 
 pub struct Param {
     pub pos: Pos,
     pub name: String,
-    pub ty: TypeName,
+    pub ty: TypeExpr,
 }
 
 pub struct TypeName {
     pub pos: Pos,
     pub name: String,
+}
+
+/// An annotation: one type name, or the members of a union.
+pub struct TypeExpr {
+    pub pos: Pos,
+    pub members: Vec<TypeName>,
 }
 
 pub struct Stmt {
@@ -48,7 +54,7 @@ pub enum StmtKind {
     },
     Assign {
         target: String,
-        annotation: Option<TypeName>,
+        annotation: Option<TypeExpr>,
         value: Expr,
     },
     Expr(Expr),
@@ -86,6 +92,14 @@ pub enum ExprKind {
     Binary(&'static str, Pos, Box<Expr>, Box<Expr>),
     /// The `__type(T)` intrinsic, whose argument is a type.
     TypeOf(TypeName),
+    None,
+    /// `operand is None`, or `operand is not None` when negated, with the
+    /// position of `is`.
+    IsNone {
+        operand: Box<Expr>,
+        negated: bool,
+        op_pos: Pos,
+    },
 }
 
 struct Parser<'a> {
@@ -233,7 +247,7 @@ impl Parser<'_> {
             }
             let (pos, name) = self.name()?;
             self.expect(":")?;
-            let ty = self.type_name()?;
+            let ty = self.type_expr()?;
             params.push(Param { pos, name, ty });
             if !self.accept(",") {
                 self.expect(")")?;
@@ -241,7 +255,7 @@ impl Parser<'_> {
             }
         }
         let ret = if self.accept("->") {
-            Some(self.type_name()?)
+            Some(self.type_expr()?)
         } else {
             None
         };
@@ -260,6 +274,15 @@ impl Parser<'_> {
             ret,
             body,
         })
+    }
+
+    fn type_expr(&mut self) -> Result<TypeExpr, Diag> {
+        let pos = self.pos();
+        let mut members = vec![self.type_name()?];
+        while self.accept("|") {
+            members.push(self.type_name()?);
+        }
+        Ok(TypeExpr { pos, members })
     }
 
     fn type_name(&mut self) -> Result<TypeName, Diag> {
@@ -366,7 +389,7 @@ impl Parser<'_> {
                 return self.fail(self.pos(), "only a name can have an annotation");
             }
             self.i += 1;
-            let ty = self.type_name()?;
+            let ty = self.type_expr()?;
             if self.peek() != &Kind::Word("=") {
                 return self.fail(self.pos(), "annotated assignment needs an initializer");
             }
@@ -448,18 +471,27 @@ impl Parser<'_> {
 
     fn comparison(&mut self) -> Result<Expr, Diag> {
         let left = self.sum()?;
-        let Some((op, op_pos)) = self.binary_op(COMPARISONS) else {
+        let pos = left.pos;
+        let kind = if let Some((_, op_pos)) = self.binary_op(&["is"]) {
+            let negated = self.accept("not");
+            if !self.accept("None") {
+                return self.fail(self.pos(), "'is' can only test for None");
+            }
+            ExprKind::IsNone {
+                operand: Box::new(left),
+                negated,
+                op_pos,
+            }
+        } else if let Some((op, op_pos)) = self.binary_op(COMPARISONS) {
+            let right = self.sum()?;
+            ExprKind::Binary(op, op_pos, Box::new(left), Box::new(right))
+        } else {
             return Ok(left);
         };
-        let right = self.sum()?;
-        if matches!(self.peek(), Kind::Word(w) if COMPARISONS.contains(w)) {
+        if matches!(self.peek(), Kind::Word(w) if COMPARISONS.contains(w) || *w == "is") {
             return self.fail(self.pos(), "comparison chains are not supported");
         }
-        let pos = left.pos;
-        Ok(Expr {
-            pos,
-            kind: ExprKind::Binary(op, op_pos, Box::new(left), Box::new(right)),
-        })
+        Ok(Expr { pos, kind })
     }
 
     fn sum(&mut self) -> Result<Expr, Diag> {
@@ -536,8 +568,9 @@ impl Parser<'_> {
         let kind = match self.peek().clone() {
             Kind::Int(value) => ExprKind::Int(value),
             Kind::Float(value) => ExprKind::Float(value),
-            // Conversions are called by their reserved type names.
-            Kind::Word(w @ ("int" | "float")) => ExprKind::Name(w.to_string()),
+            // Conversions and isinstance name types by their reserved words.
+            Kind::Word(w @ ("int" | "float" | "bool" | "str")) => ExprKind::Name(w.to_string()),
+            Kind::Word("None") => ExprKind::None,
             Kind::Str(text) => ExprKind::Str(text),
             Kind::Name(name)
                 if name == "__type" && self.tokens[self.i + 1].kind == Kind::Word("(") =>
