@@ -626,7 +626,7 @@ impl Checker<'_> {
                     let mut branch = state.clone();
                     let (body_ops, transfers) = self.block(body, &mut branch)?;
                     join(branch, transfers);
-                    lowered.push((cond_ir, body_ops));
+                    lowered.push((cond_ir, body_ops, self.os_test(cond)));
                 }
                 let mut tail = match otherwise {
                     Some(body) => {
@@ -640,8 +640,15 @@ impl Checker<'_> {
                         Vec::new()
                     }
                 };
-                while let Some((cond_ir, body_ops)) = lowered.pop() {
-                    tail = vec![Op::If(cond_ir, body_ops, tail)];
+                // Every arm is checked, but an `__os` test emits only the arm
+                // it selects, so core can call functions that exist on only
+                // one platform.
+                while let Some((cond_ir, body_ops, os_test)) = lowered.pop() {
+                    tail = match os_test {
+                        Some(true) => body_ops,
+                        Some(false) => tail,
+                        None => vec![Op::If(cond_ir, body_ops, tail)],
+                    };
                 }
                 ops.extend(tail);
                 if let Some(after) = after {
@@ -883,6 +890,24 @@ impl Checker<'_> {
             }
         };
         Ok((Value::Binary(instr, l, r), ty))
+    }
+
+    /// The value of `cond` when it compares `__os` with a string literal
+    /// using `==` or `!=`.
+    fn os_test(&self, cond: &Expr) -> Option<bool> {
+        let ExprKind::Binary(op @ ("==" | "!="), _, left, right) = &cond.kind else {
+            return None;
+        };
+        let text = match (&left.kind, &right.kind) {
+            (ExprKind::Name(name), ExprKind::Str(text))
+            | (ExprKind::Str(text), ExprKind::Name(name))
+                if name == "__os" && self.intrinsics && !self.locals.contains_key(name) =>
+            {
+                text
+            }
+            _ => return None,
+        };
+        Some((text == target_os()) == (*op == "=="))
     }
 
     /// A call to `core.fail` with a class name and a message.

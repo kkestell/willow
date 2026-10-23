@@ -143,6 +143,13 @@ impl Emitter<'_> {
 
     fn ops(&mut self, ops: &[Op]) {
         for op in ops {
+            // Ops after a jump or return cannot run. The checker rejects
+            // them, except after a kept `__os` arm that transfers control,
+            // where they are the other platform's code and must not be
+            // emitted.
+            if self.ended {
+                break;
+            }
             self.op(op);
         }
     }
