@@ -1,0 +1,61 @@
+enum Color:
+    RED
+    GREEN
+    BLUE
+
+enum Mode:
+    RED
+    QUIET
+
+class Pixel:
+    color: Color
+    bright: bool = False
+
+def name(color: Color) -> str:
+    if color == Color.RED:
+        return "red"
+    elif color == Color.GREEN:
+        return "green"
+    return "blue"
+
+def describe(value: Color | Mode | str | None) -> str:
+    if value is None:
+        return "nothing"
+    if isinstance(value, Color):
+        return "color " + name(value)
+    if isinstance(value, Mode):
+        return "mode " + str(value)
+    return "text " + value
+
+def same(a: Color | Mode, b: Color | Mode) -> bool:
+    return a == b
+
+def main():
+    color = Color.GREEN
+    print(color)
+    print(str(Color.BLUE))
+    print(f"[{Mode.QUIET}]")
+    print(color == Color.GREEN)
+    print(color != Color.RED)
+    print(name(Color.BLUE))
+    print(describe(Color.RED))
+    print(describe(Mode.RED))
+    print(describe("Color.RED"))
+    print(describe(None))
+    print(same(Color.RED, Mode.RED))
+    print(same(Mode.QUIET, Mode.QUIET))
+    pixel = Pixel(Color.BLUE)
+    print(pixel.color)
+    print(pixel.bright)
+    pixel.color = Color.RED
+    print(pixel.color)
+    palette = [Color.RED, Color.BLUE]
+    print(Color.BLUE in palette)
+    print(Color.GREEN in palette)
+    counts: dict[Color, int] = {Color.BLUE: 2}
+    counts[Color.RED] = 1
+    counts[Color.BLUE] = counts[Color.BLUE] + 1
+    for key, count in counts.items():
+        print(f"{key} {count}")
+    print(counts.get(Color.GREEN))
+    print(Color.GREEN in counts)

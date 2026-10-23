@@ -1,0 +1,4 @@
+def main():
+    print(int("12"))
+    print(int("12x"))
+    print("unreachable")
