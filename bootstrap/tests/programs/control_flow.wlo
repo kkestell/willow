@@ -1,0 +1,48 @@
+def fib(n: int) -> int:
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+def sign(n: int) -> str:
+    if n < 0:
+        return "negative"
+    elif n == 0:
+        return "zero"
+    else:
+        return "positive"
+
+def first_square_above(limit: int) -> int:
+    n = 0
+    while True:
+        if n * n > limit:
+            return n
+        n = n + 1
+    return -1
+
+def countdown(n: int):
+    while n > 0:
+        print(n)
+        n = n - 1
+
+def main():
+    print(fib(20))
+    print(sign(-5))
+    print(sign(0))
+    print(sign(7))
+    print(first_square_above(50))
+    countdown(3)
+    big: int = 9223372036854775807
+    print(big)
+    print(-big)
+    print(-(3 - 10) * +2)
+    print(2 + 3 * 4 - 1)
+    print(3 >= 3)
+    print(3 != 3)
+    print(True == (1 < 2))
+    if False:
+        label = "unused"
+    else:
+        label = "assigned in else"
+    if 1 > 2:
+        label = "then"
+    print(label)

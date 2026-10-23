@@ -1,0 +1,2 @@
+def main():
+    print(__int(__word(1)))

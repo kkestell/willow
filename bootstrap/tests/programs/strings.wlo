@@ -1,0 +1,35 @@
+def describe(a: str, b: str) -> str:
+    if a < b:
+        return a + " < " + b
+    if a > b:
+        return a + " > " + b
+    return a + " == " + b
+
+def repeat(text: str, count: int) -> str:
+    result = ""
+    while count > 0:
+        result = result + text
+        count = count - 1
+    return result
+
+def main():
+    print("tab\there, quote \" and ' and \\ backslash")
+    print('single \'quoted\'')
+    print("\x41é\U0001F600 é")
+    print("two\nlines")
+    print("")
+    print(describe("apple", "apricot"))
+    print(describe("app", "apple"))
+    print(describe("b", "a"))
+    print(describe("same", "same"))
+    print(describe("", "a"))
+    print(describe("z", "é"))
+    print("abc" == "abc")
+    print("abc" != "abd")
+    print("ab" <= "ab")
+    print("ab" >= "abc")
+    print(repeat("ab", 3) + "!")
+    print(len_check(repeat("x", 1000)))
+
+def len_check(text: str) -> bool:
+    return text == repeat("xxxxxxxxxx", 100)

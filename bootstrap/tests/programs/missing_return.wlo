@@ -1,0 +1,6 @@
+def pick(flag: bool) -> int:
+    while flag:
+        return 1
+
+def main():
+    print(pick(True))
