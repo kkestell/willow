@@ -363,9 +363,12 @@ def str_rjust(s: str, width: int) -> str:
 
 # As in Python: with a separator, the pieces between its occurrences, and
 # otherwise the runs of non-whitespace, ignoring whitespace at either end. At
-# most `maxsplit` splits are made, from the left; the rest of the string is
-# the last piece, and a negative `maxsplit` counts down without reaching zero.
+# most `maxsplit` splits are made, from the left, and the rest of the string
+# is the last piece. A negative `maxsplit` places no limit; there are never
+# more splits than bytes, so the byte count stands in for it.
 def str_split(s: str, sep: str | None, maxsplit: int) -> ptr:
+    if maxsplit < 0:
+        maxsplit = str_size(s)
     if sep is None:
         return split_whitespace(s, maxsplit)
     if str_size(sep) == 0:
