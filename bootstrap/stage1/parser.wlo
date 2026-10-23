@@ -394,6 +394,10 @@ class Parser:
             self.advance()
             self.advance()
             return self.parse_isinstance(token)
+        if kind == tokens.Kind.NAME and token.text == "__type" and self.ahead(1).kind == tokens.Kind.LPAREN:
+            self.advance()
+            self.advance()
+            return self.parse_type_of(token)
         if kind == tokens.Kind.NAME or is_conversion(kind):
             # Conversions are called, or named as values of a callable type.
             self.advance()
@@ -462,6 +466,18 @@ class Parser:
         self.accept(tokens.Kind.COMMA)
         self.expect(tokens.Kind.RPAREN, "')'")
         return ast.Expr(token.line, token.col, ast.IsInstance(operand, ref))
+
+    # `__type(T)` after its `(`. T may be `list` or `dict` without arguments.
+    def parse_type_of(self, token: tokens.Token) -> ast.Expr:
+        target = self.peek()
+        if target.kind == tokens.Kind.LIST or target.kind == tokens.Kind.DICT:
+            self.advance()
+            node = ast.TypeName(target.line, target.col, target.text, "", [], False)
+            self.expect(tokens.Kind.RPAREN, "')'")
+            return ast.Expr(token.line, token.col, ast.TypeOf(node))
+        t = self.parse_type()
+        self.expect(tokens.Kind.RPAREN, "')'")
+        return ast.Expr(token.line, token.col, ast.TypeOf(t))
 
     # Statements
 
@@ -870,6 +886,48 @@ class Parser:
             body = self.parse_block()
         return ast.FunctionDecl(name.line, name.col, name.text, type_params, params, return_type, body, is_async, [], [])
 
+    # `extern def name(params) -> R`, a C function with no body. Its parameters
+    # have no defaults, and a trailing `...` makes it variadic.
+    def parse_extern(self) -> ast.FunctionDecl:
+        self.advance()
+        self.advance()
+        name = self.expect(tokens.Kind.NAME, "a function name")
+        self.expect(tokens.Kind.LPAREN, "'('")
+        params: list[ast.Param] = []
+        variadic = False
+        while not self.accept(tokens.Kind.RPAREN):
+            if self.accept_ellipsis():
+                variadic = True
+                self.expect(tokens.Kind.RPAREN, "')'")
+                break
+            param = self.expect(tokens.Kind.NAME, "a parameter name")
+            self.expect(tokens.Kind.COLON, "':'")
+            params.append(ast.Param(param.line, param.col, param.text, self.parse_type(), None, False))
+            if self.list_end(tokens.Kind.RPAREN, "')'"):
+                break
+        return_type: ast.TypeExpr = ast.TypeName(name.line, name.col, "None", "", [], False)
+        if self.accept(tokens.Kind.ARROW):
+            return_type = self.parse_type()
+        self.expect(tokens.Kind.NEWLINE, "end of line")
+        decl = ast.FunctionDecl(name.line, name.col, name.text, [], params, return_type, [], False, [], [])
+        decl.external = True
+        decl.variadic = variadic
+        return decl
+
+    # Accepts `...`, which the lexer gives as three adjacent dots.
+    def accept_ellipsis(self) -> bool:
+        first = self.peek()
+        if first.kind != tokens.Kind.DOT:
+            return False
+        for i in range(1, 3):
+            dot = self.ahead(i)
+            if dot.kind != tokens.Kind.DOT or dot.line != first.line or dot.col != first.col + i:
+                return False
+        self.advance()
+        self.advance()
+        self.advance()
+        return True
+
     # Reads a declaration's `:`, end of line, and indent.
     def start_body(self):
         self.expect(tokens.Kind.COLON, "':'")
@@ -979,6 +1037,8 @@ class Parser:
                 self.fail(token, "imports must come before declarations")
             elif kind == tokens.Kind.DEF or kind == tokens.Kind.ASYNC:
                 module.declarations.append(self.parse_function(False, False))
+            elif kind == tokens.Kind.NAME and token.text == "extern" and self.ahead(1).kind == tokens.Kind.DEF:
+                module.declarations.append(self.parse_extern())
             elif kind == tokens.Kind.CLASS:
                 module.declarations.append(self.parse_class())
             elif kind == tokens.Kind.PROTOCOL:
