@@ -1,0 +1,26 @@
+def half(x: float) -> float:
+    return x / 2.0
+
+def main():
+    sum = 0.1 + 0.2
+    print(sum == 0.30000000000000004)
+    print(sum != 0.3)
+    print(half(5.0) == 2.5)
+    print(7 / 2 == 3.5)
+    print(-7 / 2 == -3.5)
+    print(-1.5 * 2.0 - 1.0 == -4.0)
+    print(-(1.0 - 2.0) > 0.5)
+    print(+2.0 <= 2.0)
+    print(1e3 >= 1000.0)
+    print(2.5e-3 == 0.0025)
+    print(1E2 == 100.0)
+    print(float(3) == 3.0)
+    print(float(-7) < float(-6))
+    print(-0.0 == 0.0)
+    big = 1e308 * 10.0
+    print(big > 1e308)
+    nan = big - big
+    print(nan == nan)
+    print(nan != nan)
+    print(nan < 1.0)
+    print(nan >= 1.0)
