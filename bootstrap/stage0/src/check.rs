@@ -60,6 +60,14 @@ pub enum Value {
         left: Box<Value>,
         right: Box<Value>,
     },
+    /// Integer `add`, `sub`, or `mul`, which calls `fail` when the result is
+    /// outside the symmetric int range.
+    CheckedInt {
+        instr: &'static str,
+        left: Box<Value>,
+        right: Box<Value>,
+        fail: Box<Value>,
+    },
     /// Integer `//`, or `%` when `modulo`, which calls `fail` for a zero divisor.
     FloorDivide {
         modulo: bool,
@@ -153,6 +161,7 @@ const INTRINSICS: &[(&str, &[Type], Type)] = &[
     ("__store4", &[Type::Ptr, Type::Int, Type::Int], Type::None),
     ("__addr_is_null", &[Type::Ptr], Type::Bool),
     ("__dtosi", &[Type::Float], Type::Int),
+    ("__offset", &[Type::Ptr, Type::Int], Type::Ptr),
 ];
 
 /// The value of `__os`. The host is the target, since stage 0 does not
@@ -1081,9 +1090,22 @@ impl Checker<'_> {
             (_, Type::Float, Type::Float) if !float_compare.is_empty() => {
                 return Ok((Value::FloatCompare(float_compare, l, r), Type::Bool));
             }
-            ("+", Type::Int, Type::Int) => ("add", Type::Int),
-            ("-", Type::Int, Type::Int) => ("sub", Type::Int),
-            ("*", Type::Int, Type::Int) => ("mul", Type::Int),
+            ("+" | "-" | "*", Type::Int, Type::Int) => {
+                let message = self.strings.intern("integer overflow");
+                let fail = Box::new(self.fail_call("OverflowError", message));
+                let instr = match op {
+                    "+" => "add",
+                    "-" => "sub",
+                    _ => "mul",
+                };
+                let checked = Value::CheckedInt {
+                    instr,
+                    left: l,
+                    right: r,
+                    fail,
+                };
+                return Ok((checked, Type::Int));
+            }
             (_, Type::Int, Type::Int) if !compare.is_empty() => (compare, Type::Bool),
             ("==" | "!=", Type::Bool, Type::Bool) | ("==" | "!=", Type::Ptr, Type::Ptr) => {
                 (compare, Type::Bool)
@@ -1293,6 +1315,8 @@ impl Checker<'_> {
             "__store8" => Value::Store("storel", next(), next(), next()),
             "__addr_is_null" => Value::Binary("ceql", next(), Box::new(Value::Const(0))),
             "__dtosi" => Value::FloatToInt(next()),
+            // Addresses are not ints, so their arithmetic is not checked.
+            "__offset" => Value::Binary("add", next(), next()),
             // Reinterpretations change only the static type.
             _ => *next(),
         };
