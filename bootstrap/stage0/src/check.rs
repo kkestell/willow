@@ -40,11 +40,25 @@ pub enum Op {
         index: Value,
         value: Value,
     },
-    /// A loop over a list; `store` assigns `Value::Item` to the loop
+    /// A loop over a list; `stores` assign `Value::Item(0)` to the loop
     /// variable.
     ForList {
         list: Value,
-        store: Box<Op>,
+        stores: Vec<Op>,
+        body: Vec<Op>,
+    },
+    /// A loop over the code points of a string, each as a string.
+    ForStr {
+        text: Value,
+        stores: Vec<Op>,
+        body: Vec<Op>,
+    },
+    /// A loop over a dict's live entries; `Value::Item(0)` is the key and
+    /// `Value::Item(1)` the value. A change to the dict's keys fails the
+    /// next step.
+    ForDict {
+        dict: Value,
+        stores: Vec<Op>,
         body: Vec<Op>,
     },
     /// A loop over `range(start, stop, step)`, which calls `fail` for a zero
@@ -54,7 +68,7 @@ pub enum Op {
         stop: Value,
         step: Value,
         fail: Value,
-        store: Box<Op>,
+        stores: Vec<Op>,
         body: Vec<Op>,
     },
     Break,
@@ -109,8 +123,22 @@ pub enum Value {
     },
     /// A new list holding the values.
     ListDisplay(Vec<Value>),
-    /// The current item of the innermost `for` loop.
-    Item,
+    /// A new dict with keys of the equality kind, holding the entries.
+    DictDisplay {
+        kind: i64,
+        entries: Vec<(Value, Value)>,
+    },
+    /// `d.get(key, default)`: `present`, built from the found value as
+    /// `Value::Item(0)`, or `default`, which is evaluated first.
+    DictGet {
+        dict: Box<Value>,
+        key: Box<Value>,
+        default: Box<Value>,
+        present: Box<Value>,
+    },
+    /// An item of the innermost `for` loop or `get`: 0 for an element, a
+    /// key, or a found value, and 1 for a dict entry's value.
+    Item(usize),
     /// The first value, evaluated for its effects, then the second.
     Seq(Box<Value>, Box<Value>),
     /// Core's `function(container, item, extra...)`, evaluating `item` first
@@ -347,7 +375,11 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
 
 fn resolve_name(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
     let fail = |message: String| Err(Diag::new(&module.path, ty.pos, message));
-    let expected = if ty.name == "list" { 1 } else { 0 };
+    let expected = match ty.name.as_str() {
+        "list" => 1,
+        "dict" => 2,
+        _ => 0,
+    };
     if ty.args.len() != expected {
         let plural = if expected == 1 { "" } else { "s" };
         return fail(format!(
@@ -362,6 +394,21 @@ fn resolve_name(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
             return fail(format!("{} cannot be a list element", element.name()));
         }
         return Ok(Type::List(Box::new(element)));
+    }
+    if ty.name == "dict" {
+        let key = resolve(module, &ty.args[0])?;
+        let value = resolve(module, &ty.args[1])?;
+        if !is_key_type(&key) {
+            return Err(Diag::new(
+                &module.path,
+                ty.args[0].pos,
+                "dictionary keys must be int, str, or an enum",
+            ));
+        }
+        if matches!(value, Type::Ptr | Type::Word) {
+            return fail(format!("{} cannot be a dict value", value.name()));
+        }
+        return Ok(Type::Dict(Box::new(key), Box::new(value)));
     }
     Ok(match ty.name.as_str() {
         "int" => Type::Int,
@@ -381,6 +428,11 @@ fn resolve_name(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
     })
 }
 
+/// Dict keys hash by kind, which core knows for int and str (and enums).
+fn is_key_type(ty: &Type) -> bool {
+    matches!(ty, Type::Int | Type::Str)
+}
+
 fn resolve(module: &Module, ty: &TypeExpr) -> Result<Type, Diag> {
     if let [only] = ty.members.as_slice() {
         return resolve_name(module, only);
@@ -398,6 +450,9 @@ fn resolve(module: &Module, ty: &TypeExpr) -> Result<Type, Diag> {
         }
         if matches!(member, Type::List(_)) && members.iter().any(|m| matches!(m, Type::List(_))) {
             return fail("a union can have only one list member".into());
+        }
+        if matches!(member, Type::Dict(..)) && members.iter().any(|m| matches!(m, Type::Dict(..))) {
+            return fail("a union can have only one dict member".into());
         }
         members.push(member);
     }
@@ -511,8 +566,8 @@ fn assigned_names(stmts: &[Stmt], names: &mut HashSet<String>) {
                 }
             }
             StmtKind::While { body, .. } => assigned_names(body, names),
-            StmtKind::For { target, body, .. } => {
-                names.insert(target.clone());
+            StmtKind::For { targets, body, .. } => {
+                names.extend(targets.iter().cloned());
                 assigned_names(body, names);
             }
             StmtKind::Expr(_)
@@ -559,6 +614,24 @@ type State = HashMap<String, Type>;
 enum ForSource {
     Range(Value, Value, Value),
     List(Value, Type),
+    Str(Value),
+    /// A dict, its key and value types, and which of them each step gives:
+    /// the keys, the values, or both.
+    Dict(Value, Type, Type, &'static str),
+}
+
+impl ForSource {
+    /// Each item a step gives, as the `Value::Item` slot and its type.
+    fn items(&self) -> Vec<(usize, Type)> {
+        match self {
+            ForSource::Range(..) => vec![(0, Type::Int)],
+            ForSource::List(_, element) => vec![(0, element.clone())],
+            ForSource::Str(_) => vec![(0, Type::Str)],
+            ForSource::Dict(_, key, _, "keys") => vec![(0, key.clone())],
+            ForSource::Dict(_, _, value, "values") => vec![(1, value.clone())],
+            ForSource::Dict(_, key, value, _) => vec![(0, key.clone()), (1, value.clone())],
+        }
+    }
 }
 
 /// Narrowed types a condition proves for locals, applied in order.
@@ -656,6 +729,56 @@ fn narrowed(value: Value, declared: &Type, current: &Type) -> Value {
 }
 
 /// The scalar type `expr` names as the class of an isinstance test.
+/// A call of a dict method: the dict, its key and value types, and where
+/// and how the call names the method.
+struct DictCall<'a> {
+    dict: Value,
+    key: &'a Type,
+    value: &'a Type,
+    pos: Pos,
+    display: &'a str,
+}
+
+/// The core function, parameter types, defaults for the trailing optional
+/// parameters, and result type of the method `name` of a value of `ty`.
+fn method_signature(ty: &Type, name: &str) -> Option<(&'static str, Vec<Type>, Vec<i64>, Type)> {
+    let str_list = Type::List(Box::new(Type::Str));
+    let text = |function, params: Vec<Type>, ret| (function, params, Vec::new(), ret);
+    Some(match (ty, name) {
+        (Type::List(element), "append") => {
+            text("list_append", vec![(**element).clone()], Type::None)
+        }
+        (Type::List(element), "pop") => text("list_pop", vec![], (**element).clone()),
+        (Type::List(_), "extend") => text("list_extend", vec![ty.clone()], Type::None),
+        (Type::List(_), "reverse") => text("list_reverse", vec![], Type::None),
+        (Type::Dict(key, value), "pop") => {
+            text("dict_pop", vec![(**key).clone()], (**value).clone())
+        }
+        (Type::Str, "find") => text("str_find", vec![Type::Str], Type::Int),
+        (Type::Str, "startswith") => text("str_startswith", vec![Type::Str], Type::Bool),
+        (Type::Str, "endswith") => text("str_endswith", vec![Type::Str], Type::Bool),
+        (Type::Str, "replace") => text("str_replace", vec![Type::Str, Type::Str], Type::Str),
+        (Type::Str, "strip") => text("str_strip", vec![], Type::Str),
+        (Type::Str, "removeprefix") => text("str_removeprefix", vec![Type::Str], Type::Str),
+        (Type::Str, "removesuffix") => text("str_removesuffix", vec![Type::Str], Type::Str),
+        (Type::Str, "isdigit") => text("str_isdigit", vec![], Type::Bool),
+        (Type::Str, "isalpha") => text("str_isalpha", vec![], Type::Bool),
+        (Type::Str, "isalnum") => text("str_isalnum", vec![], Type::Bool),
+        (Type::Str, "isspace") => text("str_isspace", vec![], Type::Bool),
+        (Type::Str, "ljust") => text("str_ljust", vec![Type::Int], Type::Str),
+        (Type::Str, "rjust") => text("str_rjust", vec![Type::Int], Type::Str),
+        (Type::Str, "join") => text("str_join", vec![str_list], Type::Str),
+        // An omitted separator is None, and an omitted maxsplit -1.
+        (Type::Str, "split") => (
+            "str_split",
+            vec![Type::union([Type::Str, Type::None]), Type::Int],
+            vec![0, -1],
+            str_list,
+        ),
+        _ => return None,
+    })
+}
+
 /// The class an isinstance test names, as written, and the member of `ty`
 /// it selects, if any; `list` selects the list member.
 fn isinstance_type<'e>(expr: &'e Expr, ty: &Type) -> Option<(&'e str, Option<Type>)> {
@@ -669,6 +792,10 @@ fn isinstance_type<'e>(expr: &'e Expr, ty: &Type) -> Option<(&'e str, Option<Typ
         "str" => Type::Str,
         "list" => {
             let member = ty.members().iter().find(|m| matches!(m, Type::List(_)));
+            return Some((name, member.cloned()));
+        }
+        "dict" => {
+            let member = ty.members().iter().find(|m| matches!(m, Type::Dict(..)));
             return Some((name, member.cloned()));
         }
         _ => return None,
@@ -801,9 +928,34 @@ impl Checker<'_> {
                 return Ok(ForSource::Range(start, stop, step));
             }
         }
+        if let ExprKind::Call(callee, args) = &iterable.kind {
+            if let ExprKind::Attr(object, name_pos, name) = &callee.kind {
+                if matches!(name.as_str(), "keys" | "values" | "items")
+                    && self.module_of(object).is_none()
+                {
+                    let (dict, ty) = self.expr(object, state)?;
+                    let display = format!("{}.{name}", ty.name());
+                    let Type::Dict(key, value) = ty else {
+                        return self.fail(
+                            *name_pos,
+                            format!("type {} has no method '{name}'", ty.name()),
+                        );
+                    };
+                    self.arity(*name_pos, &display, 0, args.len())?;
+                    let part = match name.as_str() {
+                        "keys" => "keys",
+                        "values" => "values",
+                        _ => "items",
+                    };
+                    return Ok(ForSource::Dict(dict, *key, *value, part));
+                }
+            }
+        }
         let (value, ty) = self.expr(iterable, state)?;
         match ty {
             Type::List(element) => Ok(ForSource::List(value, *element)),
+            Type::Str => Ok(ForSource::Str(value)),
+            Type::Dict(key, element) => Ok(ForSource::Dict(value, *key, *element, "keys")),
             _ => self.fail(iterable.pos, format!("cannot iterate over {}", ty.name())),
         }
     }
@@ -818,6 +970,7 @@ impl Checker<'_> {
     ) -> Result<(Value, Type), Diag> {
         match &expr.kind {
             ExprKind::List(items) => self.list_display(items, expr.pos, state, expected),
+            ExprKind::Dict(entries) => self.dict_display(entries, expr.pos, state, expected),
             _ => self.expr(expr, state),
         }
     }
@@ -846,6 +999,43 @@ impl Checker<'_> {
             values.push(self.coerce(item.pos, value, &ty, &element)?);
         }
         Ok((Value::ListDisplay(values), Type::List(Box::new(element))))
+    }
+
+    fn dict_display(
+        &mut self,
+        entries: &[(Expr, Expr)],
+        pos: Pos,
+        state: &State,
+        expected: Option<&Type>,
+    ) -> Result<(Value, Type), Diag> {
+        let mut values = Vec::new();
+        let (key, value) = match expected.and_then(Type::dict_entry) {
+            Some((key, value)) => (key.clone(), value.clone()),
+            None => {
+                let Some((key, value)) = entries.first() else {
+                    return self.fail(pos, "cannot infer the key and value types of an empty dict");
+                };
+                let (key_ir, key_ty) = self.expr(key, state)?;
+                let (value_ir, value_ty) = self.expr(value, state)?;
+                if !is_key_type(&key_ty) {
+                    return self.fail(key.pos, "dictionary keys must be int, str, or an enum");
+                }
+                values.push((key_ir, value_ir));
+                (key_ty, value_ty)
+            }
+        };
+        for (k, v) in &entries[values.len()..] {
+            let (key_ir, key_ty) = self.expr(k, state)?;
+            let key_ir = self.coerce(k.pos, key_ir, &key_ty, &key)?;
+            let (value_ir, value_ty) = self.expr_expect(v, state, Some(&value))?;
+            let value_ir = self.coerce(v.pos, value_ir, &value_ty, &value)?;
+            values.push((key_ir, value_ir));
+        }
+        let display = Value::DictDisplay {
+            kind: key.equality_kind(),
+            entries: values,
+        };
+        Ok((display, Type::Dict(Box::new(key), Box::new(value))))
     }
 
     /// The facts `cond` proves when it is true and when it is false (spec
@@ -961,21 +1151,25 @@ impl Checker<'_> {
                 value,
             } => {
                 let (object_ir, object_ty) = self.expr(object, state)?;
-                let Type::List(element) = &object_ty else {
-                    return self.fail(
-                        *bracket,
-                        format!(
-                            "cannot assign to an index of a value of type {}",
-                            object_ty.name()
-                        ),
-                    );
+                let (index_type, element, function) = match &object_ty {
+                    Type::List(element) => (Type::Int, &**element, "W.core.list_set"),
+                    Type::Dict(key, value) => ((**key).clone(), &**value, "W.core.dict_set"),
+                    _ => {
+                        return self.fail(
+                            *bracket,
+                            format!(
+                                "cannot assign to an index of a value of type {}",
+                                object_ty.name()
+                            ),
+                        );
+                    }
                 };
                 let (index_ir, index_ty) = self.expr(index, state)?;
-                self.expect(index.pos, &Type::Int, &index_ty)?;
+                let index_ir = self.coerce(index.pos, index_ir, &index_ty, &index_type)?;
                 let (value_ir, value_ty) = self.expr_expect(value, state, Some(element))?;
                 let value_ir = self.coerce(value.pos, value_ir, &value_ty, element)?;
                 ops.push(Op::SetItem {
-                    function: "W.core.list_set",
+                    function,
                     object: object_ir,
                     index: index_ir,
                     value: value_ir,
@@ -983,32 +1177,42 @@ impl Checker<'_> {
                 Ok(false)
             }
             StmtKind::For {
-                target,
+                targets,
                 iterable,
                 body,
             } => {
                 let mut assigned = HashSet::new();
                 assigned_names(body, &mut assigned);
-                assigned.insert(target.clone());
+                assigned.extend(targets.iter().cloned());
                 self.forget_narrowing(&assigned, state);
                 let source = self.for_source(iterable, state)?;
-                let item_ty = match &source {
-                    ForSource::Range(..) => Type::Int,
-                    ForSource::List(_, element) => element.clone(),
-                };
+                let items = source.items();
+                if targets.len() != items.len() {
+                    let message = match items.as_slice() {
+                        [(_, item)] => format!("cannot unpack a value of type {}", item.name()),
+                        _ => "'items' gives a key and a value, so it needs two targets".into(),
+                    };
+                    return self.fail(stmt.pos, message);
+                }
+                if targets.len() == 2 && targets[0] == targets[1] {
+                    return self.fail(stmt.pos, format!("duplicate target '{}'", targets[0]));
+                }
                 let mut body_state = state.clone();
-                let store = self.assign(
-                    target,
-                    iterable.pos,
-                    Value::Item,
-                    &item_ty,
-                    None,
-                    &mut body_state,
-                )?;
+                let mut stores = Vec::new();
+                for (target, (slot, ty)) in targets.iter().zip(items) {
+                    let item = Value::Item(slot);
+                    stores.push(self.assign(
+                        target,
+                        iterable.pos,
+                        item,
+                        &ty,
+                        None,
+                        &mut body_state,
+                    )?);
+                }
                 self.loops += 1;
-                let (body_ops, _) = self.block(body, &mut body_state)?;
+                let (body, _) = self.block(body, &mut body_state)?;
                 self.loops -= 1;
-                let store = Box::new(store);
                 ops.push(match source {
                     ForSource::Range(start, stop, step) => {
                         let message = self.strings.intern("range step must not be zero");
@@ -1018,15 +1222,13 @@ impl Checker<'_> {
                             stop,
                             step,
                             fail,
-                            store,
-                            body: body_ops,
+                            stores,
+                            body,
                         }
                     }
-                    ForSource::List(list, _) => Op::ForList {
-                        list,
-                        store,
-                        body: body_ops,
-                    },
+                    ForSource::List(list, _) => Op::ForList { list, stores, body },
+                    ForSource::Str(text) => Op::ForStr { text, stores, body },
+                    ForSource::Dict(dict, ..) => Op::ForDict { dict, stores, body },
                 });
                 Ok(false)
             }
@@ -1211,9 +1413,14 @@ impl Checker<'_> {
             }
             ExprKind::Call(callee, args) => self.call(callee, args, state),
             ExprKind::List(items) => self.list_display(items, expr.pos, state, None),
+            ExprKind::Dict(entries) => self.dict_display(entries, expr.pos, state, None),
             ExprKind::Index(object, index) => {
                 let (object_ir, object_ty) = self.expr(object, state)?;
                 let (index_ir, index_ty) = self.expr(index, state)?;
+                if let Type::Dict(key, value) = object_ty {
+                    let key_ir = self.coerce(index.pos, index_ir, &index_ty, &key)?;
+                    return Ok((core_call("dict_get", vec![object_ir, key_ir], true), *value));
+                }
                 self.expect(index.pos, &Type::Int, &index_ty)?;
                 let args = vec![object_ir, index_ir];
                 match object_ty {
@@ -1500,6 +1707,12 @@ impl Checker<'_> {
                     extra: vec![kind],
                 }
             }
+            Type::Dict(key, _) if item_ty.assignable_to(key) => Value::In {
+                function: "W.core.dict_contains",
+                item: Box::new(item),
+                container: Box::new(container),
+                extra: Vec::new(),
+            },
             Type::Str if *item_ty == Type::Str => Value::In {
                 function: "W.core.str_contains",
                 item: Box::new(item),
@@ -1638,7 +1851,11 @@ impl Checker<'_> {
         if name == "range" && !globals.contains_key(name) {
             return self.fail(pos, "'range' can only be the source of a for loop");
         }
-        if !globals.contains_key(name) && !matches!(name, "print" | "int" | "float" | "str" | "len")
+        if !globals.contains_key(name)
+            && !matches!(
+                name,
+                "print" | "int" | "float" | "str" | "len" | "ord" | "chr"
+            )
         {
             if !is_intrinsic(name) {
                 if BUILTINS.contains(&name) {
@@ -1671,11 +1888,23 @@ impl Checker<'_> {
             }
             return Ok((core_call("print_str", vec![text], false), Type::None));
         }
+        if name == "ord" || name == "chr" {
+            self.arity(pos, name, 1, checked.len())?;
+            let (arg_pos, value, ty) = checked.pop().unwrap();
+            let (param, ret, function) = if name == "ord" {
+                (Type::Str, Type::Int, "str_ord")
+            } else {
+                (Type::Int, Type::Str, "str_chr")
+            };
+            self.expect(arg_pos, &param, &ty)?;
+            return Ok((core_call(function, vec![value], true), ret));
+        }
         if name == "len" {
             self.arity(pos, name, 1, checked.len())?;
             let (_, value, ty) = checked.pop().unwrap();
             let function = match ty {
                 Type::List(_) => "list_len",
+                Type::Dict(..) => "dict_len",
                 Type::Str => "str_len",
                 _ => {
                     return self.fail(pos, format!("'len' cannot be applied to {}", ty.name()));
@@ -1819,33 +2048,57 @@ impl Checker<'_> {
         state: &State,
     ) -> Result<(Value, Type), Diag> {
         let (object_ir, object_ty) = self.expr(object, state)?;
-        let Type::List(element) = &object_ty else {
+        let display = format!("{}.{name}", object_ty.name());
+        if let Type::Dict(key, value) = &object_ty {
+            match name {
+                "get" => {
+                    let call = DictCall {
+                        dict: object_ir,
+                        key,
+                        value,
+                        pos: name_pos,
+                        display: &display,
+                    };
+                    return self.dict_get(call, args, state);
+                }
+                "keys" | "values" | "items" => {
+                    return self.fail(
+                        name_pos,
+                        format!("'{display}' can only be the source of a for loop"),
+                    );
+                }
+                _ => {}
+            }
+        }
+        let Some((function, params, defaults, ret)) = method_signature(&object_ty, name) else {
             return self.fail(
                 name_pos,
                 format!("type {} has no method '{name}'", object_ty.name()),
             );
         };
-        let element = (**element).clone();
-        let (params, ret) = match name {
-            "append" => (vec![element.clone()], Type::None),
-            "pop" => (Vec::new(), element.clone()),
-            "extend" => (vec![object_ty.clone()], Type::None),
-            "reverse" => (Vec::new(), Type::None),
-            _ => {
-                return self.fail(
-                    name_pos,
-                    format!("type {} has no method '{name}'", object_ty.name()),
-                );
-            }
-        };
-        let display = format!("{}.{name}", object_ty.name());
-        self.arity(name_pos, &display, params.len(), args.len())?;
+        let required = params.len() - defaults.len();
+        if defaults.is_empty() {
+            self.arity(name_pos, &display, params.len(), args.len())?;
+        } else if args.len() < required || args.len() > params.len() {
+            return self.fail(
+                name_pos,
+                format!(
+                    "'{display}' expects {required} to {}, received {}",
+                    count(params.len()),
+                    args.len()
+                ),
+            );
+        }
         let mut call_args = vec![object_ir];
-        for (arg, param) in args.iter().zip(&params) {
+        for (i, param) in params.iter().enumerate() {
+            let Some(arg) = args.get(i) else {
+                call_args.push(Value::Const(defaults[i - required]));
+                continue;
+            };
             let (value, ty) = self.expr_expect(arg, state, Some(param))?;
             // extend takes only a list of the same type in L0, since core
             // copies its slots as they are.
-            let value = if name == "extend" {
+            let value = if function == "list_extend" {
                 self.expect(arg.pos, param, &ty)?;
                 value
             } else {
@@ -1853,8 +2106,62 @@ impl Checker<'_> {
             };
             call_args.push(value);
         }
-        let function = format!("list_{name}");
-        Ok((core_call(&function, call_args, ret != Type::None), ret))
+        Ok((core_call(function, call_args, ret != Type::None), ret))
+    }
+
+    /// `d.get(key)` or `d.get(key, default)` (spec §7). The result is the
+    /// value type when the default is assignable to it, and otherwise the
+    /// value type or None.
+    fn dict_get(
+        &mut self,
+        call: DictCall,
+        args: &[Expr],
+        state: &State,
+    ) -> Result<(Value, Type), Diag> {
+        let DictCall {
+            dict,
+            key,
+            value,
+            pos,
+            display,
+        } = call;
+        if args.is_empty() || args.len() > 2 {
+            return self.fail(
+                pos,
+                format!(
+                    "'{display}' expects 1 to 2 arguments, received {}",
+                    args.len()
+                ),
+            );
+        }
+        let (key_ir, key_ty) = self.expr(&args[0], state)?;
+        let key_ir = self.coerce(args[0].pos, key_ir, &key_ty, key)?;
+        let (default, default_ty) = match args.get(1) {
+            Some(arg) => self.expr_expect(arg, state, Some(value))?,
+            None => (Value::Const(0), Type::None),
+        };
+        let result = if default_ty.assignable_to(value) {
+            value.clone()
+        } else if default_ty == Type::None {
+            Type::union([value.clone(), Type::None])
+        } else {
+            let allowed = Type::union([value.clone(), Type::None]);
+            return self.fail(
+                args[1].pos,
+                format!(
+                    "expected {}, received {}",
+                    allowed.name(),
+                    default_ty.name()
+                ),
+            );
+        };
+        let get = Value::DictGet {
+            dict: Box::new(dict),
+            key: Box::new(key_ir),
+            default: Box::new(widen(default, &default_ty, &result)),
+            present: Box::new(widen(Value::Item(0), value, &result)),
+        };
+        Ok((get, result))
     }
 
     /// A call to a declared function; `name` is its name in its module and
