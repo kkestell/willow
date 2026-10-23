@@ -1,7 +1,7 @@
 # Willow Language Specification
 
 Willow is a small, statically typed language with Python-like syntax. It compiles
-to Lua and runs on LuaJIT. Source files use the `.wlo` extension.
+to native code through QBE. Source files use the `.wlo` extension.
 
 ## 1. Programs
 
@@ -47,8 +47,7 @@ The whole program is checked before any of it runs, and an error in any module
 prevents the program from running. When the program runs, it calls `main` once.
 For an async `main`, the runtime drives its coroutine as the root task (§15).
 User code may also call `main`, and such a call behaves like any other function
-call, including producing a coroutine when `main` is async. Programs cannot
-access Lua globals or `require`.
+call, including producing a coroutine when `main` is async.
 
 The exit status is 0 when `main`'s body completes and 1 when an exception
 propagates out of it or the program reports another failure (§10). When the
@@ -387,7 +386,7 @@ Generic declarations and applications have fixed arity.
 
 | Type | Values |
 | --- | --- |
-| `int` | Integers from `-(2^53 - 1)` through `2^53 - 1` |
+| `int` | Integers from `-(2^63 - 1)` through `2^63 - 1` |
 | `float` | IEEE 754 binary64 numbers |
 | `bool` | `True` and `False` |
 | `str` | Immutable UTF-8 text |
@@ -1579,9 +1578,9 @@ source file is given, the commands search only that file's directory and the
 standard library, whether or not a `willow.json` exists. Programs run in the
 current directory, and their file operations are relative to it. Compiled and
 built output contains every module the program uses, from all roots.
-`willow compile -o <output>` writes the program as one Lua source file that
-runs on LuaJIT. `willow build -o <output>` bundles the program and LuaJIT into
-a standalone executable.
+`willow compile -o <output>` writes the program as one QBE intermediate
+language file. `willow build -o <output>` writes a native executable, and
+`willow run` builds the program to a temporary file and runs it.
 
 ### Tests
 
