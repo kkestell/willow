@@ -27,14 +27,11 @@ extern def copysign(x: float, y: float) -> float
 def init():
     signal(13, __ptr(__word(1)))
 
-def offset(p: ptr, n: int) -> ptr:
-    return __ptr(__word(__int(__word(p)) + n))
-
 # Failing to write stdout or stderr ends the program with status 1 (spec §10).
 def write_all(fd: int, buf: ptr, count: int):
     done = 0
     while done < count:
-        written = write(fd, offset(buf, done), count - done)
+        written = write(fd, __offset(buf, done), count - done)
         if written < 0:
             exit(1)
         done = done + written
@@ -68,7 +65,7 @@ def print_bool(b: bool):
 def int_to_str(n: int) -> str:
     # 21 bytes hold the longest int and the zero byte snprintf writes.
     s = __alloc_atomic(16 + 21)
-    length = snprintf(offset(s, 16), 21, str_bytes("%lld"), n)
+    length = snprintf(__offset(s, 16), 21, str_bytes("%lld"), n)
     __store8(s, 0, __word(__type(str)))
     __store8(s, 8, __word(length))
     return __str(__word(s))
@@ -88,7 +85,7 @@ def str_size(s: str) -> int:
     return __int(__load8(__ptr(__word(s)), 8))
 
 def str_bytes(s: str) -> ptr:
-    return offset(__ptr(__word(s)), 16)
+    return __offset(__ptr(__word(s)), 16)
 
 def str_byte(s: str, i: int) -> int:
     return __load1(str_bytes(s), i)
@@ -104,7 +101,7 @@ def str_alloc(length: int) -> ptr:
 # The string holding bytes `start` up to `stop` of `s`.
 def str_sub(s: str, start: int, stop: int) -> str:
     result = str_alloc(stop - start)
-    memcpy(offset(result, 16), offset(str_bytes(s), start), stop - start)
+    memcpy(__offset(result, 16), __offset(str_bytes(s), start), stop - start)
     return __str(__word(result))
 
 def is_continuation(b: int) -> bool:
@@ -143,7 +140,7 @@ def find_bytes(s: str, sub: str, start: int) -> int:
     last = str_size(s) - str_size(sub)
     i = start
     while i <= last:
-        if memcmp(offset(str_bytes(s), i), str_bytes(sub), str_size(sub)) == 0:
+        if memcmp(__offset(str_bytes(s), i), str_bytes(sub), str_size(sub)) == 0:
             return i
         i = i + 1
     return -1
@@ -151,7 +148,7 @@ def find_bytes(s: str, sub: str, start: int) -> int:
 def bytes_equal_at(s: str, at: int, sub: str) -> bool:
     if at < 0 or at + str_size(sub) > str_size(s):
         return False
-    return memcmp(offset(str_bytes(s), at), str_bytes(sub), str_size(sub)) == 0
+    return memcmp(__offset(str_bytes(s), at), str_bytes(sub), str_size(sub)) == 0
 
 # Space, tab, LF, VT, FF, and CR (spec §7).
 def is_space(b: int) -> bool:
@@ -178,8 +175,8 @@ def str_concat(a: str, b: str) -> str:
     a_size = str_size(a)
     b_size = str_size(b)
     s = str_alloc(a_size + b_size)
-    memcpy(offset(s, 16), str_bytes(a), a_size)
-    memcpy(offset(s, 16 + a_size), str_bytes(b), b_size)
+    memcpy(__offset(s, 16), str_bytes(a), a_size)
+    memcpy(__offset(s, 16 + a_size), str_bytes(b), b_size)
     return __str(__word(s))
 
 def str_eq(a: str, b: str) -> bool:
@@ -395,10 +392,10 @@ def str_join(sep: str, items: ptr) -> str:
     i = 0
     while i < count:
         if i > 0:
-            memcpy(offset(s, at), str_bytes(sep), str_size(sep))
+            memcpy(__offset(s, at), str_bytes(sep), str_size(sep))
             at = at + str_size(sep)
         item = __str(list_get(items, i))
-        memcpy(offset(s, at), str_bytes(item), str_size(item))
+        memcpy(__offset(s, at), str_bytes(item), str_size(item))
         at = at + str_size(item)
         i = i + 1
     return __str(__word(s))
@@ -536,7 +533,7 @@ def list_slice(xs: ptr, start: int, stop: int) -> ptr:
     if stop < start:
         stop = start
     result = list_new(stop - start)
-    memcpy(list_slots(result), offset(list_slots(xs), start * 8), (stop - start) * 8)
+    memcpy(list_slots(result), __offset(list_slots(xs), start * 8), (stop - start) * 8)
     set_list_len(result, stop - start)
     return result
 
@@ -615,7 +612,7 @@ def str_from_bytes(p: ptr, size: int) -> str:
     if not utf8_valid(p, size):
         fail("ValueError", "invalid UTF-8")
     s = str_alloc(size)
-    memcpy(offset(s, 16), p, size)
+    memcpy(__offset(s, 16), p, size)
     return __str(__word(s))
 
 def sys_args(argc: int, argv: ptr) -> ptr:
@@ -683,7 +680,7 @@ def fs_read_file(path: str) -> str:
             memcpy(larger, buf, size)
             buf = larger
             capacity = capacity * 2
-        count = read(fd, offset(buf, size), capacity - size)
+        count = read(fd, __offset(buf, size), capacity - size)
     close(fd)
     return str_from_bytes(buf, size)
 
@@ -694,7 +691,7 @@ def fs_write_file(path: str, text: str):
         fail_os("write", path)
     done = 0
     while done < str_size(text):
-        written = write(fd, offset(str_bytes(text), done), str_size(text) - done)
+        written = write(fd, __offset(str_bytes(text), done), str_size(text) - done)
         if written < 0:
             fail_os("write", path)
         done = done + written
