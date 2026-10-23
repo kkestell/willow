@@ -1,29 +1,20 @@
-class Circle:
-    radius: float
+type Number = int | float
+type Maybe = Number | None
+type Table = dict[str, Row]
+type Row = list[Maybe]
 
-class Square:
-    side: float
-
-type Shape = Circle | Square
-type Shapes = list[Shape]
-type MaybeShape = Shape | None
-
-def area(shape: Shape) -> float:
-    if isinstance(shape, Circle):
-        return 3.0 * shape.radius * shape.radius
-    return shape.side * shape.side
-
-def total(shapes: Shapes) -> float:
-    result = 0.0
-    for shape in shapes:
-        result = result + area(shape)
-    return result
+def total(row: Row) -> float:
+    sum = 0.0
+    for cell in row:
+        if isinstance(cell, int):
+            sum = sum + float(cell)
+        elif isinstance(cell, float):
+            sum = sum + cell
+    return sum
 
 def main():
-    shapes: Shapes = [Circle(1.0), Square(2.0)]
-    print(total(shapes))
-    found: MaybeShape = None
-    print(found is None)
-    found = shapes[1]
-    if found is not None:
-        print(area(found))
+    table: Table = {"a": [1, 2.5, None], "b": []}
+    for name, row in table.items():
+        print(name + " " + str(total(row)))
+    first: Maybe = table["a"][0]
+    print(first)

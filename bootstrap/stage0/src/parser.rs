@@ -41,7 +41,7 @@ pub struct Enum {
     pub members: Vec<(Pos, String)>,
 }
 
-/// `type name = ty`.
+/// A `type` declaration.
 pub struct Alias {
     pub pos: Pos,
     pub name: String,
@@ -101,7 +101,8 @@ pub enum StmtKind {
     },
     /// `for target in iterable:`, or `for key, value in d.items():`.
     For {
-        targets: Vec<String>,
+        /// Each target's position and name.
+        targets: Vec<(Pos, String)>,
         iterable: Expr,
         body: Vec<Stmt>,
     },
@@ -177,9 +178,9 @@ pub fn parse(name: &str, path: &str, tokens: Vec<Token>) -> Result<Module, Diag>
     let mut p = Parser { path, tokens, i: 0 };
     let mut imports = Vec::new();
     while p.accept("import") {
-        let (pos, mut name) = p.name()?;
+        let (pos, mut name) = p.name("a module name")?;
         while p.accept(".") {
-            name = format!("{name}.{}", p.name()?.1);
+            name = format!("{name}.{}", p.name("a module name")?.1);
         }
         p.end_of_line()?;
         imports.push(Import { pos, name });
@@ -202,10 +203,7 @@ pub fn parse(name: &str, path: &str, tokens: Vec<Token>) -> Result<Module, Diag>
         } else if p.accept("enum") {
             module.enums.push(p.enumeration()?);
         } else if p.accept("type") {
-            let (pos, name) = p.name()?;
-            if p.peek() == &Kind::Word("[") {
-                return p.fail(p.pos(), "type parameters are not supported");
-            }
+            let (pos, name) = p.name("an alias name")?;
             p.expect("=")?;
             let ty = p.type_expr()?;
             p.end_of_line()?;
@@ -234,10 +232,39 @@ fn describe(kind: &Kind) -> String {
     }
 }
 
-/// A reserved word that begins a construct stage 0 does not parse here.
+/// The reserved words that begin constructs stage 0 does not parse.
+const UNSUPPORTED_WORDS: &[&str] = &[
+    "as", "async", "await", "case", "del", "except", "finally", "from", "global", "lambda",
+    "match", "nonlocal", "protocol", "raise", "try", "with", "yield",
+];
+
 fn is_construct(kind: &Kind) -> bool {
-    matches!(kind, Kind::Word(w) if w.starts_with(|c: char| c.is_ascii_alphabetic())
-        && !matches!(*w, "True" | "False" | "None" | "not" | "and" | "or"))
+    matches!(kind, Kind::Word(w) if UNSUPPORTED_WORDS.contains(w))
+}
+
+/// Whether a token can begin an expression.
+fn starts_expression(kind: &Kind) -> bool {
+    match kind {
+        Kind::Name(_) | Kind::Int(_) | Kind::Float(_) | Kind::Str(_) | Kind::FStr(_) => true,
+        Kind::Word(w) => matches!(
+            *w,
+            "True"
+                | "False"
+                | "None"
+                | "int"
+                | "float"
+                | "str"
+                | "bytes"
+                | "("
+                | "["
+                | "{"
+                | "-"
+                | "+"
+                | "not"
+                | "await"
+        ),
+        _ => false,
+    }
 }
 
 impl Parser<'_> {
@@ -304,20 +331,33 @@ impl Parser<'_> {
         }
     }
 
-    fn name(&mut self) -> Result<(Pos, String), Diag> {
+    /// A name, which `expected` describes in a diagnostic.
+    fn name(&mut self, expected: &str) -> Result<(Pos, String), Diag> {
         let pos = self.pos();
         match self.peek().clone() {
             Kind::Name(name) => {
                 self.i += 1;
                 Ok((pos, name))
             }
-            _ => self.unexpected("a name"),
+            _ => self.unexpected(expected),
+        }
+    }
+
+    /// After an item of a parenthesized or bracketed list, accepts `,` or the
+    /// list's `close`; returns whether the list ended.
+    fn list_end(&mut self, close: &str) -> Result<bool, Diag> {
+        if self.accept(",") {
+            Ok(false)
+        } else if self.accept(close) {
+            Ok(true)
+        } else {
+            self.unexpected(&format!("',' or '{close}'"))
         }
     }
 
     /// A class declaration after its `class`.
     fn class(&mut self) -> Result<Class, Diag> {
-        let (pos, name) = self.name()?;
+        let (pos, name) = self.name("a class name")?;
         match self.peek() {
             Kind::Word("(") => return self.fail(self.pos(), "base classes are not supported"),
             Kind::Word("[") => return self.fail(self.pos(), "type parameters are not supported"),
@@ -344,7 +384,7 @@ impl Parser<'_> {
             if !methods.is_empty() {
                 return self.fail(self.pos(), "fields must come before methods");
             }
-            let (pos, name) = self.name()?;
+            let (pos, name) = self.name("a field name")?;
             self.i += 1;
             let ty = self.type_expr()?;
             let default = if self.accept("=") {
@@ -398,14 +438,19 @@ impl Parser<'_> {
 
     /// An enum declaration after its `enum`.
     fn enumeration(&mut self) -> Result<Enum, Diag> {
-        let (pos, name) = self.name()?;
+        let (pos, name) = self.name("an enum name")?;
         self.expect(":")?;
         self.expect_kind(Kind::Newline, "end of line")?;
         self.expect_kind(Kind::Indent, "an indented block")?;
         let mut members = Vec::new();
         while !self.accept_kind(Kind::Dedent) {
-            members.push(self.name()?);
-            self.end_of_line()?;
+            let is_member = matches!(self.peek(), Kind::Name(_))
+                && self.tokens[self.i + 1].kind == Kind::Newline;
+            if !is_member {
+                return self.fail(self.pos(), "enum bodies hold only member names");
+            }
+            members.push(self.name("a member name")?);
+            self.i += 1;
         }
         Ok(Enum { pos, name, members })
     }
@@ -423,11 +468,11 @@ impl Parser<'_> {
             }
             return self.fail(
                 self.pos(),
-                "only function, class, enum, and type declarations are allowed at file scope",
+                "only function, class, protocol, enum, and type declarations are allowed at file scope",
             );
         }
         self.i += 1;
-        let (pos, name) = self.name()?;
+        let (pos, name) = self.name("a function name")?;
         self.expect("(")?;
         if method {
             if !matches!(self.peek(), Kind::Name(n) if n == "self") {
@@ -452,12 +497,11 @@ impl Parser<'_> {
                 self.expect(")")?;
                 break;
             }
-            let (pos, name) = self.name()?;
+            let (pos, name) = self.name("a parameter name")?;
             self.expect(":")?;
             let ty = self.type_expr()?;
             params.push(Param { pos, name, ty });
-            if !self.accept(",") {
-                self.expect(")")?;
+            if self.list_end(")")? {
                 break;
             }
         }
@@ -498,7 +542,7 @@ impl Parser<'_> {
             Kind::Name(mut name) => {
                 self.i += 1;
                 while self.accept(".") {
-                    name = format!("{name}.{}", self.name()?.1);
+                    name = format!("{name}.{}", self.name("a type name")?.1);
                 }
                 name
             }
@@ -571,9 +615,9 @@ impl Parser<'_> {
             let (cond, body) = self.arm()?;
             StmtKind::While { cond, body }
         } else if self.accept("for") {
-            let mut targets = vec![self.name()?.1];
+            let mut targets = vec![self.name("a loop variable name")?];
             while self.accept(",") {
-                targets.push(self.name()?.1);
+                targets.push(self.name("a loop variable name")?);
             }
             self.expect("in")?;
             let iterable = self.expr()?;
@@ -610,6 +654,10 @@ impl Parser<'_> {
         } else if self.accept("continue") {
             self.end_of_line()?;
             StmtKind::Continue
+        } else if self.peek() == &Kind::Word("def") {
+            return self.fail(pos, "'def' is not supported");
+        } else if !starts_expression(self.peek()) {
+            return self.unexpected("a statement");
         } else {
             self.simple_statement()?
         };
@@ -624,6 +672,7 @@ impl Parser<'_> {
 
     fn simple_statement(&mut self) -> Result<StmtKind, Diag> {
         let expr = self.expr()?;
+        let equals = self.pos();
         let annotation = if self.peek() == &Kind::Word(":") {
             if !matches!(expr.kind, ExprKind::Name(_)) {
                 return self.fail(self.pos(), "only a name can have an annotation");
@@ -661,7 +710,7 @@ impl Parser<'_> {
                     index: *index,
                     value,
                 }),
-                _ => self.fail(expr.pos, "cannot assign to this expression"),
+                _ => self.fail(equals, "cannot assign to this expression"),
             };
         }
         if !matches!(expr.kind, ExprKind::Call(..)) {
@@ -700,9 +749,8 @@ impl Parser<'_> {
         let mut left = operand(self)?;
         while let Some((_, op_pos)) = self.binary_op(&[op]) {
             let right = operand(self)?;
-            let pos = left.pos;
             left = Expr {
-                pos,
+                pos: op_pos,
                 kind: ExprKind::Binary(op, op_pos, Box::new(left), Box::new(right)),
             };
         }
@@ -723,7 +771,7 @@ impl Parser<'_> {
 
     fn comparison(&mut self) -> Result<Expr, Diag> {
         let left = self.sum()?;
-        let pos = left.pos;
+        let pos = self.pos();
         let kind = if let Some((_, op_pos)) = self.binary_op(&["is"]) {
             let negated = self.accept("not");
             if !self.accept("None") {
@@ -757,9 +805,8 @@ impl Parser<'_> {
         let mut left = self.term()?;
         while let Some((op, op_pos)) = self.binary_op(&["+", "-"]) {
             let right = self.term()?;
-            let pos = left.pos;
             left = Expr {
-                pos,
+                pos: op_pos,
                 kind: ExprKind::Binary(op, op_pos, Box::new(left), Box::new(right)),
             };
         }
@@ -770,9 +817,8 @@ impl Parser<'_> {
         let mut left = self.unary()?;
         while let Some((op, op_pos)) = self.binary_op(&["*", "/", "//", "%"]) {
             let right = self.unary()?;
-            let pos = left.pos;
             left = Expr {
-                pos,
+                pos: op_pos,
                 kind: ExprKind::Binary(op, op_pos, Box::new(left), Box::new(right)),
             };
         }
@@ -794,9 +840,7 @@ impl Parser<'_> {
         let mut expr = self.primary()?;
         loop {
             if self.accept(".") {
-                // An attribute is positioned at its name, as `sys.exit(1, 2)`
-                // is reported at `exit`.
-                let (name_pos, name) = self.name()?;
+                let (name_pos, name) = self.name("a field or method name")?;
                 expr = Expr {
                     pos: name_pos,
                     kind: ExprKind::Attr(Box::new(expr), name_pos, name),
@@ -813,8 +857,7 @@ impl Parser<'_> {
             let mut args = Vec::new();
             while !self.accept(")") {
                 args.push(self.expr()?);
-                if !self.accept(",") {
-                    self.expect(")")?;
+                if self.list_end(")")? {
                     break;
                 }
             }
@@ -836,7 +879,7 @@ impl Parser<'_> {
             Some(Box::new(self.expr()?))
         };
         let kind = if self.accept(":") {
-            let stop = if self.peek() == &Kind::Word("]") {
+            let stop = if matches!(self.peek(), Kind::Word("]" | ":")) {
                 None
             } else {
                 Some(Box::new(self.expr()?))
@@ -868,8 +911,7 @@ impl Parser<'_> {
                     let key = self.expr()?;
                     self.expect(":")?;
                     entries.push((key, self.expr()?));
-                    if !self.accept(",") {
-                        self.expect("}")?;
+                    if self.list_end("}")? {
                         break;
                     }
                 }
@@ -883,8 +925,7 @@ impl Parser<'_> {
                 let mut items = Vec::new();
                 while !self.accept("]") {
                     items.push(self.expr()?);
-                    if !self.accept(",") {
-                        self.expect("]")?;
+                    if self.list_end("]")? {
                         break;
                     }
                 }

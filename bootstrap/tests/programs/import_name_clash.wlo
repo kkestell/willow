@@ -1,0 +1,6 @@
+import sys
+
+type sys = int
+
+def main():
+    pass

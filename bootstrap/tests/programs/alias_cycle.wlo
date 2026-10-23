@@ -1,4 +1,5 @@
-type Loop = int | Loop
+type Shape = Square | None
+type Square = int | Shape
 
 def main():
     pass
