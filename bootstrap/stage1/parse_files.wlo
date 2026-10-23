@@ -1,0 +1,41 @@
+# Lexes and parses each file named on the command line and writes the first
+# error in each to stderr. Exits with status 1 if any file has an error. A
+# first argument of --tokens writes every token to stdout, --tree writes each
+# syntax tree, and --positions writes each tree with positions.
+#
+# A file that is not valid UTF-8 ends the program with a ValueError from
+# fs.read_file instead of a diagnostic at the bad byte (spec §2), because L0
+# cannot catch it. Stage 2 can.
+
+import diagnostic
+import fs
+import lexer
+import parser
+import show
+import sys
+
+def main():
+    args = sys.args()
+    mode = ""
+    if len(args) > 0 and args[0].startswith("--"):
+        mode = args[0]
+        args = args[1:]
+    failed = False
+    for path in args:
+        lexed = lexer.lex(path, fs.read_file(path))
+        if isinstance(lexed, diagnostic.Diagnostic):
+            sys.eprint(lexed.format())
+            failed = True
+        elif mode == "--tokens":
+            for token in lexed:
+                print(f"{path}:{token.line}:{token.col}: {token.kind} {token.text}")
+        else:
+            parsed = parser.parse(path, lexed)
+            if isinstance(parsed, diagnostic.Diagnostic):
+                sys.eprint(parsed.format())
+                failed = True
+            elif mode == "--tree" or mode == "--positions":
+                print(f"# {path}")
+                print(show.Printer(mode == "--positions").module(parsed))
+    if failed:
+        sys.exit(1)
