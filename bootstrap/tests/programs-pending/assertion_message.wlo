@@ -1,0 +1,6 @@
+def main():
+    count = 2
+    assert count > 0, "never evaluated"
+    print(count)
+    assert count == 3, f"count is {count}"
+    print("unreachable")

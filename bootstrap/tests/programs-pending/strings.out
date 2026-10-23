@@ -1,0 +1,48 @@
+4
+c
+é
+abcd
+True
+True
+True
+False
+True
+True
+h
+é
+!
+233
+€
+65
+4
+2
+-1
+True
+False
+bbbbbb
+abc
+[pad]
+[a|b||c]
+[one|two]
+[none]
+x, y, z
+
+main
+main
+main
+True
+False
+False
+True
+False
+True
+False
+True
+False
+[ab   ]
+[   ab]
+[abcdef]
+[é  ]
+tab	here
+quote "inside"
+Aé😀
