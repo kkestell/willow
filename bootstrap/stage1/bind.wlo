@@ -1,0 +1,873 @@
+# Resolves names in a program's parsed modules, the counterpart of
+# compiler/bind.lua: each module's declarations, the symbols of parameters and
+# locals, nested functions and `nonlocal`, captures, and the names that
+# expressions use, recorded in the tree as ast.wlo describes. Errors have the
+# Lua binder's wording and positions, and binding stops at the first one.
+#
+# Not yet here: types (signatures, annotations, aliases, defaults, type
+# arguments), which wait for types.wlo, and built-in functions, built-in
+# exception classes, and standard library modules, which wait for stdlib.wlo.
+# Until then a name that the program does not declare is unknown.
+
+import ast
+import diagnostic
+
+# The names of a function body, which fall back to the enclosing function's.
+class Scope:
+    names: dict[str, ast.Symbol]
+    outer: Scope | None
+
+    def find(self, name: str) -> ast.Symbol | None:
+        if name in self.names:
+            return self.names[name]
+        outer = self.outer
+        if outer is None:
+            return None
+        return outer.find(name)
+
+class Binder:
+    modules: list[ast.Module]
+    by_name: dict[str, ast.Module]
+    entry: ast.Module
+    last_id: int
+    error: diagnostic.Diagnostic | None
+
+    def fail(self, module: ast.Module, line: int, col: int, message: str):
+        if self.error is None:
+            self.error = diagnostic.Diagnostic(module.path, line, col, message)
+
+    def new_id(self) -> int:
+        self.last_id = self.last_id + 1
+        return self.last_id
+
+    # Checks names that must be unique within a list.
+    def check_unique(self, module: ast.Module, items: list[ast.Ident], what: str):
+        seen: dict[str, bool] = {}
+        for item in items:
+            if item.name in seen:
+                self.fail(module, item.line, item.col, f"duplicate {what} '{item.name}'")
+                return
+            seen[item.name] = True
+
+    # Collects the imports and declarations of `module`, which share one
+    # namespace, and reports clashes in source order. An import takes its
+    # root name, which several qualified imports may share.
+    def declare(self, module: ast.Module):
+        taken: dict[str, bool] = {}
+        imported: dict[str, bool] = {}
+        for imp in module.imports:
+            for other in imported:
+                short = other
+                long = imp.name
+                if len(short) > len(long):
+                    short = imp.name
+                    long = other
+                if long.startswith(short + "."):
+                    self.fail(module, imp.line, imp.col, f"'{short}' is imported as a module and as a namespace")
+                    return
+            if imp.name in imported or imp.root in taken and imp.root not in module.roots:
+                self.fail(module, imp.line, imp.col, f"duplicate import '{imp.name}'")
+                return
+            imported[imp.name] = True
+            taken[imp.root] = True
+            module.roots[imp.root] = True
+            if imp.name in self.by_name:
+                module.imported[imp.name] = self.by_name[imp.name]
+        for decl in module.declarations:
+            ident = decl_ident(decl)
+            if ident.name in taken:
+                self.fail(module, ident.line, ident.col, f"duplicate {noun(decl)} '{ident.name}'")
+                return
+            taken[ident.name] = True
+            module.names[ident.name] = decl
+            type_name = ident.name
+            if module.name != self.entry.name:
+                type_name = module.name + "." + ident.name
+            set_type_name(decl, type_name)
+
+    # The type parameter names in `outer` and those of a declaration, which
+    # cannot hide one another.
+    def enter_type_params(self, module: ast.Module, outer: dict[str, bool], params: list[ast.TypeParam]) -> dict[str, bool]:
+        scope: dict[str, bool] = {}
+        for name in outer:
+            scope[name] = True
+        for param in params:
+            if param.name in scope:
+                self.fail(module, param.line, param.col, f"type parameter '{param.name}' hides another type parameter")
+            scope[param.name] = True
+        return scope
+
+    # The checks of a function's signature that need no types, with the type
+    # parameters of its class, if any, in `outer`.
+    def check_signature(self, module: ast.Module, function: ast.FunctionDecl, outer: dict[str, bool]):
+        self.enter_type_params(module, outer, function.type_params)
+        params: list[ast.Ident] = []
+        for param in function.params:
+            params.append(ast.Ident(param.line, param.col, param.name))
+        self.check_unique(module, params, "parameter")
+
+    # Gives `function` one symbol per parameter and per assigned or loop name,
+    # recording the others in `function.locals` in order of first assignment.
+    # A nested function's scope falls back to `outer`, its enclosing scope.
+    # `nonlocal` names rebind the enclosing function's variables, so
+    # assignments after the declaration make no local of their own; they are
+    # left in `pending` until the declaration is reached.
+    def collect_symbols(self, module: ast.Module, function: ast.FunctionDecl, outer: Scope | None, pending: dict[str, bool]) -> Scope:
+        function.id = self.new_id()
+        scope = Scope({}, outer)
+        for param in function.params:
+            symbol = ast.Symbol(self.new_id(), param.name, param.line, param.col, True, function)
+            param.symbol = symbol
+            scope.names[param.name] = symbol
+        self.collect(module, function, function.body, scope, pending)
+        return scope
+
+    def collect(self, module: ast.Module, function: ast.FunctionDecl, body: list[ast.Stmt], scope: Scope, pending: dict[str, bool]):
+        for statement in body:
+            node = statement.node
+            if isinstance(node, ast.Unpack):
+                self.collect_target(function, node.target, scope)
+            elif isinstance(node, ast.For):
+                # A loop variable's symbol is at its `for`.
+                if node.target.name != "":
+                    self.assign(function, node.target.name, statement.line, statement.col, scope)
+                else:
+                    self.collect_target(function, node.target, scope)
+                self.collect(module, function, node.body, scope, pending)
+            elif isinstance(node, ast.Assign):
+                self.assign(function, node.name, statement.line, statement.col, scope)
+            elif isinstance(node, ast.FunctionDef):
+                # A nested `def` names the function a call of the local reaches.
+                name = node.function.name
+                self.assign(function, name, statement.line, statement.col, scope)
+                if name in scope.names:
+                    scope.names[name].function = node.function
+            elif isinstance(node, ast.Nonlocal):
+                for ident in node.names:
+                    own: ast.Symbol | None = None
+                    if ident.name in scope.names:
+                        own = scope.names[ident.name]
+                    enclosing: ast.Symbol | None = None
+                    outer = scope.outer
+                    if outer is not None:
+                        enclosing = outer.find(ident.name)
+                    if own is not None and own.is_param or own is None and enclosing is None:
+                        self.fail(module, ident.line, ident.col, f"nonlocal '{ident.name}' must name a variable of an enclosing function")
+                        return
+                    if own is not None and (enclosing is None or own.id != enclosing.id):
+                        self.fail(module, ident.line, ident.col, f"'{ident.name}' is used before its nonlocal declaration")
+                        return
+                    if enclosing is not None:
+                        scope.names[ident.name] = enclosing
+                    pending[ident.name] = True
+            elif isinstance(node, ast.If):
+                self.collect(module, function, node.body, scope, pending)
+                self.collect(module, function, node.else_body, scope, pending)
+            elif isinstance(node, ast.While):
+                self.collect(module, function, node.body, scope, pending)
+            elif isinstance(node, ast.With):
+                for item in node.items:
+                    target = item.target
+                    if target is not None:
+                        self.collect_target(function, target, scope)
+                self.collect(module, function, node.body, scope, pending)
+            elif isinstance(node, ast.AsyncWith):
+                scope_target = node.target
+                if scope_target is not None:
+                    self.collect_target(function, scope_target, scope)
+                self.collect(module, function, node.body, scope, pending)
+            elif isinstance(node, ast.Try):
+                self.collect(module, function, node.body, scope, pending)
+                for handler in node.handlers:
+                    if handler.name != "":
+                        self.assign(function, handler.name, handler.line, handler.col, scope)
+                    self.collect(module, function, handler.body, scope, pending)
+                self.collect(module, function, node.finally_body, scope, pending)
+
+    def collect_target(self, function: ast.FunctionDecl, target: ast.Target, scope: Scope):
+        if target.name != "":
+            self.assign(function, target.name, target.line, target.col, scope)
+            return
+        for element in target.elements:
+            self.collect_target(function, element, scope)
+
+    # Makes a local for the first assignment of `name`.
+    def assign(self, function: ast.FunctionDecl, name: str, line: int, col: int, scope: Scope):
+        if name in scope.names:
+            return
+        symbol = ast.Symbol(self.new_id(), name, line, col, False, function)
+        scope.names[name] = symbol
+        function.locals.append(symbol)
+
+    # Resolves the body of `function`, whose enclosing scope is `outer`.
+    def resolve_function(self, module: ast.Module, function: ast.FunctionDecl, outer: Scope | None, type_params: dict[str, bool], enclosing_name: str):
+        pending: dict[str, bool] = {}
+        scope = self.collect_symbols(module, function, outer, pending)
+        resolver = Resolver(self, module, function, scope, pending, type_params, enclosing_name, 0)
+        resolver.resolve_block(function.body, None)
+
+# Resolves the names in one function body.
+class Resolver:
+    binder: Binder
+    module: ast.Module
+    function: ast.FunctionDecl
+    scope: Scope
+    pending: dict[str, bool]
+    type_params: dict[str, bool]
+    # The prefix of the names of functions nested in this one.
+    enclosing_name: str
+    # Grows with each call resolved in this function, not in nested ones.
+    calls: int
+
+    def failed(self) -> bool:
+        return self.binder.error is not None
+
+    def fail(self, line: int, col: int, message: str):
+        self.binder.fail(self.module, line, col, message)
+
+    # Declaration `name` of `module` as seen from this function's module.
+    # Names that begin with `_` are private to their module.
+    def lookup(self, module: ast.Module, name: str, line: int, col: int) -> ast.Decl | None:
+        if name not in module.names:
+            self.fail(line, col, f"module '{module.name}' has no function, class, enum, or alias '{name}'")
+            return None
+        if name.startswith("_") and module.name != self.module.name:
+            self.fail(line, col, f"'{name}' is private to module '{module.name}'")
+            return None
+        return module.names[name]
+
+    # The class, protocol, enum, or alias that `ref` names, through the
+    # module's declarations and imports, which locals never shadow.
+    def resolve_named(self, ref: ast.TypeName) -> ast.Decl | None:
+        decl: ast.Decl | None = None
+        written = ref.name
+        if ref.module != "":
+            written = ref.module + "." + ref.name
+            if ref.module not in self.module.imported:
+                self.fail(ref.line, ref.col, f"unknown module '{ref.module}'")
+                return None
+            decl = self.lookup(self.module.imported[ref.module], ref.name, ref.line, ref.col)
+            if decl is None:
+                return None
+        elif ref.name in self.module.names:
+            decl = self.module.names[ref.name]
+        if decl is None or isinstance(decl, ast.FunctionDecl):
+            self.fail(ref.line, ref.col, f"unknown type '{written}'")
+            return None
+        return decl
+
+    # The module name that `object` spells when it starts with an import's
+    # root that no local shadows, or "".
+    def module_path(self, object: ast.Expr) -> str:
+        path = qualified_name(object)
+        if path == "":
+            return ""
+        root = path.split(".")[0]
+        if self.scope.find(root) is None and root in self.module.roots:
+            return path
+        return ""
+
+    # The enum that `object` names as `E` or `module.E` when no local shadows
+    # it, or None.
+    def enum_named(self, object: ast.Expr) -> ast.EnumDecl | None:
+        path = qualified_name(object)
+        if path == "":
+            return None
+        parts = path.split(".")
+        root = parts[0]
+        if self.scope.find(root) is not None:
+            return None
+        decl: ast.Decl | None = None
+        if len(parts) == 1:
+            if path in self.module.names:
+                decl = self.module.names[path]
+        elif root in self.module.roots:
+            prefix = ".".join(parts[:len(parts) - 1])
+            if prefix in self.module.imported:
+                decl = self.lookup(self.module.imported[prefix], parts[len(parts) - 1], object.line, object.col)
+        if isinstance(decl, ast.EnumDecl):
+            return decl
+        return None
+
+    # Makes `expr`, a Field on `decl`, an EnumMember.
+    def resolve_member(self, expr: ast.Expr, decl: ast.EnumDecl, name: str):
+        for member in decl.members:
+            if member.name == name:
+                expr.node = ast.EnumMember(decl, name)
+                return
+        self.fail(expr.line, expr.col, f"enum '{decl.type_name}' has no member '{name}'")
+
+    # Makes `expr` a function value of `decl`, or reports why a declaration
+    # named `name` cannot be a value.
+    def declared_value(self, expr: ast.Expr, decl: ast.Decl, name: str, qualified: bool):
+        if isinstance(decl, ast.FunctionDecl):
+            expr.node = ast.FunctionValue(decl, qualified, [])
+        elif isinstance(decl, ast.ClassDecl):
+            self.fail(expr.line, expr.col, f"class '{name}' cannot be used as a value")
+        else:
+            self.fail(expr.line, expr.col, f"{noun(decl)} '{name}' cannot be used as a value")
+
+    # Records that `symbol`, a variable of an enclosing function, is captured
+    # by this function and by each function between it and the owner.
+    def capture(self, symbol: ast.Symbol, line: int, col: int):
+        symbol.captured = True
+        function: ast.FunctionDecl | None = self.function
+        while function is not None and function.id != symbol.owner.id:
+            found = False
+            for capture in function.captures:
+                if capture.symbol.id == symbol.id:
+                    found = True
+            if not found:
+                function.captures.append(ast.Capture(symbol, line, col))
+            function = function.parent
+
+    def resolve_exprs(self, exprs: list[ast.Expr]):
+        for expr in exprs:
+            self.resolve_expr(expr, False)
+
+    def resolve_args(self, args: list[ast.Expr], keywords: list[ast.Keyword]):
+        self.resolve_exprs(args)
+        for keyword in keywords:
+            self.resolve_expr(keyword.value, False)
+
+    # Resolves `expr`, which is a call's callee when `callee`.
+    def resolve_expr(self, expr: ast.Expr, callee: bool):
+        if self.failed():
+            return
+        node = expr.node
+        if isinstance(node, ast.Call) or isinstance(node, ast.CallValue) or isinstance(node, ast.MethodCall):
+            self.calls = self.calls + 1
+        if isinstance(node, ast.Name):
+            self.resolve_name(expr, node, callee)
+        elif isinstance(node, ast.Call):
+            if self.scope.find(node.name) is not None:
+                # A local hides a declaration of the same name, so this calls
+                # its value.
+                name = ast.Expr(expr.line, expr.col, ast.Name(node.name, False))
+                expr.node = ast.CallValue(name, node.args, node.keywords, node.type_args)
+                self.resolve_expr(expr, False)
+                return
+            target = node.target
+            if target is None:
+                if node.name not in self.module.names:
+                    self.fail(expr.line, expr.col, f"unknown function '{node.name}'")
+                    return
+                decl = self.module.names[node.name]
+                if isinstance(decl, ast.AliasDecl) or isinstance(decl, ast.EnumDecl) or isinstance(decl, ast.ProtocolDecl):
+                    self.fail(expr.line, expr.col, f"{noun(decl)} '{node.name}' cannot be called")
+                    return
+                node.target = decl
+            self.resolve_args(node.args, node.keywords)
+        elif isinstance(node, ast.SpecializedCall):
+            self.resolve_specialized_call(expr, node)
+        elif isinstance(node, ast.Specialized):
+            self.resolve_specialized(expr, node)
+        elif isinstance(node, ast.Lambda):
+            # A lambda is a nested function whose body returns its expression.
+            params: list[ast.Ident] = []
+            for param in node.params:
+                params.append(ast.Ident(param.line, param.col, param.name))
+            self.binder.check_unique(self.module, params, "parameter")
+            # Its result type comes from where it is used, so its return
+            # type is a placeholder.
+            result = ast.TypeName(expr.line, expr.col, "None", "", [], False)
+            body = [ast.Stmt(expr.line, expr.col, ast.Return(node.body))]
+            function = ast.FunctionDecl(expr.line, expr.col, "<lambda>", [], node.params, result, body, False, [], [])
+            function.parent = self.function
+            function.type_name = self.enclosing_name + ".<lambda>"
+            node.function = function
+            self.binder.resolve_function(self.module, function, self.scope, self.type_params, function.type_name)
+        elif isinstance(node, ast.CallValue):
+            self.resolve_expr(node.callee, True)
+            self.resolve_args(node.args, node.keywords)
+        elif isinstance(node, ast.MethodCall):
+            self.resolve_method_call(expr, node)
+        elif isinstance(node, ast.Unary):
+            self.resolve_expr(node.operand, False)
+        elif isinstance(node, ast.Is):
+            self.resolve_expr(node.operand, False)
+        elif isinstance(node, ast.IsInstance):
+            self.resolve_isinstance(expr, node)
+        elif isinstance(node, ast.Binary):
+            self.resolve_expr(node.left, False)
+            self.resolve_expr(node.right, False)
+        elif isinstance(node, ast.Index):
+            self.resolve_expr(node.object, False)
+            self.resolve_expr(node.index, False)
+        elif isinstance(node, ast.Slice):
+            self.resolve_expr(node.object, False)
+            start = node.start
+            if start is not None:
+                self.resolve_expr(start, False)
+            stop = node.stop
+            if stop is not None:
+                self.resolve_expr(stop, False)
+        elif isinstance(node, ast.Await):
+            if not self.function.is_async:
+                self.fail(expr.line, expr.col, "'await' is only allowed in an async function")
+                return
+            # An await may suspend the body, letting other code run, like a
+            # call.
+            self.resolve_expr(node.operand, False)
+            self.calls = self.calls + 1
+        elif isinstance(node, ast.Field):
+            enum_decl = self.enum_named(node.object)
+            path = self.module_path(node.object)
+            if self.failed():
+                return
+            if enum_decl is not None:
+                self.resolve_member(expr, enum_decl, node.name)
+            elif path != "" and path in self.module.imported:
+                value_decl = self.lookup(self.module.imported[path], node.name, expr.line, expr.col)
+                if value_decl is not None:
+                    self.declared_value(expr, value_decl, path + "." + node.name, True)
+            else:
+                self.resolve_expr(node.object, False)
+        elif isinstance(node, ast.FString):
+            self.resolve_exprs(node.parts)
+        elif isinstance(node, ast.ListDisplay):
+            self.resolve_exprs(node.elements)
+        elif isinstance(node, ast.TupleDisplay):
+            self.resolve_exprs(node.elements)
+        elif isinstance(node, ast.DictDisplay):
+            i = 0
+            while i < len(node.keys):
+                self.resolve_expr(node.keys[i], False)
+                self.resolve_expr(node.values[i], False)
+                i = i + 1
+
+    def resolve_name(self, expr: ast.Expr, node: ast.Name, callee: bool):
+        symbol = self.scope.find(node.name)
+        if symbol is None and node.name in self.module.names:
+            self.declared_value(expr, self.module.names[node.name], node.name, False)
+            return
+        if node.name in self.pending:
+            self.fail(expr.line, expr.col, f"'{node.name}' is used before its nonlocal declaration")
+            return
+        if symbol is None:
+            if node.name in self.module.roots:
+                self.fail(expr.line, expr.col, f"module '{node.name}' cannot be used as a value")
+            else:
+                self.fail(expr.line, expr.col, f"unknown name '{node.name}'")
+            return
+        node.symbol = symbol
+        # A generic nested function is a value of its specialization.
+        function = symbol.function
+        if function is not None and is_generic(function) and not callee:
+            expr.node = ast.FunctionValue(function, False, [], symbol)
+        if symbol.owner.id != self.function.id:
+            self.capture(symbol, expr.line, expr.col)
+
+    def resolve_specialized_call(self, expr: ast.Expr, node: ast.SpecializedCall):
+        callee = node.callee.node
+        name = ""
+        symbol: ast.Symbol | None = None
+        decl: ast.Decl | None = None
+        if isinstance(callee, ast.Name):
+            name = callee.name
+            symbol = self.scope.find(name)
+            if symbol is None and name in self.module.names:
+                decl = self.module.names[name]
+        elif isinstance(callee, ast.Field):
+            path = self.module_path(callee.object)
+            if path != "" and path in self.module.imported:
+                name = path + "." + callee.name
+                decl = self.lookup(self.module.imported[path], callee.name, node.callee.line, node.callee.col)
+                if decl is None:
+                    return
+        generic = decl is not None and is_generic_decl(decl)
+        if symbol is not None:
+            function = symbol.function
+            generic = function is not None and is_generic(function)
+        if generic:
+            if symbol is not None:
+                expr.node = ast.CallValue(node.callee, node.args, node.keywords, node.type_args)
+            elif isinstance(decl, ast.FunctionDecl):
+                expr.node = ast.Call(name, node.args, node.keywords, node.type_args, decl)
+            elif isinstance(decl, ast.ClassDecl):
+                expr.node = ast.Call(name, node.args, node.keywords, node.type_args, decl)
+        else:
+            # An index followed by a call, as in `handlers[i](x)`.
+            if decl is not None:
+                self.fail(node.callee.line, node.callee.col, f"'{name}' is not generic")
+                return
+            index = node.index
+            if index is None:
+                self.raise_error(node.index_error)
+                return
+            expr.node = ast.CallValue(index, node.args, node.keywords, [])
+        self.resolve_expr(expr, False)
+
+    # A generic function specialized as a value, or else an index.
+    def resolve_specialized(self, expr: ast.Expr, node: ast.Specialized):
+        callee = node.callee.node
+        symbol: ast.Symbol | None = None
+        decl: ast.Decl | None = None
+        if isinstance(callee, ast.Name):
+            symbol = self.scope.find(callee.name)
+            if symbol is not None:
+                decl = symbol.function
+            elif callee.name in self.module.names:
+                decl = self.module.names[callee.name]
+        elif isinstance(callee, ast.Field):
+            path = self.module_path(callee.object)
+            if path != "" and path in self.module.imported:
+                decl = self.lookup(self.module.imported[path], callee.name, node.callee.line, node.callee.col)
+                if decl is None:
+                    return
+        if isinstance(decl, ast.FunctionDecl) and is_generic(decl):
+            if symbol is not None:
+                self.resolve_expr(node.callee, False)
+            expr.node = ast.FunctionValue(decl, isinstance(callee, ast.Field), node.type_args, symbol)
+            return
+        index = node.index
+        if index is None:
+            self.raise_error(node.index_error)
+            return
+        expr.line = index.line
+        expr.col = index.col
+        expr.node = index.node
+        self.resolve_expr(expr, False)
+
+    # Reports `error`, an error the parser kept for a later pass.
+    def raise_error(self, error: diagnostic.Diagnostic | None):
+        if error is not None and self.binder.error is None:
+            self.binder.error = error
+
+    def resolve_method_call(self, expr: ast.Expr, node: ast.MethodCall):
+        decl = self.enum_named(node.object)
+        if self.failed():
+            return
+        receiver = node.object.node
+        path = self.module_path(node.object)
+        if decl is not None:
+            self.fail(expr.line, expr.col, f"enum '{decl.type_name}' has no method '{node.name}'")
+        elif isinstance(receiver, ast.Name) and receiver.reserved and receiver.name == "bytes":
+            # `bytes.fromhex(...)` is the only static method of a type.
+            if node.name != "fromhex":
+                self.fail(expr.line, expr.col, f"type 'bytes' has no static method '{node.name}'")
+                return
+            expr.node = ast.Call("bytes.fromhex", node.args, node.keywords, [])
+            self.resolve_args(node.args, node.keywords)
+        elif path != "":
+            # `module.name(...)` calls a function or constructs a class of
+            # that module.
+            if path not in self.module.imported:
+                self.fail(node.object.line, node.object.col, f"unknown module '{path}'")
+                return
+            target = self.lookup(self.module.imported[path], node.name, expr.line, expr.col)
+            if target is None:
+                return
+            name = path + "." + node.name
+            if isinstance(target, ast.AliasDecl) or isinstance(target, ast.EnumDecl) or isinstance(target, ast.ProtocolDecl):
+                self.fail(expr.line, expr.col, f"{noun(target)} '{name}' cannot be called")
+                return
+            expr.node = ast.Call(name, node.args, node.keywords, [], target)
+            self.resolve_args(node.args, node.keywords)
+        else:
+            self.resolve_expr(node.object, False)
+            self.resolve_args(node.args, node.keywords)
+
+    def resolve_isinstance(self, expr: ast.Expr, node: ast.IsInstance):
+        if self.scope.find("isinstance") is not None:
+            self.fail(expr.line, expr.col, "cannot call local variable 'isinstance'")
+            return
+        self.resolve_expr(node.operand, False)
+        ref = node.type_name
+        if ref.module == "" and ref.name in self.type_params:
+            self.fail(ref.line, ref.col, f"type parameter '{ref.name}' cannot be used in isinstance")
+            return
+        if ref.module == "" and is_builtin_type(ref.name):
+            return
+        decl = self.resolve_named(ref)
+        if isinstance(decl, ast.AliasDecl):
+            self.fail(ref.line, ref.col, f"alias '{ref.name}' cannot be used in isinstance")
+        elif isinstance(decl, ast.ProtocolDecl):
+            self.fail(ref.line, ref.col, f"protocol '{ref.name}' cannot be used in isinstance")
+        ref.declaration = decl
+
+    def resolve_target(self, target: ast.Target):
+        if target.name != "":
+            target.symbol = self.scope.find(target.name)
+            return
+        for element in target.elements:
+            self.resolve_target(element)
+
+    # Resolves `body`, inside `handling`, the innermost `try` with an
+    # `except` clause whose handler holds it, if any.
+    def resolve_block(self, body: list[ast.Stmt], handling: ast.Try | None):
+        for statement in body:
+            if self.failed():
+                return
+            self.resolve_stmt(statement, handling)
+
+    def resolve_stmt(self, statement: ast.Stmt, handling: ast.Try | None):
+        node = statement.node
+        if isinstance(node, ast.Unpack):
+            self.resolve_expr(node.value, False)
+            self.resolve_target(node.target)
+        elif isinstance(node, ast.Assign):
+            self.resolve_expr(node.value, False)
+            node.symbol = self.scope.find(node.name)
+        elif isinstance(node, ast.Nonlocal):
+            for ident in node.names:
+                if ident.name in self.pending:
+                    self.pending.pop(ident.name)
+                symbol = self.scope.find(ident.name)
+                if symbol is not None:
+                    self.capture(symbol, ident.line, ident.col)
+        elif isinstance(node, ast.FunctionDef):
+            nested = node.function
+            nested.parent = self.function
+            nested.type_name = self.enclosing_name + "." + nested.name
+            self.binder.check_signature(self.module, nested, self.type_params)
+            if self.failed():
+                return
+            node.symbol = self.scope.find(nested.name)
+            type_params = self.binder.enter_type_params(self.module, self.type_params, nested.type_params)
+            self.binder.resolve_function(self.module, nested, self.scope, type_params, nested.type_name)
+        elif isinstance(node, ast.FieldAssign):
+            self.resolve_expr(node.value, False)
+            enum_decl = self.enum_named(node.object)
+            if enum_decl is not None:
+                self.fail(statement.line, statement.col, f"cannot assign to a member of enum '{enum_decl.type_name}'")
+                return
+            self.resolve_expr(node.object, False)
+        elif isinstance(node, ast.IndexAssign):
+            self.resolve_expr(node.value, False)
+            self.resolve_expr(node.object, False)
+            self.resolve_expr(node.index, False)
+        elif isinstance(node, ast.CallStmt):
+            self.resolve_expr(node.call, False)
+        elif isinstance(node, ast.Return):
+            value = node.value
+            if value is not None:
+                self.resolve_expr(value, False)
+        elif isinstance(node, ast.If):
+            self.resolve_expr(node.condition, False)
+            self.resolve_block(node.body, handling)
+            self.resolve_block(node.else_body, handling)
+        elif isinstance(node, ast.While):
+            before = self.calls
+            self.resolve_expr(node.condition, False)
+            self.resolve_block(node.body, handling)
+            node.calls = self.calls != before
+        elif isinstance(node, ast.For):
+            self.resolve_expr(node.iterable, False)
+            self.resolve_target(node.target)
+            before = self.calls
+            self.resolve_block(node.body, handling)
+            node.calls = self.calls != before
+        elif isinstance(node, ast.Assert):
+            self.resolve_expr(node.condition, False)
+            message = node.message
+            if message is not None:
+                self.resolve_expr(message, False)
+        elif isinstance(node, ast.Yield):
+            if self.function.is_async:
+                self.fail(statement.line, statement.col, "'yield' cannot be used in an async function")
+                return
+            # A yield suspends the body, letting other code run, like a call.
+            self.resolve_expr(node.value, False)
+            self.function.generator = True
+            self.calls = self.calls + 1
+        elif isinstance(node, ast.Raise):
+            raised = node.value
+            if raised is not None:
+                self.resolve_expr(raised, False)
+            elif handling is None:
+                self.fail(statement.line, statement.col, "bare 'raise' is only allowed in an 'except' clause")
+                return
+            node.handler = handling
+        elif isinstance(node, ast.With):
+            # Entering and exiting call the managers' methods.
+            for item in node.items:
+                self.resolve_expr(item.manager, False)
+                target = item.target
+                if target is not None:
+                    self.resolve_target(target)
+                self.calls = self.calls + 2
+            self.resolve_block(node.body, handling)
+        elif isinstance(node, ast.AsyncWith):
+            if not self.function.is_async:
+                self.fail(statement.line, statement.col, "'async with' is only allowed in an async function")
+                return
+            self.resolve_expr(node.manager, False)
+            scope_target = node.target
+            if scope_target is not None:
+                self.resolve_target(scope_target)
+            # The join lets other code run.
+            self.calls = self.calls + 1
+            self.resolve_block(node.body, handling)
+        elif isinstance(node, ast.Try):
+            self.resolve_block(node.body, handling)
+            for handler in node.handlers:
+                decl = self.resolve_named(handler.type_name)
+                if decl is None:
+                    return
+                if not isinstance(decl, ast.ClassDecl) or not decl.exception:
+                    self.fail(handler.type_name.line, handler.type_name.col, f"'{decl_ident(decl).name}' is not an exception class")
+                    return
+                handler.type_name.declaration = decl
+                if handler.name != "":
+                    handler.symbol = self.scope.find(handler.name)
+                self.resolve_block(handler.body, node)
+            self.resolve_block(node.finally_body, handling)
+
+# Binds `modules`, the entry module first, and returns the first error, if
+# any.
+def bind(modules: list[ast.Module]) -> diagnostic.Diagnostic | None:
+    by_name: dict[str, ast.Module] = {}
+    for module in modules:
+        by_name[module.name] = module
+    binder = Binder(modules, by_name, modules[0], 0, None)
+    for module in modules:
+        binder.declare(module)
+        if binder.error is not None:
+            return binder.error
+    for module in modules:
+        for decl in module.declarations:
+            if isinstance(decl, ast.EnumDecl):
+                binder.check_unique(module, decl.members, "enum member")
+    for module in modules:
+        for decl in module.declarations:
+            if isinstance(decl, ast.AliasDecl):
+                binder.enter_type_params(module, {}, decl.type_params)
+    if binder.error is not None:
+        return binder.error
+    for module in modules:
+        check_declarations(binder, module)
+        if binder.error is not None:
+            return binder.error
+    check_main(binder, modules[0])
+    for module in modules:
+        for function in functions(module):
+            if binder.error is not None:
+                return binder.error
+            outer: dict[str, bool] = {}
+            enclosing_name = function.type_name
+            owner = function.owner
+            if isinstance(owner, ast.ClassDecl):
+                outer = binder.enter_type_params(module, {}, owner.type_params)
+                enclosing_name = owner.type_name + "." + function.name
+            type_params = binder.enter_type_params(module, outer, function.type_params)
+            binder.resolve_function(module, function, None, type_params, enclosing_name)
+    return binder.error
+
+# The checks of classes, protocols, and functions that come before function
+# bodies and need no types, in the Lua binder's order.
+def check_declarations(binder: Binder, module: ast.Module):
+    for decl in module.declarations:
+        if isinstance(decl, ast.ClassDecl):
+            fields: list[ast.Ident] = []
+            for field in decl.fields:
+                fields.append(ast.Ident(field.line, field.col, field.name))
+            binder.check_unique(module, fields, "field")
+            binder.check_unique(module, idents(decl.methods), "method")
+            outer = binder.enter_type_params(module, {}, decl.type_params)
+            for method in decl.methods:
+                for field in decl.fields:
+                    if field.name == method.name:
+                        binder.fail(module, method.line, method.col, f"method '{method.name}' has the same name as a field")
+                method.owner = decl
+                binder.check_signature(module, method, outer)
+    for decl in module.declarations:
+        if isinstance(decl, ast.ProtocolDecl):
+            binder.check_unique(module, idents(decl.methods), "method")
+            outer = binder.enter_type_params(module, {}, decl.type_params)
+            for method in decl.methods:
+                method.owner = decl
+                binder.check_signature(module, method, outer)
+    for decl in module.declarations:
+        if isinstance(decl, ast.FunctionDecl):
+            binder.check_signature(module, decl, {})
+
+def check_main(binder: Binder, entry: ast.Module):
+    if binder.error is not None:
+        return
+    main: ast.Decl | None = None
+    if "main" in entry.names:
+        main = entry.names["main"]
+    if not isinstance(main, ast.FunctionDecl):
+        binder.fail(entry, 1, 1, "program has no main function")
+        return
+    if len(main.params) > 0:
+        binder.fail(entry, main.line, main.col, "main must take no parameters and return None")
+
+# The functions of `module` followed by the methods of its classes.
+def functions(module: ast.Module) -> list[ast.FunctionDecl]:
+    result: list[ast.FunctionDecl] = []
+    for decl in module.declarations:
+        if isinstance(decl, ast.FunctionDecl):
+            result.append(decl)
+    for decl in module.declarations:
+        if isinstance(decl, ast.ClassDecl):
+            result.extend(decl.methods)
+    return result
+
+def idents(functions: list[ast.FunctionDecl]) -> list[ast.Ident]:
+    result: list[ast.Ident] = []
+    for function in functions:
+        result.append(ast.Ident(function.line, function.col, function.name))
+    return result
+
+def decl_ident(decl: ast.Decl) -> ast.Ident:
+    if isinstance(decl, ast.FunctionDecl):
+        return ast.Ident(decl.line, decl.col, decl.name)
+    if isinstance(decl, ast.ClassDecl):
+        return ast.Ident(decl.line, decl.col, decl.name)
+    if isinstance(decl, ast.ProtocolDecl):
+        return ast.Ident(decl.line, decl.col, decl.name)
+    if isinstance(decl, ast.EnumDecl):
+        return ast.Ident(decl.line, decl.col, decl.name)
+    return ast.Ident(decl.line, decl.col, decl.name)
+
+def set_type_name(decl: ast.Decl, name: str):
+    if isinstance(decl, ast.FunctionDecl):
+        decl.type_name = name
+    elif isinstance(decl, ast.ClassDecl):
+        decl.type_name = name
+    elif isinstance(decl, ast.ProtocolDecl):
+        decl.type_name = name
+    elif isinstance(decl, ast.EnumDecl):
+        decl.type_name = name
+    else:
+        decl.type_name = name
+
+# How errors name the kind of `decl`.
+def noun(decl: ast.Decl) -> str:
+    if isinstance(decl, ast.FunctionDecl):
+        return "function"
+    if isinstance(decl, ast.ClassDecl):
+        return "class"
+    if isinstance(decl, ast.ProtocolDecl):
+        return "protocol"
+    if isinstance(decl, ast.EnumDecl):
+        return "enum"
+    return "alias"
+
+def is_generic(function: ast.FunctionDecl) -> bool:
+    return len(function.type_params) > 0
+
+def is_generic_decl(decl: ast.Decl) -> bool:
+    if isinstance(decl, ast.FunctionDecl):
+        return len(decl.type_params) > 0
+    if isinstance(decl, ast.ClassDecl):
+        return len(decl.type_params) > 0
+    return False
+
+# The type names that isinstance takes without a declaration.
+def is_builtin_type(name: str) -> bool:
+    return name == "int" or name == "float" or name == "bool" or name == "str" or name == "bytes" or name == "None" or name == "list" or name == "dict" or name == "tuple"
+
+# The dotted name that `expr` spells, a Name or Fields on one, or "".
+def qualified_name(expr: ast.Expr) -> str:
+    node = expr.node
+    if isinstance(node, ast.Name):
+        return node.name
+    if isinstance(node, ast.Field):
+        path = qualified_name(node.object)
+        if path == "":
+            return ""
+        return path + "." + node.name
+    return ""
