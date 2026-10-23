@@ -1,0 +1,4 @@
+def main():
+    if 1 < 2:
+        message = "yes"
+    print(message)
