@@ -1,0 +1,17 @@
+import fs
+
+# host_paths.link is a symlink to this file, and host_paths_dangling.link one
+# to a file that does not exist.
+def main():
+    print(fs.exists("host_paths.wlo"))
+    print(fs.exists("."))
+    print(fs.exists("host_paths.link"))
+    print(fs.exists("host_paths_missing"))
+    print(fs.exists("host_paths_dangling.link"))
+    print(fs.exists("host_paths.wlo/inside"))
+    real = fs.realpath("host_paths.wlo")
+    print(real.startswith("/"))
+    print(real.endswith("/bootstrap/tests/programs/host_paths.wlo"))
+    print(fs.realpath("host_paths.link") == real)
+    print(fs.realpath("./../programs//host_paths.wlo") == real)
+    print(fs.realpath(".") + "/host_paths.wlo" == real)
