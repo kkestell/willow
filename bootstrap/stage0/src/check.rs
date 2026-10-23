@@ -175,11 +175,6 @@ fn target_os() -> &'static str {
 /// The built-in types with descriptors, which every program emits.
 const BUILTIN_TYPES: &[&str] = &["int", "float", "bool", "str", "list", "dict"];
 
-/// Whether `module` may use intrinsics: core, and core's tests, which import it.
-fn allows_intrinsics(module: &Module) -> bool {
-    module.name == "core" || module.imports.iter().any(|i| i.name == "core")
-}
-
 fn is_intrinsic(name: &str) -> bool {
     name == "__word" || name == "__type" || name == "__os" || INTRINSICS.iter().any(|i| i.0 == name)
 }
@@ -284,8 +279,8 @@ fn resolve(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
         "bool" => Type::Bool,
         "str" => Type::Str,
         "None" => Type::None,
-        "ptr" if allows_intrinsics(module) => Type::Ptr,
-        "word" if allows_intrinsics(module) => Type::Word,
+        "ptr" if module.name == "core" => Type::Ptr,
+        "word" if module.name == "core" => Type::Word,
         name => {
             return Err(Diag::new(
                 &module.path,
@@ -456,7 +451,7 @@ fn check_function(
         module: scope.module,
         globals: scope.globals,
         imported: scope.imported,
-        intrinsics: allows_intrinsics(scope.module),
+        intrinsics: scope.module.name == "core",
         strings,
         ret: sig.ret,
         locals,
@@ -797,7 +792,9 @@ impl Checker<'_> {
             ("-", Type::Int, Type::Int) => ("sub", Type::Int),
             ("*", Type::Int, Type::Int) => ("mul", Type::Int),
             (_, Type::Int, Type::Int) if !compare.is_empty() => (compare, Type::Bool),
-            ("==" | "!=", Type::Bool, Type::Bool) => (compare, Type::Bool),
+            ("==" | "!=", Type::Bool, Type::Bool) | ("==" | "!=", Type::Ptr, Type::Ptr) => {
+                (compare, Type::Bool)
+            }
             ("+", Type::Str, Type::Str) => {
                 return Ok((core_call("str_concat", vec![*l, *r], true), Type::Str));
             }
