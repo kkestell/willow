@@ -1,0 +1,7 @@
+import fs
+
+# The reason is the strerror text for ENOENT, the same on Linux and Darwin.
+def main():
+    print("before")
+    print(fs.read_file("no-such-file.txt"))
+    print("unreachable")

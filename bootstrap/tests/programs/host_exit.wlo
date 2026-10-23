@@ -1,0 +1,24 @@
+import sys
+
+def check(count: int) -> int:
+    if count < 2:
+        sys.eprint("need 2, got")
+        sys.eprint(count)
+        sys.exit(1)
+    return count
+
+# A call to sys.exit transfers control, so this needs no return.
+def stop() -> int:
+    sys.exit(1)
+
+def main():
+    sys.eprint("starting")
+    sys.eprint(42)
+    sys.eprint(2.5)
+    sys.eprint(False)
+    sys.eprint(None)
+    maybe: int | None = None
+    sys.eprint(maybe)
+    print(check(3))
+    print(check(0))
+    print(stop())
