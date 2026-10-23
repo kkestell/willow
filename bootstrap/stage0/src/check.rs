@@ -273,11 +273,37 @@ impl Strings {
     }
 }
 
+/// The functions of the host modules `sys` and `fs` that lower to a plain
+/// call into core. `sys.eprint` and `sys.args` are lowered in `call`.
+fn host_tables() -> HashMap<&'static str, HashMap<String, Sig>> {
+    let sig = |params: Vec<Type>, ret: Type, core_name: &str| Sig {
+        params,
+        ret,
+        target: Target::Willow(format!("W.core.{core_name}")),
+    };
+    let sys = HashMap::from([(
+        "exit".to_string(),
+        sig(vec![Type::Int], Type::None, "sys_exit"),
+    )]);
+    let fs = HashMap::from([
+        (
+            "read_file".to_string(),
+            sig(vec![Type::Str], Type::Str, "fs_read_file"),
+        ),
+        (
+            "write_file".to_string(),
+            sig(vec![Type::Str, Type::Str], Type::None, "fs_write_file"),
+        ),
+    ]);
+    HashMap::from([("sys", sys), ("fs", fs)])
+}
+
 pub fn check(modules: &[Module]) -> Result<Program, Diag> {
     let mut tables = HashMap::new();
     for module in modules {
         tables.insert(module.name.as_str(), declare(module)?);
     }
+    let host = host_tables();
     let entry = &modules[0];
     let main = match entry.funcs.iter().find(|f| f.name == "main") {
         None => {
@@ -310,12 +336,14 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
     for module in modules {
         let mut imported = HashMap::new();
         for import in &module.imports {
-            // Only core can be imported so far. Core's tests import it to call
-            // its functions; nothing stops another program from doing so.
-            let Some(table) = tables
-                .get(import.name.as_str())
-                .filter(|_| import.name == "core")
-            else {
+            // Besides the host modules, only core can be imported so far.
+            // Core's tests import it to call its functions; nothing stops
+            // another program from doing so.
+            let Some(table) = host.get(import.name.as_str()).or_else(|| {
+                tables
+                    .get(import.name.as_str())
+                    .filter(|_| import.name == "core")
+            }) else {
                 let message = format!("unknown module '{}'", import.name);
                 return Err(Diag::new(&module.path, import.pos, message));
             };
@@ -1206,7 +1234,8 @@ impl Checker<'_> {
             }
             StmtKind::Expr(expr) => {
                 ops.push(Op::Eval(self.expr(expr, state)?.0));
-                Ok(false)
+                // A statement that calls sys.exit transfers control (spec §9).
+                Ok(self.is_sys_exit(expr))
             }
             StmtKind::Assert { cond, message } => {
                 let cond_ir = self.condition(cond, state)?;
@@ -1753,12 +1782,50 @@ impl Checker<'_> {
         }
     }
 
+    fn is_sys_exit(&self, expr: &Expr) -> bool {
+        let ExprKind::Call(callee, _) = &expr.kind else {
+            return false;
+        };
+        matches!(&callee.kind, ExprKind::Attr(object, _, name)
+            if name == "exit" && self.module_of(object) == Some("sys"))
+    }
+
+    /// The text that `str(value)` gives for a printable value.
+    fn text_of(&mut self, pos: Pos, value: Value, ty: &Type) -> Result<Value, Diag> {
+        Ok(match ty {
+            Type::Str => value,
+            Type::Int => core_call("int_to_str", vec![value], true),
+            Type::Bool => core_call("bool_to_str", vec![value], true),
+            Type::Float => core_call("float_to_str", vec![value], true),
+            Type::None => Value::Seq(Box::new(value), Box::new(self.strings.intern("None"))),
+            Type::Union(_) => core_call("union_to_str", vec![value], true),
+            _ => return self.fail(pos, format!("cannot print a value of type {}", ty.name())),
+        })
+    }
+
     fn call(&mut self, callee: &Expr, args: &[Expr], state: &State) -> Result<(Value, Type), Diag> {
         let pos = callee.pos;
         if let ExprKind::Attr(object, name_pos, name) = &callee.kind {
             let Some(module) = self.module_of(object) else {
                 return self.method(object, *name_pos, name, args, state);
             };
+            if module == "sys" && name == "eprint" {
+                let mut checked = self.args(args, state, &[])?;
+                self.arity(pos, "sys.eprint", 1, checked.len())?;
+                let (arg_pos, value, ty) = checked.pop().unwrap();
+                let text = self.text_of(arg_pos, value, &ty)?;
+                return Ok((core_call("eprint_str", vec![text], false), Type::None));
+            }
+            // The entry saves argc and argv for this (core/API.md).
+            if module == "sys" && name == "args" {
+                self.arity(pos, "sys.args", 0, args.len())?;
+                let load = |symbol: &str| {
+                    let address = Box::new(Value::Global(symbol.into()));
+                    Value::Load("loadl", address, Box::new(Value::Const(0)))
+                };
+                let call = core_call("sys_args", vec![load("W.argc"), load("W.argv")], true);
+                return Ok((call, Type::List(Box::new(Type::Str))));
+            }
             let table = self.imported[module];
             let Some(sig) = table.get(name) else {
                 return self.fail(
