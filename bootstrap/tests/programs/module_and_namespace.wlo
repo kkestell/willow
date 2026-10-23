@@ -1,0 +1,5 @@
+import lib.tools
+import lib.tools.extra
+
+def main():
+    print(lib.tools.name())

@@ -436,6 +436,20 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
                 let message = format!("unknown module '{}'", import.name);
                 return Err(Diag::new(&module.path, import.pos, message));
             };
+            // A module cannot also be a namespace of another (spec §12).
+            let nested = |outer: &str, inner: &str| inner.starts_with(&format!("{outer}."));
+            let clash = imported.keys().find_map(|other: &&str| {
+                let (shorter, longer) = if other.len() < name.len() {
+                    (*other, *name)
+                } else {
+                    (*name, *other)
+                };
+                nested(shorter, longer).then_some(shorter)
+            });
+            if let Some(both) = clash {
+                let message = format!("'{both}' is imported as a module and as a namespace");
+                return Err(Diag::new(&module.path, import.pos, message));
+            }
             if imported.insert(*name, namespace).is_some() {
                 let message = format!("duplicate import '{}'", import.name);
                 return Err(Diag::new(&module.path, import.pos, message));
