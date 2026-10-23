@@ -1,0 +1,4 @@
+def main():
+    print(len("a b".split(" ")))
+    print(len("a b".split("")))
+    print("unreachable")

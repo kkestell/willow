@@ -25,6 +25,13 @@ abc
 [a|b||c]
 [one|two]
 [none]
+1
+[a|b|c]
+0
+[a|b,c]
+[a|b|c]
+[a,b,c]
+[a|b  c ]
 x, y, z
 
 main

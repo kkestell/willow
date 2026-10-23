@@ -1,0 +1,17 @@
+import fs
+
+# L0 has no way to make a unique name or remove a file, so this reuses one
+# fixed path outside the source tree.
+def main():
+    path = "/tmp/willow-l0-files.txt"
+    fs.write_file(path, "first line\nsecond line\n")
+    text = fs.read_file(path)
+    print(len(text))
+    for line in text.split("\n"):
+        print("[" + line + "]")
+    fs.write_file(path, "café\r\n")
+    text = fs.read_file(path)
+    print(len(text))
+    print(text.endswith("\r\n"))
+    fs.write_file(path, "")
+    print(len(fs.read_file(path)))
