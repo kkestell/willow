@@ -1,0 +1,7 @@
+def main():
+    d = {"a": 1, "b": 2, "c": 3}
+    for k in d:
+        print(k)
+        if k == "a":
+            d.pop("c")
+            d["z"] = 9

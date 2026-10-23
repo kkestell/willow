@@ -1161,7 +1161,7 @@ impl Checker<'_> {
                 let items = source.items();
                 if targets.len() != items.len() {
                     let message = match items.as_slice() {
-                        [(_, item)] => format!("cannot unpack {}", item.name()),
+                        [(_, item)] => format!("cannot unpack a value of type {}", item.name()),
                         _ => "'items' gives a key and a value, so it needs two targets".into(),
                     };
                     return self.fail(stmt.pos, message);
@@ -2078,9 +2078,14 @@ impl Checker<'_> {
         } else if default_ty == Type::None {
             Type::union([value.clone(), Type::None])
         } else {
+            let allowed = Type::union([value.clone(), Type::None]);
             return self.fail(
                 args[1].pos,
-                format!("expected {}, received {}", value.name(), default_ty.name()),
+                format!(
+                    "expected {}, received {}",
+                    allowed.name(),
+                    default_ty.name()
+                ),
             );
         };
         let get = Value::DictGet {
