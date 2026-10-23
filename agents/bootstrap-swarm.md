@@ -95,30 +95,15 @@ in the next task message rather than sending them alone.
 
 ### Status
 
-Milestone 1 is done. Milestone 2 is done except classes, enums, f-strings,
-and the pending tests in bootstrap/tests/programs-pending/ that need them.
-Core implements every function in bootstrap/core/API.md.
+Milestones 1 and 2 are done: stage 0 compiles all of L0, core implements
+bootstrap/core/API.md, and stage 0 compiles the stage 1 lexer. Milestone 3
+is in progress in bootstrap/stage1/.
 
-### Rest of milestone 2
+### Milestone 3
 
-Two coders, one feature each in stage 0 and core, each moving its pending
-tests into programs/:
-
-- Classes and enums: declarations, fields with literal defaults, methods,
-  constructors with positional arguments, enum members and their printing,
-  enum dict keys, `isinstance` on classes, and module-qualified names.
-- F-strings without format specifications, and whatever the remaining pending
-  tests (`assertion_message`, `control_flow`, `files`, `sys_exit`, `unions`)
-  still need.
-
-### Milestone 3, starting in parallel
-
-Stage 1 is written in L0, which is a subset of Willow, so it runs under the Lua
-implementation (`./willow run`) before stage 0 can compile all of it. A third
-coder starts it in bootstrap/stage1/ while milestone 2 finishes: first the
-token kinds and the lexer for the full language per docs/spec.md, with a
-driver that lexes every `.wlo` file in tests/ and examples/; then the parser
-and AST; then the binder. Each step is checked under `./willow run` and,
-once stage 0 accepts everything it uses, under stage 0 as well. Grow to four
-coders when the parser lands and the binder and the remaining front-end work
-can be split by feature.
+Stage 1 is written in L0 in bootstrap/stage1/. Stage 0 compiles it, and it
+also runs under the Lua implementation (`./willow run`), which helps when a
+stage 0 bug is suspected. The order is the lexer, then the parser and AST,
+then the binder, each with a driver over every `.wlo` file in tests/ and
+examples/. Grow to four coders when the parser lands and the binder and the
+remaining front-end work can be split by feature.
