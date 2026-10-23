@@ -1,0 +1,7 @@
+[package]
+name = "willow0"
+version = "0.1.0"
+edition = "2024"
+description = "Stage 0 of the Willow bootstrap: translates the L0 subset to QBE IL"
+
+[dependencies]

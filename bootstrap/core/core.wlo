@@ -1,0 +1,3 @@
+# The core module: the Willow runtime, written in L0 over the intrinsic layer
+# described in agents/bootstrap.md §5. Stage 0 compiles this module into every
+# program. Only this module may use intrinsics.
