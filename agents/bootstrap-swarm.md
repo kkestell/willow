@@ -107,3 +107,16 @@ stage 0 bug is suspected. The order is the lexer, then the parser and AST,
 then the binder, each with a driver over every `.wlo` file in tests/ and
 examples/. Grow to four coders when the parser lands and the binder and the
 remaining front-end work can be split by feature.
+
+### Milestones 4 and 5
+
+Start with a vertical slice by one coder, as milestone 1 did: the stage 1
+checker and QBE emitter for what `sum_to.wlo` needs, compiling `core` too,
+with a stage 1 driver (`willow1 build`, `willow1 compile`) that behaves like
+willow0's. Then split the rest of L0 by feature, end to end through checker,
+emitter, and core where needed, each feature moving its programs from
+`bootstrap/tests/programs/` into a stage 1 run of the same runner. The
+checker follows `compiler/check.lua`'s rules and wording; the emitter follows
+stage 0's value representation and symbols (agents/bootstrap.md §4, §7) but
+need not emit identical IL. When all of `bootstrap/tests/` passes under
+stage 1, build stage 1 with itself and compare the IL (milestone 5).

@@ -384,11 +384,16 @@ The Lua `compiler/` and `runtime/` stay in place until stage 2 passes
    and core tests pass.
 3. Stage 1 front end in L0: lexer, parser, and binder for the full language.
    It parses and binds every file in `tests/` and `examples/`.
-4. Stage 1 checker and emitter, with `core` grown to the full runtime in the
-   order exceptions, closures, tuples, protocols and generics, generators,
-   async. Each slice passes its `tests/programs/` cases.
-5. Fixpoint: stage 1 compiles itself identically.
-6. Stage 2 in full Willow, standard library ported to `lib/`, test runner in
+4. Stage 1 checker and emitter for L0. Stage 1 compiles `core` and the L0
+   programs and core tests in `bootstrap/tests/`, and they pass.
+5. Fixpoint: stage 1 compiles itself identically. Stage 1's source is L0, so
+   this needs only milestone 4, and it catches miscompilation before the
+   full-language features build on it.
+6. The rest of the language in stage 1, with `core` grown to the full runtime
+   in the order exceptions, closures, tuples, protocols and generics,
+   generators, async. Each slice passes its `tests/programs/` cases, and the
+   fixpoint still holds.
+7. Stage 2 in full Willow, standard library ported to `lib/`, test runner in
    Willow, Lua implementation deleted.
 
 ## 12. Open questions
