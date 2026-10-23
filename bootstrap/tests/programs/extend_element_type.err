@@ -1,0 +1,1 @@
+extend_element_type.wlo:4:15: error: expected list[int | None], received list[int]
