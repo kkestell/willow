@@ -14,7 +14,7 @@ pub fn emit(program: &Program) -> String {
             ended: false,
             block: String::new(),
             loops: Vec::new(),
-            item: String::new(),
+            item: [String::new(), String::new()],
         };
         emitter.function(func);
     }
@@ -84,9 +84,9 @@ struct Emitter<'a> {
     block: String,
     /// The `continue` and `break` targets of the enclosing loops.
     loops: Vec<(String, String)>,
-    /// The operand holding the current item of a `for` loop while its
-    /// variable is stored.
-    item: String,
+    /// The operands `Value::Item` stands for while a `for` loop stores its
+    /// variables or a `get` converts its value.
+    item: [String; 2],
 }
 
 impl Emitter<'_> {
@@ -145,11 +145,11 @@ impl Emitter<'_> {
         writeln!(self.out, "}}").unwrap();
     }
 
-    /// Stores `item` in the loop variable and emits the body of a loop
+    /// Stores the items in the loop variables and emits the body of a loop
     /// whose `continue` goes to `next` and `break` to `end`.
-    fn loop_body(&mut self, item: &str, store: &Op, body: &[Op], next: &str, end: &str) {
-        self.item = item.to_string();
-        self.op(store);
+    fn loop_body(&mut self, items: [String; 2], stores: &[Op], body: &[Op], next: &str, end: &str) {
+        self.item = items;
+        self.ops(stores);
         self.loops.push((next.to_string(), end.to_string()));
         self.ops(body);
         self.loops.pop();
@@ -213,7 +213,7 @@ impl Emitter<'_> {
                 let i = self.value(index);
                 self.line(format!("call ${function}(l {o}, l {i}, l {v})"));
             }
-            Op::ForList { list, store, body } => {
+            Op::ForList { list, stores, body } => {
                 let xs = self.value(list);
                 let index = self.temp();
                 self.line(format!("{index} =l copy 0"));
@@ -232,7 +232,7 @@ impl Emitter<'_> {
                     "{item} =l call $W.core.list_get(l {xs}, l {index})"
                 ));
                 self.line(format!("{index} =l add {index}, 1"));
-                self.loop_body(&item, store, body, &test, &end);
+                self.loop_body([item, String::new()], stores, body, &test, &end);
                 self.jump(format!("jmp {test}"));
                 self.label(&end);
             }
@@ -241,7 +241,7 @@ impl Emitter<'_> {
                 stop,
                 step,
                 fail,
-                store,
+                stores,
                 body,
             } => {
                 let current = self.temp();
@@ -266,7 +266,7 @@ impl Emitter<'_> {
                 self.jump(format!("jnz {more}, {body_label}, {end}"));
                 self.label(&body_label);
                 self.line(format!("{item} =l copy {current}"));
-                self.loop_body(&item, store, body, &next, &end);
+                self.loop_body([item, String::new()], stores, body, &next, &end);
                 // A step that overflows passes the stop, so it ends the loop.
                 self.label(&next);
                 let [stepped, a, b] = std::array::from_fn(|_| self.temp());
@@ -278,6 +278,57 @@ impl Emitter<'_> {
                 self.jump(format!("jnz {a}, {end}, {advance}"));
                 self.label(&advance);
                 self.line(format!("{current} =l copy {stepped}"));
+                self.jump(format!("jmp {test}"));
+                self.label(&end);
+            }
+            Op::ForStr { text, stores, body } => {
+                // Each step takes the code point at a byte offset, which
+                // advances by its size before the body.
+                let s = self.value(text);
+                let at = self.temp();
+                self.line(format!("{at} =l copy 0"));
+                let (test, body_label, end) =
+                    (self.new_label(), self.new_label(), self.new_label());
+                self.label(&test);
+                let [size, more, item, width] = std::array::from_fn(|_| self.temp());
+                self.line(format!("{size} =l call $W.core.str_size(l {s})"));
+                self.line(format!("{more} =l csltl {at}, {size}"));
+                self.jump(format!("jnz {more}, {body_label}, {end}"));
+                self.label(&body_label);
+                self.line(format!("{item} =l call $W.core.str_char_at(l {s}, l {at})"));
+                self.line(format!("{width} =l call $W.core.str_size(l {item})"));
+                self.line(format!("{at} =l add {at}, {width}"));
+                self.loop_body([item, String::new()], stores, body, &test, &end);
+                self.jump(format!("jmp {test}"));
+                self.label(&end);
+            }
+            Op::ForDict { dict, stores, body } => {
+                // The version is recorded before the loop, and each step
+                // fails if a key has been added or removed since (core/API.md).
+                let d = self.value(dict);
+                let [version, entry, live, key, value, after] =
+                    std::array::from_fn(|_| self.temp());
+                self.line(format!("{version} =l call $W.core.dict_version(l {d})"));
+                self.line(format!(
+                    "{entry} =l call $W.core.dict_next(l {d}, l 0, l {version})"
+                ));
+                let [test, body_label, next, end] = std::array::from_fn(|_| self.new_label());
+                self.label(&test);
+                self.line(format!("{live} =l csgel {entry}, 0"));
+                self.jump(format!("jnz {live}, {body_label}, {end}"));
+                self.label(&body_label);
+                self.line(format!(
+                    "{key} =l call $W.core.dict_key_at(l {d}, l {entry})"
+                ));
+                self.line(format!(
+                    "{value} =l call $W.core.dict_value_at(l {d}, l {entry})"
+                ));
+                self.loop_body([key, value], stores, body, &next, &end);
+                self.label(&next);
+                self.line(format!("{after} =l add {entry}, 1"));
+                self.line(format!(
+                    "{entry} =l call $W.core.dict_next(l {d}, l {after}, l {version})"
+                ));
                 self.jump(format!("jmp {test}"));
                 self.label(&end);
             }
@@ -444,7 +495,44 @@ impl Emitter<'_> {
                 self.line(format!("{d} =d div {l}, {r}"));
                 self.float_bits(&d)
             }
-            Value::Item => self.item.clone(),
+            Value::Item(slot) => self.item[*slot].clone(),
+            Value::DictDisplay { kind, entries } => {
+                let d = self.temp();
+                self.line(format!("{d} =l call $W.core.dict_new(l {kind})"));
+                for (key, value) in entries {
+                    let k = self.value(key);
+                    let v = self.value(value);
+                    self.line(format!("call $W.core.dict_set(l {d}, l {k}, l {v})"));
+                }
+                d
+            }
+            Value::DictGet {
+                dict,
+                key,
+                default,
+                present,
+            } => {
+                let d = self.value(dict);
+                let k = self.value(key);
+                let otherwise = self.value(default);
+                let [entry, missing, found, result] = std::array::from_fn(|_| self.temp());
+                let [have, lack, done] = std::array::from_fn(|_| self.new_label());
+                self.line(format!("{entry} =l call $W.core.dict_find(l {d}, l {k})"));
+                self.line(format!("{missing} =l csltl {entry}, 0"));
+                self.jump(format!("jnz {missing}, {lack}, {have}"));
+                self.label(&have);
+                self.line(format!(
+                    "{found} =l call $W.core.dict_value_at(l {d}, l {entry})"
+                ));
+                self.item[0] = found;
+                let v = self.value(present);
+                self.line(format!("{result} =l copy {v}"));
+                self.jump(format!("jmp {done}"));
+                self.label(&lack);
+                self.line(format!("{result} =l copy {otherwise}"));
+                self.label(&done);
+                result
+            }
             Value::ListDisplay(items) => {
                 let list = self.temp();
                 let count = items.len();

@@ -1,0 +1,1 @@
+dict_key_type.wlo:2:10: error: dictionary keys must be int, str, or an enum

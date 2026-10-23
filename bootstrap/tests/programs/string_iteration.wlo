@@ -1,0 +1,11 @@
+def main():
+    for c in "aé😀!":
+        print(c + "|")
+    count = 0
+    for c in "":
+        count = count + 1
+    print(count)
+    for c in "abc":
+        if c == "b":
+            continue
+        print(c)

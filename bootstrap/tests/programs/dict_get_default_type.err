@@ -1,0 +1,1 @@
+dict_get_default_type.wlo:3:22: error: expected int | None, received str
