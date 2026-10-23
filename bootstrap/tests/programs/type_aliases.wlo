@@ -1,0 +1,20 @@
+type Number = int | float
+type Maybe = Number | None
+type Table = dict[str, Row]
+type Row = list[Maybe]
+
+def total(row: Row) -> float:
+    sum = 0.0
+    for cell in row:
+        if isinstance(cell, int):
+            sum = sum + float(cell)
+        elif isinstance(cell, float):
+            sum = sum + cell
+    return sum
+
+def main():
+    table: Table = {"a": [1, 2.5, None], "b": []}
+    for name, row in table.items():
+        print(name + " " + str(total(row)))
+    first: Maybe = table["a"][0]
+    print(first)
