@@ -1,0 +1,15 @@
+import core
+
+# Runs programs through core.run, which stage 1's driver uses for qbe and cc.
+def main():
+    assert core.run(["true"]) == 0
+    assert core.run(["false"]) == 1
+    assert core.run(["sh", "-c", "exit 42"]) == 42
+    # Arguments reach the child as they are, without a shell.
+    assert core.run(["test", "a b", "=", "a b"]) == 0
+    # The child inherits the environment, which has PATH, since run found sh.
+    assert core.run(["sh", "-c", "test -n \"$PATH\""]) == 0
+    assert core.run(["sh", "-c", "kill -TERM $$"]) == 128 + 15
+    # SIGPIPE is not ignored in the child, although core ignores it.
+    assert core.run(["sh", "-c", "kill -PIPE $$"]) == 128 + 13
+    assert core.run(["sh", "-c", "echo to stdout"]) == 0
