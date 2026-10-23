@@ -69,6 +69,8 @@ pub enum ExprKind {
     Unary(&'static str, Box<Expr>),
     /// The operator, its position, and the operands.
     Binary(&'static str, Pos, Box<Expr>, Box<Expr>),
+    /// The `__type(T)` intrinsic, whose argument is a type.
+    TypeOf(TypeName),
 }
 
 struct Parser<'a> {
@@ -243,6 +245,22 @@ impl Parser<'_> {
         };
         self.i += 1;
         Ok(TypeName { pos, name })
+    }
+
+    /// The argument of `__type`, which may name a built-in type that is
+    /// otherwise reserved.
+    fn descriptor_type(&mut self) -> Result<TypeName, Diag> {
+        let pos = self.pos();
+        match self.peek().clone() {
+            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "list" | "dict")) => {
+                self.i += 1;
+                Ok(TypeName {
+                    pos,
+                    name: w.to_string(),
+                })
+            }
+            _ => self.type_name(),
+        }
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>, Diag> {
@@ -428,6 +446,17 @@ impl Parser<'_> {
         let kind = match self.peek().clone() {
             Kind::Int(value) => ExprKind::Int(value),
             Kind::Str(text) => ExprKind::Str(text),
+            Kind::Name(name)
+                if name == "__type" && self.tokens[self.i + 1].kind == Kind::Word("(") =>
+            {
+                self.i += 2;
+                let ty = self.descriptor_type()?;
+                self.expect(")")?;
+                return Ok(Expr {
+                    pos,
+                    kind: ExprKind::TypeOf(ty),
+                });
+            }
             Kind::Name(name) => ExprKind::Name(name),
             Kind::Word("True") => ExprKind::Bool(true),
             Kind::Word("False") => ExprKind::Bool(false),

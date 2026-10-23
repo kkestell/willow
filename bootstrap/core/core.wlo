@@ -29,7 +29,7 @@ def str_bytes(s: str) -> ptr:
 # A string of `length` bytes whose contents the caller fills in.
 def str_alloc(length: int) -> ptr:
     s = __alloc_atomic(17 + length)
-    __store8(s, 0, __word(__str_type))
+    __store8(s, 0, __word(__type(str)))
     __store8(s, 8, __word(length))
     __store1(s, 16 + length, 0)
     return s
@@ -63,7 +63,7 @@ def int_to_str(n: int) -> str:
     # 21 bytes hold the longest int and the zero byte snprintf writes.
     s = __alloc_atomic(16 + 21)
     length = snprintf(offset(s, 16), 21, str_bytes("%lld"), n)
-    __store8(s, 0, __word(__str_type))
+    __store8(s, 0, __word(__type(str)))
     __store8(s, 8, __word(length))
     return __str(__word(s))
 

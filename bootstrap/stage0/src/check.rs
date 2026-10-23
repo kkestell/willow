@@ -11,6 +11,8 @@ pub struct Program {
     pub funcs: Vec<Function>,
     /// String literal contents; literal `n` is the data symbol `$W.str.n`.
     pub strings: Vec<String>,
+    /// Each descriptor's symbol and the literal holding its type's name.
+    pub descriptors: Vec<(String, usize)>,
     /// The symbol of the entry module's `main`.
     pub main: String,
 }
@@ -136,8 +138,11 @@ const INTRINSICS: &[(&str, &[Type], Type)] = &[
     ("__str", &[Type::Word], Type::Str),
 ];
 
+/// The built-in types with descriptors, which every program emits.
+const BUILTIN_TYPES: &[&str] = &["int", "float", "bool", "str", "list", "dict"];
+
 fn is_intrinsic(name: &str) -> bool {
-    name == "__word" || name == "__str_type" || INTRINSICS.iter().any(|i| i.0 == name)
+    name == "__word" || name == "__type" || INTRINSICS.iter().any(|i| i.0 == name)
 }
 
 fn count(n: usize) -> String {
@@ -152,15 +157,18 @@ struct Strings {
 
 impl Strings {
     fn intern(&mut self, text: &str) -> Value {
-        let n = match self.index.get(text) {
+        Value::Global(format!("W.str.{}", self.index_of(text)))
+    }
+
+    fn index_of(&mut self, text: &str) -> usize {
+        match self.index.get(text) {
             Some(&n) => n,
             None => {
                 self.list.push(text.to_string());
                 self.index.insert(text.to_string(), self.list.len() - 1);
                 self.list.len() - 1
             }
-        };
-        Value::Global(format!("W.str.{n}"))
+        }
     }
 }
 
@@ -188,6 +196,10 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
         ));
     }
     let mut strings = Strings::default();
+    let descriptors = BUILTIN_TYPES
+        .iter()
+        .map(|t| (format!("W.{t}.type"), strings.index_of(t)))
+        .collect();
     let mut funcs = Vec::new();
     for (module, globals) in modules.iter().zip(&tables) {
         for func in &module.funcs {
@@ -207,6 +219,7 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
     Ok(Program {
         funcs,
         strings: strings.list,
+        descriptors,
         main: format!("W.{}.main", entry.name),
     })
 }
@@ -585,8 +598,11 @@ impl Checker<'_> {
                         ),
                     };
                 }
-                if name == "__str_type" && self.module.name == "core" {
-                    return Ok((Value::Global("W.str.type".into()), Type::Ptr));
+                if is_intrinsic(name) && self.module.name != "core" {
+                    return self.fail(
+                        expr.pos,
+                        format!("intrinsic '{name}' is only available in core"),
+                    );
                 }
                 if self.globals.contains_key(name)
                     || BUILTINS.contains(&name.as_str())
@@ -597,6 +613,18 @@ impl Checker<'_> {
                 self.fail(expr.pos, format!("unknown name '{name}'"))
             }
             ExprKind::Call(callee, args) => self.call(callee, args, state),
+            ExprKind::TypeOf(ty) => {
+                if self.module.name != "core" {
+                    return self.fail(expr.pos, "intrinsic '__type' is only available in core");
+                }
+                if !BUILTIN_TYPES.contains(&ty.name.as_str()) {
+                    return self.fail(
+                        ty.pos,
+                        "'__type' takes int, float, bool, str, list, or dict",
+                    );
+                }
+                Ok((Value::Global(format!("W.{}.type", ty.name)), Type::Ptr))
+            }
             ExprKind::Unary(op, operand) => {
                 let (value, ty) = self.expr(operand, state)?;
                 if ty != Type::Int {
@@ -680,7 +708,7 @@ impl Checker<'_> {
             }
         };
         if !self.globals.contains_key(name) && name != "print" {
-            if !is_intrinsic(name) || name == "__str_type" {
+            if !is_intrinsic(name) {
                 if BUILTINS.contains(&name.as_str()) {
                     return self.fail(pos, format!("'{name}' is not supported"));
                 }
