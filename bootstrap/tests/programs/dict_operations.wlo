@@ -1,0 +1,28 @@
+def main():
+    numbers = {1: "x", 2: "y"}
+    for key, text in numbers.items():
+        numbers[key] = text + "!"
+    for text in numbers.values():
+        print(text)
+    print(len(numbers))
+    print(3 in numbers)
+    print(2 not in numbers)
+
+    maybe: dict[str, int | None] = {"n": None, "s": 1}
+    print(maybe.get("n"))
+    print(maybe.get("n", 5))
+    print(maybe.get("q", 5))
+    print(maybe.get("q"))
+    print(maybe.get("s"))
+
+    lists: dict[str, list[int]] = {}
+    lists["a"] = []
+    lists["a"].append(3)
+    print(lists["a"][0])
+
+    # A key that is removed and inserted again moves to the end.
+    order = {"x": 1, "y": 2}
+    order.pop("x")
+    order["x"] = 3
+    for name, value in order.items():
+        print(name + "=" + str(value))

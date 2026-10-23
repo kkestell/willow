@@ -65,9 +65,9 @@ pub enum StmtKind {
         arms: Vec<(Expr, Vec<Stmt>)>,
         otherwise: Option<Vec<Stmt>>,
     },
-    /// `for target in iterable:`.
+    /// `for target in iterable:`, or `for key, value in d.items():`.
     For {
-        target: String,
+        targets: Vec<String>,
         iterable: Expr,
         body: Vec<Stmt>,
     },
@@ -102,6 +102,8 @@ pub enum ExprKind {
     Call(Box<Expr>, Vec<Expr>),
     /// A list display.
     List(Vec<Expr>),
+    /// A dict display's entries.
+    Dict(Vec<(Expr, Expr)>),
     Index(Box<Expr>, Box<Expr>),
     /// `object[start:stop]`, either bound omitted.
     Slice(Box<Expr>, Option<Box<Expr>>, Option<Box<Expr>>),
@@ -309,7 +311,9 @@ impl Parser<'_> {
         let pos = self.pos();
         let name = match self.peek().clone() {
             Kind::Name(name) => name,
-            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "None" | "list")) => w.to_string(),
+            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "None" | "list" | "dict")) => {
+                w.to_string()
+            }
             _ => return self.unexpected("a type"),
         };
         self.i += 1;
@@ -376,13 +380,16 @@ impl Parser<'_> {
             let (cond, body) = self.arm()?;
             StmtKind::While { cond, body }
         } else if self.accept("for") {
-            let (_, target) = self.name()?;
+            let mut targets = vec![self.name()?.1];
+            while self.accept(",") {
+                targets.push(self.name()?.1);
+            }
             self.expect("in")?;
             let iterable = self.expr()?;
             self.expect(":")?;
             let body = self.block()?;
             StmtKind::For {
-                target,
+                targets,
                 iterable,
                 body,
             }
@@ -653,8 +660,25 @@ impl Parser<'_> {
             Kind::Int(value) => ExprKind::Int(value),
             Kind::Float(value) => ExprKind::Float(value),
             // Conversions and isinstance name types by their reserved words.
-            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "list")) => {
+            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "list" | "dict")) => {
                 ExprKind::Name(w.to_string())
+            }
+            Kind::Word("{") => {
+                self.i += 1;
+                let mut entries = Vec::new();
+                while !self.accept("}") {
+                    let key = self.expr()?;
+                    self.expect(":")?;
+                    entries.push((key, self.expr()?));
+                    if !self.accept(",") {
+                        self.expect("}")?;
+                        break;
+                    }
+                }
+                return Ok(Expr {
+                    pos,
+                    kind: ExprKind::Dict(entries),
+                });
             }
             Kind::Word("[") => {
                 self.i += 1;

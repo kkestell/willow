@@ -12,6 +12,8 @@ pub enum Type {
     Ptr,
     Word,
     List(Box<Type>),
+    /// A dict's key and value types.
+    Dict(Box<Type>, Box<Type>),
     Union(Vec<Type>),
 }
 
@@ -43,6 +45,14 @@ impl Type {
     pub fn list_element(&self) -> Option<&Type> {
         self.members().iter().find_map(|m| match m {
             Type::List(element) => Some(&**element),
+            _ => None,
+        })
+    }
+
+    /// The key and value types of a dict, or of a union's dict member.
+    pub fn dict_entry(&self) -> Option<(&Type, &Type)> {
+        self.members().iter().find_map(|m| match m {
+            Type::Dict(key, value) => Some((&**key, &**value)),
             _ => None,
         })
     }
@@ -108,6 +118,7 @@ impl Type {
             Type::Ptr => "ptr".into(),
             Type::Word => "word".into(),
             Type::List(element) => format!("list[{}]", element.name()),
+            Type::Dict(key, value) => format!("dict[{}, {}]", key.name(), value.name()),
             Type::Union(members) => {
                 let names: Vec<String> = members.iter().map(Type::name).collect();
                 names.join(" | ")
