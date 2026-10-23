@@ -1,0 +1,5 @@
+def half(n: int) -> int:
+    return n + "2"
+
+def main():
+    print(half(4))

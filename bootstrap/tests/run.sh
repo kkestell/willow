@@ -2,17 +2,20 @@
 # Runs the bootstrap program tests: bootstrap/tests/programs/*.wlo, or the
 # files named on the command line.
 #
-# Each program is built with willow0 and run from its own directory. Optional
-# NAME.out and NAME.err hold the expected stdout and stderr; a missing file
-# means no output. The expected exit status is 1 when NAME.err exists and 0
-# otherwise. A program that fails to compile has the compiler's stderr as its
-# stderr and exit status 1. Stdin is NAME.in when it exists and empty otherwise.
+# Each program is built with willow0 and run from its own directory, so
+# diagnostics name the bare file. Optional NAME.out and NAME.err hold the
+# expected stdout and stderr; a missing file means no output. The expected exit
+# status is 1 when NAME.err exists and 0 otherwise. A program that fails to
+# compile has the compiler's stderr as its stderr and exit status 1. Stdin is
+# NAME.in when it exists and empty otherwise. A program that compiles must
+# compile to the same IL twice.
 #
 # WILLOW0 names the compiler; it defaults to the release build of stage 0.
 
 set -u
 root=$(cd "$(dirname "$0")/../.." && pwd)
 willow0=${WILLOW0:-$root/bootstrap/stage0/target/release/willow0}
+case $willow0 in /*) ;; *) willow0=$PWD/$willow0 ;; esac
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -29,7 +32,14 @@ for file in "$@"; do
     base=$dir/$name
     input=/dev/null
     [ -f "$base.in" ] && input=$base.in
-    if "$willow0" build "$file" -o "$work/$name" >"$work/out" 2>"$work/err"; then
+    ok=1
+    if (cd "$dir" && "$willow0" build "$name.wlo" -o "$work/$name") >"$work/out" 2>"$work/err"; then
+        (cd "$dir" && "$willow0" compile "$name.wlo" -o "$work/a.ssa" &&
+            "$willow0" compile "$name.wlo" -o "$work/b.ssa")
+        if ! cmp -s "$work/a.ssa" "$work/b.ssa"; then
+            echo "FAIL $file: IL differs between compilations"
+            ok=0
+        fi
         (cd "$dir" && "$work/$name" <"$input" >"$work/out" 2>"$work/err")
         status=$?
     else
@@ -37,7 +47,6 @@ for file in "$@"; do
     fi
     expected_status=0
     [ -f "$base.err" ] && expected_status=1
-    ok=1
     if [ "$status" -ne "$expected_status" ]; then
         echo "FAIL $file: exit status $status, expected $expected_status"
         ok=0
