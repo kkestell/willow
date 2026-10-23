@@ -87,12 +87,6 @@ struct Emitter<'a> {
 
 impl Emitter<'_> {
     fn line(&mut self, text: String) {
-        // Code after a jump or return, such as the statements after a kept
-        // `__os` arm that returns, needs a block of its own.
-        if self.ended {
-            let label = self.new_label();
-            self.label(&label);
-        }
         writeln!(self.out, "\t{text}").unwrap();
     }
 
@@ -149,6 +143,13 @@ impl Emitter<'_> {
 
     fn ops(&mut self, ops: &[Op]) {
         for op in ops {
+            // Ops after a jump or return cannot run. The checker rejects
+            // them, except after a kept `__os` arm that transfers control,
+            // where they are the other platform's code and must not be
+            // emitted.
+            if self.ended {
+                break;
+            }
             self.op(op);
         }
     }
