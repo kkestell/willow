@@ -9,3 +9,16 @@ def main():
     assert core.str_compare("b", "a") > 0
     assert core.str_compare("ab", "ab") == 0
     assert core.int_to_str(-42) == "-42"
+
+    assert core.str_chr(65) == "A"
+    assert core.str_chr(233) == "é"
+    assert core.str_chr(8364) == "€"
+    assert core.str_chr(128512) == "😀"
+    # The last code point of each UTF-8 length and the first of the next.
+    assert core.str_ord(core.str_chr(127)) == 127
+    assert core.str_ord(core.str_chr(128)) == 128
+    assert core.str_ord(core.str_chr(2047)) == 2047
+    assert core.str_ord(core.str_chr(2048)) == 2048
+    assert core.str_ord(core.str_chr(65535)) == 65535
+    assert core.str_ord(core.str_chr(65536)) == 65536
+    assert core.str_ord(core.str_chr(1114111)) == 1114111
