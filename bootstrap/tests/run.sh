@@ -1,6 +1,6 @@
 #!/bin/sh
-# Runs the bootstrap program tests: bootstrap/tests/programs/*.wlo, or the
-# files named on the command line.
+# Runs the bootstrap program tests, bootstrap/tests/programs/*.wlo, and core's
+# own tests, bootstrap/tests/core/*.wlo, or the files named on the command line.
 #
 # Each program is built with willow0 and run from its own directory, so
 # diagnostics name the bare file. Optional NAME.out and NAME.err hold the
@@ -20,7 +20,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 if [ $# -eq 0 ]; then
-    set -- "$root"/bootstrap/tests/programs/*.wlo
+    set -- "$root"/bootstrap/tests/programs/*.wlo "$root"/bootstrap/tests/core/*.wlo
 fi
 
 passed=0
