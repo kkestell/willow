@@ -7,8 +7,9 @@ pull requests against `main`.
 ## Repository conventions for this work
 
 - Work happens on `main`.
-- The active `gh` account must be `kkestell`, since gnat takes `GH_TOKEN` from
-  it. It was switched there on 2026-10-23.
+- gnat takes `GH_TOKEN` from the environment, or else from the active `gh`
+  account, which may not be `kkestell`. Run `gnat up` with
+  `GH_TOKEN=$(gh auth token -u kkestell)` exported.
 - Commits have a subject and body in the repository's style and no
   attribution trailers.
 - Merges use merge commits, matching the history. Before merging, the operator
@@ -22,12 +23,13 @@ pull requests against `main`.
 gnat create willow-bootstrap --repo kkestell/willow --dockerfile bootstrap/Dockerfile
 gnat agent create willow-bootstrap coder1 --profile coder --model claude-opus-5-5 --effort high --instructions "$(cat agents/bootstrap-swarm.md | sed -n '/^### Coder instructions/,/^### /p' | sed '1d;$d')"
 gnat agent create willow-bootstrap coder2 --profile coder --model claude-opus-5-5 --effort high --instructions "..."   # same text
+gnat agent create willow-bootstrap coder3 --profile coder --model claude-opus-5-5 --effort high --instructions "..."   # same text
 gnat agent create willow-bootstrap reviewer1 --profile reviewer --harness claude --model claude-opus-5-5 --effort high --instructions "$(... '/^### Reviewer instructions/,/^### /p' ...)"
 gnat up willow-bootstrap
 ```
 
-Two coders and one reviewer through milestone 2. Grow to four coders at
-milestone 3, when stage 1 splits by compiler phase and runtime subsystem.
+Three coders and one reviewer: two finish milestone 2 while the third starts
+stage 1 (see Task sequence). Idle coders review each other's PRs.
 Check `gnat status` for the account's usage limits before starting.
 
 ### Coder instructions
@@ -83,50 +85,40 @@ reviewer instructions rather than queueing them all on the reviewer.
 
 ## Task sequence
 
-Tasks follow the milestones in agents/bootstrap.md §11. Dependent tasks wait
-for the previous merge, then the agent is told to merge origin/main first.
+Tasks follow the milestones in agents/bootstrap.md §11. Split work by
+feature, end to end, not by layer: an agent that owns a library its
+teammate's code must first call writes code it cannot test. Branch every task
+off the latest `origin/main`, never off an unmerged PR; when the next task
+depends on an open PR, give the agent independent work or let it wait. Merge
+each PR as soon as it is approved and passes on macOS. Put "main moved" notes
+in the next task message rather than sending them alone.
 
-### Milestone 1, one coder
+### Status
 
-Send to coder1:
+Milestone 1 is done. Milestone 2 is done except classes, enums, f-strings,
+and the pending tests in bootstrap/tests/programs-pending/ that need them.
+Core implements every function in bootstrap/core/API.md.
 
-> Implement milestone 1 of agents/bootstrap.md: a vertical slice of stage 0.
-> In bootstrap/stage0, write the lexer, parser, checker, and QBE emitter for
-> the part of L0 that bootstrap/tests/programs/sum_to.wlo uses: `def` with
-> annotated parameters and return types, `int`, `bool`, and `str` types,
-> integer literals and string literals, `+`, `-`, `*`, `<=` and the other
-> comparisons, assignment, `while`, `if`, `return`, `main`, and `print` of
-> `int` and `str`. Implement the intrinsic layer from §5 as far as this slice
-> needs: `ptr`, `word`, `__alloc` and `__alloc_atomic`, `__load8`,
-> `__store8`, `__load1`, `__store1`, reinterpretation between `word` and
-> `int`, `ptr`, and `str`, and `extern def`. Write the first
-> bootstrap/core/core.wlo in L0 providing string objects with the layout in
-> §4, string concatenation, and printing of `int` and `str` through `extern
-> write`; stage 0 lowers `+` on strings and `print` to calls into core.
-> Follow the value representation in §4, the symbol names in §7, and the
-> driver behavior in §10: `willow0 build FILE -o OUT` runs qbe and cc with
-> the target chosen from the host and libgc found through pkg-config, and
-> `willow0 compile FILE -o OUT.ssa` writes the IL. Diagnostics use the spec
-> §13 format. Done when `make bootstrap-test` passes on Linux, and the
-> emitted IL is deterministic. Integer overflow checking, floor division,
-> unions, lists, and dicts are later milestones; do not start them. You own
-> bootstrap/stage0, bootstrap/core, and bootstrap/tests. Do not edit
-> agents/bootstrap.md; report anything in it that turned out wrong.
+### Rest of milestone 2
 
-While coder1 works, send coder2 a non-conflicting task: write the L0 program
-tests for milestone 2 in a new directory bootstrap/tests/programs-pending/
-covering strings, lists, dicts, unions and narrowing, f-strings, slicing,
-conversions, enums, classes, and the fatal runtime failures, with expected
-output taken from the spec and checked against the Lua implementation with
-`./willow run`. The directory is renamed into programs/ as features land.
+Two coders, one feature each in stage 0 and core, each moving its pending
+tests into programs/:
 
-### Milestone 2, two coders
+- Classes and enums: declarations, fields with literal defaults, methods,
+  constructors with positional arguments, enum members and their printing,
+  enum dict keys, `isinstance` on classes, and module-qualified names.
+- F-strings without format specifications, and whatever the remaining pending
+  tests (`assertion_message`, `control_flow`, `files`, `sys_exit`, `unions`)
+  still need.
 
-After milestone 1 merges, split by file: coder1 owns bootstrap/stage0 and
-adds the checker and emitter for the remaining L0 features in §3; coder2
-owns bootstrap/core and implements lists, dicts, boxing, conversions, and the
-host functions. The lowering table between them is the core function names
-in agents/bootstrap.md §4 and §5; the first task of milestone 2 is for
-coder1 to write that table into bootstrap/core/API.md as signatures, which
-coder2 then implements. Tests move from programs-pending/ to programs/ with
-each feature.
+### Milestone 3, starting in parallel
+
+Stage 1 is written in L0, which is a subset of Willow, so it runs under the Lua
+implementation (`./willow run`) before stage 0 can compile all of it. A third
+coder starts it in bootstrap/stage1/ while milestone 2 finishes: first the
+token kinds and the lexer for the full language per docs/spec.md, with a
+driver that lexes every `.wlo` file in tests/ and examples/; then the parser
+and AST; then the binder. Each step is checked under `./willow run` and,
+once stage 0 accepts everything it uses, under stage 0 as well. Grow to four
+coders when the parser lands and the binder and the remaining front-end work
+can be split by feature.
