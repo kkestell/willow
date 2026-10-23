@@ -1,0 +1,355 @@
+# The syntax tree of one source file. Expressions and statements are wrappers
+# that hold a position and a node, so every one of them has a position in the
+# same place; the node's class says what it is. Lists stand in for optional
+# blocks: an `if` without `else` has an empty `else_body`. An empty string
+# stands in for an optional name.
+
+import diagnostic
+
+class Module:
+    path: str
+    imports: list[Import]
+    # In source order.
+    declarations: list[Decl]
+
+# `import a.b.c` has the name "a.b.c" and the root "a", which it binds.
+class Import:
+    line: int
+    col: int
+    name: str
+    root: str
+
+type Decl = FunctionDecl | ClassDecl | ProtocolDecl | EnumDecl | AliasDecl
+
+class TypeParam:
+    line: int
+    col: int
+    name: str
+    bound: TypeExpr | None
+
+# A protocol method signature has an empty body. A function without `-> R`
+# has the return type None at its name.
+class FunctionDecl:
+    line: int
+    col: int
+    name: str
+    type_params: list[TypeParam]
+    params: list[Param]
+    return_type: TypeExpr
+    body: list[Stmt]
+    is_async: bool
+
+# A method's `self` and a lambda's parameters have no annotation.
+class Param:
+    line: int
+    col: int
+    name: str
+    annotation: TypeExpr | None
+    default: Expr | None
+    keyword_only: bool
+
+# An exception class's first field is `message: str`, at the class name.
+class ClassDecl:
+    line: int
+    col: int
+    name: str
+    type_params: list[TypeParam]
+    fields: list[FieldDecl]
+    methods: list[FunctionDecl]
+    exception: bool
+
+class FieldDecl:
+    line: int
+    col: int
+    name: str
+    annotation: TypeExpr
+    default: Expr | None
+
+class ProtocolDecl:
+    line: int
+    col: int
+    name: str
+    type_params: list[TypeParam]
+    methods: list[FunctionDecl]
+
+class EnumDecl:
+    line: int
+    col: int
+    name: str
+    members: list[Ident]
+
+class AliasDecl:
+    line: int
+    col: int
+    name: str
+    type_params: list[TypeParam]
+    value: TypeExpr
+
+# A name with its position: an enum member or a `nonlocal` name.
+class Ident:
+    line: int
+    col: int
+    name: str
+
+type TypeExpr = TypeName | UnionType | CallableType
+
+# A reserved type name or a possibly module-qualified name, with the type
+# arguments in its brackets: a list's element, a dict's key and value, a
+# tuple's positions, or a named type's arguments. `tuple[()]` has no
+# arguments; `has_args` tells `Box[]` from `Box`. `isinstance` and `except`
+# name their class with a TypeName too.
+class TypeName:
+    line: int
+    col: int
+    name: str
+    module: str
+    args: list[TypeExpr]
+    has_args: bool
+
+# At its first member.
+class UnionType:
+    line: int
+    col: int
+    members: list[TypeExpr]
+
+# At its `(`.
+class CallableType:
+    line: int
+    col: int
+    params: list[TypeExpr]
+    result: TypeExpr
+
+# An assignment target: a name, or a tuple of targets when `name` is empty.
+class Target:
+    line: int
+    col: int
+    name: str
+    elements: list[Target]
+
+class Expr:
+    line: int
+    col: int
+    node: ExprNode
+
+type ExprNode = Int | Float | String | FString | Constant | Name | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay
+
+# The decimal digits, with "-" before a negative default. The lexer has
+# checked the range.
+class Int:
+    text: str
+
+class Float:
+    value: float
+
+class String:
+    value: str
+
+# Text parts are Strings at the f-string's start. `specs[i]` is the format
+# specification of `parts[i]`, empty for text and for fields without one.
+class FString:
+    parts: list[Expr]
+    specs: list[str]
+
+enum Constant:
+    TRUE
+    FALSE
+    NONE
+
+# A reserved name is a conversion named as a value, as in `x = int`.
+class Name:
+    name: str
+    reserved: bool
+
+# A call by bare name, at the name. Keyword arguments follow the positional
+# ones in the source, so the two lists keep the written order.
+class Call:
+    name: str
+    args: list[Expr]
+    keywords: list[Keyword]
+
+# A call of any other callee, at its `(`.
+class CallValue:
+    callee: Expr
+    args: list[Expr]
+    keywords: list[Keyword]
+
+# At the method name.
+class MethodCall:
+    object: Expr
+    name: str
+    args: list[Expr]
+    keywords: list[Keyword]
+
+class Keyword:
+    line: int
+    col: int
+    name: str
+    value: Expr
+
+# At the field name.
+class Field:
+    object: Expr
+    name: str
+
+# At the `[`.
+class Index:
+    object: Expr
+    index: Expr
+
+class Slice:
+    object: Expr
+    start: Expr | None
+    stop: Expr | None
+
+# `name[...]` after a name or field, at the callee, read as type arguments.
+# Only the binder knows whether the callee is generic, so the node also keeps
+# the brackets read as an index, or the error from reading them as one.
+class Specialized:
+    callee: Expr
+    type_args: list[TypeExpr]
+    index: Expr | None
+    index_error: diagnostic.Diagnostic | None
+
+class SpecializedCall:
+    callee: Expr
+    type_args: list[TypeExpr]
+    index: Expr | None
+    index_error: diagnostic.Diagnostic | None
+    args: list[Expr]
+    keywords: list[Keyword]
+
+# At the operator. `op` is "-", "+", or "not".
+class Unary:
+    op: str
+    operand: Expr
+
+# At the operator, which is written as in the source, with "not in" as one.
+class Binary:
+    op: str
+    left: Expr
+    right: Expr
+
+# `operand is None` or `operand is not None`, at `is`.
+class Is:
+    negated: bool
+    operand: Expr
+
+# At `isinstance`.
+class IsInstance:
+    operand: Expr
+    type_name: TypeName
+
+class Await:
+    operand: Expr
+
+class Lambda:
+    params: list[Param]
+    body: Expr
+
+# At the `(`, or at the first element of an unparenthesized assignment target.
+class TupleDisplay:
+    elements: list[Expr]
+
+class ListDisplay:
+    elements: list[Expr]
+
+class DictDisplay:
+    keys: list[Expr]
+    values: list[Expr]
+
+# Statements are at their keyword, assignments at their target, and call
+# statements at the call.
+class Stmt:
+    line: int
+    col: int
+    node: StmtNode
+
+type StmtNode = Assign | Unpack | IndexAssign | FieldAssign | CallStmt | If | While | For | With | AsyncWith | Try | FunctionDef | Nonlocal | Return | Assert | Raise | Yield | SimpleStatement
+
+class Assign:
+    name: str
+    annotation: TypeExpr | None
+    value: Expr
+
+class Unpack:
+    target: Target
+    value: Expr
+
+class IndexAssign:
+    object: Expr
+    index: Expr
+    value: Expr
+
+class FieldAssign:
+    object: Expr
+    name: str
+    value: Expr
+
+# A call or `await` used as a statement.
+class CallStmt:
+    call: Expr
+
+# `elif` is an If, at the `elif`, that is the whole `else_body`.
+class If:
+    condition: Expr
+    body: list[Stmt]
+    else_body: list[Stmt]
+
+class While:
+    condition: Expr
+    body: list[Stmt]
+
+class For:
+    target: Target
+    iterable: Expr
+    body: list[Stmt]
+
+class With:
+    items: list[WithItem]
+    body: list[Stmt]
+
+class WithItem:
+    manager: Expr
+    target: Target | None
+
+class AsyncWith:
+    manager: Expr
+    target: Target | None
+    body: list[Stmt]
+
+class Try:
+    body: list[Stmt]
+    handlers: list[Handler]
+    finally_body: list[Stmt]
+
+# At `except`; `name` is the bound name, or empty.
+class Handler:
+    line: int
+    col: int
+    type_name: TypeName
+    name: str
+    body: list[Stmt]
+
+class FunctionDef:
+    function: FunctionDecl
+
+class Nonlocal:
+    names: list[Ident]
+
+class Return:
+    value: Expr | None
+
+class Assert:
+    condition: Expr
+    message: Expr | None
+
+class Raise:
+    value: Expr | None
+
+class Yield:
+    value: Expr
+
+enum SimpleStatement:
+    PASS
+    BREAK
+    CONTINUE
