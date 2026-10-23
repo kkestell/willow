@@ -6,6 +6,7 @@ use crate::{Diag, Pos};
 pub enum Kind {
     Name(String),
     Int(i64),
+    Float(f64),
     Str(String),
     /// A reserved word or an operator.
     Word(&'static str),
@@ -276,32 +277,55 @@ impl Lexer<'_> {
 
     fn lex_number(&mut self) -> Result<(), Diag> {
         let start = self.i;
-        while matches!(self.peek(self.i), Some('0'..='9')) {
-            self.i += 1;
+        let digits_end = self.skip_digits(start);
+        let mut end = digits_end;
+        if self.peek(end) == Some('.') && matches!(self.peek(end + 1), Some('0'..='9')) {
+            end = self.skip_digits(end + 1);
         }
-        let digits: String = self.chars[start..self.i].iter().collect();
-        let fraction =
-            self.peek(self.i) == Some('.') && matches!(self.peek(self.i + 1), Some('0'..='9'));
-        if fraction || matches!(self.peek(self.i), Some('e' | 'E')) {
-            return self.fail(start, "float literals are not supported");
-        }
-        if matches!(self.peek(self.i), Some(c) if c.is_ascii_alphanumeric() || c == '_') {
-            let mut end = self.i;
-            while matches!(self.peek(end), Some(c) if c.is_ascii_alphanumeric() || c == '_') {
-                end += 1;
+        if matches!(self.peek(end), Some('e' | 'E')) {
+            let sign = usize::from(matches!(self.peek(end + 1), Some('+' | '-')));
+            if matches!(self.peek(end + 1 + sign), Some('0'..='9')) {
+                end = self.skip_digits(end + 1 + sign);
             }
-            let text: String = self.chars[start..end].iter().collect();
-            return self.fail(start, format!("invalid number literal '{text}'"));
         }
-        if digits.len() > 1 && digits.starts_with('0') {
-            return self.fail(start, "integer literal has leading zeros");
+        let text: String = self.chars[start..end].iter().collect();
+        let mut rest = end;
+        while matches!(self.peek(rest), Some(c) if c.is_ascii_alphanumeric() || c == '_' || c == '.')
+        {
+            rest += 1;
         }
-        // The int range is symmetric, so i64::MIN is not a literal value.
-        match digits.parse::<i64>() {
-            Ok(value) => self.add(Kind::Int(value), start),
-            Err(_) => return self.fail(start, "integer literal out of range"),
+        if rest > end {
+            let all: String = self.chars[start..rest].iter().collect();
+            return self.fail(start, format!("invalid number literal '{all}'"));
         }
+        let float = end > digits_end;
+        if digits_end - start > 1 && self.chars[start] == '0' {
+            let kind = if float { "float" } else { "integer" };
+            return self.fail(start, format!("{kind} literal has leading zeros"));
+        }
+        if float {
+            // Rust's parse rounds to nearest, as the spec requires.
+            let value: f64 = text.parse().unwrap();
+            if value.is_infinite() {
+                return self.fail(start, "float literal out of range");
+            }
+            self.add(Kind::Float(value), start);
+        } else {
+            // The int range is symmetric, so i64::MIN is not a literal value.
+            match text.parse::<i64>() {
+                Ok(value) => self.add(Kind::Int(value), start),
+                Err(_) => return self.fail(start, "integer literal out of range"),
+            }
+        }
+        self.i = end;
         Ok(())
+    }
+
+    fn skip_digits(&self, mut i: usize) -> usize {
+        while matches!(self.peek(i), Some('0'..='9')) {
+            i += 1;
+        }
+        i
     }
 
     fn lex_string(&mut self) -> Result<(), Diag> {

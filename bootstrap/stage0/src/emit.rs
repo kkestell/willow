@@ -18,10 +18,16 @@ pub fn emit(program: &Program) -> String {
     writeln!(out, "export function w $main(w %argc, l %argv) {{").unwrap();
     writeln!(out, "@start").unwrap();
     writeln!(out, "\tcall $GC_init()").unwrap();
+    writeln!(out, "\t%argc.l =l extsw %argc").unwrap();
+    writeln!(out, "\tstorel %argc.l, $W.argc").unwrap();
+    writeln!(out, "\tstorel %argv, $W.argv").unwrap();
     writeln!(out, "\tcall $W.core.init()").unwrap();
     writeln!(out, "\tcall ${}()", program.main).unwrap();
     writeln!(out, "\tret 0").unwrap();
     writeln!(out, "}}").unwrap();
+    // The entry saves the arguments for sys.args (core/API.md).
+    writeln!(out, "data $W.argc = {{ l 0 }}").unwrap();
+    writeln!(out, "data $W.argv = {{ l 0 }}").unwrap();
     // Every heap object's header points at a descriptor holding its type's name.
     for (symbol, name) in &program.descriptors {
         writeln!(out, "data ${symbol} = {{ l $W.str.{name} }}").unwrap();
@@ -202,6 +208,61 @@ impl Emitter<'_> {
                 self.line(format!("{t} =l dtosi {d}"));
                 t
             }
+            Value::IntToFloat(value) => {
+                let v = self.value(value);
+                let d = self.temp();
+                self.line(format!("{d} =d sltof {v}"));
+                self.float_bits(&d)
+            }
+            Value::FloatBinary(instr, left, right) => {
+                let l = self.float(left);
+                let r = self.float(right);
+                let d = self.temp();
+                self.line(format!("{d} =d {instr} {l}, {r}"));
+                self.float_bits(&d)
+            }
+            Value::FloatCompare(instr, left, right) => {
+                let l = self.float(left);
+                let r = self.float(right);
+                let t = self.temp();
+                self.line(format!("{t} =l {instr} {l}, {r}"));
+                t
+            }
+            Value::FloatNeg(value) => {
+                let v = self.float(value);
+                let d = self.temp();
+                self.line(format!("{d} =d neg {v}"));
+                self.float_bits(&d)
+            }
+            Value::Divide {
+                ints,
+                left,
+                right,
+                fail,
+            } => {
+                let (l, r) = if *ints {
+                    let l = self.value(left);
+                    let r = self.value(right);
+                    let zero = self.temp();
+                    self.line(format!("{zero} =l ceql {r}, 0"));
+                    self.guard(&zero, fail);
+                    let (ld, rd) = (self.temp(), self.temp());
+                    self.line(format!("{ld} =d sltof {l}"));
+                    self.line(format!("{rd} =d sltof {r}"));
+                    (ld, rd)
+                } else {
+                    let l = self.float(left);
+                    let r = self.float(right);
+                    // Equal to zero includes -0.0.
+                    let zero = self.temp();
+                    self.line(format!("{zero} =l ceqd {r}, d_0"));
+                    self.guard(&zero, fail);
+                    (l, r)
+                };
+                let d = self.temp();
+                self.line(format!("{d} =d div {l}, {r}"));
+                self.float_bits(&d)
+            }
             Value::Load(instr, ptr, offset) => {
                 let address = self.address(ptr, offset);
                 let t = self.temp();
@@ -215,6 +276,31 @@ impl Emitter<'_> {
                 "0".into()
             }
         }
+    }
+
+    /// Computes a float value and returns it as a QBE `d` operand.
+    fn float(&mut self, value: &Value) -> String {
+        let v = self.value(value);
+        let d = self.temp();
+        self.line(format!("{d} =d cast {v}"));
+        d
+    }
+
+    /// The bits of the `d` operand `d` in an `l` temporary, as slots hold them.
+    fn float_bits(&mut self, d: &str) -> String {
+        let t = self.temp();
+        self.line(format!("{t} =l cast {d}"));
+        t
+    }
+
+    /// Runs `fail` when `cond` is nonzero. In L0 a failure does not return.
+    fn guard(&mut self, cond: &str, fail: &Value) {
+        let (failed, ok) = (self.new_label(), self.new_label());
+        self.jump(format!("jnz {cond}, {failed}, {ok}"));
+        self.label(&failed);
+        self.value(fail);
+        self.jump("hlt".into());
+        self.label(&ok);
     }
 
     fn address(&mut self, ptr: &Value, offset: &Value) -> String {

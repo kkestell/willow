@@ -44,6 +44,20 @@ pub enum Value {
     Binary(&'static str, Box<Value>, Box<Value>),
     /// QBE `dtosi` on a float's bits.
     FloatToInt(Box<Value>),
+    /// QBE `sltof`, giving a float's bits.
+    IntToFloat(Box<Value>),
+    /// A QBE arithmetic instruction on two floats' bits.
+    FloatBinary(&'static str, Box<Value>, Box<Value>),
+    /// A QBE comparison on two floats' bits.
+    FloatCompare(&'static str, Box<Value>, Box<Value>),
+    FloatNeg(Box<Value>),
+    /// `/`, on two ints when `ints`, which calls `fail` for a zero divisor.
+    Divide {
+        ints: bool,
+        left: Box<Value>,
+        right: Box<Value>,
+        fail: Box<Value>,
+    },
     /// A QBE load instruction, the pointer, and the byte offset.
     Load(&'static str, Box<Value>, Box<Value>),
     /// A QBE store instruction, the pointer, the byte offset, and the value.
@@ -161,6 +175,11 @@ fn target_os() -> &'static str {
 /// The built-in types with descriptors, which every program emits.
 const BUILTIN_TYPES: &[&str] = &["int", "float", "bool", "str", "list", "dict"];
 
+/// Whether `module` may use intrinsics: core, and core's tests, which import it.
+fn allows_intrinsics(module: &Module) -> bool {
+    module.name == "core" || module.imports.iter().any(|i| i.name == "core")
+}
+
 fn is_intrinsic(name: &str) -> bool {
     name == "__word" || name == "__type" || name == "__os" || INTRINSICS.iter().any(|i| i.0 == name)
 }
@@ -193,9 +212,9 @@ impl Strings {
 }
 
 pub fn check(modules: &[Module]) -> Result<Program, Diag> {
-    let mut tables = Vec::new();
+    let mut tables = HashMap::new();
     for module in modules {
-        tables.push(declare(module)?);
+        tables.insert(module.name.as_str(), declare(module)?);
     }
     let entry = &modules[0];
     let main = match entry.funcs.iter().find(|f| f.name == "main") {
@@ -221,18 +240,32 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
         .map(|t| (format!("W.{t}.type"), strings.index_of(t)))
         .collect();
     let mut funcs = Vec::new();
-    for (module, globals) in modules.iter().zip(&tables) {
+    for module in modules {
+        let mut imported = HashMap::new();
+        for import in &module.imports {
+            // Only core can be imported so far, and only by core's tests.
+            let Some(table) = tables
+                .get(import.name.as_str())
+                .filter(|_| import.name == "core")
+            else {
+                let message = format!("unknown module '{}'", import.name);
+                return Err(Diag::new(&module.path, import.pos, message));
+            };
+            if imported.insert(import.name.as_str(), table).is_some() {
+                let message = format!("duplicate import '{}'", import.name);
+                return Err(Diag::new(&module.path, import.pos, message));
+            }
+        }
+        let globals = &tables[module.name.as_str()];
         for func in &module.funcs {
             if let Some(body) = &func.body {
                 let sig = &globals[&func.name];
-                funcs.push(check_function(
+                let scope = Scope {
                     module,
                     globals,
-                    &mut strings,
-                    func,
-                    sig,
-                    body,
-                )?);
+                    imported: &imported,
+                };
+                funcs.push(check_function(scope, &mut strings, func, sig, body)?);
             }
         }
     }
@@ -251,8 +284,8 @@ fn resolve(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
         "bool" => Type::Bool,
         "str" => Type::Str,
         "None" => Type::None,
-        "ptr" if module.name == "core" => Type::Ptr,
-        "word" if module.name == "core" => Type::Word,
+        "ptr" if allows_intrinsics(module) => Type::Ptr,
+        "word" if allows_intrinsics(module) => Type::Word,
         name => {
             return Err(Diag::new(
                 &module.path,
@@ -368,14 +401,25 @@ fn assigned_names(stmts: &[Stmt], names: &mut HashSet<String>) {
                 }
             }
             StmtKind::While { body, .. } => assigned_names(body, names),
-            StmtKind::Expr(_) | StmtKind::Return(_) | StmtKind::Pass => {}
+            StmtKind::Expr(_) | StmtKind::Assert { .. } | StmtKind::Return(_) | StmtKind::Pass => {}
         }
     }
+}
+
+/// The names a function body can see besides its locals.
+#[derive(Clone, Copy)]
+struct Scope<'a> {
+    module: &'a Module,
+    globals: &'a HashMap<String, Sig>,
+    /// The function tables of the modules this module imports.
+    imported: &'a HashMap<&'a str, &'a HashMap<String, Sig>>,
 }
 
 struct Checker<'a> {
     module: &'a Module,
     globals: &'a HashMap<String, Sig>,
+    imported: &'a HashMap<&'a str, &'a HashMap<String, Sig>>,
+    intrinsics: bool,
     strings: &'a mut Strings,
     ret: Type,
     /// Every name that is local to the function, with its type once its
@@ -389,8 +433,7 @@ struct Checker<'a> {
 type State = HashSet<String>;
 
 fn check_function(
-    module: &Module,
-    globals: &HashMap<String, Sig>,
+    scope: Scope,
     strings: &mut Strings,
     func: &Func,
     sig: &Sig,
@@ -410,8 +453,10 @@ fn check_function(
         .map(|p| p.name.clone())
         .collect::<Vec<_>>();
     let mut checker = Checker {
-        module,
-        globals,
+        module: scope.module,
+        globals: scope.globals,
+        imported: scope.imported,
+        intrinsics: allows_intrinsics(scope.module),
         strings,
         ret: sig.ret,
         locals,
@@ -529,6 +574,20 @@ impl Checker<'_> {
                 ops.push(Op::Eval(self.expr(expr, state)?.0));
                 Ok(false)
             }
+            StmtKind::Assert { cond, message } => {
+                let cond_ir = self.condition(cond, state)?;
+                let message_ir = match message {
+                    Some(message) => {
+                        let (message_ir, ty) = self.expr(message, state)?;
+                        self.expect(message.pos, Type::Str, ty)?;
+                        message_ir
+                    }
+                    None => self.strings.intern("assertion failed"),
+                };
+                let fail = self.fail_call("AssertionError", message_ir);
+                ops.push(Op::If(cond_ir, Vec::new(), vec![Op::Eval(fail)]));
+                Ok(false)
+            }
             StmtKind::If { arms, otherwise } => {
                 // Lower the arms from the last, so each `elif` nests in the
                 // `else` of the arm before it.
@@ -608,6 +667,7 @@ impl Checker<'_> {
     fn expr(&mut self, expr: &Expr, state: &State) -> Result<(Value, Type), Diag> {
         match &expr.kind {
             ExprKind::Int(n) => Ok((Value::Const(*n), Type::Int)),
+            ExprKind::Float(x) => Ok((Value::Const(x.to_bits() as i64), Type::Float)),
             ExprKind::Bool(b) => Ok((Value::Const(*b as i64), Type::Bool)),
             ExprKind::Str(text) => Ok((self.strings.intern(text), Type::Str)),
             ExprKind::Name(name) => {
@@ -620,7 +680,7 @@ impl Checker<'_> {
                         ),
                     };
                 }
-                if is_intrinsic(name) && self.module.name != "core" {
+                if is_intrinsic(name) && !self.intrinsics {
                     return self.fail(
                         expr.pos,
                         format!("intrinsic '{name}' is only available in core"),
@@ -638,8 +698,15 @@ impl Checker<'_> {
                 self.fail(expr.pos, format!("unknown name '{name}'"))
             }
             ExprKind::Call(callee, args) => self.call(callee, args, state),
+            ExprKind::Attr(object, _, name) => match self.module_of(object) {
+                Some(module) => self.fail(
+                    expr.pos,
+                    format!("cannot use function '{module}.{name}' as a value"),
+                ),
+                None => self.fail(expr.pos, "field access is not supported"),
+            },
             ExprKind::TypeOf(ty) => {
-                if self.module.name != "core" {
+                if !self.intrinsics {
                     return self.fail(expr.pos, "intrinsic '__type' is only available in core");
                 }
                 if !BUILTIN_TYPES.contains(&ty.name.as_str()) {
@@ -652,19 +719,18 @@ impl Checker<'_> {
             }
             ExprKind::Unary(op, operand) => {
                 let (value, ty) = self.expr(operand, state)?;
-                if ty != Type::Int {
-                    return self.fail(
+                match (*op, ty) {
+                    ("+", Type::Int | Type::Float) => Ok((value, ty)),
+                    ("-", Type::Int) => Ok((
+                        Value::Binary("sub", Box::new(Value::Const(0)), Box::new(value)),
+                        Type::Int,
+                    )),
+                    ("-", Type::Float) => Ok((Value::FloatNeg(Box::new(value)), Type::Float)),
+                    _ => self.fail(
                         expr.pos,
                         format!("operator '{op}' cannot be applied to {}", ty.name()),
-                    );
+                    ),
                 }
-                if *op == "+" {
-                    return Ok((value, ty));
-                }
-                Ok((
-                    Value::Binary("sub", Box::new(Value::Const(0)), Box::new(value)),
-                    Type::Int,
-                ))
             }
             ExprKind::Binary(op, op_pos, left, right) => {
                 let (l, lt) = self.expr(left, state)?;
@@ -692,18 +758,52 @@ impl Checker<'_> {
             ">=" => "csgel",
             _ => "",
         };
+        let float_op = match op {
+            "+" => "add",
+            "-" => "sub",
+            "*" => "mul",
+            _ => "",
+        };
+        let float_compare = match op {
+            "==" => "ceqd",
+            "!=" => "cned",
+            "<" => "cltd",
+            "<=" => "cled",
+            ">" => "cgtd",
+            ">=" => "cged",
+            _ => "",
+        };
+        let (l, r) = (Box::new(l), Box::new(r));
         let (instr, ty) = match (op, lt, rt) {
+            ("/", Type::Int, Type::Int) | ("/", Type::Float, Type::Float) => {
+                let message = self.strings.intern("division by zero");
+                let fail = Box::new(self.fail_call("ZeroDivisionError", message));
+                let ints = lt == Type::Int;
+                let divide = Value::Divide {
+                    ints,
+                    left: l,
+                    right: r,
+                    fail,
+                };
+                return Ok((divide, Type::Float));
+            }
+            (_, Type::Float, Type::Float) if !float_op.is_empty() => {
+                return Ok((Value::FloatBinary(float_op, l, r), Type::Float));
+            }
+            (_, Type::Float, Type::Float) if !float_compare.is_empty() => {
+                return Ok((Value::FloatCompare(float_compare, l, r), Type::Bool));
+            }
             ("+", Type::Int, Type::Int) => ("add", Type::Int),
             ("-", Type::Int, Type::Int) => ("sub", Type::Int),
             ("*", Type::Int, Type::Int) => ("mul", Type::Int),
             (_, Type::Int, Type::Int) if !compare.is_empty() => (compare, Type::Bool),
             ("==" | "!=", Type::Bool, Type::Bool) => (compare, Type::Bool),
             ("+", Type::Str, Type::Str) => {
-                return Ok((core_call("str_concat", vec![l, r], true), Type::Str));
+                return Ok((core_call("str_concat", vec![*l, *r], true), Type::Str));
             }
             (_, Type::Str, Type::Str) if !compare.is_empty() => {
                 // Strings compare by the sign of core's three-way comparison.
-                let order = core_call("str_compare", vec![l, r], true);
+                let order = core_call("str_compare", vec![*l, *r], true);
                 return Ok((
                     Value::Binary(compare, Box::new(order), Box::new(Value::Const(0))),
                     Type::Bool,
@@ -720,100 +820,88 @@ impl Checker<'_> {
                 );
             }
         };
-        Ok((Value::Binary(instr, Box::new(l), Box::new(r)), ty))
+        Ok((Value::Binary(instr, l, r), ty))
+    }
+
+    /// A call to `core.fail` with a class name and a message.
+    fn fail_call(&mut self, class: &str, message: Value) -> Value {
+        let class = self.strings.intern(class);
+        core_call("fail", vec![class, message], false)
+    }
+
+    /// The name of the imported module `expr` names, unless a local hides it.
+    fn module_of(&self, expr: &Expr) -> Option<&str> {
+        match &expr.kind {
+            ExprKind::Name(name) if !self.locals.contains_key(name) => self
+                .imported
+                .get_key_value(name.as_str())
+                .map(|(module, _)| *module),
+            _ => None,
+        }
+    }
+
+    fn arity(&self, pos: Pos, name: &str, expected: usize, received: usize) -> Result<(), Diag> {
+        if expected == received {
+            Ok(())
+        } else {
+            self.fail(
+                pos,
+                format!("'{name}' expects {}, received {received}", count(expected)),
+            )
+        }
     }
 
     fn call(&mut self, callee: &Expr, args: &[Expr], state: &State) -> Result<(Value, Type), Diag> {
         let pos = callee.pos;
+        if let ExprKind::Attr(object, name_pos, name) = &callee.kind {
+            let Some(module) = self.module_of(object) else {
+                return self.fail(pos, "field access is not supported");
+            };
+            let table = self.imported[module];
+            let Some(sig) = table.get(name) else {
+                return self.fail(
+                    *name_pos,
+                    format!("module '{module}' has no function '{name}'"),
+                );
+            };
+            let display = format!("{module}.{name}");
+            let checked = self.args(args, state)?;
+            return self.call_sig(pos, &display, name, sig, checked);
+        }
         let name = match &callee.kind {
-            ExprKind::Name(name) if !self.locals.contains_key(name) => name,
+            ExprKind::Name(name) if !self.locals.contains_key(name) => name.as_str(),
             _ => {
                 let (_, ty) = self.expr(callee, state)?;
                 return self.fail(pos, format!("cannot call a value of type {}", ty.name()));
             }
         };
-        if !self.globals.contains_key(name) && name != "print" {
+        let globals = self.globals;
+        if !globals.contains_key(name) && !matches!(name, "print" | "int" | "float") {
             if !is_intrinsic(name) {
-                if BUILTINS.contains(&name.as_str()) {
+                if BUILTINS.contains(&name) {
                     return self.fail(pos, format!("'{name}' is not supported"));
                 }
                 return self.fail(pos, format!("unknown name '{name}'"));
             }
-            if self.module.name != "core" {
+            if !self.intrinsics {
                 return self.fail(pos, format!("intrinsic '{name}' is only available in core"));
             }
         }
-        let mut checked = Vec::new();
-        for arg in args {
-            let (value, ty) = self.expr(arg, state)?;
-            checked.push((arg.pos, value, ty));
-        }
-        let arity = |n: usize| -> Result<(), Diag> {
-            if checked.len() == n {
-                Ok(())
-            } else {
-                self.fail(
-                    pos,
-                    format!("'{name}' expects {}, received {}", count(n), checked.len()),
-                )
-            }
-        };
-        if let Some(sig) = self.globals.get(name) {
-            let variadic = matches!(sig.target, Target::Extern { variadic: true, .. });
-            if !variadic || checked.len() < sig.params.len() {
-                arity(sig.params.len())?;
-            }
-            for ((arg_pos, _, ty), &param) in checked.iter().zip(&sig.params) {
-                self.expect(*arg_pos, param, *ty)?;
-            }
-            let call = match &sig.target {
-                Target::Willow(symbol) => Call {
-                    symbol: symbol.clone(),
-                    args: checked.into_iter().map(|(_, v, _)| ("l", v)).collect(),
-                    variadic_at: None,
-                    ret: if sig.ret == Type::None {
-                        None
-                    } else {
-                        Some("l")
-                    },
-                },
-                Target::Extern {
-                    cparams,
-                    variadic,
-                    cret,
-                } => {
-                    let mut call_args = Vec::new();
-                    for (i, (arg_pos, value, ty)) in checked.into_iter().enumerate() {
-                        let extra = match ty {
-                            Type::Int | Type::Ptr => "l",
-                            Type::Float => "d",
-                            _ if i >= cparams.len() => {
-                                return self.fail(
-                                    arg_pos,
-                                    "variadic arguments must be int, float, or ptr",
-                                );
-                            }
-                            _ => "l",
-                        };
-                        call_args.push((cparams.get(i).copied().unwrap_or(extra), value));
-                    }
-                    Call {
-                        symbol: name.clone(),
-                        args: call_args,
-                        variadic_at: variadic.then_some(cparams.len()),
-                        ret: *cret,
-                    }
-                }
-            };
-            return Ok((Value::Call(call), sig.ret));
+        let mut checked = self.args(args, state)?;
+        if let Some(sig) = globals.get(name) {
+            return self.call_sig(pos, name, name, sig, checked);
         }
         if name == "print" {
-            arity(1)?;
+            self.arity(pos, name, 1, checked.len())?;
             let (arg_pos, value, ty) = checked.pop().unwrap();
-            let function = match ty {
-                Type::Int => "print_int",
-                Type::Str => "print_str",
-                Type::Bool => "print_bool",
+            let value = match ty {
+                Type::Int => core_call("print_int", vec![value], false),
+                Type::Bool => core_call("print_bool", vec![value], false),
+                Type::Str => core_call("print_str", vec![value], false),
+                Type::Float => {
+                    let text = core_call("float_to_str", vec![value], true);
+                    core_call("print_str", vec![text], false)
+                }
                 _ => {
                     return self.fail(
                         arg_pos,
@@ -821,13 +909,31 @@ impl Checker<'_> {
                     );
                 }
             };
-            return Ok((core_call(function, vec![value], false), Type::None));
+            return Ok((value, Type::None));
+        }
+        if name == "int" || name == "float" {
+            self.arity(pos, name, 1, checked.len())?;
+            let (arg_pos, value, ty) = checked.pop().unwrap();
+            return match (name, ty) {
+                ("int", Type::Float) => {
+                    Ok((core_call("float_to_int", vec![value], true), Type::Int))
+                }
+                ("int", Type::Str) => Ok((core_call("str_to_int", vec![value], true), Type::Int)),
+                ("float", Type::Int) => Ok((Value::IntToFloat(Box::new(value)), Type::Float)),
+                ("float", Type::Str) => {
+                    Ok((core_call("str_to_float", vec![value], true), Type::Float))
+                }
+                _ => self.fail(
+                    arg_pos,
+                    format!("cannot convert a value of type {} to {name}", ty.name()),
+                ),
+            };
         }
         if name == "__os" {
             return self.fail(pos, "cannot call a value of type str");
         }
         if name == "__word" {
-            arity(1)?;
+            self.arity(pos, name, 1, checked.len())?;
             let (arg_pos, value, ty) = checked.pop().unwrap();
             if !matches!(
                 ty,
@@ -841,13 +947,13 @@ impl Checker<'_> {
             return Ok((value, Type::Word));
         }
         let &(_, params, ret) = INTRINSICS.iter().find(|i| i.0 == name).unwrap();
-        arity(params.len())?;
+        self.arity(pos, name, params.len(), checked.len())?;
         for ((arg_pos, _, ty), &param) in checked.iter().zip(params) {
             self.expect(*arg_pos, param, *ty)?;
         }
         let mut values = checked.into_iter().map(|(_, v, _)| Box::new(v));
         let mut next = || values.next().unwrap();
-        let value = match name.as_str() {
+        let value = match name {
             "__alloc" | "__alloc_atomic" => Value::Call(Call {
                 symbol: if name == "__alloc" {
                     "GC_malloc"
@@ -871,5 +977,70 @@ impl Checker<'_> {
             _ => *next(),
         };
         Ok((value, ret))
+    }
+    fn args(&mut self, args: &[Expr], state: &State) -> Result<Vec<(Pos, Value, Type)>, Diag> {
+        let mut checked = Vec::new();
+        for arg in args {
+            let (value, ty) = self.expr(arg, state)?;
+            checked.push((arg.pos, value, ty));
+        }
+        Ok(checked)
+    }
+
+    /// A call to a declared function; `name` is its name in its module and
+    /// `display` is how the call names it.
+    fn call_sig(
+        &self,
+        pos: Pos,
+        display: &str,
+        name: &str,
+        sig: &Sig,
+        checked: Vec<(Pos, Value, Type)>,
+    ) -> Result<(Value, Type), Diag> {
+        let variadic = matches!(sig.target, Target::Extern { variadic: true, .. });
+        if !variadic || checked.len() < sig.params.len() {
+            self.arity(pos, display, sig.params.len(), checked.len())?;
+        }
+        for ((arg_pos, _, ty), &param) in checked.iter().zip(&sig.params) {
+            self.expect(*arg_pos, param, *ty)?;
+        }
+        let call = match &sig.target {
+            Target::Willow(symbol) => Call {
+                symbol: symbol.clone(),
+                args: checked.into_iter().map(|(_, v, _)| ("l", v)).collect(),
+                variadic_at: None,
+                ret: if sig.ret == Type::None {
+                    None
+                } else {
+                    Some("l")
+                },
+            },
+            Target::Extern {
+                cparams,
+                variadic,
+                cret,
+            } => {
+                let mut call_args = Vec::new();
+                for (i, (arg_pos, value, ty)) in checked.into_iter().enumerate() {
+                    let extra = match ty {
+                        Type::Int | Type::Ptr => "l",
+                        Type::Float => "d",
+                        _ if i >= cparams.len() => {
+                            return self
+                                .fail(arg_pos, "variadic arguments must be int, float, or ptr");
+                        }
+                        _ => "l",
+                    };
+                    call_args.push((cparams.get(i).copied().unwrap_or(extra), value));
+                }
+                Call {
+                    symbol: name.to_string(),
+                    args: call_args,
+                    variadic_at: variadic.then_some(cparams.len()),
+                    ret: *cret,
+                }
+            }
+        };
+        Ok((Value::Call(call), sig.ret))
     }
 }

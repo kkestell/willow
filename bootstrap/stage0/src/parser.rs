@@ -6,7 +6,13 @@ use crate::{Diag, Pos};
 pub struct Module {
     pub name: String,
     pub path: String,
+    pub imports: Vec<Import>,
     pub funcs: Vec<Func>,
+}
+
+pub struct Import {
+    pub pos: Pos,
+    pub name: String,
 }
 
 /// A `def`, or an `extern def` when `body` is `None`.
@@ -36,6 +42,10 @@ pub struct Stmt {
 }
 
 pub enum StmtKind {
+    Assert {
+        cond: Expr,
+        message: Option<Expr>,
+    },
     Assign {
         target: String,
         annotation: Option<TypeName>,
@@ -62,10 +72,13 @@ pub struct Expr {
 
 pub enum ExprKind {
     Int(i64),
+    Float(f64),
     Str(String),
     Bool(bool),
     Name(String),
     Call(Box<Expr>, Vec<Expr>),
+    /// `object.name`, with the position of the name.
+    Attr(Box<Expr>, Pos, String),
     Unary(&'static str, Box<Expr>),
     /// The operator, its position, and the operands.
     Binary(&'static str, Pos, Box<Expr>, Box<Expr>),
@@ -81,13 +94,23 @@ struct Parser<'a> {
 
 pub fn parse(name: &str, path: &str, tokens: Vec<Token>) -> Result<Module, Diag> {
     let mut p = Parser { path, tokens, i: 0 };
+    let mut imports = Vec::new();
+    while p.accept("import") {
+        let (pos, name) = p.name()?;
+        p.end_of_line()?;
+        imports.push(Import { pos, name });
+    }
     let mut funcs = Vec::new();
     while p.peek() != &Kind::Eof {
+        if p.peek() == &Kind::Word("import") {
+            return p.fail(p.pos(), "imports must come before declarations");
+        }
         funcs.push(p.declaration()?);
     }
     Ok(Module {
         name: name.to_string(),
         path: path.to_string(),
+        imports,
         funcs,
     })
 }
@@ -98,6 +121,7 @@ fn describe(kind: &Kind) -> String {
     match kind {
         Kind::Name(name) => format!("'{name}'"),
         Kind::Int(_) => "integer".into(),
+        Kind::Float(_) => "float".into(),
         Kind::Str(_) => "string".into(),
         Kind::Word(word) => format!("'{word}'"),
         Kind::Newline => "end of line".into(),
@@ -303,6 +327,15 @@ impl Parser<'_> {
             };
             self.end_of_line()?;
             StmtKind::Return(value)
+        } else if self.accept("assert") {
+            let cond = self.expr()?;
+            let message = if self.accept(",") {
+                Some(self.expr()?)
+            } else {
+                None
+            };
+            self.end_of_line()?;
+            StmtKind::Assert { cond, message }
         } else if self.accept("pass") {
             self.end_of_line()?;
             StmtKind::Pass
@@ -399,7 +432,7 @@ impl Parser<'_> {
 
     fn term(&mut self) -> Result<Expr, Diag> {
         let mut left = self.unary()?;
-        while let Some((op, op_pos)) = self.binary_op(&["*"]) {
+        while let Some((op, op_pos)) = self.binary_op(&["*", "/"]) {
             let right = self.unary()?;
             let pos = left.pos;
             left = Expr {
@@ -423,7 +456,19 @@ impl Parser<'_> {
 
     fn postfix(&mut self) -> Result<Expr, Diag> {
         let mut expr = self.primary()?;
-        while self.accept("(") {
+        loop {
+            if self.accept(".") {
+                let (name_pos, name) = self.name()?;
+                let pos = expr.pos;
+                expr = Expr {
+                    pos,
+                    kind: ExprKind::Attr(Box::new(expr), name_pos, name),
+                };
+                continue;
+            }
+            if !self.accept("(") {
+                break;
+            }
             let mut args = Vec::new();
             while !self.accept(")") {
                 args.push(self.expr()?);
@@ -445,6 +490,9 @@ impl Parser<'_> {
         let pos = self.pos();
         let kind = match self.peek().clone() {
             Kind::Int(value) => ExprKind::Int(value),
+            Kind::Float(value) => ExprKind::Float(value),
+            // Conversions are called by their reserved type names.
+            Kind::Word(w @ ("int" | "float")) => ExprKind::Name(w.to_string()),
             Kind::Str(text) => ExprKind::Str(text),
             Kind::Name(name)
                 if name == "__type" && self.tokens[self.i + 1].kind == Kind::Word("(") =>
