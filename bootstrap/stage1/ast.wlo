@@ -51,9 +51,10 @@ class FunctionDecl:
     is_async: bool
     # The binder's: the symbols assigned in the body in order of first
     # assignment, the enclosing functions' variables it uses, an id that
-    # tells functions apart, the enclosing function, the class or protocol
-    # of a method, the name of a top-level function or class member as types
-    # write it, and whether it yields.
+    # tells functions apart, given where the binder first declares the
+    # function, the enclosing function, the class or protocol of a method,
+    # the name types write ("f", "module.f", "Class.m", "f.g",
+    # "f.<lambda>"), and whether it yields.
     locals: list[Symbol]
     captures: list[Capture]
     id: int = 0

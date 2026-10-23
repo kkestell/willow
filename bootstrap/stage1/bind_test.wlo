@@ -68,6 +68,70 @@ def nested_functions(body: list[ast.Stmt], lines: list[str]):
         elif isinstance(node, ast.For):
             nested_functions(node.body, lines)
 
+# The type names of the functions of a bound program, which must all have
+# distinct ids: declarations, methods, protocol methods, and nested functions
+# and lambdas at any depth.
+def function_names(program: list[str]) -> str:
+    modules: list[ast.Module] = []
+    i = 1
+    while i < len(program):
+        name = "main"
+        source = program[i]
+        if i > 1:
+            name = program[i]
+            source = program[i + 1]
+            i = i + 1
+        i = i + 1
+        lexed = lexer.lex(name + ".wlo", source)
+        if isinstance(lexed, diagnostic.Diagnostic):
+            return lexed.format()
+        parsed = parser.parse(name + ".wlo", lexed)
+        if isinstance(parsed, diagnostic.Diagnostic):
+            return parsed.format()
+        parsed.name = name
+        modules.append(parsed)
+    error = bind.bind(modules)
+    if error is not None:
+        return error.format()
+    found: list[ast.FunctionDecl] = []
+    for module in modules:
+        for decl in module.declarations:
+            if isinstance(decl, ast.FunctionDecl):
+                collect_functions(decl, found)
+            elif isinstance(decl, ast.ClassDecl):
+                for method in decl.methods:
+                    collect_functions(method, found)
+            elif isinstance(decl, ast.ProtocolDecl):
+                for method in decl.methods:
+                    collect_functions(method, found)
+    names: list[str] = []
+    ids: dict[int, bool] = {}
+    for function in found:
+        if function.id == 0 or function.id in ids:
+            return f"{function.type_name} has id {function.id}, which is not unique"
+        ids[function.id] = True
+        names.append(function.type_name)
+    return " ".join(names)
+
+def collect_functions(function: ast.FunctionDecl, found: list[ast.FunctionDecl]):
+    found.append(function)
+    collect_in_block(function.body, found)
+
+def collect_in_block(body: list[ast.Stmt], found: list[ast.FunctionDecl]):
+    for statement in body:
+        node = statement.node
+        if isinstance(node, ast.FunctionDef):
+            collect_functions(node.function, found)
+        elif isinstance(node, ast.If):
+            collect_in_block(node.body, found)
+            collect_in_block(node.else_body, found)
+        elif isinstance(node, ast.Assign):
+            value = node.value.node
+            if isinstance(value, ast.Lambda):
+                function = value.function
+                if function is not None:
+                    collect_functions(function, found)
+
 def main():
     cases = [
         # Declarations
@@ -147,6 +211,13 @@ def main():
             print(f"  expected: {program[0]}")
             print(f"  actual:   {actual}")
             ok = False
+    names = function_names(["", "import a\nprotocol P:\n    def f(self) -> int\n    def g(self) -> int\nclass C:\n    x: int\n    def m(self) -> int:\n        return 1\ndef h() -> int:\n    return 1\ndef main():\n    if True:\n        def g[T](x: T) -> T:\n            return x\n    else:\n        def g[T](x: T) -> T:\n            f = lambda: x\n            return x\n", "a", "class D:\n    y: int\n    def n(self):\n        pass\n"])
+    expected = "P.f P.g C.m h main main.g main.g main.g.<lambda> a.D.n"
+    if names != expected:
+        print("FAIL function ids and type names")
+        print(f"  expected: {expected}")
+        print(f"  actual:   {names}")
+        ok = False
     if not ok:
         sys.exit(1)
     print("bind tests passed")

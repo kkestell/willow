@@ -84,6 +84,8 @@ class Binder:
             if module.name != self.entry.name:
                 type_name = module.name + "." + ident.name
             set_type_name(decl, type_name)
+            if isinstance(decl, ast.FunctionDecl):
+                decl.id = self.new_id()
 
     # The type parameter names in `outer` and those of a declaration, which
     # cannot hide one another.
@@ -113,7 +115,6 @@ class Binder:
     # assignments after the declaration make no local of their own; they are
     # left in `pending` until the declaration is reached.
     def collect_symbols(self, module: ast.Module, function: ast.FunctionDecl, outer: Scope | None, pending: dict[str, bool]) -> Scope:
-        function.id = self.new_id()
         scope = Scope({}, outer)
         for param in function.params:
             symbol = ast.Symbol(self.new_id(), param.name, param.line, param.col, True, function)
@@ -200,10 +201,10 @@ class Binder:
         function.locals.append(symbol)
 
     # Resolves the body of `function`, whose enclosing scope is `outer`.
-    def resolve_function(self, module: ast.Module, function: ast.FunctionDecl, outer: Scope | None, type_params: dict[str, bool], enclosing_name: str):
+    def resolve_function(self, module: ast.Module, function: ast.FunctionDecl, outer: Scope | None, type_params: dict[str, bool]):
         pending: dict[str, bool] = {}
         scope = self.collect_symbols(module, function, outer, pending)
-        resolver = Resolver(self, module, function, scope, pending, type_params, enclosing_name, 0)
+        resolver = Resolver(self, module, function, scope, pending, type_params, 0)
         resolver.resolve_block(function.body, None)
 
 # Resolves the names in one function body.
@@ -214,8 +215,6 @@ class Resolver:
     scope: Scope
     pending: dict[str, bool]
     type_params: dict[str, bool]
-    # The prefix of the names of functions nested in this one.
-    enclosing_name: str
     # Grows with each call resolved in this function, not in nested ones.
     calls: int
 
@@ -373,10 +372,11 @@ class Resolver:
             result = ast.TypeName(expr.line, expr.col, "None", "", [], False)
             body = [ast.Stmt(expr.line, expr.col, ast.Return(node.body))]
             function = ast.FunctionDecl(expr.line, expr.col, "<lambda>", [], node.params, result, body, False, [], [])
+            function.id = self.binder.new_id()
             function.parent = self.function
-            function.type_name = self.enclosing_name + ".<lambda>"
+            function.type_name = self.function.type_name + ".<lambda>"
             node.function = function
-            self.binder.resolve_function(self.module, function, self.scope, self.type_params, function.type_name)
+            self.binder.resolve_function(self.module, function, self.scope, self.type_params)
         elif isinstance(node, ast.CallValue):
             self.resolve_expr(node.callee, True)
             self.resolve_args(node.args, node.keywords)
@@ -618,14 +618,15 @@ class Resolver:
                     self.capture(symbol, ident.line, ident.col)
         elif isinstance(node, ast.FunctionDef):
             nested = node.function
+            nested.id = self.binder.new_id()
             nested.parent = self.function
-            nested.type_name = self.enclosing_name + "." + nested.name
+            nested.type_name = self.function.type_name + "." + nested.name
             self.binder.check_signature(self.module, nested, self.type_params)
             if self.failed():
                 return
             node.symbol = self.scope.find(nested.name)
             type_params = self.binder.enter_type_params(self.module, self.type_params, nested.type_params)
-            self.binder.resolve_function(self.module, nested, self.scope, type_params, nested.type_name)
+            self.binder.resolve_function(self.module, nested, self.scope, type_params)
         elif isinstance(node, ast.FieldAssign):
             self.resolve_expr(node.value, False)
             enum_decl = self.enum_named(node.object)
@@ -745,13 +746,11 @@ def bind(modules: list[ast.Module]) -> diagnostic.Diagnostic | None:
             if binder.error is not None:
                 return binder.error
             outer: dict[str, bool] = {}
-            enclosing_name = function.type_name
             owner = function.owner
             if isinstance(owner, ast.ClassDecl):
                 outer = binder.enter_type_params(module, {}, owner.type_params)
-                enclosing_name = owner.type_name + "." + function.name
             type_params = binder.enter_type_params(module, outer, function.type_params)
-            binder.resolve_function(module, function, None, type_params, enclosing_name)
+            binder.resolve_function(module, function, None, type_params)
     return binder.error
 
 # The checks of classes, protocols, and functions that come before function
@@ -770,6 +769,8 @@ def check_declarations(binder: Binder, module: ast.Module):
                     if field.name == method.name:
                         binder.fail(module, method.line, method.col, f"method '{method.name}' has the same name as a field")
                 method.owner = decl
+                method.id = binder.new_id()
+                method.type_name = decl.type_name + "." + method.name
                 binder.check_signature(module, method, outer)
     for decl in module.declarations:
         if isinstance(decl, ast.ProtocolDecl):
@@ -777,6 +778,8 @@ def check_declarations(binder: Binder, module: ast.Module):
             outer = binder.enter_type_params(module, {}, decl.type_params)
             for method in decl.methods:
                 method.owner = decl
+                method.id = binder.new_id()
+                method.type_name = decl.type_name + "." + method.name
                 binder.check_signature(module, method, outer)
     for decl in module.declarations:
         if isinstance(decl, ast.FunctionDecl):
