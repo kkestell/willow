@@ -1,0 +1,5 @@
+import real
+import alias
+
+def main():
+    print(real.f())
