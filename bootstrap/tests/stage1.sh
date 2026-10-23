@@ -103,8 +103,15 @@ drive() {
     echo "$name: $(wc -l <"$work/files" | tr -d ' ') ${kind}s, $(wc -l <"$work/errors" | tr -d ' ') with errors"
 }
 
+# The files above and core, whose `extern def` and `__type` only the parser
+# checks here.
+parsed_files() {
+    files
+    echo bootstrap/core/core.wlo
+}
+
 check_driver() {
-    drive "$1" files file
+    drive "$1" parsed_files file
 }
 
 check_program_driver() {

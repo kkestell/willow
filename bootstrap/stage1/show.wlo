@@ -64,9 +64,13 @@ class Printer:
         params: list[str] = []
         for param in function.params:
             params.append(self.param(param))
+        if function.variadic:
+            params.append("...")
         text = f"def {function.name}{self.type_params(function.type_params)}"
         if function.is_async:
             text = "async " + text
+        if function.external:
+            text = "extern " + text
         text = self.at(text, function.line, function.col) + "(" + ", ".join(params) + ") -> " + self.annotation(function.return_type)
         if len(function.body) == 0:
             return text
@@ -211,6 +215,8 @@ class Printer:
             return "tuple(" + self.exprs(node.elements) + ")"
         if isinstance(node, ast.ListDisplay):
             return "[" + self.exprs(node.elements) + "]"
+        if isinstance(node, ast.TypeOf):
+            return "__type(" + self.annotation(node.target) + ")"
         entries: list[str] = []
         i = 0
         while i < len(node.keys):
