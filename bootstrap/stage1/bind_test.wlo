@@ -1,0 +1,223 @@
+# Checks the binder's name resolution and diagnostics. Each case is a
+# program, the entry module `main` and then pairs of module names and
+# sources. Prints each mismatch and exits with status 1 if there was one.
+
+import ast
+import bind
+import diagnostic
+import lexer
+import parser
+import show
+import sys
+
+# The first error in the program, or each function's locals, with `*` on
+# captured ones, its captures, and its body after binding.
+def describe(program: list[str]) -> str:
+    modules: list[ast.Module] = []
+    i = 1
+    while i < len(program):
+        name = "main"
+        source = program[i]
+        if i > 1:
+            name = program[i]
+            source = program[i + 1]
+            i = i + 1
+        i = i + 1
+        path = "/".join(name.split(".")) + ".wlo"
+        lexed = lexer.lex(path, source)
+        if isinstance(lexed, diagnostic.Diagnostic):
+            return lexed.format()
+        parsed = parser.parse(path, lexed)
+        if isinstance(parsed, diagnostic.Diagnostic):
+            return parsed.format()
+        parsed.name = name
+        modules.append(parsed)
+    error = bind.bind(modules)
+    if error is not None:
+        return error.format()
+    lines: list[str] = []
+    for module in modules:
+        for function in bind.functions(module):
+            describe_function(function, lines)
+    return "\n".join(lines)
+
+def describe_function(function: ast.FunctionDecl, lines: list[str]):
+    locals: list[str] = []
+    for symbol in function.locals:
+        if symbol.captured:
+            locals.append(symbol.name + "*")
+        else:
+            locals.append(symbol.name)
+    captures: list[str] = []
+    for capture in function.captures:
+        captures.append(capture.symbol.name)
+    lines.append(f"{function.name} [{', '.join(locals)}] [{', '.join(captures)}] {show.Printer(False).block(function.body)}")
+    nested_functions(function.body, lines)
+
+# Describes the functions nested in `body`.
+def nested_functions(body: list[ast.Stmt], lines: list[str]):
+    for statement in body:
+        node = statement.node
+        if isinstance(node, ast.FunctionDef):
+            describe_function(node.function, lines)
+        elif isinstance(node, ast.If):
+            nested_functions(node.body, lines)
+            nested_functions(node.else_body, lines)
+        elif isinstance(node, ast.While):
+            nested_functions(node.body, lines)
+        elif isinstance(node, ast.For):
+            nested_functions(node.body, lines)
+
+# The type names of the functions of a bound program, which must all have
+# distinct ids: declarations, methods, protocol methods, and nested functions
+# and lambdas at any depth.
+def function_names(program: list[str]) -> str:
+    modules: list[ast.Module] = []
+    i = 1
+    while i < len(program):
+        name = "main"
+        source = program[i]
+        if i > 1:
+            name = program[i]
+            source = program[i + 1]
+            i = i + 1
+        i = i + 1
+        lexed = lexer.lex(name + ".wlo", source)
+        if isinstance(lexed, diagnostic.Diagnostic):
+            return lexed.format()
+        parsed = parser.parse(name + ".wlo", lexed)
+        if isinstance(parsed, diagnostic.Diagnostic):
+            return parsed.format()
+        parsed.name = name
+        modules.append(parsed)
+    error = bind.bind(modules)
+    if error is not None:
+        return error.format()
+    found: list[ast.FunctionDecl] = []
+    for module in modules:
+        for decl in module.declarations:
+            if isinstance(decl, ast.FunctionDecl):
+                collect_functions(decl, found)
+            elif isinstance(decl, ast.ClassDecl):
+                for method in decl.methods:
+                    collect_functions(method, found)
+            elif isinstance(decl, ast.ProtocolDecl):
+                for method in decl.methods:
+                    collect_functions(method, found)
+    names: list[str] = []
+    ids: dict[int, bool] = {}
+    for function in found:
+        if function.id == 0 or function.id in ids:
+            return f"{function.type_name} has id {function.id}, which is not unique"
+        ids[function.id] = True
+        names.append(function.type_name)
+    return " ".join(names)
+
+def collect_functions(function: ast.FunctionDecl, found: list[ast.FunctionDecl]):
+    found.append(function)
+    collect_in_block(function.body, found)
+
+def collect_in_block(body: list[ast.Stmt], found: list[ast.FunctionDecl]):
+    for statement in body:
+        node = statement.node
+        if isinstance(node, ast.FunctionDef):
+            collect_functions(node.function, found)
+        elif isinstance(node, ast.If):
+            collect_in_block(node.body, found)
+            collect_in_block(node.else_body, found)
+        elif isinstance(node, ast.Assign):
+            value = node.value.node
+            if isinstance(value, ast.Lambda):
+                function = value.function
+                if function is not None:
+                    collect_functions(function, found)
+
+def main():
+    cases = [
+        # Declarations
+        ["main.wlo:3:5: error: duplicate function 'f'", "def f():\n    pass\ndef f():\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:3:7: error: duplicate class 'f'", "def f():\n    pass\nclass f:\n    x: int\ndef main():\n    pass\n"],
+        ["main.wlo:2:5: error: duplicate function 'a'", "import a\ndef a():\n    pass\ndef main():\n    pass\n", "a", "def g():\n    pass\n"],
+        ["main.wlo:2:8: error: duplicate import 'a'", "import a\nimport a\ndef main():\n    pass\n", "a", "def g():\n    pass\n"],
+        ["main.wlo:2:8: error: 'a' is imported as a module and as a namespace", "import a\nimport a.b\ndef main():\n    pass\n", "a", "def g():\n    pass\n", "a.b", "def h():\n    pass\n"],
+        ["main.wlo:4:5: error: duplicate enum member 'A'", "enum E:\n    A\n    B\n    A\ndef main():\n    pass\n"],
+        ["main.wlo:3:5: error: duplicate field 'x'", "class C:\n    x: int\n    x: str\ndef main():\n    pass\n"],
+        ["main.wlo:5:9: error: duplicate method 'm'", "class C:\n    def m(self):\n        pass\n\n    def m(self):\n        pass\ndef main():\n    pass\n"],
+        ["main.wlo:4:9: error: method 'x' has the same name as a field", "class C:\n    x: int\n\n    def x(self):\n        pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:15: error: duplicate parameter 'a'", "def f(a: int, a: int):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:10: error: type parameter 'T' hides another type parameter", "def f[T, T](x: T) -> T:\n    return x\ndef main():\n    pass\n"],
+        ["main.wlo:4:11: error: type parameter 'T' hides another type parameter", "class Box[T]:\n    value: T\n\n    def m[T](self, x: T) -> T:\n        return x\ndef main():\n    pass\n"],
+        ["main.wlo:1:1: error: program has no main function", "def f():\n    pass\n"],
+        ["main.wlo:1:1: error: program has no main function", "class main:\n    x: int\n"],
+        ["main.wlo:1:5: error: main must take no parameters and return None", "def main(x: int):\n    pass\n"],
+        # Names
+        ["main.wlo:2:9: error: unknown name 'y'", "def main():\n    x = y\n"],
+        ["main.wlo:2:5: error: unknown function 'g'", "def main():\n    g()\n"],
+        ["main.wlo:3:9: error: module 'a' cannot be used as a value", "import a\ndef main():\n    x = a\n", "a", "def g():\n    pass\n"],
+        ["main.wlo:4:9: error: class 'C' cannot be used as a value", "class C:\n    x: int\ndef main():\n    y = C\n"],
+        ["main.wlo:3:9: error: alias 'T' cannot be used as a value", "type T = int\ndef main():\n    y = T\n"],
+        ["main.wlo:4:5: error: enum 'E' cannot be called", "enum E:\n    A\ndef main():\n    E()\n"],
+        ["main.wlo:3:5: error: alias 'T' cannot be called", "type T = int\ndef main():\n    T()\n"],
+        ["main.wlo:4:5: error: protocol 'P' cannot be called", "protocol P:\n    def m(self)\ndef main():\n    P()\n"],
+        ["main.wlo:5:11: error: enum 'E' has no member 'B'", "enum E:\n    A\ndef main():\n    x = E.A\n    y = E.B\n"],
+        ["main.wlo:4:7: error: enum 'E' has no method 'm'", "enum E:\n    A\ndef main():\n    E.m()\n"],
+        ["main.wlo:4:7: error: cannot assign to a member of enum 'E'", "enum E:\n    A\ndef main():\n    E.A = E.A\n"],
+        ["main.wlo:3:7: error: module 'a' has no function, class, enum, or alias 'nope'", "import a\ndef main():\n    a.nope()\n", "a", "def g():\n    pass\n"],
+        ["main.wlo:3:7: error: '_p' is private to module 'a'", "import a\ndef main():\n    a._p()\n", "a", "def _p():\n    pass\n"],
+        ["main.wlo:3:13: error: enum 'a.E' has no member 'B'", "import a\ndef main():\n    x = a.E.B\n", "a", "enum E:\n    A\n"],
+        ["main.wlo:4:7: error: alias 'a.T' cannot be called", "import a\ndef main():\n    a.g()\n    a.T()\n", "a", "def g():\n    pass\ntype T = int\n"],
+        ["main.wlo:4:5: error: 'f' is not generic", "def f(x: int):\n    pass\ndef main():\n    f[int](1)\n"],
+        # Statements
+        ["main.wlo:2:5: error: 'await' is only allowed in an async function", "def main():\n    await f()\nasync def f():\n    pass\n"],
+        ["main.wlo:2:5: error: 'yield' cannot be used in an async function", "async def f():\n    yield 1\ndef main():\n    pass\n"],
+        ["main.wlo:2:5: error: 'async with' is only allowed in an async function", "def main():\n    async with g:\n        pass\n"],
+        ["main.wlo:2:5: error: bare 'raise' is only allowed in an 'except' clause", "def main():\n    raise\n"],
+        ["main.wlo:6:12: error: 'C' is not an exception class", "class C:\n    x: int\ndef main():\n    try:\n        pass\n    except C:\n        pass\n"],
+        ["main.wlo:4:12: error: unknown type 'E'", "def main():\n    try:\n        pass\n    except E:\n        pass\n"],
+        ["main.wlo:5:23: error: alias 'T' cannot be used in isinstance", "type T = int\ndef f(x: int):\n    pass\ndef main():\n    b = isinstance(1, T)\n"],
+        ["main.wlo:2:23: error: type parameter 'T' cannot be used in isinstance", "def f[T](x: T) -> T:\n    b = isinstance(x, T)\n    return x\ndef main():\n    pass\n"],
+        ["main.wlo:3:9: error: cannot call local variable 'isinstance'", "def main():\n    isinstance = 1\n    b = isinstance(1, int)\n"],
+        ["main.wlo:2:23: error: unknown module 'q'", "def main():\n    b = isinstance(1, q.T)\n"],
+        # Scopes
+        ["main.wlo:2:14: error: nonlocal 'x' must name a variable of an enclosing function", "def main():\n    nonlocal x\n"],
+        ["main.wlo:3:18: error: nonlocal 'n' must name a variable of an enclosing function", "def main():\n    def g(n: int):\n        nonlocal n\n"],
+        ["main.wlo:5:18: error: 'x' is used before its nonlocal declaration", "def main():\n    x = 1\n    def g():\n        x = 2\n        nonlocal x\n"],
+        ["main.wlo:4:13: error: 'x' is used before its nonlocal declaration", "def main():\n    x = 1\n    def g():\n        y = x\n        nonlocal x\n        x = 2\n"],
+        ["main [x*, g] [] { x = 1; def g() -> None { nonlocal x; x = (x + 1) }; (g)() }\ng [] [x] { nonlocal x; x = (x + 1) }", "def main():\n    x = 1\n    def g():\n        nonlocal x\n        x = x + 1\n    g()\n"],
+        ["main [x*, h] [] { x = 1; def h() -> None { def k() -> None { y = x } } }\nh [k] [x] { def k() -> None { y = x } }\nk [y] [x] { y = x }", "def main():\n    x = 1\n    def h():\n        def k():\n            y = x\n"],
+        ["f [] [] { return None }\nmain [a, b, c, e, k, v, i] [] { <a, b> = f(); for c in f() { pass }; try { pass } except E as e { pass }; for <k, v> in f() { i = 1 } }",
+            "class E(Exception):\n    pass\ndef f():\n    return None\ndef main():\n    a, b = f()\n    for c in f():\n        pass\n    try:\n        pass\n    except E as e:\n        pass\n    for k, v in f():\n        i = 1\n", ],
+        ["f [] [] { pass }\nmain [g, y] [] { g = f; (g)(1); y = E.A; a.h(E.A) }\nh [] [] { pass }", "import a\nenum E:\n    A\ndef f(x: int):\n    pass\ndef main():\n    g = f\n    g(1)\n    y = E.A\n    a.h(E.A)\n", "a", "def h(x: int):\n    pass\n"],
+        ["main [x*, f] [] { x = 1; f = (lambda y: (x + y)) }", "def main():\n    x = 1\n    f = lambda y: x + y\n"],
+        ["f [] [] { pass }\nmain [f] [] { f = 1; (f)() }", "def f():\n    pass\ndef main():\n    f = 1\n    f()\n"],
+        ["main [g, v, w] [] { def g[T](x: T) -> T { return x }; v = g; w = g[int]; (g)(1) }\ng [] [] { return x }", "def main():\n    def g[T](x: T) -> T:\n        return x\n    v = g\n    w = g[int]\n    g(1)\n"],
+        ["main [h, x] [] { h = []; x = (h[0])(1) }", "def main():\n    h = []\n    x = h[0](1)\n"],
+        ["main [c, v, e, b] [] { c = a.C(1); v = h; e = E.A; try { pass } except a.Bad as b { raise } }\nh [] [] { pass }", "import a\ndef main():\n    c = a.C(1)\n    v = a.h\n    e = a.E.A\n    try:\n        pass\n    except a.Bad as b:\n        raise\n", "a", "class C:\n    x: int\nenum E:\n    A\nclass Bad(Exception):\n    pass\ndef h():\n    pass\n"],
+        ["main.wlo:3:11: error: '_E' is private to module 'a'", "import a\ndef main():\n    e = a._E.A\n", "a", "enum _E:\n    A\n"],
+        ["main.wlo:6:13: error: bare 'raise' is only allowed in an 'except' clause", "def main():\n    try:\n        pass\n    except E:\n        def g():\n            raise\nclass E(Exception):\n    pass\n"],
+        ["main.wlo:2:17: error: 'await' is only allowed in an async function", "async def main():\n    f = lambda: await g()\nasync def g():\n    pass\n"],
+        ["main.wlo:2:19: error: unknown name 'z'", "def main():\n    f = lambda y: z\n"],
+        ["main.wlo:2:19: error: duplicate parameter 'y'", "def main():\n    f = lambda y, y: y\n"],
+        ["main.wlo:3:19: error: duplicate parameter 'a'", "def main():\n    x = 1\n    def g(a: int, a: int):\n        pass\n"],
+        ["main.wlo:3:7: error: 'a.h' is not generic", "import a\ndef main():\n    a.h[int](1)\n", "a", "def h(x: int):\n    pass\n"],
+        ["main [p, x*, g] [] { p = 1; for x in p { def g() -> None { y = x } } }\ng [y] [x] { y = x }", "def main():\n    p = 1\n    for x in p:\n        def g():\n            y = x\n"],
+        ["first [] [] { return x }\nmain [xs, i] [] { xs = i; i = xs[i]; first[int](xs) }", "def first[T](x: T) -> T:\n    return x\ndef main():\n    xs = i\n    i = xs[i]\n    first[int](xs)\n"],
+    ]
+    ok = True
+    for program in cases:
+        actual = describe(program)
+        if actual != program[0]:
+            print(f"FAIL {program[1]}")
+            print(f"  expected: {program[0]}")
+            print(f"  actual:   {actual}")
+            ok = False
+    names = function_names(["", "import a\nprotocol P:\n    def f(self) -> int\n    def g(self) -> int\nclass C:\n    x: int\n    def m(self) -> int:\n        return 1\ndef h() -> int:\n    return 1\ndef main():\n    if True:\n        def g[T](x: T) -> T:\n            return x\n    else:\n        def g[T](x: T) -> T:\n            f = lambda: x\n            return x\n", "a", "class D:\n    y: int\n    def n(self):\n        pass\n"])
+    expected = "P.f P.g C.m h main main.g main.g main.g.<lambda> a.D.n"
+    if names != expected:
+        print("FAIL function ids and type names")
+        print(f"  expected: {expected}")
+        print(f"  actual:   {names}")
+        ok = False
+    if not ok:
+        sys.exit(1)
+    print("bind tests passed")

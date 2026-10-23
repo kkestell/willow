@@ -113,6 +113,7 @@ check_program_driver() {
 
 check_test lexer_test
 check_test parser_test
+check_test bind_test
 check_driver parse_files
 check_program_driver load_files
 
