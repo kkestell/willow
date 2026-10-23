@@ -1,0 +1,79 @@
+def total(values: list[int]) -> int:
+    result = 0
+    for v in values:
+        result = result + v
+    return result
+
+def show(values: list[int]):
+    text = "["
+    for v in values:
+        if text != "[":
+            text = text + ", "
+        text = text + str(v)
+    print(text + "]")
+
+def fill(values: list[int], count: int):
+    for i in range(count):
+        values.append(i * i)
+
+def main():
+    items = [10, 20, 30]
+    print(len(items))
+    print(items[0])
+    print(items[-1])
+    items[-1] = 40
+    items[0] = items[0] + 1
+    show(items)
+    items.append(50)
+    print(items.pop())
+    show(items)
+    items.extend([7, 8])
+    show(items)
+    items.extend(items)
+    show(items)
+    items.reverse()
+    show(items)
+    print(20 in items)
+    print(99 not in items)
+    print(total(items))
+
+    shared = items
+    shared.append(1)
+    print(len(items))
+
+    empty: list[int] = []
+    print(len(empty))
+    fill(empty, 4)
+    show(empty)
+
+    grow = [1, 2]
+    for v in grow:
+        if v < 4:
+            grow.append(v + 2)
+    show(grow)
+
+    names: list[str] = []
+    names.append("ada")
+    names.append("alan")
+    print(names[1])
+
+    grid = [[1, 2], [3]]
+    grid[1].append(4)
+    grid.append([])
+    print(len(grid))
+    show(grid[1])
+
+    maybe: list[int | None] = [1, None, 3]
+    print(maybe[1])
+    print(None in maybe)
+
+    counted: list[int] = []
+    i = -1
+    for i in range(3):
+        counted.append(i)
+    for i in range(10, 4, -3):
+        counted.append(i)
+    for i in range(5, 5):
+        counted.append(i)
+    show(counted)
+    print(i)

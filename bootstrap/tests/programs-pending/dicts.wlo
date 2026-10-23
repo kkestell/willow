@@ -1,0 +1,56 @@
+def show(d: dict[str, int]):
+    text = "{"
+    for key, value in d.items():
+        if text != "{":
+            text = text + ", "
+        text = text + key + ": " + str(value)
+    print(text + "}")
+
+def main():
+    ages = {"ada": 36, "alan": 41}
+    print(len(ages))
+    print(ages["ada"])
+    ages["grace"] = 85
+    ages["ada"] = 37
+    show(ages)
+    print("alan" in ages)
+    print("bob" not in ages)
+    print(ages.get("alan"))
+    print(ages.get("bob"))
+    print(ages.get("bob", 0))
+    print(ages.get("bob", None))
+    print(ages.pop("alan"))
+    show(ages)
+    ages["alan"] = 42
+    show(ages)
+    for key in ages:
+        print(key)
+    for key in ages.keys():
+        print(key)
+    for value in ages.values():
+        print(value)
+
+    dupes = {"a": 1, "b": 2, "a": 3}
+    show(dupes)
+
+    squares: dict[int, int] = {}
+    for n in range(4):
+        squares[n * 10] = n * n
+    print(squares[30])
+    print(squares.get(-1, -1))
+    print(len(squares))
+
+    seen: dict[str, str | None] = {"x": None}
+    print(seen.get("x"))
+    print(seen.get("x", "default"))
+    print(seen.get("y", "default"))
+    print("x" in seen)
+
+    groups: dict[str, list[str]] = {}
+    for word in ["ant", "bee", "asp"]:
+        first = word[0]
+        if first not in groups:
+            groups[first] = []
+        groups[first].append(word)
+    for key, words in groups.items():
+        print(key + " " + ",".join(words))

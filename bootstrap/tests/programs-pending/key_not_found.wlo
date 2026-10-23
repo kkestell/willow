@@ -1,0 +1,5 @@
+def main():
+    ages = {"ada": 36}
+    print(ages["ada"])
+    print(ages["bob"])
+    print("unreachable")

@@ -1,0 +1,100 @@
+class Circle:
+    radius: float
+
+class Square:
+    side: float
+
+class Node:
+    value: int
+    next: Node | None
+
+type Shape = Circle | Square
+type Value = int | float | str | bool | None
+
+def area(shape: Shape) -> float:
+    if isinstance(shape, Circle):
+        return 3.0 * shape.radius * shape.radius
+    return shape.side * shape.side
+
+def describe(value: Value) -> str:
+    if value is None:
+        return "nothing"
+    elif isinstance(value, bool):
+        if value:
+            return "yes"
+        return "no"
+    elif isinstance(value, int):
+        return "int " + str(value + 1)
+    elif isinstance(value, float):
+        return "float " + str(value * 2.0)
+    else:
+        return "str " + value
+
+def length(text: str | None) -> int:
+    if text is not None and len(text) > 2:
+        return len(text)
+    if text is None or text == "":
+        return 0
+    return -len(text)
+
+def positive(value: int | None) -> bool:
+    if not (value is None or value <= 0):
+        return value > 0
+    return False
+
+def sum_nodes(head: Node | None) -> int:
+    total = 0
+    node = head
+    while node is not None:
+        total = total + node.value
+        node = node.next
+    return total
+
+def same(a: int | float, b: int | float) -> bool:
+    return a == b
+
+def first_word(text: str | None) -> str:
+    assert text is not None
+    return text.split(" ")[0]
+
+def main():
+    print(area(Circle(1.0)))
+    print(area(Square(2.5)))
+    print(describe(None))
+    print(describe(True))
+    print(describe(41))
+    print(describe(1.25))
+    print(describe("hi"))
+    print(length("abcd"))
+    print(length(None))
+    print(length("ab"))
+    print(length(""))
+    print(positive(3))
+    print(positive(-3))
+    print(positive(None))
+    print(sum_nodes(Node(1, Node(2, Node(3, None)))))
+    print(sum_nodes(None))
+    print(first_word("hello there"))
+
+    value: int | str = 5
+    value = value + 1
+    print(value)
+    value = "six"
+    print(value + "!")
+
+    maybe: int | None = None
+    print(maybe)
+    maybe = 7
+    print(maybe)
+    print(maybe == 7)
+    print(same(1, 1.0))
+    print(same(1, 1))
+    print(same(2.5, 2.5))
+    mixed: list[int | str] = [1, "two"]
+    print(mixed[0])
+    print(mixed[1])
+    print("two" in mixed)
+    item = mixed[0]
+    if isinstance(item, int):
+        print(item * 10)
+    print(f"{maybe} {item}")
