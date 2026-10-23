@@ -1,0 +1,7 @@
+import core
+
+# The child inherits stderr; a program that cannot be started is fatal.
+def main():
+    print(core.run(["sh", "-c", "echo from the child >&2"]))
+    core.run(["willow-no-such-program"])
+    print("unreachable")
