@@ -6,9 +6,9 @@ pull requests against `main`.
 
 ## Repository conventions for this work
 
-- Work happens on `main`. `kkestell/willow-bak` is a private backup; after
-  each merge the operator runs `git fetch origin && git push willow-bak
-  origin/main:main` from the developer's checkout, which has that remote.
+- Work happens on `main`. `kkestell/willow-bak` is a private snapshot of
+  every branch taken on 2026-10-23, before this work began, so `main` can be
+  changed freely. It is not kept in sync.
 - The active `gh` account must be `kkestell`, since gnat takes `GH_TOKEN` from
   it. It was switched there on 2026-10-23.
 - Commits have a subject and body in the repository's style and no
