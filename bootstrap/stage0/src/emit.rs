@@ -87,6 +87,12 @@ struct Emitter<'a> {
 
 impl Emitter<'_> {
     fn line(&mut self, text: String) {
+        // Code after a jump or return, such as the statements after a kept
+        // `__os` arm that returns, needs a block of its own.
+        if self.ended {
+            let label = self.new_label();
+            self.label(&label);
+        }
         writeln!(self.out, "\t{text}").unwrap();
     }
 
