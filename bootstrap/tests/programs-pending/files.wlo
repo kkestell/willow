@@ -1,9 +1,9 @@
 import fs
 
-# L0 has no way to make a unique name or remove a file, so this reuses one
-# fixed path outside the source tree.
+# L0 has no way to remove a file, so the file stays next to this test and
+# .gitignore lists it.
 def main():
-    path = "/tmp/willow-l0-files.txt"
+    path = "files.tmp"
     fs.write_file(path, "first line\nsecond line\n")
     text = fs.read_file(path)
     print(len(text))
