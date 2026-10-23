@@ -63,6 +63,8 @@ pub enum StmtKind {
     },
     Return(Option<Expr>),
     Pass,
+    Break,
+    Continue,
 }
 
 pub struct Expr {
@@ -134,7 +136,7 @@ fn describe(kind: &Kind) -> String {
 /// A reserved word that begins a construct stage 0 does not parse here.
 fn is_construct(kind: &Kind) -> bool {
     matches!(kind, Kind::Word(w) if w.starts_with(|c: char| c.is_ascii_alphabetic())
-        && !matches!(*w, "True" | "False" | "None"))
+        && !matches!(*w, "True" | "False" | "None" | "not" | "and" | "or"))
 }
 
 impl Parser<'_> {
@@ -339,6 +341,12 @@ impl Parser<'_> {
         } else if self.accept("pass") {
             self.end_of_line()?;
             StmtKind::Pass
+        } else if self.accept("break") {
+            self.end_of_line()?;
+            StmtKind::Break
+        } else if self.accept("continue") {
+            self.end_of_line()?;
+            StmtKind::Continue
         } else {
             self.simple_statement()?
         };
@@ -402,6 +410,43 @@ impl Parser<'_> {
     }
 
     fn expr(&mut self) -> Result<Expr, Diag> {
+        self.logical("or")
+    }
+
+    /// A chain of `or`, or of `and` within it; `and` binds more tightly.
+    fn logical(&mut self, op: &'static str) -> Result<Expr, Diag> {
+        let operand = |p: &mut Self| {
+            if op == "or" {
+                p.logical("and")
+            } else {
+                p.negation()
+            }
+        };
+        let mut left = operand(self)?;
+        while let Some((_, op_pos)) = self.binary_op(&[op]) {
+            let right = operand(self)?;
+            let pos = left.pos;
+            left = Expr {
+                pos,
+                kind: ExprKind::Binary(op, op_pos, Box::new(left), Box::new(right)),
+            };
+        }
+        Ok(left)
+    }
+
+    fn negation(&mut self) -> Result<Expr, Diag> {
+        let pos = self.pos();
+        if self.accept("not") {
+            let operand = self.negation()?;
+            return Ok(Expr {
+                pos,
+                kind: ExprKind::Unary("not", Box::new(operand)),
+            });
+        }
+        self.comparison()
+    }
+
+    fn comparison(&mut self) -> Result<Expr, Diag> {
         let left = self.sum()?;
         let Some((op, op_pos)) = self.binary_op(COMPARISONS) else {
             return Ok(left);
@@ -432,7 +477,7 @@ impl Parser<'_> {
 
     fn term(&mut self) -> Result<Expr, Diag> {
         let mut left = self.unary()?;
-        while let Some((op, op_pos)) = self.binary_op(&["*", "/"]) {
+        while let Some((op, op_pos)) = self.binary_op(&["*", "/", "//", "%"]) {
             let right = self.unary()?;
             let pos = left.pos;
             left = Expr {
