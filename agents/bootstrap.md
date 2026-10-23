@@ -117,9 +117,10 @@ format specifications, `sorted` and `sort`, and all other built-ins and
 standard library modules.
 
 Runtime failures in L0 are fatal. `IndexError`, `KeyError`,
-`ZeroDivisionError`, `OverflowError`, `ValueError`, and `AssertionError` print
-`error: <Class>: <message>` to stderr and exit with status 1, using the spec's
-messages. Stage 0 does not record locations or frames for them. This is a
+`ZeroDivisionError`, `OverflowError`, `ValueError`, `AssertionError`,
+`RuntimeError`, and `OSError` print `error: <Class>: <message>` to stderr and
+exit with status 1, using the spec's messages; an `OSError` reason is the
+system's `strerror` text. Stage 0 does not record locations or frames for them. This is a
 temporary deviation from spec §13 that stage 1 removes.
 
 ## 4. Value representation
