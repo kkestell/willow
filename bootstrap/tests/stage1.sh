@@ -71,6 +71,7 @@ check_driver() {
 }
 
 check_test lexer_test
-check_driver lex_files
+check_test parser_test
+check_driver parse_files
 
 exit $failed
