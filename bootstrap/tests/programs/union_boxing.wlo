@@ -1,0 +1,44 @@
+def pick(n: int) -> int | str | bool | None:
+    if n == 0:
+        return None
+    if n == 1:
+        return n
+    if n == 2:
+        return "two"
+    return n > 5
+
+def show(v: int | str | bool | None) -> str:
+    if v is None:
+        return "none"
+    if isinstance(v, int):
+        return "int"
+    if isinstance(v, str):
+        return v
+    if v:
+        return "true"
+    return "false"
+
+def keep(x: int | float | None) -> int | float | None:
+    return x
+
+def main():
+    i = 0
+    while i < 7:
+        print(show(pick(i)))
+        i = i + 1
+    x = keep(2.5)
+    if isinstance(x, float):
+        print(x * 2.0 == 5.0)
+    y = keep(-9223372036854775807)
+    if isinstance(y, int):
+        print(y)
+    print(keep(None) is None)
+    total = 0
+    n: int | None = 0
+    while n is not None:
+        total = total + n
+        if n == 4:
+            n = None
+        else:
+            n = n + 1
+    print(total)

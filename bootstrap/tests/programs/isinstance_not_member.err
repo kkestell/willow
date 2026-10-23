@@ -1,0 +1,1 @@
+isinstance_not_member.wlo:2:25: error: type int | str has no member float
