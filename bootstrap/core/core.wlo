@@ -361,6 +361,47 @@ def str_rjust(s: str, width: int) -> str:
         return s
     return repeat_byte(32, width - length) + s
 
+# As in Python: with a separator, the pieces between its occurrences, and
+# otherwise the runs of non-whitespace, ignoring whitespace at either end. At
+# most `maxsplit` splits are made, from the left; the rest of the string is
+# the last piece, and a negative `maxsplit` counts down without reaching zero.
+def str_split(s: str, sep: str | None, maxsplit: int) -> ptr:
+    if sep is None:
+        return split_whitespace(s, maxsplit)
+    if str_size(sep) == 0:
+        fail("ValueError", "empty separator")
+    parts = list_new(0)
+    start = 0
+    at = find_bytes(s, sep, 0)
+    while at >= 0 and maxsplit != 0:
+        list_append(parts, __word(str_sub(s, start, at)))
+        start = at + str_size(sep)
+        maxsplit = maxsplit - 1
+        at = find_bytes(s, sep, start)
+    list_append(parts, __word(str_sub(s, start, str_size(s))))
+    return parts
+
+# After the last split, the remainder keeps its trailing whitespace.
+def split_whitespace(s: str, maxsplit: int) -> ptr:
+    parts = list_new(0)
+    size = str_size(s)
+    i = skip_spaces(s, 0)
+    while i < size and maxsplit != 0:
+        start = i
+        while i < size and not is_space(str_byte(s, i)):
+            i = i + 1
+        list_append(parts, __word(str_sub(s, start, i)))
+        maxsplit = maxsplit - 1
+        i = skip_spaces(s, i)
+    if i < size:
+        list_append(parts, __word(str_sub(s, i, size)))
+    return parts
+
+def skip_spaces(s: str, i: int) -> int:
+    while i < str_size(s) and is_space(str_byte(s, i)):
+        i = i + 1
+    return i
+
 def str_join(sep: str, items: ptr) -> str:
     count = list_len(items)
     if count == 0:
