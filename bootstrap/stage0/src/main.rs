@@ -110,7 +110,7 @@ fn run(command: &mut Command) -> Result<(), String> {
 fn build(il: &str, output: &str) -> Result<(), String> {
     let target = qbe_target()?;
     let dir = std::env::temp_dir().join(format!("willow0-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).map_err(|e| format!("willow0: {}: {e}", dir.display()))?;
+    std::fs::create_dir(&dir).map_err(|e| format!("willow0: {}: {e}", dir.display()))?;
     let ssa = dir.join("program.ssa");
     let asm = dir.join("program.s");
     let result = std::fs::write(&ssa, il)
@@ -126,7 +126,8 @@ fn build(il: &str, output: &str) -> Result<(), String> {
                 .arg("-o")
                 .arg(output)
                 .arg(&asm)
-                .args(gc_flags()))
+                .args(gc_flags())
+                .arg("-lm"))
         });
     let _ = std::fs::remove_dir_all(&dir);
     result

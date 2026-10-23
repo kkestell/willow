@@ -11,6 +11,8 @@ pub struct Program {
     pub funcs: Vec<Function>,
     /// String literal contents; literal `n` is the data symbol `$W.str.n`.
     pub strings: Vec<String>,
+    /// Each descriptor's symbol and the literal holding its type's name.
+    pub descriptors: Vec<(String, usize)>,
     /// The symbol of the entry module's `main`.
     pub main: String,
 }
@@ -40,6 +42,8 @@ pub enum Value {
     Call(Call),
     /// A QBE instruction on two `l` operands.
     Binary(&'static str, Box<Value>, Box<Value>),
+    /// QBE `dtosi` on a float's bits.
+    FloatToInt(Box<Value>),
     /// A QBE load instruction, the pointer, and the byte offset.
     Load(&'static str, Box<Value>, Box<Value>),
     /// A QBE store instruction, the pointer, the byte offset, and the value.
@@ -49,7 +53,7 @@ pub enum Value {
 pub struct Call {
     /// The callee's symbol, without its `$`.
     pub symbol: String,
-    /// Each argument with its QBE type, `l` or `w`.
+    /// Each argument with its QBE type: `l`, `w`, or `d`.
     pub args: Vec<(&'static str, Value)>,
     /// The number of fixed arguments of a variadic callee.
     pub variadic_at: Option<usize>,
@@ -60,6 +64,7 @@ pub struct Call {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Type {
     Int,
+    Float,
     Bool,
     Str,
     None,
@@ -71,6 +76,7 @@ impl Type {
     fn name(self) -> &'static str {
         match self {
             Type::Int => "int",
+            Type::Float => "float",
             Type::Bool => "bool",
             Type::Str => "str",
             Type::None => "None",
@@ -134,10 +140,29 @@ const INTRINSICS: &[(&str, &[Type], Type)] = &[
     ("__int", &[Type::Word], Type::Int),
     ("__ptr", &[Type::Word], Type::Ptr),
     ("__str", &[Type::Word], Type::Str),
+    ("__float", &[Type::Word], Type::Float),
+    ("__bool", &[Type::Word], Type::Bool),
+    ("__load4", &[Type::Ptr, Type::Int], Type::Int),
+    ("__store4", &[Type::Ptr, Type::Int, Type::Int], Type::None),
+    ("__addr_is_null", &[Type::Ptr], Type::Bool),
+    ("__dtosi", &[Type::Float], Type::Int),
 ];
 
+/// The value of `__os`. The host is the target, since stage 0 does not
+/// cross-compile.
+fn target_os() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "darwin"
+    } else {
+        "linux"
+    }
+}
+
+/// The built-in types with descriptors, which every program emits.
+const BUILTIN_TYPES: &[&str] = &["int", "float", "bool", "str", "list", "dict"];
+
 fn is_intrinsic(name: &str) -> bool {
-    name == "__word" || name == "__str_type" || INTRINSICS.iter().any(|i| i.0 == name)
+    name == "__word" || name == "__type" || name == "__os" || INTRINSICS.iter().any(|i| i.0 == name)
 }
 
 fn count(n: usize) -> String {
@@ -152,15 +177,18 @@ struct Strings {
 
 impl Strings {
     fn intern(&mut self, text: &str) -> Value {
-        let n = match self.index.get(text) {
+        Value::Global(format!("W.str.{}", self.index_of(text)))
+    }
+
+    fn index_of(&mut self, text: &str) -> usize {
+        match self.index.get(text) {
             Some(&n) => n,
             None => {
                 self.list.push(text.to_string());
                 self.index.insert(text.to_string(), self.list.len() - 1);
                 self.list.len() - 1
             }
-        };
-        Value::Global(format!("W.str.{n}"))
+        }
     }
 }
 
@@ -188,6 +216,10 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
         ));
     }
     let mut strings = Strings::default();
+    let descriptors = BUILTIN_TYPES
+        .iter()
+        .map(|t| (format!("W.{t}.type"), strings.index_of(t)))
+        .collect();
     let mut funcs = Vec::new();
     for (module, globals) in modules.iter().zip(&tables) {
         for func in &module.funcs {
@@ -207,6 +239,7 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
     Ok(Program {
         funcs,
         strings: strings.list,
+        descriptors,
         main: format!("W.{}.main", entry.name),
     })
 }
@@ -214,6 +247,7 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
 fn resolve(module: &Module, ty: &TypeName) -> Result<Type, Diag> {
     Ok(match ty.name.as_str() {
         "int" => Type::Int,
+        "float" => Type::Float,
         "bool" => Type::Bool,
         "str" => Type::Str,
         "None" => Type::None,
@@ -236,11 +270,12 @@ fn resolve_extern(module: &Module, ty: &TypeName) -> Result<(Type, Option<&'stat
     }
     match resolve(module, ty)? {
         t @ (Type::Int | Type::Ptr) => Ok((t, Some("l"))),
+        Type::Float => Ok((Type::Float, Some("d"))),
         Type::None => Ok((Type::None, None)),
         _ => Err(Diag::new(
             &module.path,
             ty.pos,
-            "extern functions take and return only int, ptr, and cint",
+            "extern functions take and return only int, float, ptr, and cint",
         )),
     }
 }
@@ -585,8 +620,14 @@ impl Checker<'_> {
                         ),
                     };
                 }
-                if name == "__str_type" && self.module.name == "core" {
-                    return Ok((Value::Global("W.str.type".into()), Type::Ptr));
+                if is_intrinsic(name) && self.module.name != "core" {
+                    return self.fail(
+                        expr.pos,
+                        format!("intrinsic '{name}' is only available in core"),
+                    );
+                }
+                if name == "__os" {
+                    return Ok((self.strings.intern(target_os()), Type::Str));
                 }
                 if self.globals.contains_key(name)
                     || BUILTINS.contains(&name.as_str())
@@ -597,6 +638,18 @@ impl Checker<'_> {
                 self.fail(expr.pos, format!("unknown name '{name}'"))
             }
             ExprKind::Call(callee, args) => self.call(callee, args, state),
+            ExprKind::TypeOf(ty) => {
+                if self.module.name != "core" {
+                    return self.fail(expr.pos, "intrinsic '__type' is only available in core");
+                }
+                if !BUILTIN_TYPES.contains(&ty.name.as_str()) {
+                    return self.fail(
+                        ty.pos,
+                        "'__type' takes int, float, bool, str, list, or dict",
+                    );
+                }
+                Ok((Value::Global(format!("W.{}.type", ty.name)), Type::Ptr))
+            }
             ExprKind::Unary(op, operand) => {
                 let (value, ty) = self.expr(operand, state)?;
                 if ty != Type::Int {
@@ -680,7 +733,7 @@ impl Checker<'_> {
             }
         };
         if !self.globals.contains_key(name) && name != "print" {
-            if !is_intrinsic(name) || name == "__str_type" {
+            if !is_intrinsic(name) {
                 if BUILTINS.contains(&name.as_str()) {
                     return self.fail(pos, format!("'{name}' is not supported"));
                 }
@@ -731,10 +784,18 @@ impl Checker<'_> {
                 } => {
                     let mut call_args = Vec::new();
                     for (i, (arg_pos, value, ty)) in checked.into_iter().enumerate() {
-                        if i >= cparams.len() && !matches!(ty, Type::Int | Type::Ptr) {
-                            return self.fail(arg_pos, "variadic arguments must be int or ptr");
-                        }
-                        call_args.push((cparams.get(i).copied().unwrap_or("l"), value));
+                        let extra = match ty {
+                            Type::Int | Type::Ptr => "l",
+                            Type::Float => "d",
+                            _ if i >= cparams.len() => {
+                                return self.fail(
+                                    arg_pos,
+                                    "variadic arguments must be int, float, or ptr",
+                                );
+                            }
+                            _ => "l",
+                        };
+                        call_args.push((cparams.get(i).copied().unwrap_or(extra), value));
                     }
                     Call {
                         symbol: name.clone(),
@@ -762,10 +823,16 @@ impl Checker<'_> {
             };
             return Ok((core_call(function, vec![value], false), Type::None));
         }
+        if name == "__os" {
+            return self.fail(pos, "cannot call a value of type str");
+        }
         if name == "__word" {
             arity(1)?;
             let (arg_pos, value, ty) = checked.pop().unwrap();
-            if !matches!(ty, Type::Int | Type::Ptr | Type::Str) {
+            if !matches!(
+                ty,
+                Type::Int | Type::Float | Type::Bool | Type::Ptr | Type::Str
+            ) {
                 return self.fail(
                     arg_pos,
                     format!("cannot convert a value of type {} to word", ty.name()),
@@ -793,9 +860,13 @@ impl Checker<'_> {
                 ret: Some("l"),
             }),
             "__load1" => Value::Load("loadub", next(), next()),
+            "__load4" => Value::Load("loadsw", next(), next()),
             "__load8" => Value::Load("loadl", next(), next()),
             "__store1" => Value::Store("storeb", next(), next(), next()),
+            "__store4" => Value::Store("storew", next(), next(), next()),
             "__store8" => Value::Store("storel", next(), next(), next()),
+            "__addr_is_null" => Value::Binary("ceql", next(), Box::new(Value::Const(0))),
+            "__dtosi" => Value::FloatToInt(next()),
             // Reinterpretations change only the static type.
             _ => *next(),
         };
