@@ -105,9 +105,11 @@ Included:
   string `find`, `split`, `join`, `startswith`, `endswith`, `strip`,
   `replace`, `removeprefix`, `removesuffix`, `isdigit`, `isalpha`, `isalnum`,
   `isspace`, `ljust`, `rjust`.
-- Host: `sys.args`, `sys.exit`, `sys.eprint`, and reading and writing a whole
-  file as a string. These are the parts of `sys` and `fs` the compiler needs,
-  with the signatures the spec gives them.
+- Host: `sys.args`, `sys.exit`, `sys.eprint`, `fs.read_file`,
+  `fs.write_file`, `fs.exists`, and `fs.realpath`. These are the parts of
+  `sys` and `fs` the compiler needs, with the signatures the spec gives them;
+  the module loader uses `exists` and `realpath` to find modules and tell
+  files apart.
 
 Excluded, and delivered by stage 1: exceptions, `try`, `raise`, `with`,
 generators and `yield`, `async` and `await`, closures, nested `def`, lambdas,

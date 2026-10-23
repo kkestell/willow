@@ -51,11 +51,11 @@ Fatal failures of L0 (agents/bootstrap.md §3):
 | `ValueError` | `invalid code point` | `str_chr` |
 | `ValueError` | `range step must not be zero` | stage 0 inline |
 | `ValueError` | `exit status out of range` | `sys_exit` |
-| `ValueError` | `invalid UTF-8` | `sys_args`, `fs_read_file` |
-| `ValueError` | `path contains a NUL character` | `fs_read_file`, `fs_write_file` |
+| `ValueError` | `invalid UTF-8` | `sys_args`, `fs_read_file`, `fs_realpath` |
+| `ValueError` | `path contains a NUL character` | `fs_read_file`, `fs_write_file`, `fs_exists`, `fs_realpath` |
 | `AssertionError` | the message, or `assertion failed` | stage 0 inline |
 | `RuntimeError` | `dictionary changed size during iteration` | `dict_next` |
-| `OSError` | `cannot read <path>: <reason>` and `cannot write <path>: <reason>`, where `<reason>` is the `strerror` text | `fs_read_file` and `fs_write_file` respectively |
+| `OSError` | `cannot read <path>: <reason>`, `cannot write <path>: <reason>`, `cannot stat <path>: <reason>`, and `cannot resolve <path>: <reason>`, where `<reason>` is the `strerror` text | `fs_read_file`, `fs_write_file`, `fs_exists`, and `fs_realpath` respectively |
 
 ## Text of values
 
@@ -169,6 +169,8 @@ literal `"None"`.
 | `sys_exit(status: int)` | `sys.exit(status)` |
 | `fs_read_file(path: str) -> str` | `fs.read_file(path)` |
 | `fs_write_file(path: str, text: str)` | `fs.write_file(path, text)` |
+| `fs_exists(path: str) -> bool` | `fs.exists(path)`: false when the path, or a symlink's target, is missing or a component is not a directory |
+| `fs_realpath(path: str) -> str` | `fs.realpath(path)`, the absolute path with symlinks resolved |
 
 ## Inline in stage 0
 
