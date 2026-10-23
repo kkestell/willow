@@ -67,16 +67,18 @@ Fatal failures of L0 (agents/bootstrap.md §3):
 | `enum_to_str(type: ptr, ordinal: int) -> str` | The member's text from the enum's descriptor |
 | `union_to_str(value: ptr) -> str` | The text of a printable union value; `None` for 0 |
 | `print_str(s: str)` | Writes `s` and a newline to stdout; exits with status 1 if the write fails |
-| `eprint_str(s: str)` | Writes `s` and a newline to stderr, for `sys.eprint` |
+| `eprint_str(s: str)` | Writes `s` and a newline to stderr, for `sys.eprint`; exits with status 1 if the write fails |
 
 `print(v)`, `sys.eprint(v)`, `str(v)`, and f-string fields convert `v` with
 the function for its static type; a `str` is used as it is and `None` is the
 literal `"None"`.
 
-## Conversions
+## Numbers and conversions
 
 | Signature | Meaning |
 | --- | --- |
+| `float_floordiv(a: float, b: float) -> float` | `a // b`: the floor of the quotient |
+| `float_mod(a: float, b: float) -> float` | `a % b`: the remainder with the sign of `b`, so `5.0 % -3.0` is `-1.0` |
 | `str_to_int(s: str) -> int` | `int(s)` |
 | `str_to_float(s: str) -> float` | `float(s)` |
 | `float_to_int(x: float) -> int` | `int(x)`, truncating toward zero |
@@ -124,7 +126,7 @@ literal `"None"`.
 | `list_set(xs: ptr, i: int, value: word)` | `xs[i] = value` |
 | `list_append(xs: ptr, value: word)` | `xs.append(value)` |
 | `list_pop(xs: ptr) -> word` | `xs.pop()` |
-| `list_extend(xs: ptr, items: ptr)` | `xs.extend(items)` for a list `items`, copying `items` first |
+| `list_extend(xs: ptr, items: ptr)` | `xs.extend(items)`, copying `items` first; in L0 `items` is a list, and stage 0 rejects any other argument |
 | `list_reverse(xs: ptr)` | `xs.reverse()` |
 | `list_slice(xs: ptr, start: int, stop: int) -> ptr` | `xs[start:stop]` |
 | `list_contains(xs: ptr, value: word, kind: int) -> bool` | `value in xs`, comparing with equality kind `kind` |
@@ -140,12 +142,14 @@ literal `"None"`.
 | `dict_contains(d: ptr, key: word) -> bool` | `key in d` |
 | `dict_pop(d: ptr, key: word) -> word` | `d.pop(key)` |
 | `dict_find(d: ptr, key: word) -> int` | The entry index of `key`, or -1; `d.get` reads the value with `dict_value_at` |
-| `dict_next(d: ptr, entry: int, size: int) -> int` | The first live entry index at or after `entry`, or -1; fails if `dict_len(d)` is no longer `size` |
+| `dict_version(d: ptr) -> int` | A count that every insertion of a new key and every removal increases; replacing a value leaves it unchanged |
+| `dict_next(d: ptr, entry: int, version: int) -> int` | The first live entry index at or after `entry`, or -1; fails if `dict_version(d)` is no longer `version` |
 | `dict_key_at(d: ptr, entry: int) -> word` | The key of a live entry |
 | `dict_value_at(d: ptr, entry: int) -> word` | The value of a live entry |
 
-`for` over a dict, `keys()`, `values()`, and `items()` record `size` as
-`dict_len(d)` before the loop and step with `dict_next(d, entry + 1, size)`.
+`for` over a dict, `keys()`, `values()`, and `items()` record `version` as
+`dict_version(d)` before the loop and step with
+`dict_next(d, entry + 1, version)`.
 
 ## Boxes, unions, and classes
 
@@ -154,14 +158,14 @@ literal `"None"`.
 | `box(type: ptr, value: word) -> ptr` | A new box with descriptor `type` and payload `value` |
 | `unbox(value: ptr) -> word` | The payload of a box |
 | `is_instance(value: ptr, type: ptr) -> bool` | `value` is not 0 and its header is `type` |
-| `union_eq(a: ptr, b: ptr) -> bool` | Union `==`: same descriptor and equal contents, or both 0 |
+| `union_eq(a: ptr, b: ptr) -> bool` | Union `==`: both 0, or the same descriptor and equal contents, with float boxes compared as equality kind 1 and `str` as kind 2 |
 | `object_new(type: ptr, fields: int) -> ptr` | A class instance with header `type` and `fields` zeroed field slots |
 
 ## sys and fs
 
 | Signature | Meaning |
 | --- | --- |
-| `sys_args(argc: int, argv: ptr) -> ptr` | `sys.args()` as a new `list[str]`; stage 0 passes the `argc` and `argv` its entry saved |
+| `sys_args(argc: int, argv: ptr) -> ptr` | `sys.args()` as a new `list[str]`; stage 0 passes the `argc` and `argv` its entry saved in the words `$W.argc` and `$W.argv` |
 | `sys_exit(status: int)` | `sys.exit(status)` |
 | `fs_read_file(path: str) -> str` | `fs.read_file(path)` |
 | `fs_write_file(path: str, text: str)` | `fs.write_file(path, text)` |
@@ -192,6 +196,7 @@ Only core may use these.
 | `__int(w: word) -> int`, `__float(w: word) -> float`, `__bool(w: word) -> bool`, `__ptr(w: word) -> ptr`, `__str(w: word) -> str` | Reinterprets a slot |
 | `__type(T) -> ptr` | The descriptor of `T`: `int`, `float`, `bool`, `str`, `list`, or `dict` |
 | `__addr_is_null(p: ptr) -> bool` | `p` is 0 |
+| `__dtosi(x: float) -> int` | QBE `dtosi`: `x` truncated toward zero, unspecified outside the `int` range; `float_to_int` checks the range first |
 | `__os` | `"linux"` or `"darwin"`, folded at compile time |
 | `extern def name(params) -> R` | A C function; parameters and results are `int` or `ptr` (QBE `l`), `float` (`d`), or `cint` (`w`); a trailing `...` makes it variadic |
 

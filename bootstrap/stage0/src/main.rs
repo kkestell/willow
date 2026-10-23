@@ -126,7 +126,8 @@ fn build(il: &str, output: &str) -> Result<(), String> {
                 .arg("-o")
                 .arg(output)
                 .arg(&asm)
-                .args(gc_flags()))
+                .args(gc_flags())
+                .arg("-lm"))
         });
     let _ = std::fs::remove_dir_all(&dir);
     result
