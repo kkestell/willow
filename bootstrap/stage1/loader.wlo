@@ -1,0 +1,128 @@
+# Loads an entry file and every module it imports (spec §12). Modules are
+# looked for in the entry file's directory and then in the standard library,
+# so a local file shadows a standard library module of the same name.
+
+import ast
+import diagnostic
+import fs
+import lexer
+import parser
+
+# Whether `name` is a standard library module, which has no source file here.
+def is_stdlib(name: str) -> bool:
+    return name in [
+        "aio", "cli", "fs", "http", "io", "json", "math", "net", "random",
+        "subprocess", "sys", "terminal", "time",
+    ]
+
+# A module read from a source file: its full name, as in "app.util", and its
+# syntax tree, whose path is the file it was read from.
+class Source:
+    name: str
+    tree: ast.Module
+
+class Loader:
+    # The entry file's directory with a trailing "/", or "" for the current
+    # directory.
+    root: str
+    # In the order load returns them.
+    sources: list[Source]
+    # Module names that are loaded or being loaded, including the entry's.
+    loaded: dict[str, bool]
+    # The module name each loaded file has, by the file's real path.
+    names_by_file: dict[str, str]
+    error: diagnostic.Diagnostic | None
+
+    # Loads module `name` from `path` and, depth first, every module it
+    # imports that is not loaded yet. `importer` is the path of the module
+    # whose `importing` names it, or "" for the entry.
+    def visit(self, name: str, path: str, importer: str, importing: ast.Import | None):
+        file = fs.realpath(path)
+        other = self.names_by_file.get(file)
+        if other is not None and importing is not None:
+            self.fail(importer, importing, f"module '{name}' is the same file as module '{other}'")
+            return
+        self.loaded[name] = True
+        self.names_by_file[file] = name
+        lexed = lexer.lex(path, fs.read_file(path))
+        if isinstance(lexed, diagnostic.Diagnostic):
+            self.error = lexed
+            return
+        tree = parser.parse(path, lexed)
+        if isinstance(tree, diagnostic.Diagnostic):
+            self.error = tree
+            return
+        self.sources.append(Source(name, tree))
+        for item in tree.imports:
+            if self.error is not None:
+                return
+            if self.loaded.get(item.name) is None:
+                found = self.find(path, item)
+                if found != "":
+                    self.visit(item.name, found, path, item)
+
+    # The path of the file the import `item` in the module at `importer`
+    # names, or "" when it names a standard library module or cannot be
+    # found, which sets the error.
+    def find(self, importer: str, item: ast.Import) -> str:
+        path = self.root + item.name.replace(".", "/") + ".wlo"
+        if fs.exists(path):
+            return path
+        if not is_stdlib(item.name):
+            self.fail(importer, item, f"cannot load module '{item.name}': {path}: No such file or directory")
+        return ""
+
+    def fail(self, path: str, item: ast.Import, message: str):
+        self.error = diagnostic.Diagnostic(path, item.line, item.col, message)
+
+# The directory part of `path` with its trailing "/", or "" when it has none.
+def directory_of(path: str) -> str:
+    end = 0
+    i = 0
+    for c in path:
+        i = i + 1
+        if c == "/":
+            end = i
+    return path[:end]
+
+# The module name of the entry file at `path`: its file name without ".wlo".
+def entry_name(path: str) -> str:
+    return path[len(directory_of(path)):].removesuffix(".wlo")
+
+# The error in the imports of `tree`, which only the source order of its
+# imports decides: an import of a module that is also a namespace of another,
+# as `app` and `app.util` are, or an import that repeats an earlier one.
+def check_imports(tree: ast.Module) -> diagnostic.Diagnostic | None:
+    earlier: list[str] = []
+    for item in tree.imports:
+        for other in earlier:
+            short = other
+            long = item.name
+            if len(short) > len(long):
+                short = item.name
+                long = other
+            if long.startswith(short + "."):
+                message = f"'{short}' is imported as a module and as a namespace"
+                return diagnostic.Diagnostic(tree.path, item.line, item.col, message)
+        if item.name in earlier:
+            message = f"duplicate import '{item.name}'"
+            return diagnostic.Diagnostic(tree.path, item.line, item.col, message)
+        earlier.append(item.name)
+    return None
+
+# The modules of the program whose entry file is at `path`: the entry first,
+# then each module in the order a depth-first walk of the imports first
+# reaches it. Standard library modules are not included. Returns the first
+# error instead when a module cannot be loaded, lexed, or parsed, or has
+# clashing imports.
+def load(path: str) -> list[Source] | diagnostic.Diagnostic:
+    loader = Loader(directory_of(path), [], {}, {}, None)
+    loader.visit(entry_name(path), path, "", None)
+    error = loader.error
+    if error is not None:
+        return error
+    for source in loader.sources:
+        clash = check_imports(source.tree)
+        if clash is not None:
+            return clash
+    return loader.sources
