@@ -408,6 +408,32 @@ def str_ord(s: str) -> int:
 # capacity, and a pointer to an array of `capacity` slots. Slots may hold
 # pointers, so the array is scanned memory.
 
+
+# Encodes the code point as UTF-8: the lead byte carries the high bits and
+# each continuation byte, filled from the end, carries 6 more.
+def str_chr(n: int) -> str:
+    if n < 0 or n > 1114111 or (n >= 55296 and n <= 57343):
+        fail("ValueError", "invalid code point")
+    if n < 128:
+        return repeat_byte(n, 1)
+    if n < 2048:
+        size = 2
+        lead = 192 + n // 64
+    elif n < 65536:
+        size = 3
+        lead = 224 + n // 4096
+    else:
+        size = 4
+        lead = 240 + n // 262144
+    s = str_alloc(size)
+    __store1(s, 16, lead)
+    i = size - 1
+    rest = n
+    while i > 0:
+        __store1(s, 16 + i, 128 + rest % 64)
+        rest = rest // 64
+        i = i - 1
+    return __str(__word(s))
 def list_slots(xs: ptr) -> ptr:
     return __ptr(__load8(xs, 24))
 
@@ -496,13 +522,14 @@ def list_slice(xs: ptr, start: int, stop: int) -> ptr:
     set_list_len(result, stop - start)
     return result
 
-# Equality of two slots by the equality kinds in API.md. Kind 3 (union)
-# arrives with union_eq; until then it compares slots.
+# Equality of two slots by the equality kinds in API.md.
 def slots_equal(a: word, b: word, kind: int) -> bool:
     if kind == 1:
         return __float(a) == __float(b)
     if kind == 2:
         return str_eq(__str(a), __str(b))
+    if kind == 3:
+        return union_eq(__ptr(a), __ptr(b))
     return __int(a) == __int(b)
 
 def list_contains(xs: ptr, value: word, kind: int) -> bool:
@@ -1100,3 +1127,35 @@ def str_to_float(s: str) -> float:
     if is_decimal(rest) == False:
         fail("ValueError", "cannot convert str to float")
     return str_to_float_unchecked(s)
+
+# A union value is 0 for None, a str as itself, and any other printable scalar
+# as a box, so its header tells which member it holds. Any header other than
+# the int, float, bool, and str descriptors is an enum's.
+
+def header(value: ptr) -> ptr:
+    return __ptr(__load8(value, 0))
+
+def union_eq(a: ptr, b: ptr) -> bool:
+    if __addr_is_null(a) or __addr_is_null(b):
+        return __addr_is_null(a) and __addr_is_null(b)
+    if header(a) != header(b):
+        return False
+    if header(a) == __type(str):
+        return str_eq(__str(__word(a)), __str(__word(b)))
+    if header(a) == __type(float):
+        return __float(unbox(a)) == __float(unbox(b))
+    return __int(unbox(a)) == __int(unbox(b))
+
+def union_to_str(value: ptr) -> str:
+    if __addr_is_null(value):
+        return "None"
+    kind = header(value)
+    if kind == __type(str):
+        return __str(__word(value))
+    if kind == __type(int):
+        return int_to_str(__int(unbox(value)))
+    if kind == __type(float):
+        return float_to_str(__float(unbox(value)))
+    if kind == __type(bool):
+        return bool_to_str(__bool(unbox(value)))
+    return enum_to_str(kind, __int(unbox(value)))

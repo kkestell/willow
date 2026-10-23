@@ -1,0 +1,4 @@
+def f(x: int | str):
+    print(isinstance(x, float))
+def main():
+    pass
