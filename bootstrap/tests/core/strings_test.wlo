@@ -22,3 +22,14 @@ def main():
     assert core.str_ord(core.str_chr(65535)) == 65535
     assert core.str_ord(core.str_chr(65536)) == 65536
     assert core.str_ord(core.str_chr(1114111)) == 1114111
+
+    assert core.str_join("|", core.str_split("a,b,,c", ",", -1)) == "a|b||c"
+    assert core.str_join("|", core.str_split("one::two", "::", -1)) == "one|two"
+    assert core.str_join("|", core.str_split("a,b,c", ",", 1)) == "a|b,c"
+    assert core.str_join("|", core.str_split("a,b,c", ",", 0)) == "a,b,c"
+    assert core.list_len(core.str_split("", ",", -1)) == 1
+    # Without a separator, runs of ASCII whitespace split and the ends are
+    # ignored; U+00A0 is not whitespace here.
+    assert core.str_join("|", core.str_split(" \t a  b\nc d ", None, -1)) == "a|b|c d"
+    assert core.str_join("|", core.str_split(" a b  c ", None, 1)) == "a|b  c "
+    assert core.list_len(core.str_split(" \t\n", None, -1)) == 0
