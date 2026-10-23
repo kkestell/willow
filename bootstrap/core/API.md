@@ -54,8 +54,8 @@ Fatal failures of L0 (agents/bootstrap.md §3):
 | `ValueError` | `invalid UTF-8` | `sys_args`, `fs_read_file` |
 | `ValueError` | `path contains a NUL character` | `fs_read_file`, `fs_write_file` |
 | `AssertionError` | the message, or `assertion failed` | stage 0 inline |
-| `RuntimeError` | `dictionary changed size during iteration` | `dict_next`; open: not yet decided |
-| `OSError` | `cannot read <path>: <reason>`, `cannot write <path>: <reason>` | `fs_read_file`, `fs_write_file`; open: not yet decided |
+| `RuntimeError` | `dictionary changed size during iteration` | `dict_next` |
+| `OSError` | `cannot read <path>: <reason>` and `cannot write <path>: <reason>`, where `<reason>` is the `strerror` text | `fs_read_file` and `fs_write_file` respectively |
 
 ## Text of values
 
