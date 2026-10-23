@@ -198,8 +198,6 @@ Only core may use these.
 | `__addr_is_null(p: ptr) -> bool` | `p` is 0 |
 | `a == b`, `a != b` on two `ptr` | Address equality, as in comparing a header with `__type(T)` |
 | `__dtosi(x: float) -> int` | QBE `dtosi`: `x` truncated toward zero, unspecified outside the `int` range; `float_to_int` checks the range first |
+| `__offset(p: ptr, n: int) -> ptr` | `p` moved by `n` bytes; address arithmetic is not overflow-checked as int arithmetic is |
 | `__os` | `"linux"` or `"darwin"`, folded at compile time |
 | `extern def name(params) -> R` | A C function; parameters and results are `int` or `ptr` (QBE `l`), `float` (`d`), or `cint` (`w`); a trailing `...` makes it variadic |
-
-Pointer arithmetic goes through `int` for now; `__offset(p: ptr, n: int) -> ptr`
-arrives with overflow checking.

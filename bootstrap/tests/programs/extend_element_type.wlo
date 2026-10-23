@@ -1,0 +1,4 @@
+def main():
+    xs: list[int] = [1]
+    ys: list[int | None] = [None]
+    ys.extend(xs)

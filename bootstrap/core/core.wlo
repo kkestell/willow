@@ -2,9 +2,6 @@
 # described in agents/bootstrap.md §5. Stage 0 compiles this module into every
 # program. Only this module may use intrinsics. bootstrap/core/API.md lists the
 # functions stage 0 calls.
-#
-# Functions written before stage 0 parsed `and`, `or`, `not`, `break`, `//`,
-# and `%` use nested `if`s, `== False`, and early returns instead.
 
 extern def write(fd: cint, buf: ptr, count: int) -> int
 extern def exit(status: cint)
@@ -30,14 +27,11 @@ extern def copysign(x: float, y: float) -> float
 def init():
     signal(13, __ptr(__word(1)))
 
-def offset(p: ptr, n: int) -> ptr:
-    return __ptr(__word(__int(__word(p)) + n))
-
 # Failing to write stdout or stderr ends the program with status 1 (spec §10).
 def write_all(fd: int, buf: ptr, count: int):
     done = 0
     while done < count:
-        written = write(fd, offset(buf, done), count - done)
+        written = write(fd, __offset(buf, done), count - done)
         if written < 0:
             exit(1)
         done = done + written
@@ -71,7 +65,7 @@ def print_bool(b: bool):
 def int_to_str(n: int) -> str:
     # 21 bytes hold the longest int and the zero byte snprintf writes.
     s = __alloc_atomic(16 + 21)
-    length = snprintf(offset(s, 16), 21, str_bytes("%lld"), n)
+    length = snprintf(__offset(s, 16), 21, str_bytes("%lld"), n)
     __store8(s, 0, __word(__type(str)))
     __store8(s, 8, __word(length))
     return __str(__word(s))
@@ -91,7 +85,7 @@ def str_size(s: str) -> int:
     return __int(__load8(__ptr(__word(s)), 8))
 
 def str_bytes(s: str) -> ptr:
-    return offset(__ptr(__word(s)), 16)
+    return __offset(__ptr(__word(s)), 16)
 
 def str_byte(s: str, i: int) -> int:
     return __load1(str_bytes(s), i)
@@ -107,13 +101,11 @@ def str_alloc(length: int) -> ptr:
 # The string holding bytes `start` up to `stop` of `s`.
 def str_sub(s: str, start: int, stop: int) -> str:
     result = str_alloc(stop - start)
-    memcpy(offset(result, 16), offset(str_bytes(s), start), stop - start)
+    memcpy(__offset(result, 16), __offset(str_bytes(s), start), stop - start)
     return __str(__word(result))
 
 def is_continuation(b: int) -> bool:
-    if b < 128:
-        return False
-    return b < 192
+    return b >= 128 and b < 192
 
 # The number of bytes in the code point whose first byte is `b`.
 def char_size(b: int) -> int:
@@ -130,7 +122,7 @@ def count_chars(s: str, start: int, stop: int) -> int:
     count = 0
     i = start
     while i < stop:
-        if is_continuation(str_byte(s, i)) == False:
+        if not is_continuation(str_byte(s, i)):
             count = count + 1
         i = i + 1
     return count
@@ -148,37 +140,25 @@ def find_bytes(s: str, sub: str, start: int) -> int:
     last = str_size(s) - str_size(sub)
     i = start
     while i <= last:
-        if memcmp(offset(str_bytes(s), i), str_bytes(sub), str_size(sub)) == 0:
+        if memcmp(__offset(str_bytes(s), i), str_bytes(sub), str_size(sub)) == 0:
             return i
         i = i + 1
     return -1
 
 def bytes_equal_at(s: str, at: int, sub: str) -> bool:
-    if at < 0:
+    if at < 0 or at + str_size(sub) > str_size(s):
         return False
-    if at + str_size(sub) > str_size(s):
-        return False
-    return memcmp(offset(str_bytes(s), at), str_bytes(sub), str_size(sub)) == 0
+    return memcmp(__offset(str_bytes(s), at), str_bytes(sub), str_size(sub)) == 0
 
 # Space, tab, LF, VT, FF, and CR (spec §7).
 def is_space(b: int) -> bool:
-    if b == 32:
-        return True
-    if b < 9:
-        return False
-    return b <= 13
+    return b == 32 or (b >= 9 and b <= 13)
 
 def is_digit(b: int) -> bool:
-    if b < 48:
-        return False
-    return b <= 57
+    return b >= 48 and b <= 57
 
 def is_alpha(b: int) -> bool:
-    if b >= 97:
-        return b <= 122
-    if b >= 65:
-        return b <= 90
-    return False
+    return (b >= 97 and b <= 122) or (b >= 65 and b <= 90)
 
 # `index` made non-negative by adding `length` once, as spec §7 says, then
 # clamped to the sequence.
@@ -195,8 +175,8 @@ def str_concat(a: str, b: str) -> str:
     a_size = str_size(a)
     b_size = str_size(b)
     s = str_alloc(a_size + b_size)
-    memcpy(offset(s, 16), str_bytes(a), a_size)
-    memcpy(offset(s, 16 + a_size), str_bytes(b), b_size)
+    memcpy(__offset(s, 16), str_bytes(a), a_size)
+    memcpy(__offset(s, 16 + a_size), str_bytes(b), b_size)
     return __str(__word(s))
 
 def str_eq(a: str, b: str) -> bool:
@@ -210,9 +190,7 @@ def str_compare(a: str, b: str) -> int:
     a_size = str_size(a)
     b_size = str_size(b)
     i = 0
-    while i < a_size:
-        if i == b_size:
-            return 1
+    while i < a_size and i < b_size:
         difference = str_byte(a, i) - str_byte(b, i)
         if difference != 0:
             return difference
@@ -229,9 +207,7 @@ def str_index(s: str, i: int) -> str:
     length = str_len(s)
     if i < 0:
         i = i + length
-    if i < 0:
-        fail("IndexError", "string index out of range")
-    if i >= length:
+    if i < 0 or i >= length:
         fail("IndexError", "string index out of range")
     return str_char_at(s, advance(s, 0, i))
 
@@ -278,13 +254,11 @@ def str_replace(s: str, old: str, new: str) -> str:
 def str_strip(s: str) -> str:
     start = 0
     stop = str_size(s)
-    while start < stop:
-        if is_space(str_byte(s, start)) == False:
-            while is_space(str_byte(s, stop - 1)):
-                stop = stop - 1
-            return str_sub(s, start, stop)
+    while start < stop and is_space(str_byte(s, start)):
         start = start + 1
-    return ""
+    while stop > start and is_space(str_byte(s, stop - 1)):
+        stop = stop - 1
+    return str_sub(s, start, stop)
 
 def str_removeprefix(s: str, prefix: str) -> str:
     if str_startswith(s, prefix):
@@ -303,7 +277,7 @@ def str_isdigit(s: str) -> bool:
         return False
     i = 0
     while i < str_size(s):
-        if is_digit(str_byte(s, i)) == False:
+        if not is_digit(str_byte(s, i)):
             return False
         i = i + 1
     return True
@@ -313,7 +287,7 @@ def str_isalpha(s: str) -> bool:
         return False
     i = 0
     while i < str_size(s):
-        if is_alpha(str_byte(s, i)) == False:
+        if not is_alpha(str_byte(s, i)):
             return False
         i = i + 1
     return True
@@ -324,9 +298,8 @@ def str_isalnum(s: str) -> bool:
     i = 0
     while i < str_size(s):
         b = str_byte(s, i)
-        if is_alpha(b) == False:
-            if is_digit(b) == False:
-                return False
+        if not (is_alpha(b) or is_digit(b)):
+            return False
         i = i + 1
     return True
 
@@ -335,7 +308,7 @@ def str_isspace(s: str) -> bool:
         return False
     i = 0
     while i < str_size(s):
-        if is_space(str_byte(s, i)) == False:
+        if not is_space(str_byte(s, i)):
             return False
         i = i + 1
     return True
@@ -361,6 +334,50 @@ def str_rjust(s: str, width: int) -> str:
         return s
     return repeat_byte(32, width - length) + s
 
+# As in Python: with a separator, the pieces between its occurrences, and
+# otherwise the runs of non-whitespace, ignoring whitespace at either end. At
+# most `maxsplit` splits are made, from the left, and the rest of the string
+# is the last piece. A negative `maxsplit` places no limit; there are never
+# more splits than bytes, so the byte count stands in for it.
+def str_split(s: str, sep: str | None, maxsplit: int) -> ptr:
+    if maxsplit < 0:
+        maxsplit = str_size(s)
+    if sep is None:
+        return split_whitespace(s, maxsplit)
+    if str_size(sep) == 0:
+        fail("ValueError", "empty separator")
+    parts = list_new(0)
+    start = 0
+    at = find_bytes(s, sep, 0)
+    while at >= 0 and maxsplit != 0:
+        list_append(parts, __word(str_sub(s, start, at)))
+        start = at + str_size(sep)
+        maxsplit = maxsplit - 1
+        at = find_bytes(s, sep, start)
+    list_append(parts, __word(str_sub(s, start, str_size(s))))
+    return parts
+
+# After the last split, the remainder keeps its trailing whitespace.
+def split_whitespace(s: str, maxsplit: int) -> ptr:
+    parts = list_new(0)
+    size = str_size(s)
+    i = skip_spaces(s, 0)
+    while i < size and maxsplit != 0:
+        start = i
+        while i < size and not is_space(str_byte(s, i)):
+            i = i + 1
+        list_append(parts, __word(str_sub(s, start, i)))
+        maxsplit = maxsplit - 1
+        i = skip_spaces(s, i)
+    if i < size:
+        list_append(parts, __word(str_sub(s, i, size)))
+    return parts
+
+def skip_spaces(s: str, i: int) -> int:
+    while i < str_size(s) and is_space(str_byte(s, i)):
+        i = i + 1
+    return i
+
 def str_join(sep: str, items: ptr) -> str:
     count = list_len(items)
     if count == 0:
@@ -375,10 +392,10 @@ def str_join(sep: str, items: ptr) -> str:
     i = 0
     while i < count:
         if i > 0:
-            memcpy(offset(s, at), str_bytes(sep), str_size(sep))
+            memcpy(__offset(s, at), str_bytes(sep), str_size(sep))
             at = at + str_size(sep)
         item = __str(list_get(items, i))
-        memcpy(offset(s, at), str_bytes(item), str_size(item))
+        memcpy(__offset(s, at), str_bytes(item), str_size(item))
         at = at + str_size(item)
         i = i + 1
     return __str(__word(s))
@@ -403,11 +420,6 @@ def str_ord(s: str) -> int:
         code = code * 64 + str_byte(s, i) - 128
         i = i + 1
     return code
-
-# A list is a header word pointing at the list descriptor, the length, the
-# capacity, and a pointer to an array of `capacity` slots. Slots may hold
-# pointers, so the array is scanned memory.
-
 
 # Encodes the code point as UTF-8: the lead byte carries the high bits and
 # each continuation byte, filled from the end, carries 6 more.
@@ -434,6 +446,11 @@ def str_chr(n: int) -> str:
         rest = rest // 64
         i = i - 1
     return __str(__word(s))
+
+# A list is a header word pointing at the list descriptor, the length, the
+# capacity, and a pointer to an array of `capacity` slots. Slots may hold
+# pointers, so the array is scanned memory.
+
 def list_slots(xs: ptr) -> ptr:
     return __ptr(__load8(xs, 24))
 
@@ -461,9 +478,7 @@ def list_len(xs: ptr) -> int:
 def list_index(xs: ptr, i: int) -> int:
     if i < 0:
         i = i + list_len(xs)
-    if i < 0:
-        fail("IndexError", "list index out of range")
-    if i >= list_len(xs):
+    if i < 0 or i >= list_len(xs):
         fail("IndexError", "list index out of range")
     return i
 
@@ -518,7 +533,7 @@ def list_slice(xs: ptr, start: int, stop: int) -> ptr:
     if stop < start:
         stop = start
     result = list_new(stop - start)
-    memcpy(list_slots(result), offset(list_slots(xs), start * 8), (stop - start) * 8)
+    memcpy(list_slots(result), __offset(list_slots(xs), start * 8), (stop - start) * 8)
     set_list_len(result, stop - start)
     return result
 
@@ -573,13 +588,11 @@ def utf8_char_size(p: ptr, i: int, size: int) -> int:
     if i + count > size:
         return 0
     second = __load1(p, i + 1)
-    if second < low:
-        return 0
-    if second > high:
+    if second < low or second > high:
         return 0
     j = 2
     while j < count:
-        if is_continuation(__load1(p, i + j)) == False:
+        if not is_continuation(__load1(p, i + j)):
             return 0
         j = j + 1
     return count
@@ -596,10 +609,10 @@ def utf8_valid(p: ptr, size: int) -> bool:
 # A new string holding a copy of the `size` bytes at `p`, which must be valid
 # UTF-8.
 def str_from_bytes(p: ptr, size: int) -> str:
-    if utf8_valid(p, size) == False:
+    if not utf8_valid(p, size):
         fail("ValueError", "invalid UTF-8")
     s = str_alloc(size)
-    memcpy(offset(s, 16), p, size)
+    memcpy(__offset(s, 16), p, size)
     return __str(__word(s))
 
 def sys_args(argc: int, argv: ptr) -> ptr:
@@ -613,9 +626,7 @@ def sys_args(argc: int, argv: ptr) -> ptr:
 
 # Output is unbuffered, so there is nothing to flush.
 def sys_exit(status: int):
-    if status < 0:
-        fail("ValueError", "exit status out of range")
-    if status > 255:
+    if status < 0 or status > 255:
         fail("ValueError", "exit status out of range")
     exit(status)
 
@@ -669,7 +680,7 @@ def fs_read_file(path: str) -> str:
             memcpy(larger, buf, size)
             buf = larger
             capacity = capacity * 2
-        count = read(fd, offset(buf, size), capacity - size)
+        count = read(fd, __offset(buf, size), capacity - size)
     close(fd)
     return str_from_bytes(buf, size)
 
@@ -680,7 +691,7 @@ def fs_write_file(path: str, text: str):
         fail_os("write", path)
     done = 0
     while done < str_size(text):
-        written = write(fd, offset(str_bytes(text), done), str_size(text) - done)
+        written = write(fd, __offset(str_bytes(text), done), str_size(text) - done)
         if written < 0:
             fail_os("write", path)
         done = done + written
@@ -689,34 +700,28 @@ def fs_write_file(path: str, text: str):
 
 # An optional sign and one or more decimal digits (spec §6). The magnitude is
 # checked before each step so it never leaves the int range, which is
-# symmetric, so both signs share the limit 9223372036854775807.
+# symmetric, so both signs share the limit 9223372036854775807. The first
+# byte of an empty string is its trailing zero byte.
 def str_to_int(s: str) -> int:
     size = str_size(s)
+    negative = str_byte(s, 0) == 45
     i = 0
-    negative = False
-    if size > 0:
-        if str_byte(s, 0) == 45:
-            negative = True
-            i = 1
-        elif str_byte(s, 0) == 43:
-            i = 1
+    if negative or str_byte(s, 0) == 43:
+        i = 1
     if i == size:
         fail("ValueError", "cannot convert str to int")
     value = 0
     while i < size:
         b = str_byte(s, i)
-        if is_digit(b) == False:
+        if not is_digit(b):
             fail("ValueError", "cannot convert str to int")
         digit = b - 48
-        if value > 922337203685477580:
+        if value > 922337203685477580 or (value == 922337203685477580 and digit > 7):
             fail("ValueError", "cannot convert str to int")
-        if value == 922337203685477580:
-            if digit > 7:
-                fail("ValueError", "cannot convert str to int")
         value = value * 10 + digit
         i = i + 1
     if negative:
-        return 0 - value
+        return -value
     return value
 
 # An enum's descriptor holds its name and then one str per member, in
@@ -736,9 +741,7 @@ def unbox(value: ptr) -> word:
     return __load8(value, 8)
 
 def is_instance(value: ptr, descriptor: ptr) -> bool:
-    if __addr_is_null(value):
-        return False
-    return __int(__load8(value, 0)) == __int(__word(descriptor))
+    return not __addr_is_null(value) and __ptr(__load8(value, 0)) == descriptor
 
 # __alloc returns zeroed memory, so the fields start as zero.
 def object_new(descriptor: ptr, fields: int) -> ptr:
@@ -920,14 +923,10 @@ def word_str(w: word) -> str:
 def float_max() -> float:
     return 1.7976931348623157e308
 
+# 2^63 is out of range, and so is -2^63 because the int range is symmetric.
+# Every float strictly between them truncates into range.
 def float_to_int(x: float) -> int:
-    if x != x:
-        fail("ValueError", "cannot convert float to int")
-    # 2^63 is out of range, and so is -2^63 because the int range is
-    # symmetric. Every float strictly between them truncates into range.
-    if x >= 9223372036854775808.0:
-        fail("ValueError", "cannot convert float to int")
-    if x <= -9223372036854775808.0:
+    if x != x or x >= 9223372036854775808.0 or x <= -9223372036854775808.0:
         fail("ValueError", "cannot convert float to int")
     return __dtosi(x)
 
@@ -950,9 +949,8 @@ def float_floordiv(a: float, b: float) -> float:
         fail("ZeroDivisionError", "division by zero")
     mod = fmod(a, b)
     quotient = (a - mod) / b
-    if mod != 0.0:
-        if (b < 0.0) != (mod < 0.0):
-            quotient = quotient - 1.0
+    if mod != 0.0 and (b < 0.0) != (mod < 0.0):
+        quotient = quotient - 1.0
     if quotient == 0.0:
         return copysign(0.0, a / b)
     result = floor(quotient)
@@ -980,7 +978,7 @@ def float_to_str(x: float) -> str:
         return "nan"
     if x > float_max():
         return "inf"
-    if x < 0.0 - float_max():
+    if x < -float_max():
         return "-inf"
     precision = 0
     while precision < 16:
@@ -1032,9 +1030,7 @@ def repr_text(text: str) -> str:
     exponent = str_to_int(str_slice(text, e + 1, str_len(text)))
     digits = without_trailing_zeros(str_replace(str_slice(text, 0, e), ".", ""))
     count = str_size(digits)
-    if exponent < -4:
-        return sign + scientific(digits, exponent)
-    if exponent >= 16:
+    if exponent < -4 or exponent >= 16:
         return sign + scientific(digits, exponent)
     if exponent < 0:
         return sign + "0." + repeat_byte(48, -1 - exponent) + digits
@@ -1055,7 +1051,7 @@ def scientific(digits: str, exponent: int) -> str:
     text = mantissa_text(digits)
     if exponent < 0:
         text = text + "e-"
-        exponent = 0 - exponent
+        exponent = -exponent
     else:
         text = text + "e+"
     if exponent < 10:
@@ -1067,9 +1063,8 @@ def ascii_lower(s: str) -> str:
     i = 0
     while i < str_size(s):
         b = str_byte(s, i)
-        if b >= 65:
-            if b <= 90:
-                b = b + 32
+        if b >= 65 and b <= 90:
+            b = b + 32
         __store1(result, 16 + i, b)
         i = i + 1
     return __str(__word(result))
@@ -1093,18 +1088,13 @@ def is_decimal(s: str) -> bool:
     if count == 0:
         return False
     b = str_byte(s, i)
-    if b == 101:
-        i = i + 1
-    elif b == 69:
-        i = i + 1
-    else:
+    if b != 101 and b != 69:
         return i == str_size(s)
+    i = i + 1
     b = str_byte(s, i)
-    if b == 43:
+    if b == 43 or b == 45:
         i = i + 1
-    elif b == 45:
-        i = i + 1
-    if is_digit(str_byte(s, i)) == False:
+    if not is_digit(str_byte(s, i)):
         return False
     return skip_digits(s, i) == str_size(s)
 
@@ -1118,13 +1108,9 @@ def str_to_float(s: str) -> float:
     elif str_startswith(s, "-"):
         rest = str_removeprefix(s, "-")
     word = ascii_lower(rest)
-    if word == "inf":
+    if word == "inf" or word == "infinity" or word == "nan":
         return str_to_float_unchecked(s)
-    if word == "infinity":
-        return str_to_float_unchecked(s)
-    if word == "nan":
-        return str_to_float_unchecked(s)
-    if is_decimal(rest) == False:
+    if not is_decimal(rest):
         fail("ValueError", "cannot convert str to float")
     return str_to_float_unchecked(s)
 

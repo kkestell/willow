@@ -1,0 +1,1 @@
+union_duplicate_member.wlo:2:14: error: union members int and int overlap

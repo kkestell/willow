@@ -34,6 +34,8 @@ pub struct Param {
 pub struct TypeName {
     pub pos: Pos,
     pub name: String,
+    /// The arguments of a generic type, as in `list[int]`.
+    pub args: Vec<TypeExpr>,
 }
 
 /// An annotation: one type name, or the members of a union.
@@ -63,6 +65,19 @@ pub enum StmtKind {
         arms: Vec<(Expr, Vec<Stmt>)>,
         otherwise: Option<Vec<Stmt>>,
     },
+    /// `for target in iterable:`.
+    For {
+        target: String,
+        iterable: Expr,
+        body: Vec<Stmt>,
+    },
+    /// `object[index] = value`, with the position of `[`.
+    SetIndex {
+        bracket: Pos,
+        object: Expr,
+        index: Expr,
+        value: Expr,
+    },
     While {
         cond: Expr,
         body: Vec<Stmt>,
@@ -85,6 +100,11 @@ pub enum ExprKind {
     Bool(bool),
     Name(String),
     Call(Box<Expr>, Vec<Expr>),
+    /// A list display.
+    List(Vec<Expr>),
+    Index(Box<Expr>, Box<Expr>),
+    /// `object[start:stop]`, either bound omitted.
+    Slice(Box<Expr>, Option<Box<Expr>>, Option<Box<Expr>>),
     /// `object.name`, with the position of the name.
     Attr(Box<Expr>, Pos, String),
     Unary(&'static str, Box<Expr>),
@@ -131,7 +151,7 @@ pub fn parse(name: &str, path: &str, tokens: Vec<Token>) -> Result<Module, Diag>
     })
 }
 
-const COMPARISONS: &[&str] = &["==", "!=", "<", "<=", ">", ">="];
+const COMPARISONS: &[&str] = &["==", "!=", "<", "<=", ">", ">=", "in"];
 
 fn describe(kind: &Kind) -> String {
     match kind {
@@ -289,11 +309,21 @@ impl Parser<'_> {
         let pos = self.pos();
         let name = match self.peek().clone() {
             Kind::Name(name) => name,
-            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "None")) => w.to_string(),
+            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "None" | "list")) => w.to_string(),
             _ => return self.unexpected("a type"),
         };
         self.i += 1;
-        Ok(TypeName { pos, name })
+        let mut args = Vec::new();
+        if self.accept("[") {
+            loop {
+                args.push(self.type_expr()?);
+                if !self.accept(",") {
+                    break;
+                }
+            }
+            self.expect("]")?;
+        }
+        Ok(TypeName { pos, name, args })
     }
 
     /// The argument of `__type`, which may name a built-in type that is
@@ -306,6 +336,7 @@ impl Parser<'_> {
                 Ok(TypeName {
                     pos,
                     name: w.to_string(),
+                    args: Vec::new(),
                 })
             }
             _ => self.type_name(),
@@ -344,6 +375,17 @@ impl Parser<'_> {
         } else if self.accept("while") {
             let (cond, body) = self.arm()?;
             StmtKind::While { cond, body }
+        } else if self.accept("for") {
+            let (_, target) = self.name()?;
+            self.expect("in")?;
+            let iterable = self.expr()?;
+            self.expect(":")?;
+            let body = self.block()?;
+            StmtKind::For {
+                target,
+                iterable,
+                body,
+            }
         } else if self.accept("return") {
             let value = if self.peek() == &Kind::Newline {
                 None
@@ -398,19 +440,25 @@ impl Parser<'_> {
             None
         };
         if self.accept("=") {
-            let ExprKind::Name(target) = expr.kind else {
-                return self.fail(expr.pos, "cannot assign to this expression");
-            };
             let value = self.expr()?;
             if self.peek() == &Kind::Word("=") {
                 return self.fail(self.pos(), "chained assignment is not supported");
             }
             self.end_of_line()?;
-            return Ok(StmtKind::Assign {
-                target,
-                annotation,
-                value,
-            });
+            return match expr.kind {
+                ExprKind::Name(target) => Ok(StmtKind::Assign {
+                    target,
+                    annotation,
+                    value,
+                }),
+                ExprKind::Index(object, index) => Ok(StmtKind::SetIndex {
+                    bracket: expr.pos,
+                    object: *object,
+                    index: *index,
+                    value,
+                }),
+                _ => self.fail(expr.pos, "cannot assign to this expression"),
+            };
         }
         if !matches!(expr.kind, ExprKind::Call(..)) {
             return self.fail(
@@ -482,6 +530,13 @@ impl Parser<'_> {
                 negated,
                 op_pos,
             }
+        } else if self.peek() == &Kind::Word("not")
+            && self.tokens[self.i + 1].kind == Kind::Word("in")
+        {
+            let op_pos = self.pos();
+            self.i += 2;
+            let right = self.sum()?;
+            ExprKind::Binary("not in", op_pos, Box::new(left), Box::new(right))
         } else if let Some((op, op_pos)) = self.binary_op(COMPARISONS) {
             let right = self.sum()?;
             ExprKind::Binary(op, op_pos, Box::new(left), Box::new(right))
@@ -543,6 +598,10 @@ impl Parser<'_> {
                 };
                 continue;
             }
+            if self.peek() == &Kind::Word("[") {
+                expr = self.subscript(expr)?;
+                continue;
+            }
             if !self.accept("(") {
                 break;
             }
@@ -563,13 +622,55 @@ impl Parser<'_> {
         Ok(expr)
     }
 
+    /// An index or slice of `object`, positioned at its `[`.
+    fn subscript(&mut self, object: Expr) -> Result<Expr, Diag> {
+        let pos = self.advance().pos;
+        let start = if self.peek() == &Kind::Word(":") {
+            None
+        } else {
+            Some(Box::new(self.expr()?))
+        };
+        let kind = if self.accept(":") {
+            let stop = if self.peek() == &Kind::Word("]") {
+                None
+            } else {
+                Some(Box::new(self.expr()?))
+            };
+            if self.peek() == &Kind::Word(":") {
+                return self.fail(self.pos(), "slice steps are not supported");
+            }
+            ExprKind::Slice(Box::new(object), start, stop)
+        } else {
+            ExprKind::Index(Box::new(object), start.unwrap())
+        };
+        self.expect("]")?;
+        Ok(Expr { pos, kind })
+    }
+
     fn primary(&mut self) -> Result<Expr, Diag> {
         let pos = self.pos();
         let kind = match self.peek().clone() {
             Kind::Int(value) => ExprKind::Int(value),
             Kind::Float(value) => ExprKind::Float(value),
             // Conversions and isinstance name types by their reserved words.
-            Kind::Word(w @ ("int" | "float" | "bool" | "str")) => ExprKind::Name(w.to_string()),
+            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "list")) => {
+                ExprKind::Name(w.to_string())
+            }
+            Kind::Word("[") => {
+                self.i += 1;
+                let mut items = Vec::new();
+                while !self.accept("]") {
+                    items.push(self.expr()?);
+                    if !self.accept(",") {
+                        self.expect("]")?;
+                        break;
+                    }
+                }
+                return Ok(Expr {
+                    pos,
+                    kind: ExprKind::List(items),
+                });
+            }
             Kind::Word("None") => ExprKind::None,
             Kind::Str(text) => ExprKind::Str(text),
             Kind::Name(name)
