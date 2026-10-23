@@ -15,7 +15,10 @@ pull requests against `main`.
 - Merges use merge commits, matching the history. Before merging, the operator
   tests the combined result on macOS from a scratch clone of `origin/main`
   with the PR branch merged in: `make bootstrap-test`, and `make test` when
-  Lua files changed. Agents can only test Linux.
+  Lua files changed. Agents can only test Linux. Merge with
+  `gh pr merge N --merge --delete-branch`; agents can't delete branches.
+- Pause before the 5-hour usage window runs out (about 78%, per `gnat
+  status`) with `gnat pause -m "commit and push what you have" --wait`.
 
 ## Swarm definition
 
@@ -95,9 +98,7 @@ in the next task message rather than sending them alone.
 
 ### Status
 
-Milestones 1 and 2 are done: stage 0 compiles all of L0, core implements
-bootstrap/core/API.md, and stage 0 compiles the stage 1 lexer. Milestone 3
-is in progress in bootstrap/stage1/.
+See agents/bootstrap-handoff.md.
 
 ### Milestone 3
 
