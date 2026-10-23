@@ -1,0 +1,5 @@
+import fs
+
+def main():
+    print(fs.exists("host_realpath_missing.tmp"))
+    print(fs.realpath("host_realpath_missing.tmp"))
