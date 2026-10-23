@@ -23,7 +23,9 @@ pub fn emit(program: &Program) -> String {
     writeln!(out, "\tret 0").unwrap();
     writeln!(out, "}}").unwrap();
     // Every heap object's header points at a descriptor holding its type's name.
-    writeln!(out, "data $W.str.type = {{ b \"str\", b 0 }}").unwrap();
+    for (symbol, name) in &program.descriptors {
+        writeln!(out, "data ${symbol} = {{ l $W.str.{name} }}").unwrap();
+    }
     for (n, text) in program.strings.iter().enumerate() {
         writeln!(
             out,
