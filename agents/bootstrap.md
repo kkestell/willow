@@ -109,7 +109,10 @@ Included:
   `fs.write_file`, `fs.exists`, and `fs.realpath`. These are the parts of
   `sys` and `fs` the compiler needs, with the signatures the spec gives them;
   the module loader uses `exists` and `realpath` to find modules and tell
-  files apart.
+  files apart. Stage 1's driver runs `qbe` and `cc` through
+  `core.run(args: list[str]) -> int`, which runs a program without a shell
+  and returns its exit status. It is a core function that stage 1 imports,
+  not part of the language; stage 2 uses `subprocess`.
 
 Excluded, and delivered by stage 1: exceptions, `try`, `raise`, `with`,
 generators and `yield`, `async` and `await`, closures, nested `def`, lambdas,
