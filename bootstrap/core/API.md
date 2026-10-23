@@ -64,7 +64,7 @@ Fatal failures of L0 (agents/bootstrap.md §3):
 | `int_to_str(n: int) -> str` | Decimal text |
 | `float_to_str(x: float) -> str` | Python `repr` text, including `inf`, `-inf`, `nan` |
 | `bool_to_str(b: bool) -> str` | `True` or `False` |
-| `enum_to_str(type: ptr, ordinal: int) -> str` | The member's text from the enum's descriptor |
+| `enum_to_str(descriptor: ptr, ordinal: int) -> str` | The member's text from the enum's descriptor |
 | `union_to_str(value: ptr) -> str` | The text of a printable union value; `None` for 0 |
 | `print_str(s: str)` | Writes `s` and a newline to stdout; exits with status 1 if the write fails |
 | `eprint_str(s: str)` | Writes `s` and a newline to stderr, for `sys.eprint`; exits with status 1 if the write fails |
@@ -155,11 +155,11 @@ literal `"None"`.
 
 | Signature | Meaning |
 | --- | --- |
-| `box(type: ptr, value: word) -> ptr` | A new box with descriptor `type` and payload `value` |
+| `box(descriptor: ptr, value: word) -> ptr` | A new box with header `descriptor` and payload `value` |
 | `unbox(value: ptr) -> word` | The payload of a box |
-| `is_instance(value: ptr, type: ptr) -> bool` | `value` is not 0 and its header is `type` |
+| `is_instance(value: ptr, descriptor: ptr) -> bool` | `value` is not 0 and its header is `descriptor` |
 | `union_eq(a: ptr, b: ptr) -> bool` | Union `==`: both 0, or the same descriptor and equal contents, with float boxes compared as equality kind 1 and `str` as kind 2 |
-| `object_new(type: ptr, fields: int) -> ptr` | A class instance with header `type` and `fields` zeroed field slots |
+| `object_new(descriptor: ptr, fields: int) -> ptr` | A class instance with header `descriptor` and `fields` zeroed field slots |
 
 ## sys and fs
 

@@ -17,6 +17,10 @@ extern def open(path: ptr, flags: cint, ...) -> cint
 extern def read(fd: cint, buf: ptr, count: int) -> int
 extern def close(fd: cint) -> cint
 extern def perror(s: ptr)
+extern def strtod(s: ptr, end: ptr) -> float
+extern def fmod(x: float, y: float) -> float
+extern def floor(x: float) -> float
+extern def copysign(x: float, y: float) -> float
 
 # Called by the program entry before main. Writing to a closed pipe must fail
 # the write instead of raising SIGPIPE (spec §10); SIGPIPE is 13 and SIG_IGN
@@ -334,11 +338,12 @@ def str_isspace(s: str) -> bool:
         i = i + 1
     return True
 
-def spaces(count: int) -> str:
+# A string of `count` copies of the ASCII byte `b`.
+def repeat_byte(b: int, count: int) -> str:
     s = str_alloc(count)
     i = 0
     while i < count:
-        __store1(s, 16 + i, 32)
+        __store1(s, 16 + i, b)
         i = i + 1
     return __str(__word(s))
 
@@ -346,13 +351,13 @@ def str_ljust(s: str, width: int) -> str:
     length = str_len(s)
     if width <= length:
         return s
-    return s + spaces(width - length)
+    return s + repeat_byte(32, width - length)
 
 def str_rjust(s: str, width: int) -> str:
     length = str_len(s)
     if width <= length:
         return s
-    return spaces(width - length) + s
+    return repeat_byte(32, width - length) + s
 
 def str_join(sep: str, items: ptr) -> str:
     count = list_len(items)
@@ -489,10 +494,11 @@ def list_slice(xs: ptr, start: int, stop: int) -> ptr:
     set_list_len(result, stop - start)
     return result
 
-# Equality of two slots by the equality kinds in API.md. Kind 1 (float) and
-# kind 3 (union) arrive with float comparisons and unions in stage 0; until
-# then they compare slots.
+# Equality of two slots by the equality kinds in API.md. Kind 3 (union)
+# arrives with union_eq; until then it compares slots.
 def slots_equal(a: word, b: word, kind: int) -> bool:
+    if kind == 1:
+        return __float(a) == __float(b)
     if kind == 2:
         return str_eq(__str(a), __str(b))
     return __int(a) == __int(b)
@@ -678,9 +684,10 @@ def str_to_int(s: str) -> int:
 def enum_to_str(descriptor: ptr, ordinal: int) -> str:
     return __str(__load8(descriptor, 8 + ordinal * 8))
 
-# A box is a header word and a payload word, which may hold a pointer.
+# A box is a header word and a payload word. Only scalars are boxed, and the
+# header points at static data, so the collector need not scan a box.
 def box(descriptor: ptr, value: word) -> ptr:
-    b = __alloc(16)
+    b = __alloc_atomic(16)
     __store8(b, 0, __word(descriptor))
     __store8(b, 8, value)
     return b
@@ -868,3 +875,215 @@ def str_word(s: str) -> word:
 
 def word_str(w: word) -> str:
     return __str(w)
+
+# The largest float, which is finite.
+def float_max() -> float:
+    return 1.7976931348623157e308
+
+def float_to_int(x: float) -> int:
+    if x != x:
+        fail("ValueError", "cannot convert float to int")
+    # 2^63 is out of range, and so is -2^63 because the int range is
+    # symmetric. Every float strictly between them truncates into range.
+    if x >= 9223372036854775808.0:
+        fail("ValueError", "cannot convert float to int")
+    if x <= -9223372036854775808.0:
+        fail("ValueError", "cannot convert float to int")
+    return __dtosi(x)
+
+# The remainder and floor quotient follow CPython's float_rem and
+# float_divmod, so results match Python, including signed zeros and
+# infinities.
+
+def float_mod(a: float, b: float) -> float:
+    if b == 0.0:
+        fail("ZeroDivisionError", "division by zero")
+    mod = fmod(a, b)
+    if mod == 0.0:
+        return copysign(0.0, b)
+    if (b < 0.0) != (mod < 0.0):
+        return mod + b
+    return mod
+
+def float_floordiv(a: float, b: float) -> float:
+    if b == 0.0:
+        fail("ZeroDivisionError", "division by zero")
+    mod = fmod(a, b)
+    quotient = (a - mod) / b
+    if mod != 0.0:
+        if (b < 0.0) != (mod < 0.0):
+            quotient = quotient - 1.0
+    if quotient == 0.0:
+        return copysign(0.0, a / b)
+    result = floor(quotient)
+    if quotient - result > 0.5:
+        return result + 1.0
+    return result
+
+# `x` written by snprintf with `format`, which converts one float.
+def format_float(format: str, x: float) -> str:
+    buf = __alloc_atomic(32)
+    snprintf(buf, 32, str_bytes(format), x)
+    return str_from_bytes(buf, strlen(buf))
+
+def str_to_float_unchecked(s: str) -> float:
+    return strtod(str_bytes(s), __ptr(__word(0)))
+
+# Python's repr: the shortest decimal that reads back as `x` (spec §7). The
+# search starts at one significant digit rather than the 15 that suffice for
+# normal floats, because subnormals such as 5e-324 have fewer. At a power of
+# two the gap below `x` is half the gap above, so the nearest decimal of a
+# length may miss while the next one up in magnitude reads back; repr picks
+# that one. 17 digits always read back.
+def float_to_str(x: float) -> str:
+    if x != x:
+        return "nan"
+    if x > float_max():
+        return "inf"
+    if x < 0.0 - float_max():
+        return "-inf"
+    precision = 0
+    while precision < 16:
+        text = format_float("%." + int_to_str(precision) + "e", x)
+        if str_to_float_unchecked(text) == x:
+            return repr_text(text)
+        up = next_decimal(text)
+        if str_to_float_unchecked(up) == x:
+            return repr_text(up)
+        precision = precision + 1
+    return repr_text(format_float("%.16e", x))
+
+# The decimal after `text` in magnitude with the same number of significant
+# digits, in the same `[-]d.ddde[+-]X` form.
+def next_decimal(text: str) -> str:
+    sign = ""
+    if str_startswith(text, "-"):
+        sign = "-"
+        text = str_removeprefix(text, "-")
+    e = str_find(text, "e")
+    exponent = str_to_int(str_slice(text, e + 1, str_len(text)))
+    digits = str_replace(str_slice(text, 0, e), ".", "")
+    count = str_size(digits)
+    i = count - 1
+    while i >= 0:
+        b = str_byte(digits, i)
+        if b != 57:
+            digits = str_sub(digits, 0, i) + repeat_byte(b + 1, 1) + repeat_byte(48, count - i - 1)
+            return sign + mantissa_text(digits) + "e" + int_to_str(exponent)
+        i = i - 1
+    # All nines, so the result is 1 followed by zeros, one power of ten up.
+    return sign + mantissa_text("1" + repeat_byte(48, count - 1)) + "e" + int_to_str(exponent + 1)
+
+# `d.ddd` from the digits `dddd`.
+def mantissa_text(digits: str) -> str:
+    if str_size(digits) == 1:
+        return digits
+    return str_sub(digits, 0, 1) + "." + str_sub(digits, 1, str_size(digits))
+
+# Rewrites snprintf's `[-]d.ddde[+-]XX` the way repr writes it: fixed notation
+# when the decimal exponent is from -4 through 15, with at least one digit
+# after the point, and otherwise `d.ddde[+-]XX` without trailing zeros.
+def repr_text(text: str) -> str:
+    sign = ""
+    if str_startswith(text, "-"):
+        sign = "-"
+        text = str_removeprefix(text, "-")
+    e = str_find(text, "e")
+    exponent = str_to_int(str_slice(text, e + 1, str_len(text)))
+    digits = without_trailing_zeros(str_replace(str_slice(text, 0, e), ".", ""))
+    count = str_size(digits)
+    if exponent < -4:
+        return sign + scientific(digits, exponent)
+    if exponent >= 16:
+        return sign + scientific(digits, exponent)
+    if exponent < 0:
+        return sign + "0." + repeat_byte(48, -1 - exponent) + digits
+    if count <= exponent + 1:
+        return sign + digits + repeat_byte(48, exponent + 1 - count) + ".0"
+    return sign + str_sub(digits, 0, exponent + 1) + "." + str_sub(digits, exponent + 1, count)
+
+# `digits` without trailing zeros, keeping at least one digit.
+def without_trailing_zeros(digits: str) -> str:
+    stop = str_size(digits)
+    while stop > 1:
+        if str_byte(digits, stop - 1) != 48:
+            return str_sub(digits, 0, stop)
+        stop = stop - 1
+    return str_sub(digits, 0, 1)
+
+def scientific(digits: str, exponent: int) -> str:
+    text = mantissa_text(digits)
+    if exponent < 0:
+        text = text + "e-"
+        exponent = 0 - exponent
+    else:
+        text = text + "e+"
+    if exponent < 10:
+        text = text + "0"
+    return text + int_to_str(exponent)
+
+def ascii_lower(s: str) -> str:
+    result = str_alloc(str_size(s))
+    i = 0
+    while i < str_size(s):
+        b = str_byte(s, i)
+        if b >= 65:
+            if b <= 90:
+                b = b + 32
+        __store1(result, 16 + i, b)
+        i = i + 1
+    return __str(__word(result))
+
+# The first index at or after `i` that does not hold a digit. Reading the
+# byte at the string's size is safe: it is the trailing zero byte.
+def skip_digits(s: str, i: int) -> int:
+    while is_digit(str_byte(s, i)):
+        i = i + 1
+    return i
+
+# Digits with an optional fraction and exponent, as in `7`, `2.5`, `.5`,
+# `5.`, and `1e-3`, with at least one digit before the exponent.
+def is_decimal(s: str) -> bool:
+    i = skip_digits(s, 0)
+    count = i
+    if str_byte(s, i) == 46:
+        stop = skip_digits(s, i + 1)
+        count = count + stop - i - 1
+        i = stop
+    if count == 0:
+        return False
+    b = str_byte(s, i)
+    if b == 101:
+        i = i + 1
+    elif b == 69:
+        i = i + 1
+    else:
+        return i == str_size(s)
+    b = str_byte(s, i)
+    if b == 43:
+        i = i + 1
+    elif b == 45:
+        i = i + 1
+    if is_digit(str_byte(s, i)) == False:
+        return False
+    return skip_digits(s, i) == str_size(s)
+
+# An optional sign and then a decimal number or `inf`, `infinity`, or `nan`
+# in any case (spec §6). strtod reads exactly that text, and also forms such
+# as hexadecimal that this check rejects first.
+def str_to_float(s: str) -> float:
+    rest = s
+    if str_startswith(s, "+"):
+        rest = str_removeprefix(s, "+")
+    elif str_startswith(s, "-"):
+        rest = str_removeprefix(s, "-")
+    word = ascii_lower(rest)
+    if word == "inf":
+        return str_to_float_unchecked(s)
+    if word == "infinity":
+        return str_to_float_unchecked(s)
+    if word == "nan":
+        return str_to_float_unchecked(s)
+    if is_decimal(rest) == False:
+        fail("ValueError", "cannot convert str to float")
+    return str_to_float_unchecked(s)
