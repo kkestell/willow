@@ -1,0 +1,26 @@
+def main():
+    for i in range(10, 0, -3):
+        print(i)
+    for i in range(3, -3, -1):
+        if i == 1:
+            continue
+        if i == -2:
+            break
+        print(i)
+    for j in range(0):
+        print(j)
+    xs = [[1, 2], [3]]
+    for row in xs:
+        for v in row:
+            if v == 2:
+                break
+            print(v)
+    # A step past the largest int ends the loop instead of overflowing.
+    for k in range(9223372036854775806, 9223372036854775807, 5):
+        print(k)
+    for k in range(-9223372036854775806, -9223372036854775807, -5):
+        print(k)
+    last = -1
+    for last in range(3):
+        pass
+    print(last)

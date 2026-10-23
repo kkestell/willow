@@ -1,0 +1,14 @@
+def f(v: list[int] | None) -> int:
+    if isinstance(v, list):
+        return len(v)
+    return -1
+def main():
+    print(f([1, 2, 3]))
+    print(f(None))
+    xs: list[int | str] = [1, "a", 2]
+    print("a" in xs)
+    print(3 in xs)
+    print(xs[1])
+    ys: list[float] = [1.5, -0.0]
+    print(0.0 in ys)
+    print(ys[1])
