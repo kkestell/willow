@@ -4,6 +4,10 @@
 /// least two members; `Type::union` builds one.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Type {
+    // Classes and enums come first so that unions such as `Node | None`
+    // are named as they are usually written.
+    Class(Named),
+    Enum(Named),
     Int,
     Float,
     Bool,
@@ -15,6 +19,15 @@ pub enum Type {
     /// A dict's key and value types.
     Dict(Box<Type>, Box<Type>),
     Union(Vec<Type>),
+}
+
+/// A declared class or enum: the name diagnostics give it, which is
+/// qualified by its module outside the entry module, and its symbol
+/// `W.<module>.<Name>`, which its descriptor and methods extend.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct Named {
+    pub display: String,
+    pub symbol: String,
 }
 
 impl Type {
@@ -57,12 +70,13 @@ impl Type {
         })
     }
 
-    /// Whether `==` applies: a scalar, or a union of scalars.
+    /// Whether `==` applies and the value is printable: a scalar, or a
+    /// union of scalars.
     pub fn is_comparable(&self) -> bool {
         self.members().iter().all(|m| {
             matches!(
                 m,
-                Type::Int | Type::Float | Type::Bool | Type::Str | Type::None
+                Type::Int | Type::Float | Type::Bool | Type::Str | Type::None | Type::Enum(_)
             )
         })
     }
@@ -99,12 +113,25 @@ impl Type {
 
     /// The descriptor of a scalar that a union holds in a box; `str` is
     /// already an object and `None` is 0.
-    pub fn box_descriptor(&self) -> Option<&'static str> {
+    pub fn box_descriptor(&self) -> Option<String> {
         match self {
-            Type::Int => Some("W.int.type"),
-            Type::Float => Some("W.float.type"),
-            Type::Bool => Some("W.bool.type"),
+            Type::Int | Type::Float | Type::Bool | Type::Enum(_) => Some(self.descriptor()),
             _ => None,
+        }
+    }
+
+    /// The symbol of the descriptor in the header of this type's objects and
+    /// boxes, for a type that is not a union or None.
+    pub fn descriptor(&self) -> String {
+        match self {
+            Type::Int => "W.int.type".into(),
+            Type::Float => "W.float.type".into(),
+            Type::Bool => "W.bool.type".into(),
+            Type::Str => "W.str.type".into(),
+            Type::List(_) => "W.list.type".into(),
+            Type::Dict(..) => "W.dict.type".into(),
+            Type::Class(named) | Type::Enum(named) => format!("{}.type", named.symbol),
+            _ => unreachable!("{} has no descriptor", self.name()),
         }
     }
 
@@ -119,6 +146,7 @@ impl Type {
             Type::Word => "word".into(),
             Type::List(element) => format!("list[{}]", element.name()),
             Type::Dict(key, value) => format!("dict[{}, {}]", key.name(), value.name()),
+            Type::Class(named) | Type::Enum(named) => named.display.clone(),
             Type::Union(members) => {
                 let names: Vec<String> = members.iter().map(Type::name).collect();
                 names.join(" | ")

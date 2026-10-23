@@ -8,11 +8,44 @@ pub struct Module {
     pub path: String,
     pub imports: Vec<Import>,
     pub funcs: Vec<Func>,
+    pub classes: Vec<Class>,
+    pub enums: Vec<Enum>,
+    pub aliases: Vec<Alias>,
 }
 
 pub struct Import {
     pub pos: Pos,
+    /// The module's full name, as in `app.util`.
     pub name: String,
+}
+
+pub struct Class {
+    pub pos: Pos,
+    pub name: String,
+    pub fields: Vec<Field>,
+    /// The methods, whose `params` leave out `self`.
+    pub methods: Vec<Func>,
+}
+
+pub struct Field {
+    pub pos: Pos,
+    pub name: String,
+    pub ty: TypeExpr,
+    /// A literal default.
+    pub default: Option<Expr>,
+}
+
+pub struct Enum {
+    pub pos: Pos,
+    pub name: String,
+    pub members: Vec<(Pos, String)>,
+}
+
+/// `type name = ty`.
+pub struct Alias {
+    pub pos: Pos,
+    pub name: String,
+    pub ty: TypeExpr,
 }
 
 /// A `def`, or an `extern def` when `body` is `None`.
@@ -33,6 +66,7 @@ pub struct Param {
 
 pub struct TypeName {
     pub pos: Pos,
+    /// The name, qualified with a module name as in `app.util.Item`.
     pub name: String,
     /// The arguments of a generic type, as in `list[int]`.
     pub args: Vec<TypeExpr>,
@@ -70,6 +104,13 @@ pub enum StmtKind {
         targets: Vec<String>,
         iterable: Expr,
         body: Vec<Stmt>,
+    },
+    /// `object.name = value`.
+    SetField {
+        object: Expr,
+        name_pos: Pos,
+        name: String,
+        value: Expr,
     },
     /// `object[index] = value`, with the position of `[`.
     SetIndex {
@@ -136,23 +177,44 @@ pub fn parse(name: &str, path: &str, tokens: Vec<Token>) -> Result<Module, Diag>
     let mut p = Parser { path, tokens, i: 0 };
     let mut imports = Vec::new();
     while p.accept("import") {
-        let (pos, name) = p.name()?;
+        let (pos, mut name) = p.name()?;
+        while p.accept(".") {
+            name = format!("{name}.{}", p.name()?.1);
+        }
         p.end_of_line()?;
         imports.push(Import { pos, name });
     }
-    let mut funcs = Vec::new();
+    let mut module = Module {
+        name: name.to_string(),
+        path: path.to_string(),
+        imports,
+        funcs: Vec::new(),
+        classes: Vec::new(),
+        enums: Vec::new(),
+        aliases: Vec::new(),
+    };
     while p.peek() != &Kind::Eof {
         if p.peek() == &Kind::Word("import") {
             return p.fail(p.pos(), "imports must come before declarations");
         }
-        funcs.push(p.declaration()?);
+        if p.accept("class") {
+            module.classes.push(p.class()?);
+        } else if p.accept("enum") {
+            module.enums.push(p.enumeration()?);
+        } else if p.accept("type") {
+            let (pos, name) = p.name()?;
+            if p.peek() == &Kind::Word("[") {
+                return p.fail(p.pos(), "type parameters are not supported");
+            }
+            p.expect("=")?;
+            let ty = p.type_expr()?;
+            p.end_of_line()?;
+            module.aliases.push(Alias { pos, name, ty });
+        } else {
+            module.funcs.push(p.declaration(false)?);
+        }
     }
-    Ok(Module {
-        name: name.to_string(),
-        path: path.to_string(),
-        imports,
-        funcs,
-    })
+    Ok(module)
 }
 
 const COMPARISONS: &[&str] = &["==", "!=", "<", "<=", ">", ">=", "in"];
@@ -225,9 +287,17 @@ impl Parser<'_> {
         }
     }
 
-    fn expect_kind(&mut self, kind: Kind, expected: &str) -> Result<(), Diag> {
+    fn accept_kind(&mut self, kind: Kind) -> bool {
         if *self.peek() == kind {
             self.i += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn expect_kind(&mut self, kind: Kind, expected: &str) -> Result<(), Diag> {
+        if self.accept_kind(kind) {
             Ok(())
         } else {
             self.unexpected(expected)
@@ -245,7 +315,104 @@ impl Parser<'_> {
         }
     }
 
-    fn declaration(&mut self) -> Result<Func, Diag> {
+    /// A class declaration after its `class`.
+    fn class(&mut self) -> Result<Class, Diag> {
+        let (pos, name) = self.name()?;
+        match self.peek() {
+            Kind::Word("(") => return self.fail(self.pos(), "base classes are not supported"),
+            Kind::Word("[") => return self.fail(self.pos(), "type parameters are not supported"),
+            _ => {}
+        }
+        self.expect(":")?;
+        self.expect_kind(Kind::Newline, "end of line")?;
+        self.expect_kind(Kind::Indent, "an indented block")?;
+        let mut fields = Vec::new();
+        let mut methods = Vec::new();
+        while !self.accept_kind(Kind::Dedent) {
+            if self.peek() == &Kind::Word("def") {
+                methods.push(self.declaration(true)?);
+                continue;
+            }
+            let is_field = matches!(self.peek(), Kind::Name(_))
+                && self.tokens[self.i + 1].kind == Kind::Word(":");
+            if !is_field {
+                return self.fail(
+                    self.pos(),
+                    "class bodies hold only field and method declarations",
+                );
+            }
+            if !methods.is_empty() {
+                return self.fail(self.pos(), "fields must come before methods");
+            }
+            let (pos, name) = self.name()?;
+            self.i += 1;
+            let ty = self.type_expr()?;
+            let default = if self.accept("=") {
+                Some(self.literal()?)
+            } else {
+                None
+            };
+            self.end_of_line()?;
+            fields.push(Field {
+                pos,
+                name,
+                ty,
+                default,
+            });
+        }
+        Ok(Class {
+            pos,
+            name,
+            fields,
+            methods,
+        })
+    }
+
+    /// A literal default: None, True, False, a string, or a number with an
+    /// optional sign.
+    fn literal(&mut self) -> Result<Expr, Diag> {
+        let pos = self.pos();
+        let sign = self.binary_op(&["-", "+"]).map(|(op, _)| op);
+        let kind = match (self.peek().clone(), sign) {
+            (Kind::Int(n), _) => ExprKind::Int(n),
+            (Kind::Float(x), _) => ExprKind::Float(x),
+            (Kind::Str(text), None) => ExprKind::Str(text),
+            (Kind::Word("None"), None) => ExprKind::None,
+            (Kind::Word("True"), None) => ExprKind::Bool(true),
+            (Kind::Word("False"), None) => ExprKind::Bool(false),
+            _ => return self.fail(self.pos(), "a default must be a literal"),
+        };
+        let value_pos = self.advance().pos;
+        let value = Expr {
+            pos: value_pos,
+            kind,
+        };
+        Ok(match sign {
+            Some(op) => Expr {
+                pos,
+                kind: ExprKind::Unary(op, Box::new(value)),
+            },
+            None => value,
+        })
+    }
+
+    /// An enum declaration after its `enum`.
+    fn enumeration(&mut self) -> Result<Enum, Diag> {
+        let (pos, name) = self.name()?;
+        self.expect(":")?;
+        self.expect_kind(Kind::Newline, "end of line")?;
+        self.expect_kind(Kind::Indent, "an indented block")?;
+        let mut members = Vec::new();
+        while !self.accept_kind(Kind::Dedent) {
+            members.push(self.name()?);
+            self.end_of_line()?;
+        }
+        Ok(Enum { pos, name, members })
+    }
+
+    /// A function, an `extern def`, or a method when `method`, whose first
+    /// parameter must be an unannotated `self`.
+    fn declaration(&mut self, method: bool) -> Result<Func, Diag> {
         let external = matches!(self.peek(), Kind::Name(n) if n == "extern")
             && matches!(self.tokens[self.i + 1].kind, Kind::Word("def"));
         if external {
@@ -256,12 +423,27 @@ impl Parser<'_> {
             }
             return self.fail(
                 self.pos(),
-                "only function declarations are allowed at file scope",
+                "only function, class, enum, and type declarations are allowed at file scope",
             );
         }
         self.i += 1;
         let (pos, name) = self.name()?;
         self.expect("(")?;
+        if method {
+            if !matches!(self.peek(), Kind::Name(n) if n == "self") {
+                return self.fail(
+                    self.pos(),
+                    format!("method '{name}' must take 'self' as its first parameter"),
+                );
+            }
+            self.i += 1;
+            if self.peek() == &Kind::Word(":") {
+                return self.fail(self.pos(), "'self' cannot have an annotation");
+            }
+            if !self.accept(",") && self.peek() != &Kind::Word(")") {
+                return self.unexpected("',' or ')'");
+            }
+        }
         let mut params = Vec::new();
         let mut variadic = false;
         while !self.accept(")") {
@@ -313,13 +495,19 @@ impl Parser<'_> {
     fn type_name(&mut self) -> Result<TypeName, Diag> {
         let pos = self.pos();
         let name = match self.peek().clone() {
-            Kind::Name(name) => name,
+            Kind::Name(mut name) => {
+                self.i += 1;
+                while self.accept(".") {
+                    name = format!("{name}.{}", self.name()?.1);
+                }
+                name
+            }
             Kind::Word(w @ ("int" | "float" | "bool" | "str" | "None" | "list" | "dict")) => {
+                self.i += 1;
                 w.to_string()
             }
             _ => return self.unexpected("a type"),
         };
-        self.i += 1;
         let mut args = Vec::new();
         if self.accept("[") {
             loop {
@@ -461,6 +649,12 @@ impl Parser<'_> {
                     annotation,
                     value,
                 }),
+                ExprKind::Attr(object, name_pos, name) => Ok(StmtKind::SetField {
+                    object: *object,
+                    name_pos,
+                    name,
+                    value,
+                }),
                 ExprKind::Index(object, index) => Ok(StmtKind::SetIndex {
                     bracket: expr.pos,
                     object: *object,
@@ -600,10 +794,11 @@ impl Parser<'_> {
         let mut expr = self.primary()?;
         loop {
             if self.accept(".") {
+                // An attribute is positioned at its name, as `sys.exit(1, 2)`
+                // is reported at `exit`.
                 let (name_pos, name) = self.name()?;
-                let pos = expr.pos;
                 expr = Expr {
-                    pos,
+                    pos: name_pos,
                     kind: ExprKind::Attr(Box::new(expr), name_pos, name),
                 };
                 continue;

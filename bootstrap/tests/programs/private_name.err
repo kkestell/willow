@@ -1,0 +1,1 @@
+private_name.wlo:4:24: error: '_scale' is private to module 'lib.geometry'

@@ -1,0 +1,1 @@
+enum_member.wlo:6:17: error: enum 'Color' has no member 'BLUE'

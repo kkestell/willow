@@ -1,0 +1,29 @@
+class Circle:
+    radius: float
+
+class Square:
+    side: float
+
+type Shape = Circle | Square
+type Shapes = list[Shape]
+type MaybeShape = Shape | None
+
+def area(shape: Shape) -> float:
+    if isinstance(shape, Circle):
+        return 3.0 * shape.radius * shape.radius
+    return shape.side * shape.side
+
+def total(shapes: Shapes) -> float:
+    result = 0.0
+    for shape in shapes:
+        result = result + area(shape)
+    return result
+
+def main():
+    shapes: Shapes = [Circle(1.0), Square(2.0)]
+    print(total(shapes))
+    found: MaybeShape = None
+    print(found is None)
+    found = shapes[1]
+    if found is not None:
+        print(area(found))
