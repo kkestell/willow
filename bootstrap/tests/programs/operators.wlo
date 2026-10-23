@@ -1,0 +1,27 @@
+def noisy(label: str, value: bool) -> bool:
+    print(label)
+    return value
+
+def main():
+    print(7 // 2)
+    print(7 % 2)
+    print(7 // -2)
+    print(7 % -2)
+    print(-7 // 2)
+    print(-7 % 2)
+    print(-7 // -2)
+    print(-7 % -2)
+    print(0 // 5)
+    print(-6 % 3)
+    print(9223372036854775807 // -1)
+    print(17 - 17 // 5 * 5 == 17 % 5)
+    print(True and False)
+    print(True or False)
+    print(not True)
+    print(not 1 == 2)
+    print(False or True and False)
+    print(not False and not False)
+    print(noisy("left", False) and noisy("right", True))
+    print(noisy("left", True) or noisy("right", True))
+    print(noisy("left", True) and noisy("right", False))
+    print(noisy("left", False) or noisy("right", True))

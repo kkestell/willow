@@ -12,6 +12,8 @@ pub fn emit(program: &Program) -> String {
             temps: 0,
             labels: 0,
             ended: false,
+            block: String::new(),
+            loops: Vec::new(),
         };
         emitter.function(func);
     }
@@ -77,6 +79,10 @@ struct Emitter<'a> {
     labels: u32,
     /// Whether the current block has ended with a jump or return.
     ended: bool,
+    /// The label of the current block, for `phi`.
+    block: String,
+    /// The `continue` and `break` targets of the enclosing loops.
+    loops: Vec<(String, String)>,
 }
 
 impl Emitter<'_> {
@@ -97,6 +103,7 @@ impl Emitter<'_> {
     fn label(&mut self, label: &str) {
         writeln!(self.out, "{label}").unwrap();
         self.ended = false;
+        self.block = label.to_string();
     }
 
     /// Writes a jump or return, unless the block has already ended; a
@@ -168,9 +175,19 @@ impl Emitter<'_> {
                 let c = self.value(cond);
                 self.jump(format!("jnz {c}, {body_label}, {end}"));
                 self.label(&body_label);
+                self.loops.push((test.clone(), end.clone()));
                 self.ops(body);
+                self.loops.pop();
                 self.jump(format!("jmp {test}"));
                 self.label(&end);
+            }
+            Op::Break => {
+                let target = self.loops.last().unwrap().1.clone();
+                self.jump(format!("jmp {target}"));
+            }
+            Op::Continue => {
+                let target = self.loops.last().unwrap().0.clone();
+                self.jump(format!("jmp {target}"));
             }
             Op::Return(value) => {
                 let text = match value {
@@ -233,6 +250,58 @@ impl Emitter<'_> {
                 let d = self.temp();
                 self.line(format!("{d} =d neg {v}"));
                 self.float_bits(&d)
+            }
+            Value::Logic { and, left, right } => {
+                // The left operand decides when it is false for `and` and
+                // true for `or`, and is then the result.
+                let l = self.value(left);
+                let left_block = self.block.clone();
+                let (rhs, end) = (self.new_label(), self.new_label());
+                if *and {
+                    self.jump(format!("jnz {l}, {rhs}, {end}"));
+                } else {
+                    self.jump(format!("jnz {l}, {end}, {rhs}"));
+                }
+                self.label(&rhs);
+                let r = self.value(right);
+                let right_block = self.block.clone();
+                self.jump(format!("jmp {end}"));
+                self.label(&end);
+                let t = self.temp();
+                self.line(format!("{t} =l phi {left_block} {l}, {right_block} {r}"));
+                t
+            }
+            Value::FloorDivide {
+                modulo,
+                left,
+                right,
+                fail,
+            } => {
+                let l = self.value(left);
+                let r = self.value(right);
+                let zero = self.temp();
+                self.line(format!("{zero} =l ceql {r}, 0"));
+                self.guard(&zero, fail);
+                // QBE truncates; a nonzero remainder whose sign differs from
+                // the divisor's moves the quotient down one and the remainder
+                // up by the divisor. The range is symmetric, so the quotient
+                // cannot overflow.
+                let [q, m, signs, differ, nonzero, adjust] = [(); 6].map(|_| self.temp());
+                self.line(format!("{q} =l div {l}, {r}"));
+                self.line(format!("{m} =l rem {l}, {r}"));
+                self.line(format!("{signs} =l xor {m}, {r}"));
+                self.line(format!("{differ} =l csltl {signs}, 0"));
+                self.line(format!("{nonzero} =l cnel {m}, 0"));
+                self.line(format!("{adjust} =l and {differ}, {nonzero}"));
+                let t = self.temp();
+                if *modulo {
+                    let step = self.temp();
+                    self.line(format!("{step} =l mul {r}, {adjust}"));
+                    self.line(format!("{t} =l add {m}, {step}"));
+                } else {
+                    self.line(format!("{t} =l sub {q}, {adjust}"));
+                }
+                t
             }
             Value::Divide {
                 ints,
