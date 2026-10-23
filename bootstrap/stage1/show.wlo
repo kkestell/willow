@@ -4,6 +4,7 @@
 # followed by @line:col.
 
 import ast
+import types
 
 class Printer:
     positions: bool
@@ -135,16 +136,20 @@ class Printer:
             parts.append(self.at(keyword.name, keyword.line, keyword.col) + "=" + self.expr(keyword.value))
         return ", ".join(parts)
 
-    def type_args(self, types: list[ast.TypeExpr]) -> str:
+    def type_args(self, args: list[ast.TypeExpr]) -> str:
         parts: list[str] = []
-        for t in types:
+        for t in args:
             parts.append(self.annotation(t))
         return ", ".join(parts)
 
-    def type_arg_list(self, types: list[ast.TypeExpr]) -> str:
-        if len(types) == 0:
+    # The resolved type arguments of a generic call or function value.
+    def type_arg_list(self, args: list[types.Type]) -> str:
+        if len(args) == 0:
             return ""
-        return "[" + self.type_args(types) + "]"
+        names: list[str] = []
+        for arg in args:
+            names.append(types.display(arg))
+        return "[" + ", ".join(names) + "]"
 
     def expr(self, expr: ast.Expr) -> str:
         return self.at(self.expr_node(expr.node), expr.line, expr.col)
@@ -168,6 +173,8 @@ class Printer:
             return node.name
         if isinstance(node, ast.FunctionValue):
             return node.target.name + self.type_arg_list(node.type_args)
+        if isinstance(node, ast.BuiltinValue):
+            return node.name
         if isinstance(node, ast.EnumMember):
             return node.decl.name + "." + node.name
         if isinstance(node, ast.Call):
