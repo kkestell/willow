@@ -310,6 +310,14 @@ fn host_tables() -> HashMap<&'static str, HashMap<String, Sig>> {
             "write_file".to_string(),
             sig(vec![Type::Str, Type::Str], Type::None, "fs_write_file"),
         ),
+        (
+            "exists".to_string(),
+            sig(vec![Type::Str], Type::Bool, "fs_exists"),
+        ),
+        (
+            "realpath".to_string(),
+            sig(vec![Type::Str], Type::Str, "fs_realpath"),
+        ),
     ]);
     HashMap::from([("sys", sys), ("fs", fs)])
 }
