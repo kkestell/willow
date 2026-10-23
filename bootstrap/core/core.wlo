@@ -16,6 +16,16 @@ extern def close(fd: cint) -> cint
 extern def strerror(code: cint) -> ptr
 extern def access(path: ptr, mode: cint) -> cint
 extern def realpath(path: ptr, resolved: ptr) -> ptr
+extern def posix_spawnp(pid: ptr, file: ptr, actions: ptr, attributes: ptr, argv: ptr, envp: ptr) -> cint
+extern def posix_spawnattr_init(attributes: ptr) -> cint
+extern def posix_spawnattr_destroy(attributes: ptr) -> cint
+extern def posix_spawnattr_setflags(attributes: ptr, flags: cint) -> cint
+extern def posix_spawnattr_setsigdefault(attributes: ptr, signals: ptr) -> cint
+extern def sigemptyset(signals: ptr) -> cint
+extern def sigaddset(signals: ptr, sig: cint) -> cint
+extern def waitpid(pid: cint, status: ptr, options: cint) -> cint
+extern def dlsym(handle: ptr, name: ptr) -> ptr
+extern def _NSGetEnviron() -> ptr
 extern def __errno_location() -> ptr
 extern def __error() -> ptr
 extern def strtod(s: ptr, end: ptr) -> float
@@ -716,6 +726,59 @@ def fs_realpath(path: str) -> str:
     if __addr_is_null(realpath(path_bytes(path), buf)):
         fail_os("resolve", path)
     return str_from_bytes(buf, strlen(buf))
+
+# The process's environment, a C array of strings. L0 cannot name the C
+# variable environ, so Darwin's accessor function or, on Linux, dlsym with
+# RTLD_DEFAULT, 0, finds it. glibc has dlsym in libc itself since 2.34.
+def environment() -> ptr:
+    if __os == "darwin":
+        return __ptr(__load8(_NSGetEnviron(), 0))
+    else:
+        return __ptr(__load8(dlsym(__ptr(__word(0)), str_bytes("environ")), 0))
+
+# Runs args[0], found in PATH, with the remaining arguments, without a shell,
+# and returns its exit status, or 128 plus the signal number if a signal ended
+# it. The child inherits stdin, stdout, stderr, and the environment.
+def run(args: list[str]) -> int:
+    if len(args) == 0 or args[0] == "":
+        fail("ValueError", "args must contain a nonempty executable name")
+    argv = __alloc((len(args) + 1) * 8)
+    i = 0
+    for arg in args:
+        if strlen(str_bytes(arg)) != str_size(arg):
+            fail("ValueError", "argument contains a NUL character")
+        __store8(argv, i * 8, __word(str_bytes(arg)))
+        i = i + 1
+    __store8(argv, i * 8, __word(0))
+    # posix_spawnattr_t is 336 bytes in glibc and a pointer on Darwin, and
+    # sigset_t 128 bytes and 4. init ignores SIGPIPE, which a child would
+    # inherit, so the child gets SIGPIPE's default action back through
+    # POSIX_SPAWN_SETSIGDEF, 4. SIGPIPE is 13 on both systems.
+    attributes = __alloc_atomic(512)
+    signals = __alloc_atomic(128)
+    posix_spawnattr_init(attributes)
+    sigemptyset(signals)
+    sigaddset(signals, 13)
+    posix_spawnattr_setsigdefault(attributes, signals)
+    posix_spawnattr_setflags(attributes, 4)
+    pid = __alloc_atomic(8)
+    code = posix_spawnp(pid, str_bytes(args[0]), __ptr(__word(0)), attributes, argv, environment())
+    posix_spawnattr_destroy(attributes)
+    if code != 0:
+        reason = strerror(code)
+        fail("OSError", "cannot run " + args[0] + ": " + str_from_bytes(reason, strlen(reason)))
+    status = __alloc_atomic(8)
+    # EINTR is 4 on both systems.
+    while waitpid(__load4(pid, 0), status, 0) < 0:
+        if errno() != 4:
+            fail_os("wait for", args[0])
+    # The low 7 bits of a wait status are 0 for a normal exit, whose code is
+    # the next 8 bits, and otherwise the signal number; without WUNTRACED no
+    # child is reported as stopped.
+    value = __load4(status, 0)
+    if value % 128 == 0:
+        return value // 256 % 256
+    return 128 + value % 128
 
 # An optional sign and one or more decimal digits (spec §6). The magnitude is
 # checked before each step so it never leaves the int range, which is

@@ -1,0 +1,2 @@
+from the child
+error: OSError: cannot run willow-no-such-program: No such file or directory
