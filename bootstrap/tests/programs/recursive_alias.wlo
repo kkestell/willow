@@ -1,0 +1,5 @@
+# Spec §3 allows this, but stage 0's types cannot represent it.
+type Tree = int | list[Tree]
+
+def main():
+    pass
