@@ -8,6 +8,8 @@ pub enum Kind {
     Int(i64),
     Float(f64),
     Str(String),
+    /// An f-string's literal text and fields, in order, without empty text.
+    FStr(Vec<FPart>),
     /// A reserved word or an operator.
     Word(&'static str),
     Newline,
@@ -16,7 +18,15 @@ pub enum Kind {
     Eof,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+pub enum FPart {
+    Text(String),
+    /// The tokens of a field's expression, followed by its `}` and an end of
+    /// file.
+    Field(Vec<Token>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Token {
     pub kind: Kind,
     pub pos: Pos,
@@ -234,28 +244,35 @@ impl Lexer<'_> {
         }
     }
 
-    /// Tokenizes up to and including the end of the current line.
+    /// Tokenizes up to and including the end of the current line, which a
+    /// triple-quoted string may move to a later line.
     fn lex_line(&mut self) -> Result<(), Diag> {
         loop {
             let i = self.i;
             let Some(c) = self.peek(i) else { return Ok(()) };
-            match c {
-                ' ' => self.i += 1,
-                '\t' => return self.fail(i, TABS),
-                '#' => self.skip_comment(),
-                '\r' | '\n' => {
-                    if self.depth == 0 {
-                        self.add(Kind::Newline, i);
-                    }
-                    self.end_line();
-                    return Ok(());
+            if c == '\r' || c == '\n' {
+                if self.depth == 0 {
+                    self.add(Kind::Newline, i);
                 }
-                '\'' | '"' => self.lex_string()?,
-                '0'..='9' => self.lex_number()?,
-                c if c.is_ascii_alphabetic() || c == '_' => self.lex_word()?,
-                _ => self.lex_operator()?,
+                self.end_line();
+                return Ok(());
             }
+            self.lex_token(c)?;
         }
+    }
+
+    /// Reads the token, space, or comment that starts with `c` at `self.i`.
+    fn lex_token(&mut self, c: char) -> Result<(), Diag> {
+        match c {
+            ' ' => self.i += 1,
+            '\t' => return self.fail(self.i, TABS),
+            '#' => self.skip_comment(),
+            '\'' | '"' => self.lex_string(false)?,
+            '0'..='9' => self.lex_number()?,
+            c if c.is_ascii_alphabetic() || c == '_' => self.lex_word()?,
+            _ => self.lex_operator()?,
+        }
+        Ok(())
     }
 
     fn lex_word(&mut self) -> Result<(), Diag> {
@@ -265,7 +282,7 @@ impl Lexer<'_> {
         }
         let word: String = self.chars[start..self.i].iter().collect();
         if word == "f" && matches!(self.peek(self.i), Some('\'' | '"')) {
-            return self.fail(start, "f-strings are not supported");
+            return self.lex_string(true);
         }
         let kind = match RESERVED.iter().find(|&&r| r == word) {
             Some(r) => Kind::Word(r),
@@ -333,36 +350,159 @@ impl Lexer<'_> {
         i
     }
 
-    fn lex_string(&mut self) -> Result<(), Diag> {
+    /// Reads the string, or the f-string when `formatted`, whose opening
+    /// quote is at `self.i`.
+    fn lex_string(&mut self, formatted: bool) -> Result<(), Diag> {
         let start = self.i;
+        let opening = self.pos_at(if formatted { start - 1 } else { start });
         let quote = self.chars[start];
-        if self.peek(start + 1) == Some(quote) && self.peek(start + 2) == Some(quote) {
-            return self.fail(start, "triple-quoted strings are not supported");
-        }
+        let triple = self.peek(start + 1) == Some(quote) && self.peek(start + 2) == Some(quote);
+        let width = if triple { 3 } else { 1 };
+        let mut parts = Vec::new();
         let mut text = String::new();
-        self.i += 1;
+        self.i += width;
         loop {
             let i = self.i;
+            let closing = (0..width).all(|k| self.peek(i + k) == Some(quote));
             match self.peek(i) {
-                None | Some('\n' | '\r') => return self.fail(start, "unterminated string literal"),
-                Some(c) if c == quote => break,
-                Some('\\') => text.push(self.lex_escape(start)?),
+                None => return Err(Diag::new(self.path, opening, "unterminated string literal")),
+                Some('\n' | '\r') if !triple => {
+                    return Err(Diag::new(self.path, opening, "unterminated string literal"))
+                }
+                Some(_) if closing => break,
+                Some('\r') => self.i += 1,
+                Some('\n') => {
+                    text.push('\n');
+                    self.i += 1;
+                    self.line += 1;
+                    self.line_start = self.i;
+                }
+                Some('\\') => text.push(self.lex_escape(opening, triple)?),
+                Some('{') if formatted && self.peek(i + 1) != Some('{') => {
+                    if !text.is_empty() {
+                        parts.push(FPart::Text(std::mem::take(&mut text)));
+                    }
+                    let field = self.lex_field(quote, triple)?;
+                    parts.push(FPart::Field(field));
+                }
+                Some(c @ ('{' | '}')) if formatted => {
+                    if self.peek(i + 1) != Some(c) {
+                        return self.fail(i, "single '}' is not allowed in an f-string");
+                    }
+                    text.push(c);
+                    self.i += 2;
+                }
                 Some(c) => {
                     text.push(c);
                     self.i += 1;
                 }
             }
         }
-        self.i += 1;
-        self.add(Kind::Str(text), start);
+        self.i += width;
+        let kind = if formatted {
+            if !text.is_empty() {
+                parts.push(FPart::Text(text));
+            }
+            Kind::FStr(parts)
+        } else {
+            Kind::Str(text)
+        };
+        self.tokens.push(Token { kind, pos: opening });
         Ok(())
     }
 
-    /// Reads the escape sequence at `i` in the string opened at `start`.
-    fn lex_escape(&mut self, start: usize) -> Result<char, Diag> {
+    /// Reads the field whose `{` is at `self.i`, in an f-string delimited by
+    /// `quote`, and returns its tokens.
+    fn lex_field(&mut self, quote: char, triple: bool) -> Result<Vec<Token>, Diag> {
+        let open = self.i;
+        let (line, line_start) = (self.line, self.line_start);
+        let unterminated = Diag::new(self.path, self.pos_at(open), "unterminated f-string field");
+        // Find the closing `}` first; the scan advances lines for its
+        // diagnostics, and lexing the field advances them again.
+        let mut nesting = 0;
+        let mut i = open + 1;
+        loop {
+            let Some(c) = self.peek(i) else { return Err(unterminated) };
+            match c {
+                '\n' if triple => {
+                    self.line += 1;
+                    self.line_start = i + 1;
+                }
+                '\n' | '\r' if !triple => return Err(unterminated),
+                '\\' => return self.fail(i, "f-string fields cannot contain a backslash"),
+                '#' => return self.fail(i, "f-string fields cannot contain '#'"),
+                c if c == quote => {
+                    return self.fail(
+                        i,
+                        "f-string fields cannot contain the f-string's quote character",
+                    )
+                }
+                '\'' | '"' => {
+                    // A string in the other quote character may hold braces.
+                    let mut close = i + 1;
+                    while !matches!(self.peek(close), None | Some('\n' | '\r'))
+                        && self.chars[close] != c
+                    {
+                        close += 1;
+                    }
+                    if self.peek(close) != Some(c) {
+                        return self.fail(i, "unterminated string literal");
+                    }
+                    let bad = (i + 1..close).find(|&j| {
+                        matches!(self.chars[j], '\\' | '#') || self.chars[j] == quote
+                    });
+                    if let Some(j) = bad {
+                        let message = format!("f-string fields cannot contain '{}'", self.chars[j]);
+                        return self.fail(j, message);
+                    }
+                    i = close;
+                }
+                '(' | '[' | '{' => nesting += 1,
+                ')' | ']' => nesting -= 1,
+                '}' if nesting == 0 => break,
+                '}' => nesting -= 1,
+                ':' if nesting == 0 => {
+                    return self.fail(i, "format specifications are not supported")
+                }
+                '!' if nesting == 0 && self.peek(i + 1) != Some('=') => {
+                    return self.fail(i, "conversions are not supported")
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        let stop = i;
+        self.line = line;
+        self.line_start = line_start;
+        if self.chars[open + 1..stop].iter().all(|&c| matches!(c, ' ' | '\r' | '\n')) {
+            return self.fail(open, "empty f-string field");
+        }
+        let outer = std::mem::take(&mut self.tokens);
+        // Newlines inside a field do not end a statement.
+        let depth = std::mem::replace(&mut self.depth, 1);
+        self.i = open + 1;
+        while self.i < stop {
+            match self.chars[self.i] {
+                '\r' | '\n' => self.end_line(),
+                c => self.lex_token(c)?,
+            }
+        }
+        self.add(Kind::Word("}"), stop);
+        self.add(Kind::Eof, stop);
+        self.depth = depth;
+        self.i = stop + 1;
+        Ok(std::mem::replace(&mut self.tokens, outer))
+    }
+
+    /// Reads the escape sequence at `self.i` in the string opened at
+    /// `opening`, which is triple-quoted when `triple`.
+    fn lex_escape(&mut self, opening: Pos, triple: bool) -> Result<char, Diag> {
         let at = self.i;
         let escaped = match self.peek(at + 1) {
-            None | Some('\n' | '\r') => return self.fail(start, "unterminated string literal"),
+            Some('\n' | '\r') if !triple => {
+                return Err(Diag::new(self.path, opening, "unterminated string literal"))
+            }
+            None => return Err(Diag::new(self.path, opening, "unterminated string literal")),
             Some(c) => c,
         };
         let simple = match escaped {

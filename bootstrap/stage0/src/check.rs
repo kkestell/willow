@@ -1383,6 +1383,23 @@ impl Checker<'_> {
                 ))
             }
             ExprKind::Str(text) => Ok((self.strings.intern(text), Type::Str)),
+            ExprKind::FStr(parts) => {
+                let mut text = None;
+                for part in parts {
+                    let (value, ty) = self.expr(part, state)?;
+                    let Some(value) = self.to_str(value, &ty) else {
+                        return self.fail(
+                            part.pos,
+                            format!("cannot format a value of type {}", ty.name()),
+                        );
+                    };
+                    text = Some(match text {
+                        None => value,
+                        Some(text) => core_call("str_concat", vec![text, value], true),
+                    });
+                }
+                Ok((text.unwrap_or_else(|| self.strings.intern("")), Type::Str))
+            }
             ExprKind::Name(name) => {
                 if let Some(declared) = self.locals.get(name) {
                     let (Some(declared), Some(current)) = (declared, state.get(name)) else {
