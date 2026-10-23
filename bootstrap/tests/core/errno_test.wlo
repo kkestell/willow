@@ -1,0 +1,12 @@
+import core
+
+# ENOENT and ENOTDIR have the same numbers and strerror text on Linux and
+# Darwin. The runner runs this test from its own directory, so this file's
+# name is a path to a regular file.
+def main():
+    assert core.open(core.str_bytes("no-such-file"), 0) < 0
+    assert core.errno() == 2
+    assert core.os_reason() == "No such file or directory"
+    assert core.open(core.str_bytes("errno_test.wlo/x"), 0) < 0
+    assert core.errno() == 20
+    assert core.os_reason() == "Not a directory"
