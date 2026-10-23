@@ -240,7 +240,7 @@ impl Parser<'_> {
         let pos = self.pos();
         let name = match self.peek().clone() {
             Kind::Name(name) => name,
-            Kind::Word(w @ ("int" | "bool" | "str" | "None")) => w.to_string(),
+            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "None")) => w.to_string(),
             _ => return self.unexpected("a type"),
         };
         self.i += 1;

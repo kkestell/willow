@@ -194,6 +194,14 @@ impl Emitter<'_> {
                 self.line(format!("{t} =l {instr} {l}, {r}"));
                 t
             }
+            Value::FloatToInt(value) => {
+                let v = self.value(value);
+                let d = self.temp();
+                self.line(format!("{d} =d cast {v}"));
+                let t = self.temp();
+                self.line(format!("{t} =l dtosi {d}"));
+                t
+            }
             Value::Load(instr, ptr, offset) => {
                 let address = self.address(ptr, offset);
                 let t = self.temp();
@@ -223,7 +231,14 @@ impl Emitter<'_> {
             if call.variadic_at == Some(i) {
                 args.push("...".to_string());
             }
-            args.push(format!("{ty} {}", self.value(arg)));
+            let mut v = self.value(arg);
+            if *ty == "d" {
+                // Floats travel as their bits in `l` slots.
+                let d = self.temp();
+                self.line(format!("{d} =d cast {v}"));
+                v = d;
+            }
+            args.push(format!("{ty} {v}"));
         }
         if call.variadic_at == Some(call.args.len()) {
             args.push("...".to_string());
@@ -234,12 +249,14 @@ impl Emitter<'_> {
                 self.line(text);
                 "0".into()
             }
-            Some("w") => {
-                // A C int result is sign-extended to fill its slot.
-                let w = self.temp();
-                self.line(format!("{w} =w {text}"));
+            Some(ty @ ("w" | "d")) => {
+                // A C int result is sign-extended to fill its slot, and a
+                // float result becomes its bits.
+                let r = self.temp();
+                self.line(format!("{r} ={ty} {text}"));
                 let t = self.temp();
-                self.line(format!("{t} =l extsw {w}"));
+                let convert = if ty == "w" { "extsw" } else { "cast" };
+                self.line(format!("{t} =l {convert} {r}"));
                 t
             }
             Some(ty) => {
