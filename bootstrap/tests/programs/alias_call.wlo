@@ -1,0 +1,4 @@
+type Count = int
+
+def main():
+    print(Count(3))
