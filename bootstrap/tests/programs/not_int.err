@@ -1,0 +1,1 @@
+not_int.wlo:2:11: error: operator 'not' cannot be applied to int
