@@ -72,6 +72,7 @@ check_driver() {
 
 check_test lexer_test
 check_test parser_test
+check_test types_test
 check_driver parse_files
 
 exit $failed

@@ -1,0 +1,878 @@
+# The types of the full language as the binder and checker see them, the
+# counterpart of compiler/types.lua.
+#
+# A type is one of the classes in `Type`. Declared classes, protocols, enums,
+# and functions appear in types through the records Class, Protocol, Enum,
+# and Function, which the binder creates when it declares a name and fills in
+# as it resolves the declaration. Types compare those records by type_name,
+# which is unique in a program, and compare a type parameter by its owner's
+# type_name and its own name, so two objects for the same declaration are
+# the same type. L0 has no module variables, so `prim` makes a scalar type
+# whenever one is needed; scalars compare by name.
+
+import ast
+
+type Type = Prim | ListType | DictType | TupleType | ClassType | ProtocolType | EnumType | CallableType | FunctionType | TypeVar | UnionType | Lazy
+
+# int, float, bool, str, bytes, or None.
+class Prim:
+    name: str
+
+class ListType:
+    element: Type
+
+class DictType:
+    key: Type
+    value: Type
+
+class TupleType:
+    elements: list[Type]
+
+# A class, or with `args` a generic class's specialization. Specializations
+# compare by their arguments, so they are invariant.
+class ClassType:
+    decl: Class
+    args: list[Type]
+
+# A protocol, or with `args` a generic protocol's specialization.
+class ProtocolType:
+    decl: Protocol
+    args: list[Type]
+
+class EnumType:
+    decl: Enum
+
+# `(A, B) -> R`: a function taking exactly those positional arguments,
+# compared by structure.
+class CallableType:
+    params: list[Type]
+    result: Type
+
+# A declared function as a value, which keeps its whole call signature. A
+# `bound` method keeps its receiver, so calls skip its `self`; a generic
+# `receiver` specializes the signature and is part of the type's identity.
+class FunctionType:
+    fn: Function
+    bound: bool
+    receiver: ClassType | ProtocolType | None
+
+# A type parameter as its declaration's body sees it, with no operations
+# beyond storing, passing, and returning, and those of its bound.
+class TypeVar:
+    owner: str
+    name: str
+    bound: Type | None
+
+# A union of at least two members, none of them a union. A union that an
+# alias names is displayed by `alias`, which is empty otherwise.
+class UnionType:
+    members: list[Type]
+    alias: str
+
+# A list element or dict value inside an alias, which the binder fills in
+# once every alias is resolved, so that an alias may refer to itself there.
+# `name` is the alias's.
+class Lazy:
+    name: str
+    target: Type | None
+
+# A class, an exception class, or a standard library native type. A native
+# type has no fields, and its methods lower to helpers named after `prefix`.
+class Class:
+    name: str
+    type_name: str
+    typevars: list[TypeVar]
+    fields: list[Field]
+    methods: list[Function]
+    exception: bool
+    native: bool
+    prefix: str
+
+class Field:
+    name: str
+    ty: Type
+    default: ast.Expr | None
+
+class Protocol:
+    name: str
+    type_name: str
+    typevars: list[TypeVar]
+    methods: list[Function]
+
+class Enum:
+    name: str
+    type_name: str
+    members: list[str]
+
+# A function or method. A method's first parameter is `self`, and its
+# type_name is the class's followed by its name.
+class Function:
+    name: str
+    type_name: str
+    typevars: list[TypeVar]
+    params: list[Param]
+    result: Type
+
+# A built-in method's parameter that has no name is positional-only.
+class Param:
+    name: str
+    ty: Type
+    default: ast.Expr | None
+    keyword_only: bool
+
+# The signature of a method of some type, after `self`, with the type's
+# arguments substituted. `generic[i]` and `result_generic` tell whether the
+# declared type of parameter `i` and of the result mention a type parameter.
+class Method:
+    params: list[Param]
+    generic: list[bool]
+    result: Type
+    result_generic: bool
+
+def prim(name: str) -> Prim:
+    return Prim(name)
+
+def union(parts: list[Type]) -> Type:
+    return named_union(parts, "")
+
+# The union of `parts`, which may be unions themselves, displayed as `alias`
+# when it is not empty; one member is returned as it is.
+def named_union(parts: list[Type], alias: str) -> Type:
+    flat: list[Type] = []
+    for part in parts:
+        flat.extend(members(part))
+    if len(flat) == 1:
+        return flat[0]
+    return UnionType(flat, alias)
+
+def optional(t: Type) -> Type:
+    return union([t, prim("None")])
+
+# A class's type as its own body sees it: specialized by its own type
+# parameters when it is generic.
+def class_self(decl: Class) -> ClassType:
+    return ClassType(decl, var_types(decl.typevars))
+
+def protocol_self(decl: Protocol) -> ProtocolType:
+    return ProtocolType(decl, var_types(decl.typevars))
+
+def var_types(vars: list[TypeVar]) -> list[Type]:
+    result: list[Type] = []
+    for v in vars:
+        result.append(v)
+    return result
+
+def var_key(v: TypeVar) -> str:
+    return v.owner + "." + v.name
+
+# The kind of `t` as compiler/types.lua names it: a scalar's name, or list,
+# dict, tuple, record, protocol, enum, callable, function, typevar, union, or
+# lazy.
+def kind(t: Type) -> str:
+    if isinstance(t, Prim):
+        return t.name
+    if isinstance(t, ListType):
+        return "list"
+    if isinstance(t, DictType):
+        return "dict"
+    if isinstance(t, TupleType):
+        return "tuple"
+    if isinstance(t, ClassType):
+        return "record"
+    if isinstance(t, ProtocolType):
+        return "protocol"
+    if isinstance(t, EnumType):
+        return "enum"
+    if isinstance(t, CallableType):
+        return "callable"
+    if isinstance(t, FunctionType):
+        return "function"
+    if isinstance(t, TypeVar):
+        return "typevar"
+    if isinstance(t, UnionType):
+        return "union"
+    return "lazy"
+
+# The text diagnostics give `t`.
+def display(t: Type) -> str:
+    if isinstance(t, Prim):
+        return t.name
+    if isinstance(t, ListType):
+        return f"list[{display(t.element)}]"
+    if isinstance(t, DictType):
+        return f"dict[{display(t.key)}, {display(t.value)}]"
+    if isinstance(t, TupleType):
+        if len(t.elements) == 0:
+            return "tuple[()]"
+        return "tuple[" + join(t.elements, ", ") + "]"
+    if isinstance(t, ClassType):
+        return specialized(t.decl.type_name, t.args)
+    if isinstance(t, ProtocolType):
+        return specialized(t.decl.type_name, t.args)
+    if isinstance(t, EnumType):
+        return t.decl.type_name
+    if isinstance(t, CallableType):
+        return "(" + join(t.params, ", ") + ") -> " + display(t.result)
+    if isinstance(t, FunctionType):
+        receiver = t.receiver
+        if t.bound and receiver is not None:
+            return "function " + display(receiver) + "." + t.fn.name
+        return "function " + t.fn.type_name
+    if isinstance(t, TypeVar):
+        return t.name
+    if isinstance(t, UnionType):
+        if t.alias != "":
+            return t.alias
+        names: list[str] = []
+        for m in t.members:
+            # A callable's result would otherwise absorb the members after it.
+            if isinstance(m, CallableType):
+                names.append("(" + display(m) + ")")
+            else:
+                names.append(display(m))
+        return " | ".join(names)
+    return t.name
+
+def join(parts: list[Type], separator: str) -> str:
+    names: list[str] = []
+    for part in parts:
+        names.append(display(part))
+    return separator.join(names)
+
+def specialized(type_name: str, args: list[Type]) -> str:
+    if len(args) == 0:
+        return type_name
+    return type_name + "[" + join(args, ", ") + "]"
+
+# The type a Lazy stands for, or `t` itself.
+def expand(t: Type) -> Type:
+    if isinstance(t, Lazy):
+        target = t.target
+        assert target is not None, f"alias {t.name} is used before it is resolved"
+        return target
+    return t
+
+def members(t: Type) -> list[Type]:
+    if isinstance(t, UnionType):
+        return t.members
+    return [t]
+
+def has(t: Type, kind_name: str) -> bool:
+    for m in members(t):
+        if kind(m) == kind_name:
+            return True
+    return False
+
+def is_optional(t: Type) -> bool:
+    return isinstance(t, UnionType) and has(t, "None")
+
+def printable(t: Type) -> bool:
+    for m in members(t):
+        if kind(m) not in ["int", "float", "bool", "str", "None", "enum"]:
+            return False
+    return True
+
+# Whether `==` applies: every member is a scalar, or a tuple whose positions
+# are comparable.
+def comparable(t: Type) -> bool:
+    for m in members(t):
+        if isinstance(m, TupleType):
+            for element in m.elements:
+                if not comparable(element):
+                    return False
+        elif kind(m) not in ["int", "float", "bool", "str", "None", "bytes", "enum"]:
+            return False
+    return True
+
+# Whether `<` and the other orderings apply: both are the same ordered scalar
+# type, or tuples of equal arity whose positions are ordered.
+def ordered(a: Type, b: Type) -> bool:
+    if isinstance(a, TupleType) and isinstance(b, TupleType):
+        if len(a.elements) == len(b.elements):
+            for i in range(len(a.elements)):
+                if not ordered(a.elements[i], b.elements[i]):
+                    return False
+            return True
+    return isinstance(a, Prim) and isinstance(b, Prim) and a.name == b.name and a.name in ["int", "float", "str"]
+
+# In a type with both int and float members, floats are boxed at run time so
+# that they differ from ints.
+def boxed(t: Type) -> bool:
+    return has(t, "int") and has(t, "float")
+
+# Dictionary keys are ints, strs, or members of one enum.
+def is_key(t: Type) -> bool:
+    return kind(t) in ["int", "str", "enum"]
+
+# Union members are matched by kind, or by declaration for classes,
+# protocols, enums, functions, and type parameters.
+def key(t: Type) -> str:
+    t = expand(t)
+    if isinstance(t, ClassType):
+        return "record " + t.decl.type_name
+    if isinstance(t, ProtocolType):
+        return "protocol " + t.decl.type_name
+    if isinstance(t, EnumType):
+        return "enum " + t.decl.type_name
+    if isinstance(t, FunctionType):
+        return "function " + t.fn.type_name
+    if isinstance(t, TypeVar):
+        return "typevar " + var_key(t)
+    return kind(t)
+
+def same(a: Type, b: Type) -> bool:
+    return same_in(a, b, [])
+
+# `assumed` holds the pairs of aliases already being compared, so recursive
+# aliases terminate.
+def same_in(a: Type, b: Type, assumed: list[str]) -> bool:
+    if isinstance(a, Lazy) and isinstance(b, Lazy):
+        pair = a.name + " = " + b.name
+        if pair in assumed:
+            return True
+        assumed.append(pair)
+    a = expand(a)
+    b = expand(b)
+    if isinstance(a, Prim):
+        return isinstance(b, Prim) and a.name == b.name
+    if isinstance(a, ListType):
+        return isinstance(b, ListType) and same_in(a.element, b.element, assumed)
+    if isinstance(a, DictType):
+        return isinstance(b, DictType) and same_in(a.key, b.key, assumed) and same_in(a.value, b.value, assumed)
+    if isinstance(a, TupleType):
+        return isinstance(b, TupleType) and all_same(a.elements, b.elements, assumed)
+    if isinstance(a, ClassType):
+        return isinstance(b, ClassType) and a.decl.type_name == b.decl.type_name and all_same(a.args, b.args, assumed)
+    if isinstance(a, ProtocolType):
+        return isinstance(b, ProtocolType) and a.decl.type_name == b.decl.type_name and all_same(a.args, b.args, assumed)
+    if isinstance(a, EnumType):
+        return isinstance(b, EnumType) and a.decl.type_name == b.decl.type_name
+    if isinstance(a, CallableType):
+        return isinstance(b, CallableType) and all_same(a.params, b.params, assumed) and same_in(a.result, b.result, assumed)
+    if isinstance(a, FunctionType):
+        if not isinstance(b, FunctionType):
+            return False
+        if a.fn.type_name != b.fn.type_name or a.bound != b.bound:
+            return False
+        ra = a.receiver
+        rb = b.receiver
+        if ra is None or rb is None:
+            return ra is None and rb is None
+        return same_in(ra, rb, assumed)
+    if isinstance(a, TypeVar):
+        return isinstance(b, TypeVar) and var_key(a) == var_key(b)
+    if isinstance(a, UnionType):
+        if not isinstance(b, UnionType) or len(a.members) != len(b.members):
+            return False
+        for m in a.members:
+            found = False
+            for n in b.members:
+                if key(m) == key(n):
+                    found = same_in(m, n, assumed)
+                    break
+            if not found:
+                return False
+        return True
+    return False
+
+def all_same(xs: list[Type], ys: list[Type], assumed: list[str]) -> bool:
+    if len(xs) != len(ys):
+        return False
+    for i in range(len(xs)):
+        if not same_in(xs[i], ys[i], assumed):
+            return False
+    return True
+
+# The substitution a specialization gives its declaration's type parameters,
+# keyed by var_key.
+def record_map(t: ClassType | ProtocolType) -> dict[str, Type]:
+    if isinstance(t, ClassType):
+        return bind_vars(t.decl.typevars, t.args)
+    return bind_vars(t.decl.typevars, t.args)
+
+def bind_vars(vars: list[TypeVar], args: list[Type]) -> dict[str, Type]:
+    bindings: dict[str, Type] = {}
+    for i in range(len(args)):
+        bindings[var_key(vars[i])] = args[i]
+    return bindings
+
+# The parameters a call through function type `t` binds.
+def function_params(t: FunctionType) -> list[Param]:
+    receiver = t.receiver
+    if receiver is not None:
+        signature = method(receiver, t.fn.name)
+        if signature is not None:
+            return signature.params
+    if t.bound:
+        return t.fn.params[1:]
+    return t.fn.params
+
+def function_result(t: FunctionType) -> Type:
+    receiver = t.receiver
+    if receiver is not None:
+        signature = method(receiver, t.fn.name)
+        if signature is not None:
+            return signature.result
+    return t.fn.result
+
+# The signature of method `name` on `t`, a class, native type, or protocol,
+# with `t`'s type arguments substituted, or None. A declared generic method
+# has no single signature, so it is left out; a native one is not, and its
+# types are not substituted. Built-in collections, strings, and bytes have
+# an `iter` method.
+def method(t: Type, name: str) -> Method | None:
+    if isinstance(t, ClassType):
+        fns = t.decl.methods
+        native = t.decl.native
+    elif isinstance(t, ProtocolType):
+        fns = t.decl.methods
+        native = False
+    else:
+        if name != "iter":
+            return None
+        item = iteration_item(t)
+        if item is None:
+            return None
+        return Method([], [], iterator(item), True)
+    bindings = record_map(t)
+    for fn in fns:
+        if fn.name == name and (native or len(fn.typevars) == 0):
+            params: list[Param] = []
+            generic: list[bool] = []
+            for param in fn.params[1:]:
+                ty = param.ty
+                if not native:
+                    ty = substitute(ty, bindings)
+                params.append(Param(param.name, ty, param.default, param.keyword_only))
+                generic.append(mentions(param.ty))
+            result = fn.result
+            if not native:
+                result = substitute(result, bindings)
+            return Method(params, generic, result, mentions(fn.result))
+    return None
+
+# The index of the parameter of method signature `have` that serves each
+# parameter of protocol method `want`, matched by position and name or, for
+# a keyword-only parameter, by name, or None when the parameters do not line
+# up. Every parameter of `have` left unmatched has a default.
+def match_params(want: Method, have: Method) -> list[int] | None:
+    indexes: list[int] = []
+    used: list[bool] = []
+    for h in have.params:
+        used.append(False)
+    for i in range(len(want.params)):
+        param = want.params[i]
+        index = -1
+        for j in range(len(have.params)):
+            if have.params[j].name == param.name:
+                index = j
+        if index < 0:
+            return None
+        h = have.params[index]
+        if not param.keyword_only and (index != i or h.keyword_only):
+            return None
+        if param.default is not None and h.default is None:
+            return None
+        indexes.append(index)
+        used[index] = True
+    for j in range(len(have.params)):
+        if not used[j] and have.params[j].default is None:
+            return None
+    return indexes
+
+def tuple_member(t: Type) -> TupleType | None:
+    for m in members(t):
+        if isinstance(m, TupleType):
+            return m
+    return None
+
+def callable_member(t: Type) -> CallableType | None:
+    for m in members(t):
+        if isinstance(m, CallableType):
+            return m
+    return None
+
+# Whether a value of `source` changes representation to serve `target`, or
+# the other way around: a float boxed or unboxed, including in tuple
+# positions, tuple items copied for a protocol, and callable parameters and
+# results.
+def converts(source: Type, target: Type) -> bool:
+    source = expand(source)
+    target = expand(target)
+    if boxed(target) != boxed(source):
+        unboxed = target
+        if boxed(target):
+            unboxed = source
+        if has(unboxed, "float"):
+            return True
+    from_tuple = tuple_member(source)
+    to_tuple = tuple_member(target)
+    if from_tuple is not None and to_tuple is not None:
+        for i in range(len(from_tuple.elements)):
+            if converts(from_tuple.elements[i], to_tuple.elements[i]):
+                return True
+    elif from_tuple is not None and has(target, "protocol") or to_tuple is not None and has(source, "protocol"):
+        # A tuple serving a protocol holds its items in the item type's
+        # representation.
+        held = from_tuple
+        if held is None:
+            held = to_tuple
+        assert held is not None
+        items_type = items(held)
+        if not isinstance(items_type, str):
+            for element in held.elements:
+                if converts(element, items_type):
+                    return True
+    from_callable = callable_member(source)
+    to_callable = callable_member(target)
+    if from_callable is not None and to_callable is not None:
+        for i in range(len(to_callable.params)):
+            if converts(to_callable.params[i], from_callable.params[i]):
+                return True
+        return converts(from_callable.result, to_callable.result)
+    return False
+
+# Whether `t` holds a float whose representation a conversion could change.
+def has_float(t: Type) -> bool:
+    t = expand(t)
+    if isinstance(t, Prim):
+        return t.name == "float"
+    parts: list[Type] = []
+    if isinstance(t, UnionType):
+        parts = t.members
+    elif isinstance(t, TupleType):
+        parts = t.elements
+    elif isinstance(t, CallableType):
+        if has_float(t.result):
+            return True
+        parts = t.params
+    for part in parts:
+        if has_float(part):
+            return True
+    return False
+
+# Whether a protocol converter can carry values between a protocol method's
+# position of type `want` and the matching position `have` of the method
+# that serves it; each is generic when its declared type mentions a type
+# parameter. A converter is built from declared types, so it converts only
+# where neither is generic. A value reached through another protocol uses
+# its own type's converter, so between protocols nothing may convert, and a
+# position generic only in `want` cannot hold a float that converter may
+# have changed.
+def representable(want: Type, have: Type, want_generic: bool, have_generic: bool, between: bool) -> bool:
+    if between:
+        return not converts(have, want) and not (want_generic and not have_generic and has_float(have))
+    return not ((want_generic or have_generic) and converts(have, want))
+
+# The items a built-in value of type `t` yields when iterated, or None: list
+# elements, dictionary keys, one-code-point strings, octets, or tuple items.
+def iteration_item(t: Type) -> Type | None:
+    t = expand(t)
+    if isinstance(t, ListType):
+        return expand(t.element)
+    if isinstance(t, DictType):
+        return t.key
+    if isinstance(t, Prim) and t.name == "str":
+        return prim("str")
+    if isinstance(t, Prim) and t.name == "bytes":
+        return prim("int")
+    if isinstance(t, TupleType):
+        item = items(t)
+        if isinstance(item, str):
+            return None
+        return item
+    return None
+
+# The standard `Iterator[T]` protocol, which built-in values' `iter` methods
+# return.
+def iterator_protocol() -> Protocol:
+    t = TypeVar("Iterator", "T", None)
+    decl = Protocol("Iterator", "Iterator", [t], [])
+    self_type = protocol_self(decl)
+    receiver = Param("self", self_type, None, False)
+    decl.methods.append(Function("iter", "Iterator.iter", [], [receiver], self_type))
+    decl.methods.append(Function("next", "Iterator.next", [], [receiver], t))
+    return decl
+
+def iterator(item: Type) -> ProtocolType:
+    return ProtocolType(iterator_protocol(), [item])
+
+# Whether method signature `have` accepts every call protocol method `want`
+# permits, by position and by keyword, and returns a result `want` accepts.
+# `between` is true when `have` is a protocol's method.
+def compatible(want: Method | None, have: Method | None, between: bool, assuming: list[str]) -> bool:
+    if want is None or have is None:
+        return False
+    indexes = match_params(want, have)
+    if indexes is None:
+        return False
+    for i in range(len(want.params)):
+        param = want.params[i]
+        h = have.params[indexes[i]]
+        if not assignable_in(h.ty, param.ty, assuming):
+            return False
+        if not representable(param.ty, h.ty, want.generic[i], have.generic[indexes[i]], between):
+            return False
+    if not assignable_in(want.result, have.result, assuming):
+        return False
+    return representable(want.result, have.result, want.result_generic, have.result_generic, between)
+
+# Whether `source` provides every method of protocol `target` compatibly.
+# `assuming` holds the protocol and source pairs being checked, by display
+# text, which are assumed to hold so that self-referential protocols
+# terminate.
+def satisfies(target: ProtocolType, source: Type, assuming: list[str]) -> bool:
+    pair = display(target) + " <- " + display(source)
+    if pair in assuming:
+        return True
+    assuming.append(pair)
+    ok = True
+    for fn in target.decl.methods:
+        if ok:
+            want = method(target, fn.name)
+            have = method(source, fn.name)
+            ok = compatible(want, have, isinstance(source, ProtocolType), assuming)
+    assuming.pop()
+    return ok
+
+def is_exception(t: Type) -> bool:
+    return isinstance(t, ClassType) and t.decl.exception
+
+# Whether a value of `source`, a function or callable, can serve callable
+# `target`: it accepts the target's positional arguments, any parameters
+# past them have defaults, and its result fits the target's.
+def serves(target: CallableType, source: Type, assuming: list[str]) -> bool:
+    params: list[Type] = []
+    if isinstance(source, FunctionType):
+        result = function_result(source)
+        declared = function_params(source)
+        for i in range(len(declared)):
+            param = declared[i]
+            if i < len(target.params) and param.keyword_only:
+                return False
+            if i >= len(target.params) and param.default is None:
+                return False
+            params.append(param.ty)
+    elif isinstance(source, CallableType):
+        if len(source.params) != len(target.params):
+            return False
+        result = source.result
+        params = source.params
+    else:
+        return False
+    if len(params) < len(target.params):
+        return False
+    for i in range(len(target.params)):
+        if not assignable_in(params[i], target.params[i], assuming):
+            return False
+    return assignable_in(target.result, result, assuming)
+
+def assignable(target: Type, source: Type) -> bool:
+    return assignable_in(target, source, [])
+
+def assignable_in(target: Type, source: Type, assuming: list[str]) -> bool:
+    target = expand(target)
+    source = expand(source)
+    if isinstance(source, UnionType):
+        for m in source.members:
+            if not assignable_in(target, m, assuming):
+                return False
+        return True
+    if isinstance(target, UnionType):
+        for m in target.members:
+            if assignable_in(m, source, assuming):
+                return True
+        return False
+    if isinstance(target, CallableType):
+        return same(target, source) or serves(target, source, assuming)
+    if isinstance(target, TupleType) and isinstance(source, TupleType):
+        if len(target.elements) == len(source.elements):
+            for i in range(len(target.elements)):
+                if not assignable_in(target.elements[i], source.elements[i], assuming):
+                    return False
+            return True
+    if same(target, source):
+        return True
+    if isinstance(target, ClassType) and target.decl.type_name == "Exception":
+        if target.decl.exception and is_exception(source):
+            return True
+    if isinstance(target, ProtocolType):
+        holds = kind(source) in ["record", "protocol"] or iteration_item(source) is not None
+        if holds and satisfies(target, source, assuming):
+            return True
+    # A bounded type parameter serves wherever its bound does.
+    if isinstance(source, TypeVar):
+        bound = source.bound
+        return bound is not None and assignable_in(target, bound, assuming)
+    return False
+
+# `t` with only the members in `kept`, a subset of its members in order, or
+# `t` itself, keeping an alias's name, when it keeps them all.
+def subset(t: Type, kept: list[Type]) -> Type:
+    if len(kept) == len(members(t)):
+        return t
+    return union(kept)
+
+# Whether protocol type `p` can hold a value of `t`, a list, dict, or tuple
+# of any item types, because `p` asks only for a parameterless `iter`.
+def holds_any(p: Type, t: Type) -> bool:
+    if not isinstance(p, ProtocolType) or kind(t) not in ["list", "dict", "tuple"]:
+        return False
+    for fn in p.decl.methods:
+        if fn.name != "iter":
+            return False
+        signature = method(p, "iter")
+        if signature is None or len(signature.params) > 0:
+            return False
+    return True
+
+# The generic class or protocol `t` specializes, as its key, or "".
+def generic_key(t: Type) -> str:
+    if isinstance(t, ClassType) and len(t.args) > 0:
+        return key(t)
+    if isinstance(t, ProtocolType) and len(t.args) > 0:
+        return key(t)
+    return ""
+
+def generic_name(t: Type) -> str:
+    if isinstance(t, ClassType):
+        return t.decl.type_name
+    if isinstance(t, ProtocolType):
+        return t.decl.type_name
+    return ""
+
+# The message for adding member `m` to a union with `parts`, or "". Lists,
+# dicts, tuples, and callables are counted first, so their component types
+# are never compared.
+def conflict(parts: list[Type], m: Type) -> str:
+    for other in parts:
+        if kind(other) == kind(m) and kind(m) in ["list", "dict", "tuple", "callable"]:
+            return "a union can have only one " + kind(m) + " member"
+        if generic_key(m) != "" and generic_key(other) == generic_key(m):
+            return "a union can have only one specialization of " + generic_name(m)
+        if assignable(other, m) or assignable(m, other) or holds_any(other, m) or holds_any(m, other):
+            return "union members " + display(other) + " and " + display(m) + " overlap"
+    return ""
+
+# The type `for` gives the items of tuple `t`: the union of its position
+# types without duplicate or subsumed members, or None when it has no
+# positions. When that union is not a valid type, the reason instead.
+def items(t: TupleType) -> Type | str:
+    kept: list[Type] = []
+    for element in t.elements:
+        for m in members(element):
+            subsumed = False
+            for other in kept:
+                if assignable(other, m):
+                    subsumed = True
+            if not subsumed:
+                rest: list[Type] = []
+                for other in kept:
+                    if not assignable(m, other):
+                        rest.append(other)
+                rest.append(m)
+                kept = rest
+    if len(kept) == 0:
+        return prim("None")
+    for i in range(1, len(kept)):
+        message = conflict(kept[:i], kept[i])
+        if message != "":
+            return message
+    return union(kept)
+
+# The error for type argument `arg` of type parameter `v` that does not
+# satisfy its bound, or "".
+def unsatisfied(v: TypeVar, arg: Type) -> str:
+    bound = v.bound
+    if bound is None:
+        return ""
+    # A value of a type parameter reaches its bound's methods unconverted.
+    if assignable(bound, arg) and not converts(arg, bound):
+        return ""
+    return f"type argument {display(arg)} does not satisfy the bound {display(bound)} of '{v.name}'"
+
+# Whether `t` mentions a type parameter.
+def mentions(t: Type) -> bool:
+    return has_typevar(t, [], [], False)
+
+# Whether `t` mentions one of the type parameters `vars`.
+def mentions_any(t: Type, vars: list[TypeVar]) -> bool:
+    keys: list[str] = []
+    for v in vars:
+        keys.append(var_key(v))
+    return has_typevar(t, [], keys, True)
+
+# `seen` holds the aliases already entered, which stops at recursive ones;
+# when `only` is true, just the type parameters in `keys` count.
+def has_typevar(t: Type, seen: list[str], keys: list[str], only: bool) -> bool:
+    if isinstance(t, Lazy):
+        if t.name in seen:
+            return False
+        seen.append(t.name)
+    t = expand(t)
+    if isinstance(t, TypeVar):
+        return not only or var_key(t) in keys
+    for part in parts_of(t):
+        if has_typevar(part, seen, keys, only):
+            return True
+    return False
+
+# The types `t` is made of, as substitution sees them; a dict key cannot
+# mention a type parameter.
+def parts_of(t: Type) -> list[Type]:
+    parts: list[Type] = []
+    if isinstance(t, ListType):
+        parts.append(t.element)
+    elif isinstance(t, DictType):
+        parts.append(t.value)
+    elif isinstance(t, TupleType):
+        parts.extend(t.elements)
+    elif isinstance(t, CallableType):
+        parts.extend(t.params)
+        parts.append(t.result)
+    elif isinstance(t, ClassType):
+        parts.extend(t.args)
+    elif isinstance(t, ProtocolType):
+        parts.extend(t.args)
+    elif isinstance(t, UnionType):
+        parts.extend(t.members)
+    return parts
+
+# `t` with each type parameter that `bindings` names, by var_key, replaced by
+# its type argument. Unions flatten and drop members they already hold.
+def substitute(t: Type, bindings: dict[str, Type]) -> Type:
+    t = expand(t)
+    if not mentions(t):
+        return t
+    if isinstance(t, TypeVar):
+        return bindings.get(var_key(t), t)
+    if isinstance(t, ListType):
+        return ListType(substitute(t.element, bindings))
+    if isinstance(t, DictType):
+        return DictType(t.key, substitute(t.value, bindings))
+    if isinstance(t, TupleType):
+        return TupleType(substitute_all(t.elements, bindings))
+    if isinstance(t, CallableType):
+        return CallableType(substitute_all(t.params, bindings), substitute(t.result, bindings))
+    if isinstance(t, ClassType):
+        return ClassType(t.decl, substitute_all(t.args, bindings))
+    if isinstance(t, ProtocolType):
+        return ProtocolType(t.decl, substitute_all(t.args, bindings))
+    if isinstance(t, UnionType):
+        kept: list[Type] = []
+        for member in t.members:
+            for m in members(substitute(member, bindings)):
+                held = False
+                for other in kept:
+                    if same(other, m):
+                        held = True
+                if not held:
+                    kept.append(m)
+        return union(kept)
+    return t
+
+def substitute_all(parts: list[Type], bindings: dict[str, Type]) -> list[Type]:
+    result: list[Type] = []
+    for part in parts:
+        result.append(substitute(part, bindings))
+    return result
