@@ -12,6 +12,11 @@ extern def memcpy(dest: ptr, src: ptr, count: int) -> ptr
 extern def memcmp(a: ptr, b: ptr, count: int) -> cint
 extern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint
 extern def signal(sig: cint, handler: ptr) -> ptr
+extern def strlen(s: ptr) -> int
+extern def open(path: ptr, flags: cint, ...) -> cint
+extern def read(fd: cint, buf: ptr, count: int) -> int
+extern def close(fd: cint) -> cint
+extern def perror(s: ptr)
 
 # Called by the program entry before main. Writing to a closed pipe must fail
 # the write instead of raising SIGPIPE (spec §10); SIGPIPE is 13 and SIG_IGN
@@ -349,6 +354,28 @@ def str_rjust(s: str, width: int) -> str:
         return s
     return spaces(width - length) + s
 
+def str_join(sep: str, items: ptr) -> str:
+    count = list_len(items)
+    if count == 0:
+        return ""
+    size = str_size(sep) * (count - 1)
+    i = 0
+    while i < count:
+        size = size + str_size(__str(list_get(items, i)))
+        i = i + 1
+    s = str_alloc(size)
+    at = 16
+    i = 0
+    while i < count:
+        if i > 0:
+            memcpy(offset(s, at), str_bytes(sep), str_size(sep))
+            at = at + str_size(sep)
+        item = __str(list_get(items, i))
+        memcpy(offset(s, at), str_bytes(item), str_size(item))
+        at = at + str_size(item)
+        i = i + 1
+    return __str(__word(s))
+
 # Decodes the code point from its UTF-8 bytes: the lead byte keeps its low
 # 7, 5, 4, or 3 bits and each continuation byte adds 6 more.
 def str_ord(s: str) -> int:
@@ -477,3 +504,197 @@ def list_contains(xs: ptr, value: word, kind: int) -> bool:
             return True
         i = i + 1
     return False
+
+# UTF-8 validation for text from outside the program. A code point is one to
+# four bytes; the ranges for the second byte rule out overlong forms,
+# surrogates, and values above U+10FFFF.
+
+# The size of the valid UTF-8 code point at byte `i` of the `size` bytes at
+# `p`, or 0 if none starts there.
+def utf8_char_size(p: ptr, i: int, size: int) -> int:
+    lead = __load1(p, i)
+    low = 128
+    high = 191
+    if lead < 128:
+        return 1
+    elif lead < 194:
+        return 0
+    elif lead < 224:
+        count = 2
+    elif lead < 240:
+        count = 3
+        if lead == 224:
+            low = 160
+        elif lead == 237:
+            high = 159
+    elif lead < 245:
+        count = 4
+        if lead == 240:
+            low = 144
+        elif lead == 244:
+            high = 143
+    else:
+        return 0
+    if i + count > size:
+        return 0
+    second = __load1(p, i + 1)
+    if second < low:
+        return 0
+    if second > high:
+        return 0
+    j = 2
+    while j < count:
+        if is_continuation(__load1(p, i + j)) == False:
+            return 0
+        j = j + 1
+    return count
+
+def utf8_valid(p: ptr, size: int) -> bool:
+    i = 0
+    while i < size:
+        count = utf8_char_size(p, i, size)
+        if count == 0:
+            return False
+        i = i + count
+    return True
+
+# A new string holding a copy of the `size` bytes at `p`, which must be valid
+# UTF-8.
+def str_from_bytes(p: ptr, size: int) -> str:
+    if utf8_valid(p, size) == False:
+        fail("ValueError", "invalid UTF-8")
+    s = str_alloc(size)
+    memcpy(offset(s, 16), p, size)
+    return __str(__word(s))
+
+def sys_args(argc: int, argv: ptr) -> ptr:
+    args = list_new(argc)
+    i = 1
+    while i < argc:
+        arg = __ptr(__load8(argv, i * 8))
+        list_append(args, __word(str_from_bytes(arg, strlen(arg))))
+        i = i + 1
+    return args
+
+# Output is unbuffered, so there is nothing to flush.
+def sys_exit(status: int):
+    if status < 0:
+        fail("ValueError", "exit status out of range")
+    if status > 255:
+        fail("ValueError", "exit status out of range")
+    exit(status)
+
+# The path's bytes, which libc reads up to the string's trailing zero byte.
+def path_bytes(path: str) -> ptr:
+    if strlen(str_bytes(path)) != str_size(path):
+        fail("ValueError", "path contains a NUL character")
+    return str_bytes(path)
+
+# Reports `cannot <action> <path>: <reason>` as a fatal OSError. perror
+# writes the strerror text for errno after its argument. It stands in for
+# strerror(errno()) because errno is read through __errno_location on Linux
+# and __error on Darwin, and stage 0 still links both branches of
+# `if __os == ...`.
+def fail_os(action: str, path: str):
+    perror(str_bytes("error: OSError: cannot " + action + " " + path))
+    exit(1)
+
+# open flags. O_RDONLY is 0 on both systems.
+def write_flags() -> int:
+    # O_WRONLY | O_CREAT | O_TRUNC
+    if __os == "linux":
+        return 1 + 64 + 512
+    return 1 + 512 + 1024
+
+def fs_read_file(path: str) -> str:
+    fd = open(path_bytes(path), 0)
+    if fd < 0:
+        fail_os("read", path)
+    capacity = 4096
+    size = 0
+    buf = __alloc_atomic(capacity)
+    count = read(fd, buf, capacity)
+    while count != 0:
+        if count < 0:
+            fail_os("read", path)
+        size = size + count
+        if size == capacity:
+            larger = __alloc_atomic(capacity * 2)
+            memcpy(larger, buf, size)
+            buf = larger
+            capacity = capacity * 2
+        count = read(fd, offset(buf, size), capacity - size)
+    close(fd)
+    return str_from_bytes(buf, size)
+
+def fs_write_file(path: str, text: str):
+    # 438 is mode 0666, which the umask then restricts.
+    fd = open(path_bytes(path), write_flags(), 438)
+    if fd < 0:
+        fail_os("write", path)
+    done = 0
+    while done < str_size(text):
+        written = write(fd, offset(str_bytes(text), done), str_size(text) - done)
+        if written < 0:
+            fail_os("write", path)
+        done = done + written
+    if close(fd) < 0:
+        fail_os("write", path)
+
+# An optional sign and one or more decimal digits (spec §6). The magnitude is
+# checked before each step so it never leaves the int range, which is
+# symmetric, so both signs share the limit 9223372036854775807.
+def str_to_int(s: str) -> int:
+    size = str_size(s)
+    i = 0
+    negative = False
+    if size > 0:
+        if str_byte(s, 0) == 45:
+            negative = True
+            i = 1
+        elif str_byte(s, 0) == 43:
+            i = 1
+    if i == size:
+        fail("ValueError", "cannot convert str to int")
+    value = 0
+    while i < size:
+        b = str_byte(s, i)
+        if is_digit(b) == False:
+            fail("ValueError", "cannot convert str to int")
+        digit = b - 48
+        if value > 922337203685477580:
+            fail("ValueError", "cannot convert str to int")
+        if value == 922337203685477580:
+            if digit > 7:
+                fail("ValueError", "cannot convert str to int")
+        value = value * 10 + digit
+        i = i + 1
+    if negative:
+        return 0 - value
+    return value
+
+# An enum's descriptor holds its name and then one str per member, in
+# declaration order.
+def enum_to_str(descriptor: ptr, ordinal: int) -> str:
+    return __str(__load8(descriptor, 8 + ordinal * 8))
+
+# A box is a header word and a payload word, which may hold a pointer.
+def box(descriptor: ptr, value: word) -> ptr:
+    b = __alloc(16)
+    __store8(b, 0, __word(descriptor))
+    __store8(b, 8, value)
+    return b
+
+def unbox(value: ptr) -> word:
+    return __load8(value, 8)
+
+def is_instance(value: ptr, descriptor: ptr) -> bool:
+    if __addr_is_null(value):
+        return False
+    return __int(__load8(value, 0)) == __int(__word(descriptor))
+
+# __alloc returns zeroed memory, so the fields start as zero.
+def object_new(descriptor: ptr, fields: int) -> ptr:
+    object = __alloc(8 + fields * 8)
+    __store8(object, 0, __word(descriptor))
+    return object
