@@ -1,6 +1,6 @@
 //! Builds the syntax tree of one module from its tokens.
 
-use crate::lexer::{Kind, Token};
+use crate::lexer::{FPart, Kind, Token};
 use crate::{Diag, Pos};
 
 pub struct Module {
@@ -97,6 +97,8 @@ pub enum ExprKind {
     Int(i64),
     Float(f64),
     Str(String),
+    /// An f-string's parts in order: `Str` for literal text, and fields.
+    FStr(Vec<Expr>),
     Bool(bool),
     Name(String),
     Call(Box<Expr>, Vec<Expr>),
@@ -161,6 +163,7 @@ fn describe(kind: &Kind) -> String {
         Kind::Int(_) => "integer".into(),
         Kind::Float(_) => "float".into(),
         Kind::Str(_) => "string".into(),
+        Kind::FStr(_) => "f-string".into(),
         Kind::Word(word) => format!("'{word}'"),
         Kind::Newline => "end of line".into(),
         Kind::Indent => "indent".into(),
@@ -697,6 +700,30 @@ impl Parser<'_> {
             }
             Kind::Word("None") => ExprKind::None,
             Kind::Str(text) => ExprKind::Str(text),
+            Kind::FStr(parts) => {
+                self.i += 1;
+                let mut exprs = Vec::new();
+                for part in parts {
+                    match part {
+                        FPart::Text(text) => exprs.push(Expr {
+                            pos,
+                            kind: ExprKind::Str(text),
+                        }),
+                        FPart::Field(tokens) => {
+                            let outer = std::mem::replace(&mut self.tokens, tokens);
+                            let i = std::mem::replace(&mut self.i, 0);
+                            exprs.push(self.expr()?);
+                            self.expect("}")?;
+                            self.tokens = outer;
+                            self.i = i;
+                        }
+                    }
+                }
+                return Ok(Expr {
+                    pos,
+                    kind: ExprKind::FStr(exprs),
+                });
+            }
             Kind::Name(name)
                 if name == "__type" && self.tokens[self.i + 1].kind == Kind::Word("(") =>
             {
