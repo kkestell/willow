@@ -322,10 +322,8 @@ impl Emitter<'_> {
                     let zero = self.temp();
                     self.line(format!("{zero} =l ceql {r}, 0"));
                     self.guard(&zero, fail);
-                    let (ld, rd) = (self.temp(), self.temp());
-                    self.line(format!("{ld} =d sltof {l}"));
-                    self.line(format!("{rd} =d sltof {r}"));
-                    (ld, rd)
+                    let d = self.int_quotient(&l, &r);
+                    return self.float_bits(&d);
                 } else {
                     let l = self.float(left);
                     let r = self.float(right);
@@ -338,6 +336,10 @@ impl Emitter<'_> {
                 let d = self.temp();
                 self.line(format!("{d} =d div {l}, {r}"));
                 self.float_bits(&d)
+            }
+            Value::Seq(first, second) => {
+                self.value(first);
+                self.value(second)
             }
             Value::Load(instr, ptr, offset) => {
                 let address = self.address(ptr, offset);
@@ -352,6 +354,125 @@ impl Emitter<'_> {
                 "0".into()
             }
         }
+    }
+
+    /// The correctly rounded quotient of the nonzero-divisor ints `l` and `r`
+    /// as a `d` operand. Converting each operand to a float first would round
+    /// twice once either exceeds 2^53, so those quotients are found by long
+    /// division to 56 bits, with the last bit set when any remainder is
+    /// left, which makes the one conversion round correctly. QBE accepts the
+    /// temporaries assigned more than once here.
+    fn int_quotient(&mut self, l: &str, r: &str) -> String {
+        const EXACT: &str = "9007199254740992"; // 2^53
+        let labels: [String; 14] = std::array::from_fn(|_| self.new_label());
+        let [
+            fast,
+            slow,
+            shr_test,
+            shr,
+            shl_test,
+            shl,
+            round,
+            up_test,
+            up,
+            down_test,
+            down,
+            sign,
+            negate,
+            done,
+        ] = labels;
+        let [
+            result,
+            abs_l,
+            abs_r,
+            cond,
+            q,
+            rem,
+            e,
+            lost,
+            bit,
+            t,
+            d,
+            divisor,
+        ] = std::array::from_fn(|_| self.temp());
+        // Magnitudes are exact: the int range is symmetric.
+        for (abs, x) in [(&abs_l, l), (&abs_r, r)] {
+            self.line(format!("{t} =l sar {x}, 63"));
+            self.line(format!("{abs} =l xor {x}, {t}"));
+            self.line(format!("{abs} =l sub {abs}, {t}"));
+        }
+        self.line(format!("{cond} =l culel {abs_l}, {EXACT}"));
+        self.line(format!("{t} =l culel {abs_r}, {EXACT}"));
+        self.line(format!("{cond} =l and {cond}, {t}"));
+        self.line(format!("{t} =l ceql {l}, 0"));
+        self.line(format!("{cond} =l or {cond}, {t}"));
+        self.jump(format!("jnz {cond}, {fast}, {slow}"));
+        self.label(&fast);
+        self.line(format!("{d} =d sltof {l}"));
+        self.line(format!("{divisor} =d sltof {r}"));
+        self.line(format!("{result} =d div {d}, {divisor}"));
+        self.jump(format!("jmp {done}"));
+        self.label(&slow);
+        self.line(format!("{q} =l udiv {abs_l}, {abs_r}"));
+        self.line(format!("{rem} =l urem {abs_l}, {abs_r}"));
+        self.line(format!("{e} =l copy 0"));
+        self.line(format!("{lost} =l copy 0"));
+        // A quotient of 2^56 or more drops its low bits into `lost`.
+        self.label(&shr_test);
+        self.line(format!("{cond} =l cugel {q}, 72057594037927936"));
+        self.jump(format!("jnz {cond}, {shr}, {shl_test}"));
+        self.label(&shr);
+        self.line(format!("{bit} =l and {q}, 1"));
+        self.line(format!("{lost} =l or {lost}, {bit}"));
+        self.line(format!("{q} =l shr {q}, 1"));
+        self.line(format!("{e} =l add {e}, 1"));
+        self.jump(format!("jmp {shr_test}"));
+        // A quotient below 2^55 takes the next bit of the division. Doubling
+        // the remainder may pass 2^63, but subtracting the divisor brings it
+        // back, and the arithmetic is modulo 2^64.
+        self.label(&shl_test);
+        self.line(format!("{cond} =l cultl {q}, 36028797018963968"));
+        self.jump(format!("jnz {cond}, {shl}, {round}"));
+        self.label(&shl);
+        self.line(format!("{t} =l sub {abs_r}, {rem}"));
+        self.line(format!("{bit} =l cugel {rem}, {t}"));
+        self.line(format!("{q} =l shl {q}, 1"));
+        self.line(format!("{q} =l or {q}, {bit}"));
+        self.line(format!("{rem} =l shl {rem}, 1"));
+        self.line(format!("{t} =l mul {bit}, {abs_r}"));
+        self.line(format!("{rem} =l sub {rem}, {t}"));
+        self.line(format!("{e} =l sub {e}, 1"));
+        self.jump(format!("jmp {shl_test}"));
+        self.label(&round);
+        self.line(format!("{t} =l cnel {rem}, 0"));
+        self.line(format!("{lost} =l or {lost}, {t}"));
+        self.line(format!("{q} =l or {q}, {lost}"));
+        self.line(format!("{d} =d sltof {q}"));
+        // Scaling by two is exact: the quotient's magnitude is between 2^-63
+        // and 2^63.
+        self.label(&up_test);
+        self.line(format!("{cond} =l csgtl {e}, 0"));
+        self.jump(format!("jnz {cond}, {up}, {down_test}"));
+        self.label(&up);
+        self.line(format!("{d} =d mul {d}, d_2"));
+        self.line(format!("{e} =l sub {e}, 1"));
+        self.jump(format!("jmp {up_test}"));
+        self.label(&down_test);
+        self.line(format!("{cond} =l csltl {e}, 0"));
+        self.jump(format!("jnz {cond}, {down}, {sign}"));
+        self.label(&down);
+        self.line(format!("{d} =d mul {d}, d_0.5"));
+        self.line(format!("{e} =l add {e}, 1"));
+        self.jump(format!("jmp {down_test}"));
+        self.label(&sign);
+        self.line(format!("{t} =l xor {l}, {r}"));
+        self.line(format!("{cond} =l csltl {t}, 0"));
+        self.line(format!("{result} =d copy {d}"));
+        self.jump(format!("jnz {cond}, {negate}, {done}"));
+        self.label(&negate);
+        self.line(format!("{result} =d neg {d}"));
+        self.label(&done);
+        result
     }
 
     /// Computes a float value and returns it as a QBE `d` operand.

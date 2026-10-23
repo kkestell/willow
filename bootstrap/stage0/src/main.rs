@@ -7,6 +7,7 @@ mod check;
 mod emit;
 mod lexer;
 mod parser;
+mod types;
 
 use std::path::Path;
 use std::process::{Command, ExitCode};
