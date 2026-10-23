@@ -16,7 +16,9 @@ extern def strlen(s: ptr) -> int
 extern def open(path: ptr, flags: cint, ...) -> cint
 extern def read(fd: cint, buf: ptr, count: int) -> int
 extern def close(fd: cint) -> cint
-extern def perror(s: ptr)
+extern def strerror(code: cint) -> ptr
+extern def __errno_location() -> ptr
+extern def __error() -> ptr
 extern def strtod(s: ptr, end: ptr) -> float
 extern def fmod(x: float, y: float) -> float
 extern def floor(x: float) -> float
@@ -596,14 +598,25 @@ def path_bytes(path: str) -> ptr:
         fail("ValueError", "path contains a NUL character")
     return str_bytes(path)
 
-# Reports `cannot <action> <path>: <reason>` as a fatal OSError. perror
-# writes the strerror text for errno after its argument. It stands in for
-# strerror(errno()) because errno is read through __errno_location on Linux
-# and __error on Darwin, and stage 0 still links both branches of
-# `if __os == ...`.
+# libc reaches the calling thread's errno through a function whose name
+# depends on the system. Stage 0 emits only the branch for the target, so the
+# other function is never linked.
+def errno() -> int:
+    if __os == "darwin":
+        return __load4(__error(), 0)
+    else:
+        return __load4(__errno_location(), 0)
+
+# The strerror text for the current errno. It is read before anything else
+# runs, since allocating may change errno.
+def os_reason() -> str:
+    text = strerror(errno())
+    return str_from_bytes(text, strlen(text))
+
+# Reports `cannot <action> <path>: <reason>` as a fatal OSError.
 def fail_os(action: str, path: str):
-    perror(str_bytes("error: OSError: cannot " + action + " " + path))
-    exit(1)
+    reason = os_reason()
+    fail("OSError", "cannot " + action + " " + path + ": " + reason)
 
 # open flags. O_RDONLY is 0 on both systems.
 def write_flags() -> int:
