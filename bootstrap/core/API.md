@@ -3,7 +3,7 @@
 The functions stage 0 calls to lower the built-ins and operations of L0
 (agents/bootstrap.md §3), and the intrinsic layer core is written over. Every
 function here is `$W.core.<name>`. Core may define other functions; stage 0
-calls only these.
+calls only these, and stage 1 calls `run` through `import core`.
 
 ## Conventions
 
@@ -53,8 +53,11 @@ Fatal failures of L0 (agents/bootstrap.md §3):
 | `ValueError` | `exit status out of range` | `sys_exit` |
 | `ValueError` | `invalid UTF-8` | `sys_args`, `fs_read_file`, `fs_realpath` |
 | `ValueError` | `path contains a NUL character` | `fs_read_file`, `fs_write_file`, `fs_exists`, `fs_realpath` |
+| `ValueError` | `args must contain a nonempty executable name` | `run` |
+| `ValueError` | `argument contains a NUL character` | `run` |
 | `AssertionError` | the message, or `assertion failed` | stage 0 inline |
 | `RuntimeError` | `dictionary changed size during iteration` | `dict_next` |
+| `OSError` | `cannot run <program>: <reason>` | `run`, when the program cannot be found or started |
 | `OSError` | `cannot read <path>: <reason>`, `cannot write <path>: <reason>`, `cannot stat <path>: <reason>`, and `cannot resolve <path>: <reason>`, where `<reason>` is the `strerror` text | `fs_read_file`, `fs_write_file`, `fs_exists`, and `fs_realpath` respectively |
 
 ## Text of values
@@ -171,6 +174,12 @@ literal `"None"`.
 | `fs_write_file(path: str, text: str)` | `fs.write_file(path, text)` |
 | `fs_exists(path: str) -> bool` | `fs.exists(path)`: false when the path, or a symlink's target, is missing or a component is not a directory |
 | `fs_realpath(path: str) -> str` | `fs.realpath(path)`, the absolute path with symlinks resolved |
+
+## Called by stage 1
+
+| Signature | Meaning |
+| --- | --- |
+| `run(args: list[str]) -> int` | Runs `args[0]`, searched for in `PATH`, with the remaining arguments and no shell, through `posix_spawnp`; the child inherits stdin, stdout, stderr, and the environment, with SIGPIPE's default action. Waits and returns the exit status, or 128 plus the signal number if a signal ended the child |
 
 ## Inline in stage 0
 
