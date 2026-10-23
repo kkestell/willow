@@ -1,0 +1,29 @@
+def first_multiple(step: int, limit: int) -> int:
+    n = 1
+    while True:
+        if n * step > limit:
+            break
+        n = n + 1
+    return n * step
+
+def main():
+    i = 0
+    while i < 10:
+        i = i + 1
+        if i % 2 == 0:
+            continue
+        if i > 7:
+            break
+        print(i)
+    outer = 0
+    while outer < 3:
+        outer = outer + 1
+        inner = 0
+        while True:
+            inner = inner + 1
+            if inner == outer:
+                break
+            if inner > 5:
+                print("never")
+        print(outer * 10 + inner)
+    print(first_multiple(7, 50))

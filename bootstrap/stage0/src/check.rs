@@ -31,6 +31,8 @@ pub enum Op {
     Eval(Value),
     If(Value, Vec<Op>, Vec<Op>),
     While(Value, Vec<Op>),
+    Break,
+    Continue,
     Return(Option<Value>),
 }
 
@@ -51,6 +53,19 @@ pub enum Value {
     /// A QBE comparison on two floats' bits.
     FloatCompare(&'static str, Box<Value>, Box<Value>),
     FloatNeg(Box<Value>),
+    /// Short-circuit `and`, or `or` when `and` is false.
+    Logic {
+        and: bool,
+        left: Box<Value>,
+        right: Box<Value>,
+    },
+    /// Integer `//`, or `%` when `modulo`, which calls `fail` for a zero divisor.
+    FloorDivide {
+        modulo: bool,
+        left: Box<Value>,
+        right: Box<Value>,
+        fail: Box<Value>,
+    },
     /// `/`, on two ints when `ints`, which calls `fail` for a zero divisor.
     Divide {
         ints: bool,
@@ -396,7 +411,12 @@ fn assigned_names(stmts: &[Stmt], names: &mut HashSet<String>) {
                 }
             }
             StmtKind::While { body, .. } => assigned_names(body, names),
-            StmtKind::Expr(_) | StmtKind::Assert { .. } | StmtKind::Return(_) | StmtKind::Pass => {}
+            StmtKind::Expr(_)
+            | StmtKind::Assert { .. }
+            | StmtKind::Return(_)
+            | StmtKind::Pass
+            | StmtKind::Break
+            | StmtKind::Continue => {}
         }
     }
 }
@@ -422,6 +442,8 @@ struct Checker<'a> {
     locals: HashMap<String, Option<Type>>,
     params: HashSet<String>,
     order: Vec<String>,
+    /// The number of loops around the statement being checked.
+    loops: u32,
 }
 
 /// The locals definitely assigned at a point.
@@ -457,6 +479,7 @@ fn check_function(
         locals,
         params: params.iter().cloned().collect(),
         order: Vec::new(),
+        loops: 0,
     };
     let (ops, transfers) = checker.block(body, &mut state)?;
     if sig.ret != Type::None && !transfers {
@@ -628,7 +651,9 @@ impl Checker<'_> {
             }
             StmtKind::While { cond, body } => {
                 let cond_ir = self.condition(cond, state)?;
+                self.loops += 1;
                 let (body_ops, _) = self.block(body, &mut state.clone())?;
+                self.loops -= 1;
                 ops.push(Op::While(cond_ir, body_ops));
                 Ok(false)
             }
@@ -656,6 +681,15 @@ impl Checker<'_> {
                 Ok(true)
             }
             StmtKind::Pass => Ok(false),
+            StmtKind::Break | StmtKind::Continue => {
+                let is_break = matches!(stmt.kind, StmtKind::Break);
+                if self.loops == 0 {
+                    let word = if is_break { "break" } else { "continue" };
+                    return self.fail(stmt.pos, format!("'{word}' outside of a loop"));
+                }
+                ops.push(if is_break { Op::Break } else { Op::Continue });
+                Ok(true)
+            }
         }
     }
 
@@ -721,6 +755,10 @@ impl Checker<'_> {
                         Type::Int,
                     )),
                     ("-", Type::Float) => Ok((Value::FloatNeg(Box::new(value)), Type::Float)),
+                    ("not", Type::Bool) => Ok((
+                        Value::Binary("ceql", Box::new(value), Box::new(Value::Const(0))),
+                        Type::Bool,
+                    )),
                     _ => self.fail(
                         expr.pos,
                         format!("operator '{op}' cannot be applied to {}", ty.name()),
@@ -770,6 +808,33 @@ impl Checker<'_> {
         };
         let (l, r) = (Box::new(l), Box::new(r));
         let (instr, ty) = match (op, lt, rt) {
+            ("and" | "or", Type::Bool, Type::Bool) => {
+                let logic = Value::Logic {
+                    and: op == "and",
+                    left: l,
+                    right: r,
+                };
+                return Ok((logic, Type::Bool));
+            }
+            ("//" | "%", Type::Int, Type::Int) => {
+                let message = self.strings.intern("division by zero");
+                let fail = Box::new(self.fail_call("ZeroDivisionError", message));
+                let divide = Value::FloorDivide {
+                    modulo: op == "%",
+                    left: l,
+                    right: r,
+                    fail,
+                };
+                return Ok((divide, Type::Int));
+            }
+            ("//" | "%", Type::Float, Type::Float) => {
+                let function = if op == "%" {
+                    "float_mod"
+                } else {
+                    "float_floordiv"
+                };
+                return Ok((core_call(function, vec![*l, *r], true), Type::Float));
+            }
             ("/", Type::Int, Type::Int) | ("/", Type::Float, Type::Float) => {
                 let message = self.strings.intern("division by zero");
                 let fail = Box::new(self.fail_call("ZeroDivisionError", message));
