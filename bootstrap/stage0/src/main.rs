@@ -9,6 +9,8 @@ mod lexer;
 mod parser;
 mod types;
 
+use std::collections::HashSet;
+use std::io::ErrorKind;
 use std::path::Path;
 use std::process::{Command, ExitCode};
 
@@ -67,12 +69,52 @@ fn compile(path: &str) -> Result<String, String> {
     if !valid || name == "core" {
         return Err(format!("willow0: {path}: '{name}' cannot be a module name"));
     }
-    let modules = vec![
-        load(name, path, &source).map_err(|d| d.to_string())?,
-        load("core", CORE_PATH, CORE.as_bytes()).map_err(|d| d.to_string())?,
-    ];
+    let root = Path::new(path).parent().unwrap_or(Path::new(""));
+    let modules = load_all(root, name, path, &source).map_err(|d| d.to_string())?;
     let program = check::check(&modules).map_err(|d| d.to_string())?;
     Ok(emit::emit(&program))
+}
+
+/// The entry module, the modules it imports directly or indirectly, and
+/// core, which is always last. `import a.b` loads `a/b.wlo` under `root`, the
+/// entry file's directory; `sys` and `fs` are host modules unless such a
+/// file exists (spec §12).
+fn load_all(
+    root: &Path,
+    name: &str,
+    path: &str,
+    source: &[u8],
+) -> Result<Vec<parser::Module>, Diag> {
+    let mut modules = vec![load(name, path, source)?];
+    let mut seen = HashSet::from([name.to_string(), "core".to_string()]);
+    let mut next = 0;
+    while next < modules.len() {
+        let mut found = Vec::new();
+        for import in &modules[next].imports {
+            if !seen.insert(import.name.clone()) {
+                continue;
+            }
+            let file = root.join(import.name.replace('.', "/") + ".wlo");
+            let file = file.to_string_lossy();
+            match std::fs::read(&*file) {
+                Ok(source) => found.push(load(&import.name, &file, &source)?),
+                Err(e)
+                    if e.kind() == ErrorKind::NotFound
+                        && matches!(import.name.as_str(), "sys" | "fs") => {}
+                Err(e) => {
+                    // The system's text without Rust's " (os error N)".
+                    let reason = e.to_string();
+                    let reason = reason.split(" (os error").next().unwrap();
+                    let message = format!("cannot load module '{}': {file}: {reason}", import.name);
+                    return Err(Diag::new(&modules[next].path, import.pos, message));
+                }
+            }
+        }
+        modules.extend(found);
+        next += 1;
+    }
+    modules.push(load("core", CORE_PATH, CORE.as_bytes())?);
+    Ok(modules)
 }
 
 fn qbe_target() -> Result<&'static str, String> {

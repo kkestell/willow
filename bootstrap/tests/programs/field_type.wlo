@@ -1,0 +1,7 @@
+class Point:
+    x: int
+    y: int
+
+def main():
+    point = Point(1, 2)
+    point.x = "one"

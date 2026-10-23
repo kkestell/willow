@@ -1,0 +1,6 @@
+class Options:
+    name: str
+    level: int = 0
+
+def main():
+    options = Options()

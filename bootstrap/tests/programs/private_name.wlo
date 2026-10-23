@@ -1,0 +1,4 @@
+import lib.geometry
+
+def main():
+    print(lib.geometry._scale(2))

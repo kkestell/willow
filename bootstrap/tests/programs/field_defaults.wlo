@@ -1,0 +1,28 @@
+enum Kind:
+    PLAIN
+    FANCY
+
+class Options:
+    name: str = "out"
+    level: int = -2
+    ratio: float = +0.5
+    verbose: bool = True
+    limit: int | None = 3
+    kind: Kind | None = None
+
+    def describe(self) -> str:
+        return self.name + " " + str(self.level) + " " + str(self.limit) + " " + str(self.kind)
+
+def main():
+    options = Options()
+    print(options.describe())
+    print(options.ratio)
+    print(options.verbose)
+    options.limit = None
+    options.kind = Kind.FANCY
+    print(options.describe())
+    kind = options.kind
+    if isinstance(kind, Kind):
+        print(kind == Kind.FANCY)
+    other = Options("other", 7)
+    print(other.describe())
