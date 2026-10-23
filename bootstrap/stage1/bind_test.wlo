@@ -6,13 +6,15 @@ import ast
 import bind
 import diagnostic
 import lexer
+import loader
 import parser
 import show
 import sys
 
-# The first error in the program, or each function's locals, with `*` on
-# captured ones, its captures, and its body after binding.
-def describe(program: list[str]) -> str:
+# The modules of `program`, the entry first, after binding, or the first
+# error. A `test` program is a test file.
+def bind_program(program: list[str], test: bool) -> list[ast.Module] | str:
+    sources: list[loader.Source] = []
     modules: list[ast.Module] = []
     i = 1
     while i < len(program):
@@ -30,15 +32,35 @@ def describe(program: list[str]) -> str:
         parsed = parser.parse(path, lexed)
         if isinstance(parsed, diagnostic.Diagnostic):
             return parsed.format()
-        parsed.name = name
+        sources.append(loader.Source(name, parsed))
         modules.append(parsed)
-    error = bind.bind(modules)
+    error = bind.bind(sources, test)
     if error is not None:
         return error.format()
+    return modules
+
+# The first error in the program, or each function's locals, with `*` on
+# captured ones, its captures, and its body after binding.
+def describe(program: list[str]) -> str:
+    modules = bind_program(program, False)
+    if isinstance(modules, str):
+        return modules
     lines: list[str] = []
     for module in modules:
         for function in bind.functions(module):
             describe_function(function, lines)
+    return "\n".join(lines)
+
+# The first error in the program, or the types of its modules' functions and
+# fields, as bind_files --signatures writes them.
+def signatures(program: list[str], test: bool) -> str:
+    modules = bind_program(program, test)
+    if isinstance(modules, str):
+        return modules
+    lines: list[str] = []
+    for module in modules:
+        for line in bind.signatures(module):
+            lines.append(f"{module.name}: {line}")
     return "\n".join(lines)
 
 def describe_function(function: ast.FunctionDecl, lines: list[str]):
@@ -72,27 +94,9 @@ def nested_functions(body: list[ast.Stmt], lines: list[str]):
 # distinct ids: declarations, methods, protocol methods, and nested functions
 # and lambdas at any depth.
 def function_names(program: list[str]) -> str:
-    modules: list[ast.Module] = []
-    i = 1
-    while i < len(program):
-        name = "main"
-        source = program[i]
-        if i > 1:
-            name = program[i]
-            source = program[i + 1]
-            i = i + 1
-        i = i + 1
-        lexed = lexer.lex(name + ".wlo", source)
-        if isinstance(lexed, diagnostic.Diagnostic):
-            return lexed.format()
-        parsed = parser.parse(name + ".wlo", lexed)
-        if isinstance(parsed, diagnostic.Diagnostic):
-            return parsed.format()
-        parsed.name = name
-        modules.append(parsed)
-    error = bind.bind(modules)
-    if error is not None:
-        return error.format()
+    modules = bind_program(program, False)
+    if isinstance(modules, str):
+        return modules
     found: list[ast.FunctionDecl] = []
     for module in modules:
         for decl in module.declarations:
@@ -202,6 +206,41 @@ def main():
         ["main.wlo:3:7: error: 'a.h' is not generic", "import a\ndef main():\n    a.h[int](1)\n", "a", "def h(x: int):\n    pass\n"],
         ["main [p, x*, g] [] { p = 1; for x in p { def g() -> None { y = x } } }\ng [y] [x] { y = x }", "def main():\n    p = 1\n    for x in p:\n        def g():\n            y = x\n"],
         ["first [] [] { return x }\nmain [xs, i] [] { xs = i; i = xs[i]; first[int](xs) }", "def first[T](x: T) -> T:\n    return x\ndef main():\n    xs = i\n    i = xs[i]\n    first[int](xs)\n"],
+        # Types
+        ["main.wlo:1:10: error: alias 'A' expands to itself", "type A = A | int\ndef main():\n    pass\n"],
+        ["main.wlo:2:16: error: alias 'A' expands to itself", "type A = B\ntype B = int | A\ndef main():\n    pass\n"],
+        ["main.wlo:1:13: error: alias 'S' expands to itself", "type S[T] = S[T] | None\ndef main():\n    pass\n"],
+        ["main.wlo:2:10: error: type 'Opt' needs type arguments", "type Opt[T] = T | None\ndef f(x: Opt):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:2:10: error: 'Opt' expects 1 type argument, received 2", "type Opt[T] = T | None\ndef f(x: Opt[int, str]):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:2:10: error: type 'I' does not take type arguments", "type I = int\ndef f(x: I[str]):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:13: error: a type parameter can be in a union only with None", "type G[T] = T | list[G[list[T]]]\ndef f(g: G[int]):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:13: error: a type parameter can be in a union only with None", "def f[T](x: T | int) -> T:\n    return x\ndef main():\n    pass\n"],
+        ["main.wlo:1:13: error: type parameter 'T' does not take type arguments", "def f[T](x: T[int]) -> T:\n    return x\ndef main():\n    pass\n"],
+        ["main.wlo:1:10: error: a type parameter's bound must be a class, native type, or protocol", "def f[T: int](x: T) -> T:\n    return x\ndef main():\n    pass\n"],
+        ["main.wlo:5:14: error: type argument int does not satisfy the bound Named of 'T'", "protocol Named:\n    def name(self) -> str\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[int]):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:7:14: error: union members P and C overlap", "protocol P:\n    def m(self) -> int\nclass C:\n    x: int\n    def m(self) -> int:\n        return 1\ndef f(x: P | C):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:26: error: union members Iterable[int] and list[str] overlap", "def f(x: Iterable[int] | list[str]):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:16: error: expected int, received str", "def f(x: int = 'a'):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:3:16: error: enum 'E' has no member 'C'", "enum E:\n    A\ndef f(x: E = E.C):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:3:16: error: unknown enum 'K'", "class K:\n    x: int\ndef f(x: int = K.x):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:18: error: expected float, received int", "def f(x: float = 1):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:2:14: error: expected str, received int", "class C:\n    x: str = 1\ndef main():\n    pass\n"],
+        ["main.wlo:1:11: error: main must take no parameters and return None", "async def main() -> int:\n    return 1\n"],
+        ["main.wlo:1:5: error: main must take no parameters and return None", "def main() -> int:\n    return 1\n"],
+        ["main.wlo:3:12: error: class 'io.File' cannot be used as a value", "import io\ndef main():\n    x = io.File\n"],
+        ["main.wlo:3:10: error: constant 'math.pi' cannot be called", "import math\ndef main():\n    math.pi()\n"],
+        ["main.wlo:2:23: error: 'Coroutine' cannot be used in isinstance", "def main():\n    b = isinstance(1, Coroutine)\n"],
+        ["main.wlo:3:29: error: type 'Coroutine' needs type arguments", "async def g() -> int:\n    return 1\ndef f(c: Coroutine[int], d: Coroutine) -> None:\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:9: error: exception classes cannot be generic", "class E[T](Exception):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:7: error: cannot redefine built-in class 'ValueError'", "class ValueError:\n    x: int\ndef main():\n    pass\n"],
+        ["main.wlo:3:10: error: type 'Box' needs type arguments", "class Box[T]:\n    v: T\ndef f(b: Box):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:4:20: error: expected int, received str", "def main():\n    def g[T](x: T) -> T:\n        return x\n    def h(x: int = 'a'):\n        pass\n"],
+        ["main.wlo:2:11: error: type parameter 'T' hides another type parameter", "def f[T](x: T) -> T:\n    def g[T](y: T) -> T:\n        return y\n    return x\ndef main():\n    pass\n"],
+        ["main.wlo:2:15: error: dictionary keys must be int, str, or an enum", "type K = int | str\ndef f(d: dict[K, int]):\n    pass\ndef main():\n    pass\n"],
+        # The Lua implementation has neither extern nor __type; these are
+        # stage 0's errors.
+        ["main.wlo:1:12: error: extern functions are only allowed in core", "extern def write(fd: int) -> int\ndef main():\n    pass\n"],
+        ["main.wlo:2:9: error: intrinsic '__type' is only available in core", "def main():\n    x = __type(str)\n"],
     ]
     ok = True
     for program in cases:
@@ -210,6 +249,51 @@ def main():
             print(f"FAIL {program[1]}")
             print(f"  expected: {program[0]}")
             print(f"  actual:   {actual}")
+            ok = False
+    signature_cases = [
+        ["main: def f(t: Tree, j: J) -> list[Tree]\nmain: def main() -> None", "type Tree = int | list[Tree]\ntype J = None | dict[str, J]\ndef f(t: Tree, j: J) -> list[Tree]:\n    return [t]\ndef main():\n    pass\n"],
+        ["main: def f(p: tuple[int, str], o: Opt[int], q: Opt[list[int]]) -> Opt[str]\nmain: def main() -> None", "type Pair[K, V] = tuple[K, V]\ntype Opt[T] = T | None\ndef f(p: Pair[int, str], o: Opt[int], q: Opt[list[int]]) -> Opt[str]:\n    return None\ndef main():\n    pass\n"],
+        ["main: def f(x: None, y: Opt[int | None]) -> None\nmain: def main() -> None", "type Opt[T] = T | None\ndef f(x: Opt[None], y: Opt[int | None]):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(x: list[Count], y: dict[str, Count]) -> list[list[Count]]\nmain: def main() -> None", "type Count = int\ndef f(x: list[Count], y: dict[str, Count]) -> list[list[Count]]:\n    return []\ndef main():\n    pass\n"],
+        ["main: def f(j: json.Json, p: cli.Parser, fl: io.File) -> json.Json\nmain: def main() -> None", "import json\nimport math\nimport cli\nimport io\ndef f(j: json.Json, p: cli.Parser, fl: io.File) -> json.Json:\n    x = math.pi\n    y = json.parse\n    return j\ndef main():\n    pass\n"],
+        ["main: def f(x: E, y: E | None, z: tuple[E, int]) -> None\nmain: def main() -> None\nmain: field C.e: E", "enum E:\n    A\n    B\ndef f(x: E = E.B, y: E | None = None, z: tuple[E, int] = (E.A, -1)):\n    pass\nclass C:\n    e: E = E.A\ndef main():\n    pass\n"],
+        ["main: def f(x: (int) -> str | None, y: ((int) -> str) | None) -> None\nmain: def main() -> None", "def f(x: (int) -> str | None, y: ((int) -> str) | None):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(x: P | C | None) -> None\nmain: def main() -> None\nmain: field C.x: int", "protocol P:\n    def m(self) -> int\nclass C:\n    x: int\ndef f(x: P | C | None):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(x: T) -> T\nmain: def g(b: Box[P]) -> None\nmain: def main() -> None\nmain: def P.name(self: P) -> str\nmain: field P.n: str\nmain: field Box.v: T", "protocol Named:\n    def name(self) -> str\nclass P:\n    n: str\n    def name(self) -> str:\n        return self.n\ndef f[T: Named](x: T) -> T:\n    return x\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[P]):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind\nmain: def main() -> None\nshapes: field shapes.Circle.r: float\nshapes: field shapes.Square.s: float", "import shapes\ndef f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind:\n    return shapes.Kind.A\ndef main():\n    pass\n", "shapes", "type Shape = Circle | Square\nclass Circle:\n    r: float\nclass Square:\n    s: float\nenum Kind:\n    A\n"],
+        ["main: def main() -> Coroutine[None]", "async def main():\n    pass\n"],
+        ["main: def f(a: tuple[int, str], b: tuple[()], c: tuple[int]) -> None\nmain: def main() -> None", "def f(a: tuple[int, str], b: tuple[()], c: tuple[int]):\n    pass\ndef main():\n    pass\n"],
+    ]
+    for program in signature_cases:
+        actual = signatures(program, False)
+        if actual != program[0]:
+            print(f"FAIL signatures {program[1]}")
+            print(f"  expected: {program[0]}")
+            print(f"  actual:   {actual}")
+            ok = False
+    # A test file needs no main; its tests take no parameters and return None.
+    test_cases = [
+        ["main: def test_b() -> None\nmain: def test_a() -> None\nmain: def test_c() -> Coroutine[None]", "def test_b():\n    pass\ndef test_a():\n    pass\nasync def test_c():\n    pass\n"],
+        ["main.wlo:1:5: error: test function 'test_a' must take no parameters and return None", "def test_a(x: int):\n    pass\n"],
+        ["main.wlo:1:5: error: test function 'test_b' must take no parameters and return None", "def test_b() -> int:\n    return 1\ndef test_a():\n    pass\n"],
+    ]
+    for program in test_cases:
+        actual = signatures(program, True)
+        if actual != program[0]:
+            print(f"FAIL test file {program[1]}")
+            print(f"  expected: {program[0]}")
+            print(f"  actual:   {actual}")
+            ok = False
+    tested = bind_program(["", "def test_b():\n    pass\ndef helper():\n    pass\ndef test_a():\n    pass\n"], True)
+    if isinstance(tested, str):
+        print(f"FAIL tests in name order: {tested}")
+        ok = False
+    else:
+        order: list[str] = []
+        for function in tested[0].tests:
+            order.append(function.name)
+        if " ".join(order) != "test_a test_b":
+            print("FAIL tests in name order: " + " ".join(order))
             ok = False
     names = function_names(["", "import a\nprotocol P:\n    def f(self) -> int\n    def g(self) -> int\nclass C:\n    x: int\n    def m(self) -> int:\n        return 1\ndef h() -> int:\n    return 1\ndef main():\n    if True:\n        def g[T](x: T) -> T:\n            return x\n    else:\n        def g[T](x: T) -> T:\n            f = lambda: x\n            return x\n", "a", "class D:\n    y: int\n    def n(self):\n        pass\n"])
     expected = "P.f P.g C.m h main main.g main.g main.g.<lambda> a.D.n"

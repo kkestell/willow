@@ -1,0 +1,5 @@
+import util
+import util
+
+def main():
+    print(util.f())

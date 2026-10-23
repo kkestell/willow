@@ -1,0 +1,44 @@
+# Loads and binds the program whose entry file is each path named on the
+# command line, and writes the first error in each to stderr as
+# "ENTRY: DIAGNOSTIC", where the diagnostic names files relative to the entry
+# file's directory, as a compiler run from that directory would. An entry
+# whose file name begins with `test_` is a test file, which needs no `main`.
+# With --signatures first, writes the types the binder gave each module's
+# functions, methods, fields, and aliases to stdout. Exits with status 1 if
+# any program has an error.
+
+import bind
+import diagnostic
+import loader
+import sys
+
+def main():
+    args = sys.args()
+    signatures = len(args) > 0 and args[0] == "--signatures"
+    if signatures:
+        args = args[1:]
+    failed = False
+    for path in args:
+        root = loader.directory_of(path)
+        test = path[len(root):].startswith("test_")
+        error: diagnostic.Diagnostic | None = None
+        result = loader.load(path)
+        if isinstance(result, diagnostic.Diagnostic):
+            error = result
+        else:
+            error = bind.bind(result, test)
+            if error is None and signatures:
+                for source in result:
+                    for line in bind.signatures(source.tree):
+                        print(f"{source.name}: {line}")
+        if error is not None:
+            # Paths in messages, such as a missing module's, start with the
+            # directory too.
+            message = error.message
+            if root != "":
+                message = message.replace(root, "")
+            relative = diagnostic.Diagnostic(error.path.removeprefix(root), error.line, error.col, message)
+            sys.eprint(f"{path}: {relative.format()}")
+            failed = True
+    if failed:
+        sys.exit(1)

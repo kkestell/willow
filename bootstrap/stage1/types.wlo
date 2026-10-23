@@ -74,12 +74,16 @@ class UnionType:
     members: list[Type]
     alias: str
 
-# A list element or dict value inside an alias, which the binder fills in
-# once every alias is resolved, so that an alias may refer to itself there.
-# `name` is the alias's.
+# A list element or dict value, which the binder fills in once every alias
+# is resolved, so that an alias may refer to itself there. As in
+# compiler/bind.lua, every one is lazy and `name` is its source text, which
+# is how it displays. The binder gives each an `id`, which stands in for the
+# object identity Lua compares when it reuses a generic alias's
+# specialization.
 class Lazy:
     name: str
     target: Type | None
+    id: int = 0
 
 # A class, an exception class, or a standard library native type. A native
 # type has no fields, and its methods lower to helpers named after `prefix`.

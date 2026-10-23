@@ -1021,7 +1021,7 @@ class Parser:
         return decl
 
     def parse_module(self) -> ast.Module:
-        module = ast.Module(self.path, "", [], [], {}, {}, {})
+        module = ast.Module(self.path, "", [], [], {}, {}, {}, {}, [])
         while self.peek().kind == tokens.Kind.IMPORT:
             self.advance()
             name = self.expect(tokens.Kind.NAME, "a module name")

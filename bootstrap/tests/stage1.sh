@@ -11,6 +11,14 @@
 # written with paths relative to the program's directory, as the test runner,
 # which runs each program from its own directory, sees it.
 #
+# The bind driver takes the entry programs that are programs: those with a
+# main function, and test files. Its rule is the program drivers', so a
+# program whose first error in the Lua implementation comes from its checker
+# or at run time, as for every NAME.err in tests/ and examples/ except a
+# lexical and a loading error, must bind without error. Besides, each case in
+# bootstrap/tests/loader/ and bootstrap/tests/bind/ must report the error its
+# main.err expects, so that a missed binder error fails too.
+#
 # WILLOW0 names the compiler; it defaults to the release build of stage 0.
 
 set -u
@@ -56,7 +64,8 @@ files() {
 
 # The entry programs: the files above except the modules of tests/modules/*/
 # other than main.wlo and the files of projects, whose imports need the
-# project's roots; and the loader's cases in bootstrap/tests/loader/.
+# project's roots; and the cases in bootstrap/tests/loader/ and
+# bootstrap/tests/bind/.
 entries() {
     projects=$(find tests examples -name willow.json | sed 's|willow.json$||')
     files | while IFS= read -r file; do
@@ -69,7 +78,18 @@ entries() {
         done
         echo "$file"
     done
-    find bootstrap/tests/loader -name main.wlo | sort
+    find bootstrap/tests/loader bootstrap/tests/bind -name main.wlo | sort
+}
+
+# The entry programs with a main function, and test files, which have none;
+# the other entries are modules that programs import.
+programs() {
+    entries | while IFS= read -r file; do
+        case $file in
+        */test_*) echo "$file" ;;
+        *) grep -qE '^(async )?def main\(' "$file" && echo "$file" ;;
+        esac
+    done
 }
 
 # Runs driver NAME over the paths that command LIST writes; with "program" as
@@ -118,11 +138,23 @@ check_program_driver() {
     drive "$1" entries program
 }
 
+check_bind_driver() {
+    drive "$1" programs program
+    for err in bootstrap/tests/loader/*/main.err bootstrap/tests/bind/*/main.err; do
+        entry=${err%.err}.wlo
+        if ! grep -qxF "$entry: $(head -n 1 "$err")" "$work/errors"; then
+            echo "FAIL $1 $entry: no error, expected $(head -n 1 "$err")"
+            failed=1
+        fi
+    done
+}
+
 check_test lexer_test
 check_test parser_test
 check_test types_test
 check_test bind_test
 check_driver parse_files
 check_program_driver load_files
+check_bind_driver bind_files
 
 exit $failed
