@@ -236,7 +236,8 @@ pub fn check(modules: &[Module]) -> Result<Program, Diag> {
     for module in modules {
         let mut imported = HashMap::new();
         for import in &module.imports {
-            // Only core can be imported so far, and only by core's tests.
+            // Only core can be imported so far. Core's tests import it to call
+            // its functions; nothing stops another program from doing so.
             let Some(table) = tables
                 .get(import.name.as_str())
                 .filter(|_| import.name == "core")
