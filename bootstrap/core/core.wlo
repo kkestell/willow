@@ -3,8 +3,8 @@
 # program. Only this module may use intrinsics. bootstrap/core/API.md lists the
 # functions stage 0 calls.
 #
-# Stage 0 does not parse `and`, `or`, `not`, `break`, `//`, or `%` yet, so core
-# writes them as nested `if`s, `== False`, and early returns for now.
+# Functions written before stage 0 parsed `and`, `or`, `not`, `break`, `//`,
+# and `%` use nested `if`s, `== False`, and early returns instead.
 
 extern def write(fd: cint, buf: ptr, count: int) -> int
 extern def exit(status: cint)
@@ -705,6 +705,176 @@ def object_new(descriptor: ptr, fields: int) -> ptr:
     object = __alloc(8 + fields * 8)
     __store8(object, 0, __word(descriptor))
     return object
+
+# A dict keeps its entries in insertion order in an array of three slots per
+# entry: the key, the value, and 1 while the entry is live. Removing a key
+# clears its entry and marks it dead. A hash index of entry numbers, -1 when
+# empty, finds keys by linear probing. Growing compacts the entries and
+# rebuilds the index, which keeps at least twice as many slots as there are
+# entries, so it never fills. Entry numbers change only when the version
+# does, so iteration by entry number stays valid until it fails.
+#
+# The object is the header, the key kind, the number of live keys, the
+# version, the entries array, the number of entries used, the entries
+# capacity, the index array, and the index size.
+
+def dict_slot(d: ptr, field: int) -> int:
+    return __int(__load8(d, field * 8))
+
+def set_dict_slot(d: ptr, field: int, value: int):
+    __store8(d, field * 8, __word(value))
+
+def dict_entries(d: ptr) -> ptr:
+    return __ptr(__load8(d, 32))
+
+def dict_index(d: ptr) -> ptr:
+    return __ptr(__load8(d, 56))
+
+def dict_new(key_kind: int) -> ptr:
+    d = __alloc(72)
+    __store8(d, 0, __word(__type(dict)))
+    set_dict_slot(d, 1, key_kind)
+    dict_allocate(d, 8)
+    return d
+
+# Gives `d` an empty entries array of `capacity` and an index for it.
+def dict_allocate(d: ptr, capacity: int):
+    __store8(d, 32, __word(__alloc(capacity * 24)))
+    set_dict_slot(d, 5, 0)
+    set_dict_slot(d, 6, capacity)
+    size = capacity * 2
+    index = __alloc_atomic(size * 8)
+    i = 0
+    while i < size:
+        __store8(index, i * 8, __word(-1))
+        i = i + 1
+    __store8(d, 56, __word(index))
+    set_dict_slot(d, 8, size)
+
+def dict_len(d: ptr) -> int:
+    return dict_slot(d, 2)
+
+def dict_version(d: ptr) -> int:
+    return dict_slot(d, 3)
+
+def entry_live(d: ptr, entry: int) -> bool:
+    return __int(__load8(dict_entries(d), entry * 24 + 16)) == 1
+
+def dict_key_at(d: ptr, entry: int) -> word:
+    return __load8(dict_entries(d), entry * 24)
+
+def dict_value_at(d: ptr, entry: int) -> word:
+    return __load8(dict_entries(d), entry * 24 + 8)
+
+# A string hash kept below 2^31 at every step, so it never overflows.
+def str_hash(s: str) -> int:
+    h = 0
+    i = 0
+    while i < str_size(s):
+        h = (h * 31 + str_byte(s, i)) % 2147483647
+        i = i + 1
+    return h
+
+# The index slot where the search for `key` starts.
+def dict_home(d: ptr, key: word) -> int:
+    if dict_slot(d, 1) == 2:
+        return str_hash(__str(key)) % dict_slot(d, 8)
+    return __int(key) % dict_slot(d, 8)
+
+def dict_find(d: ptr, key: word) -> int:
+    size = dict_slot(d, 8)
+    slot = dict_home(d, key)
+    entry = __int(__load8(dict_index(d), slot * 8))
+    while entry != -1:
+        if entry_live(d, entry) and slots_equal(dict_key_at(d, entry), key, dict_slot(d, 1)):
+            return entry
+        slot = (slot + 1) % size
+        entry = __int(__load8(dict_index(d), slot * 8))
+    return -1
+
+# Appends a live entry, which the caller has made room for, and indexes it.
+def dict_append(d: ptr, key: word, value: word):
+    entry = dict_slot(d, 5)
+    entries = dict_entries(d)
+    __store8(entries, entry * 24, key)
+    __store8(entries, entry * 24 + 8, value)
+    __store8(entries, entry * 24 + 16, __word(1))
+    set_dict_slot(d, 5, entry + 1)
+    slot = dict_home(d, key)
+    while __int(__load8(dict_index(d), slot * 8)) != -1:
+        slot = (slot + 1) % dict_slot(d, 8)
+    __store8(dict_index(d), slot * 8, __word(entry))
+
+# Rebuilds `d` with room for twice its live keys, dropping dead entries.
+def dict_grow(d: ptr):
+    entries = dict_entries(d)
+    used = dict_slot(d, 5)
+    dict_allocate(d, dict_len(d) * 2 + 8)
+    entry = 0
+    while entry < used:
+        if __int(__load8(entries, entry * 24 + 16)) == 1:
+            dict_append(d, __load8(entries, entry * 24), __load8(entries, entry * 24 + 8))
+        entry = entry + 1
+
+# Replacing the value of an existing key keeps its position and the version.
+def dict_set(d: ptr, key: word, value: word):
+    entry = dict_find(d, key)
+    if entry >= 0:
+        __store8(dict_entries(d), entry * 24 + 8, value)
+        return
+    if dict_slot(d, 5) == dict_slot(d, 6):
+        dict_grow(d)
+    dict_append(d, key, value)
+    set_dict_slot(d, 2, dict_len(d) + 1)
+    set_dict_slot(d, 3, dict_version(d) + 1)
+
+def dict_get(d: ptr, key: word) -> word:
+    entry = dict_find(d, key)
+    if entry < 0:
+        fail("KeyError", "key not found")
+    return dict_value_at(d, entry)
+
+def dict_contains(d: ptr, key: word) -> bool:
+    return dict_find(d, key) >= 0
+
+# The dead entry stays in the index so later probes pass over it. Clearing
+# its key and value lets the collector free them.
+def dict_pop(d: ptr, key: word) -> word:
+    entry = dict_find(d, key)
+    if entry < 0:
+        fail("KeyError", "key not found")
+    value = dict_value_at(d, entry)
+    entries = dict_entries(d)
+    __store8(entries, entry * 24, __word(0))
+    __store8(entries, entry * 24 + 8, __word(0))
+    __store8(entries, entry * 24 + 16, __word(0))
+    set_dict_slot(d, 2, dict_len(d) - 1)
+    set_dict_slot(d, 3, dict_version(d) + 1)
+    return value
+
+def dict_next(d: ptr, entry: int, version: int) -> int:
+    if dict_version(d) != version:
+        fail("RuntimeError", "dictionary changed size during iteration")
+    while entry < dict_slot(d, 5):
+        if entry_live(d, entry):
+            return entry
+        entry = entry + 1
+    return -1
+
+# Core's own tests cannot use intrinsics, so they pass collection elements
+# through these.
+
+def int_word(n: int) -> word:
+    return __word(n)
+
+def word_int(w: word) -> int:
+    return __int(w)
+
+def str_word(s: str) -> word:
+    return __word(s)
+
+def word_str(w: word) -> str:
+    return __str(w)
 
 # The largest float, which is finite.
 def float_max() -> float:
