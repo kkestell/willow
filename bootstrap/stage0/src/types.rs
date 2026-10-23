@@ -11,6 +11,7 @@ pub enum Type {
     None,
     Ptr,
     Word,
+    List(Box<Type>),
     Union(Vec<Type>),
 }
 
@@ -35,6 +36,35 @@ impl Type {
         match self {
             Type::Union(members) => members,
             _ => std::slice::from_ref(self),
+        }
+    }
+
+    /// The element type of a list, or of a union's list member.
+    pub fn list_element(&self) -> Option<&Type> {
+        self.members().iter().find_map(|m| match m {
+            Type::List(element) => Some(&**element),
+            _ => None,
+        })
+    }
+
+    /// Whether `==` applies: a scalar, or a union of scalars.
+    pub fn is_comparable(&self) -> bool {
+        self.members().iter().all(|m| {
+            matches!(
+                m,
+                Type::Int | Type::Float | Type::Bool | Type::Str | Type::None
+            )
+        })
+    }
+
+    /// The equality kind core's list and dict functions compare elements of
+    /// this type with (core/API.md), for a comparable type.
+    pub fn equality_kind(&self) -> i64 {
+        match self {
+            Type::Float => 1,
+            Type::Str => 2,
+            Type::Union(_) => 3,
+            _ => 0,
         }
     }
 
@@ -77,6 +107,7 @@ impl Type {
             Type::None => "None".into(),
             Type::Ptr => "ptr".into(),
             Type::Word => "word".into(),
+            Type::List(element) => format!("list[{}]", element.name()),
             Type::Union(members) => {
                 let names: Vec<String> = members.iter().map(Type::name).collect();
                 names.join(" | ")

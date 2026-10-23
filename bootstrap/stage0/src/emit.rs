@@ -14,6 +14,7 @@ pub fn emit(program: &Program) -> String {
             ended: false,
             block: String::new(),
             loops: Vec::new(),
+            item: String::new(),
         };
         emitter.function(func);
     }
@@ -83,6 +84,9 @@ struct Emitter<'a> {
     block: String,
     /// The `continue` and `break` targets of the enclosing loops.
     loops: Vec<(String, String)>,
+    /// The operand holding the current item of a `for` loop while its
+    /// variable is stored.
+    item: String,
 }
 
 impl Emitter<'_> {
@@ -141,6 +145,16 @@ impl Emitter<'_> {
         writeln!(self.out, "}}").unwrap();
     }
 
+    /// Stores `item` in the loop variable and emits the body of a loop
+    /// whose `continue` goes to `next` and `break` to `end`.
+    fn loop_body(&mut self, item: &str, store: &Op, body: &[Op], next: &str, end: &str) {
+        self.item = item.to_string();
+        self.op(store);
+        self.loops.push((next.to_string(), end.to_string()));
+        self.ops(body);
+        self.loops.pop();
+    }
+
     fn ops(&mut self, ops: &[Op]) {
         for op in ops {
             // Ops after a jump or return cannot run. The checker rejects
@@ -185,6 +199,85 @@ impl Emitter<'_> {
                 self.loops.push((test.clone(), end.clone()));
                 self.ops(body);
                 self.loops.pop();
+                self.jump(format!("jmp {test}"));
+                self.label(&end);
+            }
+            Op::SetItem {
+                function,
+                object,
+                index,
+                value,
+            } => {
+                let v = self.value(value);
+                let o = self.value(object);
+                let i = self.value(index);
+                self.line(format!("call ${function}(l {o}, l {i}, l {v})"));
+            }
+            Op::ForList { list, store, body } => {
+                let xs = self.value(list);
+                let index = self.temp();
+                self.line(format!("{index} =l copy 0"));
+                let (test, body_label, end) =
+                    (self.new_label(), self.new_label(), self.new_label());
+                // The length is read at every step, so elements appended
+                // during the loop are visited (spec §8). The index advances
+                // before the body, so `continue` goes straight to the test.
+                self.label(&test);
+                let [length, more, item] = std::array::from_fn(|_| self.temp());
+                self.line(format!("{length} =l call $W.core.list_len(l {xs})"));
+                self.line(format!("{more} =l csltl {index}, {length}"));
+                self.jump(format!("jnz {more}, {body_label}, {end}"));
+                self.label(&body_label);
+                self.line(format!(
+                    "{item} =l call $W.core.list_get(l {xs}, l {index})"
+                ));
+                self.line(format!("{index} =l add {index}, 1"));
+                self.loop_body(&item, store, body, &test, &end);
+                self.jump(format!("jmp {test}"));
+                self.label(&end);
+            }
+            Op::ForRange {
+                start,
+                stop,
+                step,
+                fail,
+                store,
+                body,
+            } => {
+                let current = self.temp();
+                let first = self.value(start);
+                let last = self.value(stop);
+                let by = self.value(step);
+                let zero = self.temp();
+                self.line(format!("{zero} =l ceql {by}, 0"));
+                self.guard(&zero, fail);
+                self.line(format!("{current} =l copy {first}"));
+                let [test, body_label, next, advance, end] =
+                    std::array::from_fn(|_| self.new_label());
+                self.label(&test);
+                let [up, below, above, down, more, item] = std::array::from_fn(|_| self.temp());
+                self.line(format!("{up} =l csgtl {by}, 0"));
+                self.line(format!("{below} =l csltl {current}, {last}"));
+                self.line(format!("{above} =l csgtl {current}, {last}"));
+                self.line(format!("{below} =l and {up}, {below}"));
+                self.line(format!("{down} =l ceql {up}, 0"));
+                self.line(format!("{above} =l and {down}, {above}"));
+                self.line(format!("{more} =l or {below}, {above}"));
+                self.jump(format!("jnz {more}, {body_label}, {end}"));
+                self.label(&body_label);
+                self.line(format!("{item} =l copy {current}"));
+                self.loop_body(&item, store, body, &next, &end);
+                // A step that overflows passes the stop, so it ends the loop.
+                self.label(&next);
+                let [stepped, a, b] = std::array::from_fn(|_| self.temp());
+                self.line(format!("{stepped} =l add {current}, {by}"));
+                self.line(format!("{a} =l xor {current}, {stepped}"));
+                self.line(format!("{b} =l xor {by}, {stepped}"));
+                self.line(format!("{a} =l and {a}, {b}"));
+                self.line(format!("{a} =l csltl {a}, 0"));
+                self.jump(format!("jnz {a}, {end}, {advance}"));
+                self.label(&advance);
+                self.line(format!("{current} =l copy {stepped}"));
                 self.jump(format!("jmp {test}"));
                 self.label(&end);
             }
@@ -350,6 +443,33 @@ impl Emitter<'_> {
                 let d = self.temp();
                 self.line(format!("{d} =d div {l}, {r}"));
                 self.float_bits(&d)
+            }
+            Value::Item => self.item.clone(),
+            Value::ListDisplay(items) => {
+                let list = self.temp();
+                let count = items.len();
+                self.line(format!("{list} =l call $W.core.list_new(l {count})"));
+                for item in items {
+                    let v = self.value(item);
+                    self.line(format!("call $W.core.list_append(l {list}, l {v})"));
+                }
+                list
+            }
+            Value::In {
+                function,
+                item,
+                container,
+                extra,
+            } => {
+                let i = self.value(item);
+                let c = self.value(container);
+                let mut args = vec![format!("l {c}"), format!("l {i}")];
+                for value in extra {
+                    args.push(format!("l {}", self.value(value)));
+                }
+                let t = self.temp();
+                self.line(format!("{t} =l call ${function}({})", args.join(", ")));
+                t
             }
             Value::Seq(first, second) => {
                 self.value(first);
