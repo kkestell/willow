@@ -1,0 +1,4 @@
+import app.missing
+
+def f() -> int:
+    return 1
