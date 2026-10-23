@@ -84,7 +84,7 @@ Included:
 
 - Types: `int`, `float`, `bool`, `str`, `None`, `list[T]`, `dict[K, V]` with
   `int`, `str`, or enum keys, classes with fields and methods and no
-  inheritance, enums, unions, type aliases, module-qualified names.
+  inheritance, enums, unions, type aliases that are not recursive, module-qualified names.
 - Narrowing: `is None`, `is not None`, `isinstance` on classes and scalars,
   with the `and`, `or`, and `not` fact rules, `if`/`elif`/`else` and `while`
   flow, assignment narrowing, and the `assert` rule. Definite assignment and
