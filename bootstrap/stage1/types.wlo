@@ -4,11 +4,14 @@
 # A type is one of the classes in `Type`. Declared classes, protocols, enums,
 # and functions appear in types through the records Class, Protocol, Enum,
 # and Function, which the binder creates when it declares a name and fills in
-# as it resolves the declaration. Types compare those records by type_name,
-# which is unique in a program, and compare a type parameter by its owner's
-# type_name and its own name, so two objects for the same declaration are
-# the same type. L0 has no module variables, so `prim` makes a scalar type
-# whenever one is needed; scalars compare by name.
+# as it resolves the declaration. L0 has no object identity, so types compare
+# those records by content: classes, protocols, and enums by type_name, which
+# is unique because they are declared only at file scope, and functions and
+# type parameters by an `id` the binder gives each declaration. A nested
+# function's type_name is not unique: redefining one in the same function
+# makes a second function that is not the same type, though both display
+# alike. L0 has no module variables, so `prim` makes a scalar type whenever
+# one is needed; scalars compare by name.
 
 import ast
 
@@ -57,9 +60,11 @@ class FunctionType:
     receiver: ClassType | ProtocolType | None
 
 # A type parameter as its declaration's body sees it, with no operations
-# beyond storing, passing, and returning, and those of its bound.
+# beyond storing, passing, and returning, and those of its bound. `id` is
+# unique among type parameters: the binder gives each declared one an id,
+# and the standard library's have negative ids.
 class TypeVar:
-    owner: str
+    id: int
     name: str
     bound: Type | None
 
@@ -104,9 +109,12 @@ class Enum:
     type_name: str
     members: list[str]
 
-# A function or method. A method's first parameter is `self`, and its
-# type_name is the class's followed by its name.
+# A function or method. `id` is the binder's id of its declaration, unique
+# among functions; the standard library's functions have id 0, since native
+# and standard protocol methods never become values. A method's first
+# parameter is `self`, and its type_name is the class's followed by its name.
 class Function:
+    id: int
     name: str
     type_name: str
     typevars: list[TypeVar]
@@ -163,7 +171,7 @@ def var_types(vars: list[TypeVar]) -> list[Type]:
     return result
 
 def var_key(v: TypeVar) -> str:
-    return v.owner + "." + v.name
+    return str(v.id)
 
 # The kind of `t` as compiler/types.lua names it: a scalar's name, or list,
 # dict, tuple, record, protocol, enum, callable, function, typevar, union, or
@@ -315,7 +323,7 @@ def key(t: Type) -> str:
     if isinstance(t, EnumType):
         return "enum " + t.decl.type_name
     if isinstance(t, FunctionType):
-        return "function " + t.fn.type_name
+        return "function " + str(t.fn.id)
     if isinstance(t, TypeVar):
         return "typevar " + var_key(t)
     return kind(t)
@@ -352,7 +360,7 @@ def same_in(a: Type, b: Type, assumed: list[str]) -> bool:
     if isinstance(a, FunctionType):
         if not isinstance(b, FunctionType):
             return False
-        if a.fn.type_name != b.fn.type_name or a.bound != b.bound:
+        if a.fn.id != b.fn.id or a.bound != b.bound:
             return False
         ra = a.receiver
         rb = b.receiver
@@ -586,12 +594,12 @@ def iteration_item(t: Type) -> Type | None:
 # The standard `Iterator[T]` protocol, which built-in values' `iter` methods
 # return.
 def iterator_protocol() -> Protocol:
-    t = TypeVar("Iterator", "T", None)
+    t = TypeVar(-1, "T", None)
     decl = Protocol("Iterator", "Iterator", [t], [])
     self_type = protocol_self(decl)
     receiver = Param("self", self_type, None, False)
-    decl.methods.append(Function("iter", "Iterator.iter", [], [receiver], self_type))
-    decl.methods.append(Function("next", "Iterator.next", [], [receiver], t))
+    decl.methods.append(Function(0, "iter", "Iterator.iter", [], [receiver], self_type))
+    decl.methods.append(Function(0, "next", "Iterator.next", [], [receiver], t))
     return decl
 
 def iterator(item: Type) -> ProtocolType:
@@ -818,10 +826,14 @@ def has_typevar(t: Type, seen: list[str], keys: list[str], only: bool) -> bool:
     return False
 
 # The types `t` is made of, as substitution sees them; a dict key cannot
-# mention a type parameter.
+# mention a type parameter. A bound method with a receiver has the result of
+# its specialized signature.
 def parts_of(t: Type) -> list[Type]:
     parts: list[Type] = []
-    if isinstance(t, ListType):
+    if isinstance(t, FunctionType):
+        if t.receiver is not None:
+            parts.append(function_result(t))
+    elif isinstance(t, ListType):
         parts.append(t.element)
     elif isinstance(t, DictType):
         parts.append(t.value)

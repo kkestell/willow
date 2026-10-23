@@ -2,8 +2,9 @@
 # few standard library signatures. Each expected display text is what the
 # Lua implementation prints for the same type in a diagnostic, as in
 # "expected int, received function Box[int].get". Declarations are built by
-# hand as the binder builds them. Prints each mismatch and exits with status
-# 1 if there was one.
+# hand as the binder builds them, with the ids the binder would give their
+# functions and type parameters written out. Prints each mismatch and exits
+# with status 1 if there was one.
 
 import stdlib
 import sys
@@ -31,18 +32,18 @@ def prim(name: str) -> types.Type:
 def param(name: str, ty: types.Type) -> types.Param:
     return types.Param(name, ty, None, False)
 
-def method(decl: types.Class, name: str, params: list[types.Param], result: types.Type) -> types.Function:
+def method(decl: types.Class, id: int, name: str, params: list[types.Param], result: types.Type) -> types.Function:
     all_params = [param("self", types.class_self(decl))]
     all_params.extend(params)
-    fn = types.Function(name, decl.type_name + "." + name, [], all_params, result)
+    fn = types.Function(id, name, decl.type_name + "." + name, [], all_params, result)
     decl.methods.append(fn)
     return fn
 
 # `class Box[T]` with `item: T` and `def get(self) -> T`.
 def box() -> types.Class:
-    t = types.TypeVar("Box", "T", None)
+    t = types.TypeVar(1, "T", None)
     decl = types.Class("Box", "Box", [t], [types.Field("item", t, None)], [], False, False, "")
-    method(decl, "get", [], t)
+    method(decl, 10, "get", [], t)
     return decl
 
 def box_of(arg: types.Type) -> types.ClassType:
@@ -51,16 +52,16 @@ def box_of(arg: types.Type) -> types.ClassType:
 # `class Pair[A, B]` with `def swap(self) -> Pair[B, A]` and
 # `def apply(self, f: (A) -> B) -> dict[str, B | None]`.
 def pair() -> types.Class:
-    a = types.TypeVar("Pair", "A", None)
-    b = types.TypeVar("Pair", "B", None)
+    a = types.TypeVar(2, "A", None)
+    b = types.TypeVar(3, "B", None)
     decl = types.Class("Pair", "Pair", [a, b], [], [], False, False, "")
-    method(decl, "swap", [], types.ClassType(decl, [b, a]))
+    method(decl, 11, "swap", [], types.ClassType(decl, [b, a]))
     f = types.CallableType([a], b)
-    method(decl, "apply", [param("f", f)], types.DictType(prim("str"), types.optional(b)))
+    method(decl, 12, "apply", [param("f", f)], types.DictType(prim("str"), types.optional(b)))
     return decl
 
-def function(name: str, params: list[types.Param], result: types.Type) -> types.Function:
-    return types.Function(name, name, [], params, result)
+def function(id: int, name: str, params: list[types.Param], result: types.Type) -> types.Function:
+    return types.Function(id, name, name, [], params, result)
 
 def display(r: Results):
     int_or_none = types.optional(prim("int"))
@@ -74,10 +75,10 @@ def display(r: Results):
     returns_optional = types.CallableType([prim("int")], types.optional(prim("str")))
     parts: list[types.Type] = [types.ListType(prim("int")), types.DictType(prim("str"), prim("int")), returns_optional]
     r.shows("union with a callable member", types.union(parts), "list[int] | dict[str, int] | ((int) -> str | None)")
-    f = function("f", [param("x", prim("int")), param("y", prim("str"))], prim("bool"))
+    f = function(20, "f", [param("x", prim("int")), param("y", prim("str"))], prim("bool"))
     r.shows("function", types.FunctionType(f, False, None), "function f")
     counter = types.Class("Counter", "Counter", [], [types.Field("n", prim("int"), None)], [], False, False, "")
-    add = method(counter, "add", [], prim("int"))
+    add = method(counter, 13, "add", [], prim("int"))
     r.shows("bound method", types.FunctionType(add, True, None), "function Counter.add")
     boxed = box_of(prim("int"))
     r.shows("specialization", boxed, "Box[int]")
@@ -104,24 +105,36 @@ def equality(r: Results):
     to_str = types.CallableType([prim("int")], prim("str"))
     r.check("callables", types.same(to_str, types.CallableType([prim("int")], prim("str"))), True)
     r.check("callable params", types.same(to_str, types.CallableType([prim("str")], prim("str"))), False)
-    t = types.TypeVar("f", "T", None)
-    r.check("type parameters", types.same(t, types.TypeVar("f", "T", None)), True)
-    r.check("owners", types.same(t, types.TypeVar("g", "T", None)), False)
-    f = function("f", [], prim("None"))
+    t = types.TypeVar(4, "T", None)
+    r.check("type parameters", types.same(t, types.TypeVar(4, "T", None)), True)
+    r.check("other declarations", types.same(t, types.TypeVar(5, "T", None)), False)
+    f = function(21, "f", [], prim("None"))
     r.check("functions", types.same(types.FunctionType(f, False, None), types.FunctionType(f, False, None)), True)
     r.check("bound", types.same(types.FunctionType(f, False, None), types.FunctionType(f, True, None)), False)
+    # A nested `def g` defined twice in `f` makes two functions named f.g, which
+    # Lua reports as "expected function f.g, received function f.g".
+    first_t = types.TypeVar(6, "T", None)
+    second_t = types.TypeVar(7, "T", None)
+    first = types.Function(22, "g", "f.g", [first_t], [param("x", first_t)], first_t)
+    second = types.Function(23, "g", "f.g", [second_t], [param("x", second_t)], second_t)
+    first_value = types.FunctionType(first, False, None)
+    second_value = types.FunctionType(second, False, None)
+    r.check("redefined function", types.same(first_value, second_value), False)
+    r.shows("redefined function display", second_value, "function f.g")
+    bindings: dict[str, types.Type] = {types.var_key(first_t): prim("int")}
+    r.shows("other function's type parameter", types.substitute(second_t, bindings), "T")
     # Recursive aliases terminate.
     r.check("recursive alias", types.same(stdlib.json_type(), stdlib.json_type()), True)
     r.check("recursive alias and int", types.same(stdlib.json_type(), prim("int")), False)
 
 def substitution(r: Results):
     # `def first[T](items: list[T]) -> T | None` called with list[int | None].
-    t = types.TypeVar("first", "T", None)
+    t = types.TypeVar(8, "T", None)
     bindings: dict[str, types.Type] = {types.var_key(t): types.optional(prim("int"))}
     r.shows("flattened union", types.substitute(types.optional(t), bindings), "int | None")
     r.check("mentions", types.mentions(types.ListType(t)), True)
     r.check("mentions none", types.mentions(types.ListType(prim("int"))), False)
-    other = types.TypeVar("other", "T", None)
+    other = types.TypeVar(9, "T", None)
     r.check("mentions any", types.mentions_any(types.ListType(t), [other]), False)
     specialized = types.ClassType(pair(), [prim("int"), prim("str")])
     swap = types.method(specialized, "swap")
@@ -133,6 +146,13 @@ def substitution(r: Results):
     r.check("generic param", apply.generic[0], True)
     r.shows("method result union", apply.result, "dict[str, str | None]")
     r.shows("bound specialized method", types.FunctionType(specialized.decl.methods[1], True, specialized), "function Pair[int, str].apply")
+    # A bound method mentions a type parameter through its receiver's
+    # signature, as `function Box[T].get` does in Lua.
+    generic_box = box()
+    own = types.class_self(generic_box)
+    get = types.FunctionType(generic_box.methods[0], True, own)
+    r.check("bound method mentions", types.mentions(get), True)
+    r.check("specialized bound method", types.mentions(types.FunctionType(generic_box.methods[0], True, box_of(prim("int")))), False)
     boxed = box_of(prim("int"))
     field = types.substitute(boxed.decl.fields[0].ty, types.record_map(boxed))
     r.shows("field", field, "int")
@@ -165,12 +185,12 @@ def assignability(r: Results):
     # `class Box[T: Sized]` specialized with a class whose `size` returns str.
     sized = types.Protocol("Sized", "Sized", [], [])
     receiver = param("self", types.protocol_self(sized))
-    sized.methods.append(types.Function("size", "Sized.size", [], [receiver], prim("int")))
+    sized.methods.append(types.Function(14, "size", "Sized.size", [], [receiver], prim("int")))
     right = types.Class("Right", "Right", [], [], [], False, False, "")
-    method(right, "size", [], prim("int"))
+    method(right, 15, "size", [], prim("int"))
     wrong = types.Class("Wrong", "Wrong", [], [], [], False, False, "")
-    method(wrong, "size", [], prim("str"))
-    t = types.TypeVar("Box", "T", types.protocol_self(sized))
+    method(wrong, 16, "size", [], prim("str"))
+    t = types.TypeVar(1, "T", types.protocol_self(sized))
     r.text("bound satisfied", types.unsatisfied(t, types.ClassType(right, [])), "")
     r.text("bound", types.unsatisfied(t, types.ClassType(wrong, [])), "type argument Wrong does not satisfy the bound Sized of 'T'")
 
