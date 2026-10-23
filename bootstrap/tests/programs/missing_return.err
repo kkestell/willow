@@ -1,0 +1,1 @@
+missing_return.wlo:1:5: error: function 'pick' must return a value on every path
