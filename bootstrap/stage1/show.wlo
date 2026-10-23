@@ -137,6 +137,11 @@ class Printer:
             parts.append(self.annotation(t))
         return ", ".join(parts)
 
+    def type_arg_list(self, types: list[ast.TypeExpr]) -> str:
+        if len(types) == 0:
+            return ""
+        return "[" + self.type_args(types) + "]"
+
     def expr(self, expr: ast.Expr) -> str:
         return self.at(self.expr_node(expr.node), expr.line, expr.col)
 
@@ -157,10 +162,14 @@ class Printer:
             return "None"
         if isinstance(node, ast.Name):
             return node.name
+        if isinstance(node, ast.FunctionValue):
+            return node.target.name + self.type_arg_list(node.type_args)
+        if isinstance(node, ast.EnumMember):
+            return node.decl.name + "." + node.name
         if isinstance(node, ast.Call):
-            return node.name + "(" + self.args(node.args, node.keywords) + ")"
+            return node.name + self.type_arg_list(node.type_args) + "(" + self.args(node.args, node.keywords) + ")"
         if isinstance(node, ast.CallValue):
-            return "(" + self.expr(node.callee) + ")(" + self.args(node.args, node.keywords) + ")"
+            return "(" + self.expr(node.callee) + ")" + self.type_arg_list(node.type_args) + "(" + self.args(node.args, node.keywords) + ")"
         if isinstance(node, ast.MethodCall):
             return self.expr(node.object) + "." + node.name + "(" + self.args(node.args, node.keywords) + ")"
         if isinstance(node, ast.Field):
