@@ -1,0 +1,49 @@
+import core
+
+def main():
+    d = core.dict_new(0)
+    core.dict_set(d, core.int_word(10), core.int_word(1))
+    core.dict_set(d, core.int_word(-3), core.int_word(2))
+    core.dict_set(d, core.int_word(7), core.int_word(3))
+    assert core.dict_len(d) == 3
+    assert core.word_int(core.dict_get(d, core.int_word(-3))) == 2
+    assert core.dict_contains(d, core.int_word(7))
+    assert not core.dict_contains(d, core.int_word(8))
+    assert core.dict_find(d, core.int_word(8)) == -1
+
+    # Replacing a value keeps the entry's position and the version; removing
+    # a key and inserting it again moves it to the end.
+    version = core.dict_version(d)
+    core.dict_set(d, core.int_word(10), core.int_word(4))
+    assert core.dict_version(d) == version
+    assert core.word_int(core.dict_pop(d, core.int_word(-3))) == 2
+    assert core.dict_version(d) != version
+    core.dict_set(d, core.int_word(-3), core.int_word(5))
+    order = ""
+    version = core.dict_version(d)
+    entry = core.dict_next(d, 0, version)
+    while entry != -1:
+        key = core.word_int(core.dict_key_at(d, entry))
+        value = core.word_int(core.dict_value_at(d, entry))
+        order = order + core.int_to_str(key) + "=" + core.int_to_str(value) + " "
+        entry = core.dict_next(d, entry + 1, version)
+    assert order == "10=4 7=3 -3=5 "
+
+    # Keys compare by contents, and growing keeps insertion order.
+    s = core.dict_new(2)
+    i = 0
+    while i < 100:
+        core.dict_set(s, core.str_word("k" + core.int_to_str(i)), core.int_word(i))
+        i = i + 1
+    i = 0
+    while i < 100:
+        if i % 2 == 0:
+            core.dict_pop(s, core.str_word("k" + core.int_to_str(i)))
+        i = i + 1
+    assert core.dict_len(s) == 50
+    assert core.word_int(core.dict_get(s, core.str_word("k99"))) == 99
+    assert not core.dict_contains(s, core.str_word("k98"))
+    entry = core.dict_next(s, 0, core.dict_version(s))
+    assert core.word_str(core.dict_key_at(s, entry)) == "k1"
+    core.dict_set(s, core.str_word(""), core.int_word(-1))
+    assert core.word_int(core.dict_get(s, core.str_word(""))) == -1
