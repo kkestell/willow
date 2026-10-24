@@ -309,61 +309,9 @@ def io_file() -> types.Class:
 def none_param(name: str, ty: types.Type) -> types.Param:
     return default_param(name, ty, none_default())
 
-def aio_module() -> Module:
-    module = new_module("aio")
-    # `aio.Task[T]`, an opaque generic handle like `Coroutine[T]`.
-    task = native_class("aio", "Task", "aio_task")
-    t = types.TypeVar(-6, "T", None)
-    task.typevars.append(t)
-    native_method(task, "result", [], t)
-    group = native_class("aio", "TaskGroup", "aio_group")
-    start = types.TypeVar(-7, "T", None)
-    started = types.ClassType(task, [start])
-    generic_method(group, "start", [start], [param("coro", coroutine_of(start))], started)
-    native_method(group, "cancel", [], prim("None"))
-    # aio's TCP handles behave like net's, but recv, sendall, and accept
-    # return coroutines that wait by suspending their task.
-    timeout = none_param("timeout", optional("float"))
-    connection = native_class("aio", "Connection", "aio_connection")
-    received = coroutine_of(prim("bytes"))
-    native_method(connection, "recv", [param("size", prim("int")), timeout], received)
-    sent = coroutine_of(prim("None"))
-    native_method(connection, "sendall", [param("data", prim("bytes")), timeout], sent)
-    native_method(connection, "close", [], prim("None"))
-    listener = native_class("aio", "Listener", "aio_listener")
-    native_method(listener, "accept", [timeout], coroutine_of(class_type(connection)))
-    native_method(listener, "local_port", [], prim("int"))
-    native_method(listener, "close", [], prim("None"))
-    scoped(connection)
-    scoped(listener)
-    semaphore = native_class("aio", "Semaphore", "aio_semaphore")
-    native_method(semaphore, "acquire", [], coroutine_of(prim("None")))
-    native_method(semaphore, "release", [], prim("None"))
-    module.classes["Task"] = task
-    module.classes["TaskGroup"] = group
-    module.classes["Connection"] = connection
-    module.classes["Listener"] = listener
-    module.classes["Semaphore"] = semaphore
-    functions = module.functions
-    seconds = arg("seconds", prim("float"))
-    add_helper(functions, "sleep", [seconds], coroutine_of(prim("None")), "aio_sleep_coroutine")
-    add_helper(functions, "task_group", [], class_type(group), "aio_task_group")
-    host = arg("host", prim("str"))
-    port = arg("port", prim("int"))
-    connect_timeout = defaulted("timeout", optional("float"), float_default(30.0))
-    connected = coroutine_of(class_type(connection))
-    add_helper(functions, "connect", [host, port, connect_timeout], connected, "aio_connect_coroutine")
-    backlog = defaulted("backlog", prim("int"), int_default("16"))
-    add_helper(functions, "listen", [host, port, backlog], class_type(listener), "aio_listen")
-    value = defaulted("value", prim("int"), int_default("1"))
-    add_helper(functions, "semaphore", [value], class_type(semaphore), "aio_semaphore")
-    return module
-
 # The compiler-provided modules, by name.
 def modules() -> dict[str, Module]:
-    return {
-        "aio": aio_module(),
-    }
+    return {}
 
 # Run-time types of built-in values that protocol dispatch finds converters
 # for, named by their dispatch tags, which no class can have. Programs cannot
