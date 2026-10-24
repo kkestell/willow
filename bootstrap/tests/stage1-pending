@@ -1,13 +1,9 @@
 aio_listener_outside_loop
-aio_protocols
 aio_sleep
-aio_sleep_invalid
 aio_sockets
 bound_methods
 cancel_after_raising_finally
 cli_parsing
-coroutine_traceback
-coroutines
 file_lines
 generator_cleanup
 generator_traceback

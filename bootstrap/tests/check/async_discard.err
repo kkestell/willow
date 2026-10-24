@@ -1,0 +1,1 @@
+async_discard.wlo:8:5: error: cannot discard a value of type Coroutine[int]; a discarded coroutine never runs

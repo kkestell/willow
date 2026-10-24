@@ -147,8 +147,8 @@ class Emitter:
             if body != "":
                 self.write(body)
                 return
-        if module == "core" and function.name == "fail":
-            self.emit_fail()
+        if module == "core" and function.name in ["fail", "fail_at"]:
+            self.emit_fail(function.name)
             return
         self.emit_function(function, self.symbol(function), [], {})
         while self.emitted < len(self.later):
@@ -162,11 +162,17 @@ class Emitter:
         record = function.record
         assert record is not None, f"function {function.name} has no signature"
         module = self.module_of(function)
+        result = self.concrete_type(record.result)
+        if function.is_async:
+            self.emit_async_constructor(function, symbol, first)
+            symbol = symbol + ".body"
+            assert isinstance(result, types.ClassType), "async function without a coroutine result"
+            result = result.args[0]
         params: list[str] = []
         params.extend(first)
         for param in function.params:
             params.append(f"l %p.{param.name}")
-        self.begin(symbol, params, not is_none(self.concrete_type(record.result)))
+        self.begin(symbol, params, not is_none(result))
         self.function_name = frame_name(function)
         self.path = self.module_paths[module]
         self.frames = module != "core"
@@ -190,6 +196,28 @@ class Emitter:
         if self.returns:
             self.jump("hlt")
         self.end("0")
+
+    def emit_async_constructor(self, function: ast.FunctionDecl, symbol: str, first: list[str]):
+        params: list[str] = []
+        params.extend(first)
+        values: list[str] = []
+        if len(first) > 0:
+            values.append("%env")
+        for param in function.params:
+            params.append(f"l %p.{param.name}")
+            values.append(f"%p.{param.name}")
+        self.begin(symbol, params, True)
+        body = self.new_closure(symbol + ".await", values)
+        self.end(self.core_call("async_coroutine", [body], True))
+        self.begin(symbol + ".await", ["l %env"], True)
+        args: list[str] = []
+        for i in range(len(values)):
+            args.append("l " + self.load_field("%env", 16 + i * 8))
+        record = function.record
+        assert record is not None, "async function without a signature"
+        result = self.concrete_type(record.result)
+        assert isinstance(result, types.ClassType), "async function without a coroutine result"
+        self.end(self.call_text(symbol + ".body", args, not is_none(result.args[0])))
 
     # Starts function `symbol` with `params`, which returns a value when
     # `returns`. Its frames are recorded only when the caller says so.
@@ -224,10 +252,15 @@ class Emitter:
 
     # Stage 0 compiles core's `fail`, which ends the program. Stage 1 replaces
     # its body with one that raises the built-in exception it names.
-    def emit_fail(self):
-        self.write("function $W.core.fail(l %p.class_name, l %p.message) {")
+    def emit_fail(self, name: str):
+        params = "l %p.class_name, l %p.message"
+        if name == "fail_at":
+            params = params + ", l %p.path, l %p.line, l %p.col"
+        self.write("function $W.core." + name + "(" + params + ") {")
         self.label("@start")
         self.line("%e =l call $W.core.failure(l $W.exceptions, l %p.class_name, l %p.message)")
+        if name == "fail_at":
+            self.line("call $W.core.locate(l %e, l %p.path, l %p.line, l %p.col)")
         self.line("storel %e, $W.pending")
         self.jump("ret")
         self.write("}")
@@ -421,7 +454,13 @@ class Emitter:
         self.line("storel %argc.l, $W.argc")
         self.line("storel %argv, $W.argv")
         self.line("call $W.core.init()")
-        self.line(f"call $W.{entry.name}.main()")
+        main = entry.names["main"]
+        assert isinstance(main, ast.FunctionDecl), "entry without main"
+        if main.is_async:
+            self.line(f"%root =l call $W.{entry.name}.main()")
+            self.line("%result =l call $W.core.aio_run(l %root)")
+        else:
+            self.line(f"call $W.{entry.name}.main()")
         # Output is not buffered, so there is nothing to flush.
         self.line("%e =l loadl $W.pending")
         self.line("jnz %e, @uncaught, @done")
@@ -1534,6 +1573,8 @@ class Emitter:
             function = node.function
             assert function is not None, "unbound lambda"
             return self.closure(function)
+        elif isinstance(node, ast.Await):
+            return self.core_call("async_await", [self.expr(node.operand)], True)
         elif isinstance(node, ast.Typed):
             return f"%p.{node.index}"
         return self.unchecked("expression")
@@ -2078,6 +2119,10 @@ class Emitter:
             return self.host(node, target)
         elif name == "fs.realpath":
             return self.host(node, target)
+        elif name == "aio.sleep":
+            args = self.arg_values(node.args, node.order)
+            args.extend([self.string(self.path), str(self.at_line), str(self.at_col)])
+            return self.core_call("aio_sleep_coroutine", args, True)
         return self.unchecked(f"'{name}'")
 
     def saved_method(self, expr: ast.Expr, object: str, supplied: list[str]) -> str:
@@ -2916,7 +2961,7 @@ def field_base(decl: types.Class) -> int:
 
 # The built-in types with descriptors, which every program emits.
 def builtin_types() -> list[str]:
-    return ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple", "function"]
+    return ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple", "function", "Coroutine"]
 
 def equality_kind(t: types.Type) -> str:
     kind = types.kind(types.expand(t))

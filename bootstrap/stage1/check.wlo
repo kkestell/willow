@@ -162,7 +162,9 @@ class Checker:
         elif isinstance(node, ast.Unpack):
             self.check_pattern(node.target, self.check_expr(node.value, state), state)
         elif isinstance(node, ast.CallStmt):
-            self.check_expr(node.call, state)
+            ty = self.check_expr(node.call, state)
+            if stdlib.has_coroutine(ty):
+                self.fail(line, col, f"cannot discard a value of type {types.display(ty)}; a discarded coroutine never runs")
             # sys.exit never returns, so it transfers control.
             call = node.call.node
             if isinstance(call, ast.Call):
@@ -857,7 +859,7 @@ class Checker:
         ty = self.check_node(expr, state)
         expr.ty = ty
         node = expr.node
-        if isinstance(node, ast.Call) or isinstance(node, ast.CallValue) or isinstance(node, ast.MethodCall):
+        if isinstance(node, ast.Call) or isinstance(node, ast.CallValue) or isinstance(node, ast.MethodCall) or isinstance(node, ast.Await):
             self.calls = self.calls + 1
             self.forget_captured(state)
         return ty
@@ -902,6 +904,15 @@ class Checker:
             return self.check_lambda(expr, node, state)
         elif isinstance(node, ast.CallValue):
             return self.check_call_value(expr, node, state)
+        elif isinstance(node, ast.Await):
+            expected = expr.expected
+            if expected is not None:
+                node.operand.expected = stdlib.coroutine_of(expected)
+            operand = self.check_expr(node.operand, state)
+            if isinstance(operand, types.ClassType) and operand.decl.type_name == "Coroutine":
+                return operand.args[0]
+            self.fail(line, col, f"cannot await a value of type {types.display(operand)}")
+            return none()
         elif isinstance(node, ast.Typed):
             return node.ty
         elif isinstance(node, ast.Index):
@@ -1578,6 +1589,8 @@ class Checker:
             return self.check_host(expr, node, target, state)
         elif name == "fs.realpath":
             return self.check_host(expr, node, target, state)
+        elif name == "aio.sleep":
+            return self.check_host(expr, node, target, state)
         # Not in L0.
         return self.unsupported(line, col, f"'{name}'")
 
@@ -1755,7 +1768,11 @@ class Checker:
 def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[int, ast.Symbol]) -> diagnostic.Diagnostic | None:
     record = function.record
     assert record is not None, f"function {function.name} has no signature"
-    checker = Checker(module, function, record.result, None, {})
+    result = record.result
+    if function.is_async:
+        assert isinstance(result, types.ClassType), "async function without a coroutine result"
+        result = result.args[0]
+    checker = Checker(module, function, result, None, {})
     state: dict[int, types.Type] = {}
     for id in entry:
         checker.symbols[id] = entry[id]
@@ -1770,7 +1787,7 @@ def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[i
         if default is not None:
             checker.check_against(default, {}, record.params[i].ty)
     transfers = checker.check_block(function.body, state)
-    if not checker.failed() and not transfers and not types.assignable(record.result, none()):
+    if not checker.failed() and not transfers and not types.assignable(result, none()):
         name = "function '" + function.name
         owner = function.owner
         if isinstance(owner, ast.ClassDecl):
