@@ -27,7 +27,7 @@ on the compiler, library, or bootstrap chain.
   configuration systems, or fallback paths for hypothetical future needs.
 - Handle expected invalid source and ordinary operation failures clearly. Do not
   turn every imaginable host failure or pathological program into a new subsystem.
-- Rely on internal invariants; fail clearly when they break. Avoid redundant checks,
+- Trust internal invariants; fail clearly when they break. Avoid redundant checks,
   speculative recovery, and layers of defensive wrappers.
 - Let repeated, concrete needs earn abstractions and dependencies. Measure before
   optimizing. Fix demonstrated problems rather than inventing them.
