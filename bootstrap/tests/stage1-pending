@@ -5,9 +5,6 @@ bound_methods
 cancel_after_raising_finally
 cli_parsing
 file_lines
-generator_cleanup
-generator_traceback
-generators
 generics
 host
 http_values
@@ -22,12 +19,9 @@ protocol_native_failure
 protocols
 scoped_resources
 sockets
-sort_keys
-sorting
 square_root
 stdlib_aio_semaphore
 stdlib_aio_semaphore_deadlock
-stdlib_builtins
 stdlib_builtins_errors
 stdlib_fs
 stdlib_fs_symlinks
@@ -49,4 +43,3 @@ terminal_styles
 text_collections
 text_conversions
 type_errors
-with_statements

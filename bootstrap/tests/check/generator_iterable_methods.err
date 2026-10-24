@@ -1,0 +1,1 @@
+generator_iterable_methods.wlo:5:14: error: type Iterable[int] has no method 'next'

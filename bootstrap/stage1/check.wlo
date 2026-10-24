@@ -25,6 +25,7 @@ class Checker:
     loop_finally: int = 0
     # The number of calls checked so far.
     calls: int = 0
+    yield_type: types.Type | None = None
 
     def fail(self, line: int, col: int, message: str):
         if self.error is None:
@@ -179,6 +180,14 @@ class Checker:
                 self.fail(line, col, "'return' cannot leave a 'finally' clause")
             self.check_return(statement, node, state)
             return True
+        elif isinstance(node, ast.Yield):
+            if self.finally_depth > 0:
+                self.fail(line, col, "'yield' cannot be used in a 'finally' clause")
+            yielded = self.yield_type
+            assert yielded is not None, "yield outside a generator"
+            self.check_against(node.value, state, yielded)
+            self.calls = self.calls + 1
+            self.forget_captured(state)
         elif isinstance(node, ast.IndexAssign):
             self.check_index_assign(statement, node, state)
         elif isinstance(node, ast.FieldAssign):
@@ -845,6 +854,10 @@ class Checker:
 
     def check_return(self, statement: ast.Stmt, node: ast.Return, state: dict[int, types.Type]):
         value = node.value
+        if self.yield_type is not None:
+            if value is not None:
+                self.fail(statement.line, statement.col, "a generator cannot return a value")
+            return
         if value is not None:
             self.check_against(value, state, self.result)
         elif not types.assignable(self.result, none()):
@@ -1773,6 +1786,15 @@ def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[i
         assert isinstance(result, types.ClassType), "async function without a coroutine result"
         result = result.args[0]
     checker = Checker(module, function, result, None, {})
+    if function.generator:
+        result = types.expand(result)
+        if not isinstance(result, types.ProtocolType):
+            checker.fail(function.line, function.col, "a generator function must be annotated Generator[T], Iterator[T], or Iterable[T]")
+            return checker.error
+        if result.decl.type_name not in ["Generator", "Iterator", "Iterable"]:
+            checker.fail(function.line, function.col, "a generator function must be annotated Generator[T], Iterator[T], or Iterable[T]")
+            return checker.error
+        checker.yield_type = result.args[0]
     state: dict[int, types.Type] = {}
     for id in entry:
         checker.symbols[id] = entry[id]
@@ -1787,7 +1809,7 @@ def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[i
         if default is not None:
             checker.check_against(default, {}, record.params[i].ty)
     transfers = checker.check_block(function.body, state)
-    if not checker.failed() and not transfers and not types.assignable(result, none()):
+    if not checker.failed() and not function.generator and not transfers and not types.assignable(result, none()):
         name = "function '" + function.name
         owner = function.owner
         if isinstance(owner, ast.ClassDecl):

@@ -1,0 +1,8 @@
+def values() -> Iterator[int]:
+    try:
+        pass
+    finally:
+        yield 1
+
+def main():
+    pass

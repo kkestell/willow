@@ -217,9 +217,10 @@ per scheduled task; direct coroutine awaits run on that task's stack.
 | `coroutine_finished(coroutine: CoroutineContext) -> bool` | Whether the entry has returned, normally or with an exception |
 
 Resuming a finished coroutine returns 0 again. Resuming a running coroutine
-or yielding outside one raises `RuntimeError`. Each inactive context holds its
-own pending exception; a callback failure is transferred once. Finished
-contexts release their stack references after switching to the caller.
+or yielding outside one raises `RuntimeError`. A callback failure is transferred
+once; generator advancement converts an escaping `StopIteration` to `RuntimeError`.
+Switches run with no pending exception. Finished contexts release their stack
+references after switching to the caller.
 
 ## Async under stage 1
 
