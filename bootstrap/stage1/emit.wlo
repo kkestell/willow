@@ -159,6 +159,9 @@ class Emitter:
             if body != "":
                 self.write(body)
                 return
+        if module == "W.core" and function.name == "ascii_character":
+            self.emit_ascii_character()
+            return
         if module == "W.core" and function.name == "stdin_buffer":
             self.begin(self.symbol(function), [], True)
             self.end("$W.stdin.buffer")
@@ -179,6 +182,23 @@ class Emitter:
         while self.emitted < len(self.later):
             self.emitted = self.emitted + 1
             self.emit_later(self.later[self.emitted - 1])
+
+    def emit_ascii_character(self):
+        self.write("\n".join([
+            "function l $W.core.ascii_character(l %code) {",
+            "@start",
+            "    %offset =l mul %code, 32",
+            "    %result =l add $W.ascii.characters, %offset",
+            "    ret %result",
+            "}",
+        ]))
+
+    def emit_ascii_characters(self):
+        # Aligned string objects: descriptor, length, empty hash cache, byte, NUL.
+        entries: list[str] = []
+        for code in range(128):
+            entries.append(f"l $W.str.type, l 1, l 0, b {code}, b 0, z 6")
+        self.write("data $W.ascii.characters = align 8 { " + ", ".join(entries) + " }")
 
     # Emits `function` as `symbol`, whose parameters start with `first`. A
     # captured parameter or local lives in a cell that its closures share.
@@ -626,6 +646,7 @@ class Emitter:
         self.write("data $W.argv = { l 0 }")
         self.write("data $W.pending = { l 0 }")
         self.write("data $W.stdin.buffer = { z 4120 }")
+        self.emit_ascii_characters()
         self.write(coroutine.data())
         for name in builtin_types():
             self.write(f"data $W.{name}.type = " + "{ l " + self.string(name) + " }")
