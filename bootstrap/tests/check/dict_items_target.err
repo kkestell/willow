@@ -1,0 +1,1 @@
+dict_items_target.wlo:3:9: error: 'items' gives a key and a value, so it needs two targets

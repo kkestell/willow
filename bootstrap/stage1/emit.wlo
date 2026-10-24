@@ -257,14 +257,73 @@ class Emitter:
         value = self.expr(node.value)
         object = self.expr(node.object)
         index = self.expr(node.index)
-        self.core_call("list_set", [object, index, value], False)
+        ty = node.object.ty
+        assert ty is not None, "unchecked index assignment"
+        self.core_call(types.kind(ty) + "_set", [object, index, value], False)
 
     def emit_for(self, node: ast.For):
         call = node.iterable.node
         if isinstance(call, ast.Call) and call.name == "range" and isinstance(call.target, stdlib.Builtin):
             self.for_range(node, call)
+        elif isinstance(call, ast.MethodCall) and call.name in ["keys", "values", "items"]:
+            self.for_dict(node, call.object, call.name)
         else:
-            self.for_list(node)
+            ty = node.iterable.ty
+            assert ty is not None, "unchecked for source"
+            if types.kind(ty) == "dict":
+                self.for_dict(node, node.iterable, "keys")
+            else:
+                self.for_list(node)
+
+    def for_dict(self, node: ast.For, source: ast.Expr, part: str):
+        object = self.expr(source)
+        ty = source.ty
+        assert ty is not None, "unchecked dict source"
+        ty = types.expand(ty)
+        assert isinstance(ty, types.DictType), "unchecked dict loop"
+        version = self.core_call("dict_version", [object], True)
+        entry = self.core_call("dict_next", [object, "0", version], True)
+        test = self.new_label()
+        body = self.new_label()
+        next = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        more = self.temp()
+        self.line(f"{more} =l csgel {entry}, 0")
+        self.jump(f"jnz {more}, {body}, {end}")
+        self.label(body)
+        targets = [node.target]
+        items = [ty.key]
+        functions = ["dict_key_at"]
+        if part == "values":
+            items = [types.expand(ty.value)]
+            functions = ["dict_value_at"]
+        elif part == "items":
+            targets = node.target.elements
+            items = [ty.key, types.expand(ty.value)]
+            functions = ["dict_key_at", "dict_value_at"]
+        for i in range(len(targets)):
+            target = targets[i]
+            item = self.core_call(functions[i], [object, entry], True)
+            symbol = target.symbol
+            assert symbol is not None, "loop target without a symbol"
+            declared = symbol.ty
+            assert declared is not None, "unchecked loop target"
+            item = self.convert(item, items[i], declared)
+            self.line(f"storel {item}, %v.{target.name}")
+        self.loop_next.append(next)
+        self.loop_end.append(end)
+        self.block(node.body)
+        self.loop_next.pop()
+        self.loop_end.pop()
+        self.jump(f"jmp {next}")
+        self.label(next)
+        after = self.temp()
+        self.line(f"{after} =l add {entry}, 1")
+        advanced = self.core_call("dict_next", [object, after, version], True)
+        self.line(f"{entry} =l copy {advanced}")
+        self.jump(f"jmp {test}")
+        self.label(end)
 
     def for_list(self, node: ast.For):
         source = self.expr(node.iterable)
@@ -360,6 +419,60 @@ class Emitter:
             args.append(self.expr(arg))
         return self.core_call("list_" + node.name, args, node.name == "pop")
 
+    def dict_display(self, expr: ast.Expr, node: ast.DictDisplay) -> str:
+        ty = expr.ty
+        assert ty is not None, "unchecked dict display"
+        ty = types.expand(ty)
+        assert isinstance(ty, types.DictType), "unchecked dict type"
+        kind = "0"
+        if types.kind(ty.key) == "str":
+            kind = "2"
+        result = self.core_call("dict_new", [kind], True)
+        for i in range(len(node.keys)):
+            key = self.expr(node.keys[i])
+            value = self.expr(node.values[i])
+            self.core_call("dict_set", [result, key, value], False)
+        return result
+
+    def method_call(self, expr: ast.Expr, node: ast.MethodCall) -> str:
+        ty = node.object.ty
+        assert ty is not None, "unchecked method object"
+        if types.kind(ty) == "dict":
+            return self.dict_method(expr, node)
+        return self.list_method(node)
+
+    def dict_method(self, expr: ast.Expr, node: ast.MethodCall) -> str:
+        object = self.expr(node.object)
+        key = self.expr(node.args[0])
+        if node.name == "pop":
+            return self.core_call("dict_pop", [object, key], True)
+        assert node.name == "get", "unchecked dict method"
+        default = "0"
+        if len(node.args) == 2:
+            default = self.expr(node.args[1])
+        entry = self.core_call("dict_find", [object, key], True)
+        missing = self.temp()
+        self.line(f"{missing} =l csltl {entry}, 0")
+        have = self.new_label()
+        lack = self.new_label()
+        done = self.new_label()
+        result = self.temp()
+        self.jump(f"jnz {missing}, {lack}, {have}")
+        self.label(have)
+        found = self.core_call("dict_value_at", [object, entry], True)
+        ty = node.object.ty
+        target = expr.ty
+        assert ty is not None and target is not None, "unchecked dict get"
+        ty = types.expand(ty)
+        assert isinstance(ty, types.DictType), "unchecked dict get object"
+        found = self.convert(found, types.expand(ty.value), target)
+        self.line(f"{result} =l copy {found}")
+        self.jump(f"jmp {done}")
+        self.label(lack)
+        self.line(f"{result} =l copy {default}")
+        self.label(done)
+        return result
+
     def index(self, node: ast.Index) -> str:
         object = self.expr(node.object)
         index = self.expr(node.index)
@@ -368,6 +481,8 @@ class Emitter:
         name = "list_get"
         if types.kind(ty) == "str":
             name = "str_index"
+        elif types.kind(ty) == "dict":
+            name = "dict_get"
         return self.core_call(name, [object, index], True)
 
     def slice(self, node: ast.Slice) -> str:
@@ -397,16 +512,20 @@ class Emitter:
         ty = node.right.ty
         assert ty is not None, "unchecked membership container"
         ty = types.expand(ty)
-        assert isinstance(ty, types.ListType), "unchecked membership"
-        kind = "0"
-        element = types.kind(ty.element)
-        if element == "float":
-            kind = "1"
-        elif element == "str":
-            kind = "2"
-        elif element == "union":
-            kind = "3"
-        result = self.core_call("list_contains", [container, item, kind], True)
+        result = "0"
+        if isinstance(ty, types.DictType):
+            result = self.core_call("dict_contains", [container, item], True)
+        else:
+            assert isinstance(ty, types.ListType), "unchecked membership"
+            kind = "0"
+            element = types.kind(ty.element)
+            if element == "float":
+                kind = "1"
+            elif element == "str":
+                kind = "2"
+            elif element == "union":
+                kind = "3"
+            result = self.core_call("list_contains", [container, item, kind], True)
         if node.op == "not in":
             negated = self.temp()
             self.line(f"{negated} =l ceql {result}, 0")
@@ -447,7 +566,7 @@ class Emitter:
         elif isinstance(node, ast.EnumMember):
             return self.unchecked("enum member")
         elif isinstance(node, ast.MethodCall):
-            return self.list_method(node)
+            return self.method_call(expr, node)
         elif isinstance(node, ast.Field):
             return self.unchecked("field")
         elif isinstance(node, ast.Index):
@@ -463,7 +582,7 @@ class Emitter:
         elif isinstance(node, ast.ListDisplay):
             return self.list_display(node)
         elif isinstance(node, ast.DictDisplay):
-            return self.unchecked("dict display")
+            return self.dict_display(expr, node)
         return self.unchecked("expression")
 
     def binary(self, node: ast.Binary) -> str:

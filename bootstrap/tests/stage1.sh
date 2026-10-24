@@ -156,6 +156,8 @@ check_bind_driver() {
 # The programs in bootstrap/tests/ that willow1 compiles, one per line. Each
 # runs through run.sh as it does with willow0.
 willow1_programs="
+check/dict_items_target.wlo
+check/dict_view_expression.wlo
 check/list_extend_element_type.wlo
 programs/alias_call.wlo
 programs/alias_cycle.wlo
@@ -164,7 +166,13 @@ programs/branches_and_loops.wlo
 programs/break_continue.wlo
 programs/break_outside_loop.wlo
 programs/conversions.wlo
+programs/dict_changed_during_iteration.wlo
+programs/dict_evaluation_order.wlo
+programs/dict_get_default_type.wlo
+programs/dict_key_type.wlo
+programs/dict_operations.wlo
 programs/division_by_zero.wlo
+programs/empty_dict_display.wlo
 programs/empty_list_display.wlo
 programs/enum_member.wlo
 programs/exponent_without_digits.wlo
@@ -178,6 +186,7 @@ programs/integer_overflow.wlo
 programs/integer_range.wlo
 programs/invalid_int.wlo
 programs/isinstance_none.wlo
+programs/key_not_found.wlo
 programs/keyword_after_condition.wlo
 programs/list_evaluation_order.wlo
 programs/list_index_out_of_range.wlo
