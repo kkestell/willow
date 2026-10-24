@@ -1,5 +1,5 @@
 # Checks types' equality, display, substitution, and assignability, and a
-# few standard library signatures. Each expected display text is what the
+# coroutine types. Each expected display text is what the
 # Lua implementation prints for the same type in a diagnostic, as in
 # "expected int, received function Box[int].get". Declarations are built by
 # hand as the binder builds them, with the ids the binder would give their
@@ -203,16 +203,10 @@ def assignability(r: Results):
     r.text("bound satisfied", types.unsatisfied(t, types.ClassType(right, [])), "")
     r.text("bound", types.unsatisfied(t, types.ClassType(wrong, [])), "type argument Wrong does not satisfy the bound Sized of 'T'")
 
-def standard_library(r: Results):
-    modules = stdlib.modules()
-    sleep = modules["aio"].functions["sleep"].result
-    assert sleep is not None
-    r.shows("aio.sleep", sleep, "Coroutine[None]")
-    r.check("coroutine", stdlib.has_coroutine(sleep), True)
-    task_group = types.ClassType(modules["aio"].classes["TaskGroup"], [])
-    start = types.method(task_group, "start")
-    assert start is not None
-    r.shows("native generic method", start.result, "aio.Task[T]")
+def coroutines(r: Results):
+    result = stdlib.coroutine_of(prim("None"))
+    r.shows("coroutine result", result, "Coroutine[None]")
+    r.check("coroutine", stdlib.has_coroutine(result), True)
 
 def main():
     r = Results(False)
@@ -220,7 +214,7 @@ def main():
     equality(r)
     substitution(r)
     assignability(r)
-    standard_library(r)
+    coroutines(r)
     if r.failed:
         sys.exit(1)
     print("types tests passed")

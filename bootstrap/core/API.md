@@ -251,11 +251,15 @@ state, scope, group, waiters, interruptible, and start location. State is 0
 helper uses the context at byte 8 and error at byte 32 to capture a task failure
 without unwinding the scheduler. `aio_loop` and `aio_set_loop` access the
 running loop, rooted by `$W.aio.loop`. Public `aio.Task`, `aio.TaskGroup`, and
-`aio.Semaphore` values use the core `AioTask`, `AioGroup`, and `AioSemaphore`
-headers respectively.
+`aio.Semaphore` values wrap the core `AioTask`, `AioGroup`, and `AioSemaphore`
+objects in their first fields; await and group-scope lowering unwrap them.
+The loop polls descriptor interests alongside timers, using wait IDs to discard
+registrations after readiness, timeout, or cancellation.
 
 | Signature | Meaning |
 | --- | --- |
+| `aio_wait_fd(fd: int, events: int, deadline: float \| None) -> bool` | Suspend until readiness or deadline, checking cancellation before and after waiting |
+| `aio_close_fd(fd: int, loop: AioLoop \| None)` | Remove registrations and wake operations before closing; also works outside a loop |
 | `aio_task_group() -> AioGroup` | Create an inactive group |
 | `aio_group_enter(group: AioGroup)` | Enter a single-use group and install its cancellation scope |
 | `aio_group_exit(group: AioGroup, error: ptr) -> ptr` | Join children; return the first final failure, an outer cancellation, or 0 |
@@ -265,6 +269,7 @@ headers respectively.
 | `aio_await_task(task: AioTask) -> word` | Check cancellation, wait if needed, and return the outcome |
 | `aio_semaphore(value: int) -> AioSemaphore` | Create a positive, bounded permit count |
 | `aio_semaphore_acquire(semaphore: AioSemaphore) -> ptr` | Create a coroutine that acquires a permit at a checkpoint |
+| `aio_semaphore_wait(semaphore: AioSemaphore)` | Acquire a permit, suspending at a checkpoint when unavailable |
 | `aio_semaphore_release(semaphore: AioSemaphore)` | Hand a permit to the first live waiter or return it to the count |
 
 `$W.aio.cancel` is a pending control-transfer marker, outside `Exception`.

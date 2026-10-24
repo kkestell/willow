@@ -1,5 +1,3 @@
-aio_listener_outside_loop
-aio_sockets
 http_values
 json_library
 overflow_add
@@ -7,6 +5,5 @@ overflow_sub
 stdlib_builtins_errors
 stdlib_http_async
 streams
-task_group_sockets
 text_conversions
 type_errors

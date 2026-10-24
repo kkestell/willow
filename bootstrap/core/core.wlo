@@ -2799,6 +2799,15 @@ def net_check_timeout(timeout: float | None):
         if not (timeout > 0.0 and timeout - timeout == 0.0):
             fail("ValueError", "timeout must be finite and positive")
 
+def net_deadline(timeout: float | None) -> float | None:
+    if timeout is None:
+        return None
+    return aio_now() + timeout
+
+def net_timed_out(what: str, timeout: float | None):
+    assert timeout is not None, "timeout without deadline"
+    fail("TimeoutError", what + " timed out after " + float_to_str(timeout) + " seconds")
+
 def net_reason(code: int) -> str:
     text = strerror(code)
     return str_from_bytes(text, strlen(text))
@@ -2880,6 +2889,116 @@ def net_local_port(fd: int) -> int:
         fail("OSError", "cannot get local port: " + os_reason())
     # sockaddr_in and sockaddr_in6 both put the network-order port at byte 2.
     return __load1(address, 2) * 256 + __load1(address, 3)
+
+# A negative count means the nonblocking operation needs readiness.
+def net_try_recv(fd: int, buffer: ptr, size: int) -> int:
+    while True:
+        count = recv(fd, __offset(buffer, 16), size, 0)
+        if count >= 0:
+            __store8(buffer, 8, __word(count))
+            __store1(buffer, 16 + count, 0)
+            return count
+        code = errno()
+        if code == net_layout().again:
+            return -1
+        if code != 4:
+            fail("OSError", "cannot receive: " + net_reason(code))
+            return -1
+    return -1
+
+def net_received(buffer: ptr) -> word:
+    return __word(bytes_tag(__str(__word(buffer))))
+
+def net_try_send(fd: int, data: ptr, offset: int, size: int) -> int:
+    while True:
+        count = send(fd, __offset(data, 16 + offset), size - offset, net_layout().no_signal)
+        if count >= 0:
+            return count
+        code = errno()
+        if code == net_layout().again:
+            return -1
+        if code != 4:
+            fail("OSError", "cannot send: " + net_reason(code))
+            return -1
+    return -1
+
+def net_try_accept(fd: int) -> int:
+    while True:
+        accepted = accept(fd, __ptr(__word(0)), __ptr(__word(0)))
+        if accepted >= 0:
+            code = net_configure(accepted)
+            if code != 0:
+                close(accepted)
+                fail("OSError", "cannot accept: " + net_reason(code))
+                return -1
+            return accepted
+        code = errno()
+        if code == net_layout().again:
+            return -1
+        if code != 4:
+            fail("OSError", "cannot accept: " + net_reason(code))
+            return -1
+    return -1
+
+class NetConnect:
+    host: str
+    port: int
+    addresses: list[NetAddress]
+    next: int
+    fd: int
+    reason: str
+
+# Returns true when connected, false when the current fd needs POLLOUT.
+def net_connect_step(state: NetConnect) -> bool:
+    if state.fd >= 0:
+        code = net_socket_error(state.fd)
+        if code == 0:
+            return True
+        if code == net_layout().in_progress or code == net_layout().again:
+            return False
+        state.reason = net_reason(code)
+        close(state.fd)
+        state.fd = -1
+    while state.next < len(state.addresses):
+        address = state.addresses[state.next]
+        state.next = state.next + 1
+        state.fd = net_socket(address.family)
+        if state.fd < 0:
+            state.reason = os_reason()
+        else:
+            status = connect(state.fd, address.data, address.size)
+            if status == 0:
+                return True
+            code = errno()
+            if code == net_layout().in_progress or code == 4:
+                return False
+            state.reason = net_reason(code)
+            close(state.fd)
+            state.fd = -1
+    fail("OSError", "cannot connect to " + state.host + ":" + str(state.port) + ": " + state.reason)
+    return False
+
+def net_listen(host: str, port: int, backlog: int) -> int:
+    net_check_host(host, port, 0)
+    if backlog < 1:
+        fail("ValueError", "backlog must be positive")
+        return -1
+    addresses = net_resolve(host, port)
+    layout = net_layout()
+    enabled = __alloc_atomic(4)
+    __store4(enabled, 0, 1)
+    reason = "no addresses"
+    for address in addresses:
+        fd = net_socket(address.family)
+        if fd < 0:
+            reason = os_reason()
+        else:
+            if setsockopt(fd, layout.socket_level, layout.reuse_address, enabled, 4) == 0 and bind(fd, address.data, address.size) == 0 and listen(fd, backlog) == 0:
+                return fd
+            reason = os_reason()
+            close(fd)
+    fail("OSError", "cannot listen on " + host + ":" + str(port) + ": " + reason)
+    return -1
 
 class FsLayout:
     buffer_size: int
@@ -3865,16 +3984,24 @@ class AioTimer:
     task: AioTask
     wait: int
 
+class AioFdWait:
+    fd: int
+    events: int
+    task: AioTask
+    wait: int
+    ready: bool = False
+
 class AioLoop:
     current: AioTask | None
     ready: list[AioTask]
     timers: list[AioTimer]
     last_wait: int
     waiting: dict[int, AioTask]
+    descriptors: list[AioFdWait]
 
 def aio_loop() -> AioLoop:
     fail("RuntimeError", "coroutines require stage 1 on arm64")
-    return AioLoop(None, [], [], 0, {})
+    return AioLoop(None, [], [], 0, {}, [])
 
 def aio_set_loop(loop: AioLoop | None):
     fail("RuntimeError", "coroutines require stage 1 on arm64")
@@ -3958,28 +4085,82 @@ def aio_poll(loop: AioLoop):
     timers = loop.timers
     while len(timers) > 0 and timers[0].task.wait != timers[0].wait:
         aio_pop_timer(loop)
-    if len(loop.ready) == 0 and len(timers) == 0:
+    waits: list[AioFdWait] = []
+    slots: dict[int, int] = {}
+    interests: list[int] = []
+    for entry in loop.descriptors:
+        if entry.task.wait == entry.wait:
+            waits.append(entry)
+            if entry.fd not in slots:
+                slots[entry.fd] = len(interests)
+                interests.append(entry.events)
+            else:
+                index = slots[entry.fd]
+                if interests[index] != entry.events:
+                    interests[index] = 5
+    loop.descriptors = waits
+    if len(loop.ready) == 0 and len(timers) == 0 and len(waits) == 0:
         eprint_str("error: deadlock: all tasks are waiting")
         exit(1)
-    timeout = 0
-    if len(loop.ready) == 0:
+    timeout = -1
+    if len(loop.ready) > 0:
+        timeout = 0
+    elif len(timers) > 0:
         milliseconds = (timers[0].at - aio_now()) * 1000.0
+        timeout = 0
         if milliseconds >= 2147483647.0:
             timeout = 2147483647
         elif milliseconds > 0.0:
             timeout = __dtosi(milliseconds)
             if float(timeout) < milliseconds:
                 timeout = timeout + 1
-    if poll(__ptr(__word(0)), 0, timeout) < 0 and errno() != 4:
-        eprint_str("error: cannot poll: " + os_reason())
-        exit(1)
+    fds = __alloc_atomic(len(interests) * 8)
+    for fd in slots:
+        index = slots[fd]
+        __store4(fds, index * 8, fd)
+        __store4(fds, index * 8 + 4, interests[index])
+    result = poll(fds, len(interests), timeout)
+    failed = result < 0 and errno() != 4
+    for entry in waits:
+        revents = __load4(fds, slots[entry.fd] * 8 + 4) // 65536
+        if entry.task.wait == entry.wait and (failed or revents >= 8 or revents // entry.events % 2 == 1):
+            entry.ready = True
+            aio_wake(loop, entry.task, entry.wait)
+
     now = aio_now()
     while len(timers) > 0 and timers[0].at <= now:
         timer = aio_pop_timer(loop)
         aio_wake(loop, timer.task, timer.wait)
 
+def aio_wait_fd(fd: int, events: int, deadline: float | None) -> bool:
+    aio_checkpoint()
+    loop = aio_loop()
+    task = aio_current()
+    wait = aio_wait(True)
+    entry = AioFdWait(fd, events, task, wait)
+    loop.descriptors.append(entry)
+    if deadline is not None:
+        aio_push_timer(loop, AioTimer(deadline, task, wait))
+    coroutine_yield(__word(0))
+    aio_checkpoint()
+    return entry.ready
+
+def aio_close_fd(fd: int, loop: AioLoop | None):
+    # Remove registrations before close lets another handle reuse the number.
+    if loop is None:
+        close(fd)
+        return
+    kept: list[AioFdWait] = []
+    for entry in loop.descriptors:
+        if entry.fd == fd:
+            aio_wake(loop, entry.task, entry.wait)
+        else:
+            kept.append(entry)
+    loop.descriptors = kept
+    close(fd)
+
 def aio_run(body: ptr) -> word:
-    loop = AioLoop(None, [], [], 0, {})
+    loop = AioLoop(None, [], [], 0, {}, [])
     aio_set_loop(loop)
     root = aio_spawn(async_consume(body), None, "")
     while True:
@@ -4008,6 +4189,17 @@ def aio_sleep_coroutine(seconds: float, path: str, line: int, col: int) -> ptr:
     __store8(body, 32, __word(line))
     __store8(body, 40, __word(col))
     return async_coroutine(body)
+
+def aio_sleep_wait(seconds: float):
+    if not (seconds >= 0.0 and seconds <= 1.7976931348623157e308):
+        fail("ValueError", "sleep length must be finite and nonnegative")
+        return
+    aio_checkpoint()
+    task = aio_current()
+    wait = aio_wait(True)
+    aio_push_timer(aio_loop(), AioTimer(aio_now() + seconds, task, wait))
+    coroutine_yield(__word(0))
+    aio_checkpoint()
 
 def aio_sleep_body(body: ptr) -> word:
     seconds = __float(__load8(body, 16))
