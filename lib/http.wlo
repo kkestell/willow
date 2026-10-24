@@ -26,6 +26,8 @@ extern def fflush(file: ptr) -> cint
 extern def free(buffer: ptr)
 extern def unlink(path: ptr) -> cint
 extern def mkstemps(template: ptr, suffix: cint) -> cint
+extern def umask(mask: cint) -> cint
+extern def fchmod(fd: cint, mode: cint) -> cint
 
 class Header:
     name: str
@@ -589,6 +591,18 @@ def _fetch(method: str, url: str, headers: list[Header] | None, body: bytes | No
         if fd < 0:
             raise OSError("cannot write " + path + ": " + core.os_reason())
         temp = core.str_from_bytes(template, core.strlen(template))
+        # mkstemps starts at 0600; downloads use the normal file creation mode.
+        mask = umask(0)
+        umask(mask)
+        mode = 0
+        for bit in [2, 4, 16, 32, 128, 256]:
+            if mask // bit % 2 == 0:
+                mode = mode + bit
+        if fchmod(fd, mode) != 0:
+            reason = core.os_reason()
+            core.close(fd)
+            unlink(template)
+            raise OSError("cannot write " + path + ": " + reason)
         if core.close(fd) != 0:
             reason = core.os_reason()
             unlink(template)

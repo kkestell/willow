@@ -31,10 +31,14 @@ port=$(head -n 1 "$work/port")
 mkdir "$work/downloads"
 for name in client streams async; do
     "$willow" build "tests/http/$name.wlo" -o "$work/$name"
-    "$work/$name" "http://127.0.0.1:$port" "$work/downloads" >"$work/$name.out"
+    (umask 027; "$work/$name" "http://127.0.0.1:$port" "$work/downloads") >"$work/$name.out"
     sed "s/$port/PORT/g" "$work/$name.out" >"$work/normalized"
     diff -u "tests/http/$name.out" "$work/normalized"
 done
+if [ "$(find "$work/downloads/data.bin" -perm 0640 -print)" != "$work/downloads/data.bin" ]; then
+    echo "HTTP download did not respect umask 027" >&2
+    exit 1
+fi
 
 kill "$server_pid"
 wait "$server_pid" 2>/dev/null || :
