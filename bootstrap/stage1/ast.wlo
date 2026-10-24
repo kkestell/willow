@@ -176,10 +176,15 @@ class Target:
     elements: list[Target]
     symbol: Symbol | None = None
 
+# The checker's: `ty`, the expression's type where it is evaluated, and
+# `expected`, the type a value of it was checked against where it is
+# assigned, passed, returned, or stored, as compiler/check.lua records.
 class Expr:
     line: int
     col: int
     node: ExprNode
+    ty: types.Type | None = None
+    expected: types.Type | None = None
 
 type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | BuiltinValue | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay | TypeOf
 

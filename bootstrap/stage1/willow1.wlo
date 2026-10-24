@@ -1,0 +1,156 @@
+# The stage 1 compiler's driver, which behaves as willow0's does.
+#
+# Usage: willow1 build FILE.wlo -o OUTPUT
+#        willow1 compile FILE.wlo -o OUTPUT.ssa
+#
+# Core is compiled into every program. Its text comes from the module
+# core_source, which the build generates from bootstrap/core/core.wlo (see
+# core_source in bootstrap/tests/stage1.sh).
+
+import ast
+import bind
+import check
+import core
+import core_source
+import diagnostic
+import emit
+import fs
+import lexer
+import loader
+import parser
+import sys
+
+def usage():
+    sys.eprint("usage: willow1 build FILE.wlo -o OUTPUT\n       willow1 compile FILE.wlo -o OUTPUT.ssa")
+    sys.exit(2)
+
+def fail(message: str):
+    sys.eprint(message)
+    sys.exit(1)
+
+def report(error: diagnostic.Diagnostic):
+    fail(error.format())
+
+def main():
+    args = sys.args()
+    if len(args) != 4 or args[0] not in ["build", "compile"] or args[2] != "-o":
+        usage()
+    il = compile(args[1])
+    if args[0] == "compile":
+        fs.write_file(args[3], il)
+    else:
+        build(il, args[3])
+
+# The IL of the program whose entry file is at `path`.
+def compile(path: str) -> str:
+    if not fs.exists(path):
+        fail(f"willow1: {path}: No such file or directory")
+    name = loader.entry_name(path)
+    if not is_module_name(name) or name == "core":
+        fail(f"willow1: {path}: '{name}' cannot be a module name")
+    loaded = loader.load(path)
+    if isinstance(loaded, diagnostic.Diagnostic):
+        report(loaded)
+        return ""
+    sources = loaded
+    sources.append(loader.Source("core", parse_core()))
+    error = bind.bind(sources, False)
+    if error is not None:
+        report(error)
+    modules: list[ast.Module] = []
+    for source in sources:
+        modules.append(source.tree)
+    error = check.check_program(modules)
+    if error is not None:
+        report(error)
+    emitter = emit.emitter(modules, core.os())
+    for module in modules:
+        if module.name != "core":
+            for function in bind.functions(module):
+                emitter.function(function)
+    # Core's functions are checked and emitted as the program reaches them.
+    core_module = modules[len(modules) - 1]
+    done = 0
+    while done < len(emitter.needed):
+        function = emitter.needed[done]
+        error = check.check_function(core_module, function)
+        if error is not None:
+            report(error)
+        emitter.function(function)
+        done = done + 1
+    return emitter.finish(modules[0])
+
+def parse_core() -> ast.Module:
+    path = "bootstrap/core/core.wlo"
+    lexed = lexer.lex(path, core_source.text())
+    if isinstance(lexed, diagnostic.Diagnostic):
+        report(lexed)
+        return ast.Module(path, "core", [], [], {}, {}, {}, {}, [])
+    tree = parser.parse(path, lexed)
+    if isinstance(tree, diagnostic.Diagnostic):
+        report(tree)
+        return ast.Module(path, "core", [], [], {}, {}, {}, {}, [])
+    return tree
+
+def is_module_name(name: str) -> bool:
+    if name == "" or not (name[0].isalpha() or name[0] == "_"):
+        return False
+    for c in name:
+        if not (c.isalnum() or c == "_") or ord(c) > 127:
+            return False
+    return True
+
+# Assembles `il` with qbe and links it with libgc into the executable
+# `output`. The intermediate files sit next to `output`, since L0 cannot make
+# a temporary directory.
+def build(il: str, output: str):
+    ssa = output + ".ssa"
+    asm = output + ".s"
+    scratch = output + ".tmp"
+    fs.write_file(ssa, il)
+    target = qbe_target(scratch)
+    ok = core.run(["qbe", "-t", target, "-o", asm, ssa]) == 0
+    message = "willow1: qbe failed"
+    if ok:
+        command = ["cc", "-o", output, asm]
+        command.extend(gc_flags(scratch))
+        command.append("-lm")
+        ok = core.run(command) == 0
+        message = "willow1: cc failed"
+    remove([ssa, asm, scratch])
+    if not ok:
+        fail(message)
+
+# The QBE target for the host, whose architecture `uname -m` names.
+def qbe_target(scratch: str) -> str:
+    os = core.os()
+    arch = shell_output("uname -m", scratch).strip()
+    if arch == "aarch64" or arch == "arm64":
+        if os == "darwin":
+            return "arm64_apple"
+        return "arm64"
+    if arch == "x86_64":
+        if os == "darwin":
+            return "amd64_apple"
+        return "amd64_sysv"
+    fail(f"willow1: unsupported host {os} {arch}")
+    return ""
+
+# The compiler flags that link libgc.
+def gc_flags(scratch: str) -> list[str]:
+    flags = shell_output("pkg-config --cflags --libs bdw-gc 2>/dev/null", scratch)
+    if flags == "":
+        return ["-lgc"]
+    return flags.split()
+
+# The standard output of shell `command`, or "" if it fails, by way of the
+# file `scratch`; core.run cannot capture output.
+def shell_output(command: str, scratch: str) -> str:
+    if core.run(["sh", "-c", command + " >\"$1\"", "sh", scratch]) != 0:
+        return ""
+    return fs.read_file(scratch)
+
+def remove(paths: list[str]):
+    command = ["rm", "-f"]
+    command.extend(paths)
+    core.run(command)

@@ -736,6 +736,10 @@ def environment() -> ptr:
     else:
         return __ptr(__load8(dlsym(__ptr(__word(0)), str_bytes("environ")), 0))
 
+# The target's operating system, for stage 1's driver.
+def os() -> str:
+    return __os
+
 # Runs args[0], found in PATH, with the remaining arguments, without a shell,
 # and returns its exit status, or 128 plus the signal number if a signal ended
 # it. The child inherits stdin, stdout, stderr, and the environment.

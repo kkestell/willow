@@ -306,8 +306,10 @@ through the escape hatch in §2.
   `bootstrap/tests/stage1.sh` builds stage 1's tests and drivers with
   `willow0` and runs them natively, the drivers over every `.wlo` file in
   `tests/` and `examples/`; `--lua` runs them under the Lua implementation
-  instead. `make bootstrap` builds stage 0 and `make bootstrap-test` runs both
-  without LuaJIT. The runners move to a Willow program once stage 2 exists.
+  instead. It also builds the `willow1` driver and runs `run.sh` with it over
+  the programs stage 1 compiles so far, which it lists. `make bootstrap`
+  builds stage 0 and `make bootstrap-test` runs both without LuaJIT. The
+  runners move to a Willow program once stage 2 exists.
 
 ## 9. Specification changes
 

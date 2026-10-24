@@ -113,6 +113,29 @@ def builtins() -> dict[str, Builtin]:
     add(table, "zip", [any_arg("a"), any_arg("b")], None)
     return table
 
+# The intrinsics that core calls (agents/bootstrap.md §5). `__type` has its
+# own syntax, and `__os` is a name.
+def intrinsics() -> dict[str, Builtin]:
+    table: dict[str, Builtin] = {}
+    add(table, "__alloc", [arg("", prim("int"))], prim("ptr"))
+    add(table, "__alloc_atomic", [arg("", prim("int"))], prim("ptr"))
+    add(table, "__load1", [arg("", prim("ptr")), arg("", prim("int"))], prim("int"))
+    add(table, "__load4", [arg("", prim("ptr")), arg("", prim("int"))], prim("int"))
+    add(table, "__load8", [arg("", prim("ptr")), arg("", prim("int"))], prim("word"))
+    add(table, "__store1", [arg("", prim("ptr")), arg("", prim("int")), arg("", prim("int"))], prim("None"))
+    add(table, "__store4", [arg("", prim("ptr")), arg("", prim("int")), arg("", prim("int"))], prim("None"))
+    add(table, "__store8", [arg("", prim("ptr")), arg("", prim("int")), arg("", prim("word"))], prim("None"))
+    add(table, "__word", [any_arg("")], prim("word"))
+    add(table, "__int", [arg("", prim("word"))], prim("int"))
+    add(table, "__float", [arg("", prim("word"))], prim("float"))
+    add(table, "__bool", [arg("", prim("word"))], prim("bool"))
+    add(table, "__ptr", [arg("", prim("word"))], prim("ptr"))
+    add(table, "__str", [arg("", prim("word"))], prim("str"))
+    add(table, "__addr_is_null", [arg("", prim("ptr"))], prim("bool"))
+    add(table, "__dtosi", [arg("", prim("float"))], prim("int"))
+    add(table, "__offset", [arg("", prim("ptr")), arg("", prim("int"))], prim("ptr"))
+    return table
+
 # An exception class: a class with only a `message` field.
 def exception(name: str, type_name: str) -> types.Class:
     message = types.Field("message", prim("str"), None)
