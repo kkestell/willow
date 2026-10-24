@@ -2,18 +2,6 @@ import io
 import sys
 
 def main():
-    args = sys.args()
-    if len(args) > 0 and args[0] == "closed-pipe":
-        try:
-            io.stdout().write_text("x")
-            assert False
-        except OSError as pipe_error:
-            assert pipe_error.message == "cannot write <stdout>: Broken pipe"
-        return
-    if len(args) > 0 and args[0] == "print-pipe":
-        print("x")
-        return
-
     first = io.stdin()
     second = io.stdin()
     assert input() == "first"

@@ -2547,6 +2547,7 @@ def fill_buffer(fd: int, buffer: ptr, path: str, fatal: bool) -> int:
     count = read(fd, __offset(buffer, 16), 4096)
     if count < 0:
         if fatal:
+            eprint_str("error: cannot read input: " + os_reason())
             exit(1)
         fail_os("read", path)
     __store8(buffer, 0, __word(0))
@@ -2651,6 +2652,12 @@ def write_flags() -> int:
     if __os == "linux":
         return 1 + 64 + 512
     return 1 + 512 + 1024
+
+def append_flags() -> int:
+    # O_WRONLY | O_CREAT | O_APPEND
+    if __os == "linux":
+        return 1 + 64 + 1024
+    return 1 + 512 + 8
 
 def fs_read_file(path: str) -> str:
     fd = open(path_bytes(path), 0)
