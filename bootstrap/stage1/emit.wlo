@@ -1487,7 +1487,24 @@ class Emitter:
     def fstring(self, node: ast.FString) -> str:
         text = self.string("")
         for i in range(len(node.parts)):
-            value = self.to_str(node.parts[i])
+            part = node.parts[i]
+            spec = node.specs[i]
+            ty = part.ty
+            assert ty is not None, "unchecked f-string field"
+            align = spec.align
+            if types.kind(ty) == "union" and spec.width > 0:
+                value = self.core_call("format_union", [self.expr(part), str(spec.width), self.string(align)], True)
+            else:
+                if spec.kind == "f":
+                    value = self.core_call("format_fixed", [self.expr(part), str(spec.precision)], True)
+                else:
+                    value = self.to_str(part)
+                if spec.width > 0:
+                    if align == "":
+                        align = ">"
+                        if types.kind(ty) == "str":
+                            align = "<"
+                    value = self.core_call("pad", [value, str(spec.width), self.string(align)], True)
             if i == 0:
                 text = value
             else:

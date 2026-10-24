@@ -423,8 +423,7 @@ class Lexer:
                 self.pos = self.pos + 1
             else:
                 self.lex_token()
-        end = self.add(tokens.Kind.FIELD_END, spec, stop)
-        end.format_spec = self.chars[stop] == ":"
+        self.add(tokens.Kind.FIELD_END, spec, stop)
         self.pos = close + 1
 
 # The tokens of `source`, or its first lexical error.

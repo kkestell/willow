@@ -973,13 +973,22 @@ class Checker:
         return none()
 
     def check_fstring(self, node: ast.FString, state: dict[int, types.Type]) -> types.Type:
-        spec = node.format_spec
-        if spec is not None:
-            self.fail(spec.line, spec.col, "format specifications are not supported")
-            return none()
-        for part in node.parts:
+        for i in range(len(node.parts)):
+            part = node.parts[i]
             ty = self.check_expr(part, state)
-            if not self.failed() and not types.printable(ty):
+            if self.failed():
+                return none()
+            kind = node.specs[i].kind
+            required = ""
+            if kind == "s":
+                required = "str"
+            elif kind == "d":
+                required = "int"
+            elif kind == "f":
+                required = "float"
+            if required != "" and types.kind(ty) != required:
+                self.fail(part.line, part.col, f"format type '{kind}' requires {required}, received {types.display(ty)}")
+            elif not types.printable(ty):
                 self.fail(part.line, part.col, f"cannot format a value of type {types.display(ty)}")
         return types.prim("str")
 

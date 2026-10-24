@@ -1,0 +1,5 @@
+def formatted(value: int | str) -> str:
+    return f"{value:d}"
+
+def main():
+    print(formatted(1))
