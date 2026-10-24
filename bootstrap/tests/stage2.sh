@@ -189,7 +189,7 @@ check_willow() {
         bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo bootstrap/tests/modules/*/main.wlo || failed=1
     echo "willow2 tests/programs:"
     # shellcheck disable=SC2046 # the paths have no spaces
-    WILLOW0=$work/willow bootstrap/tests/run.sh $(conformance) || failed=1
+    WILLOW=$root/willow WILLOW0=$work/willow bootstrap/tests/run.sh $(conformance) || failed=1
     if ! "$work/willow" build "$src/willow.wlo" -o "$work/willow-self"; then
         echo "FAIL willow2-self: does not compile"
         failed=1
