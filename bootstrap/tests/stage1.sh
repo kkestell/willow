@@ -185,6 +185,7 @@ programs/exit_unreachable.wlo
 programs/exponent_without_digits.wlo
 programs/field_defaults.wlo
 programs/field_type.wlo
+programs/files.wlo
 programs/float_division_by_zero.wlo
 programs/float_to_int_overflow.wlo
 programs/floats.wlo
@@ -195,6 +196,7 @@ programs/fstring_type.wlo
 programs/host_args.wlo
 programs/host_exit.wlo
 programs/host_files.wlo
+programs/host_paths.wlo
 programs/host_realpath_missing.wlo
 programs/import_name_clash.wlo
 programs/int_true_division.wlo
@@ -213,6 +215,7 @@ programs/list_values.wlo
 programs/lists.wlo
 programs/loop_assignment_narrowing.wlo
 programs/maybe_unassigned.wlo
+programs/method_arity.wlo
 programs/missing_comma.wlo
 programs/missing_return.wlo
 programs/mixed_number_types.wlo
@@ -229,6 +232,10 @@ programs/read_missing_file.wlo
 programs/recursive_alias.wlo
 programs/return_none.wlo
 programs/slicing.wlo
+programs/split_empty_separator.wlo
+programs/string_basics.wlo
+programs/string_iteration.wlo
+programs/strings.wlo
 programs/sum_to.wlo
 programs/sys_exit.wlo
 programs/type_intrinsic_outside_core.wlo
@@ -238,6 +245,7 @@ programs/union_duplicate_member.wlo
 programs/union_equality.wlo
 programs/union_flow.wlo
 programs/union_narrowing.wlo
+programs/unions.wlo
 programs/unknown_escape.wlo
 programs/unknown_list_method.wlo
 programs/unreachable.wlo
