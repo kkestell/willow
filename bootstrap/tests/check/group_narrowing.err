@@ -1,0 +1,1 @@
+group_narrowing.wlo:12:17: error: operator '+' cannot be applied to int | None and int

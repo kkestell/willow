@@ -33,6 +33,7 @@ extern def fmod(x: float, y: float) -> float
 extern def floor(x: float) -> float
 extern def copysign(x: float, y: float) -> float
 
+extern def GC_gcollect()
 extern def GC_get_my_stackbottom(base: ptr) -> ptr
 extern def GC_set_stackbottom(thread: ptr, base: ptr)
 extern def GC_alloc_lock()
@@ -261,6 +262,12 @@ def raised(e: ptr, function: str, path: str, line: int, col: int):
 # Adds the frame of `function` at `path`, `line`, and `col` to `e`. The first
 # frame's location is the exception's.
 def trace(e: ptr, function: str, path: str, line: int, col: int):
+    if e == aio_cancel():
+        return
+    # A task-start frame ends the original traceback, even when re-observed.
+    frames = __ptr(__load8(e, 16))
+    if not __addr_is_null(frames) and str_find(__str(__word(frames)), "\n  in task started at ") >= 0:
+        return
     where = path + ":" + int_to_str(line) + ":" + int_to_str(col)
     if __addr_is_null(__ptr(__load8(e, 8))):
         __store8(e, 8, __word(where))
@@ -3334,14 +3341,17 @@ def async_invoke(body: ptr) -> word:
     fail("RuntimeError", "coroutines require stage 1 on arm64")
     return __word(0)
 
-def async_await(coroutine: ptr) -> word:
+def async_consume(coroutine: ptr) -> ptr:
     if __bool(__load8(coroutine, 16)):
         fail("RuntimeError", "coroutine was already awaited or started")
-        return __word(0)
+        return __ptr(__word(0))
     body = __ptr(__load8(coroutine, 8))
     __store8(coroutine, 16, __word(True))
     __store8(coroutine, 8, __word(0))
-    return async_invoke(body)
+    return body
+
+def async_await(coroutine: ptr) -> word:
+    return async_invoke(async_consume(coroutine))
 
 class AioTask:
     context: CoroutineContext | None
@@ -3349,6 +3359,33 @@ class AioTask:
     result: word
     error: ptr
     wait: int
+    # 0 running, 1 done, 2 failed, 3 cancelled.
+    state: int
+    scope: AioGroup | None
+    group: AioGroup | None
+    waiters: list[AioWait]
+    interruptible: bool
+    location: str
+
+class AioGroup:
+    # 0 inactive, 1 active (including joining), 2 exited.
+    state: int
+    parent: AioGroup | None
+    count: int
+    cancelled: bool
+    failure: ptr
+    joiner: AioTask | None
+    join_wait: int
+
+class AioWait:
+    task: AioTask
+    id: int
+    granted: bool = False
+
+class AioSemaphore:
+    value: int
+    maximum: int
+    waiters: list[AioWait]
 
 class AioTimer:
     at: float
@@ -3360,10 +3397,11 @@ class AioLoop:
     ready: list[AioTask]
     timers: list[AioTimer]
     last_wait: int
+    waiting: dict[int, AioTask]
 
 def aio_loop() -> AioLoop:
     fail("RuntimeError", "coroutines require stage 1 on arm64")
-    return AioLoop(None, [], [], 0)
+    return AioLoop(None, [], [], 0, {})
 
 def aio_set_loop(loop: AioLoop | None):
     fail("RuntimeError", "coroutines require stage 1 on arm64")
@@ -3383,7 +3421,7 @@ def aio_resume(task: AioTask):
 def aio_task_run(argument: word):
     task = aio_loop().current
     assert task is not None, "no running task"
-    task.result = async_await(task.body)
+    task.result = async_invoke(task.body)
 
 extern def clock_gettime(clock: cint, stamp: ptr) -> cint
 extern def poll(fds: ptr, count: int, timeout: cint) -> cint
@@ -3439,6 +3477,7 @@ def aio_pop_timer(loop: AioLoop) -> AioTimer:
 def aio_wake(loop: AioLoop, task: AioTask, wait: int):
     if task.wait == wait:
         task.wait = 0
+        loop.waiting.pop(wait)
         loop.ready.append(task)
 
 # Polling between ready batches prevents timers from being starved.
@@ -3467,20 +3506,21 @@ def aio_poll(loop: AioLoop):
         aio_wake(loop, timer.task, timer.wait)
 
 def aio_run(body: ptr) -> word:
-    loop = AioLoop(None, [], [], 0)
+    loop = AioLoop(None, [], [], 0, {})
     aio_set_loop(loop)
-    root = AioTask(None, body, __word(0), __ptr(__word(0)), 0)
-    context = coroutine_create(aio_task_address(), __word(0))
-    root.context = context
-    loop.ready.append(root)
+    root = aio_spawn(async_consume(body), None, "")
     while True:
         batch = loop.ready
         loop.ready = []
         for task in batch:
             loop.current = task
             aio_resume(task)
+            context = task.context
+            assert context is not None, "task without context"
+            if coroutine_finished(context):
+                aio_finish(task)
         loop.current = None
-        if coroutine_finished(context):
+        if root.state != 0:
             break
         aio_poll(loop)
     aio_set_loop(None)
@@ -3501,13 +3541,13 @@ def aio_sleep_body(body: ptr) -> word:
     if not (seconds >= 0.0 and seconds <= 1.7976931348623157e308):
         fail_at("ValueError", "sleep length must be finite and nonnegative", __str(__load8(body, 24)), __int(__load8(body, 32)), __int(__load8(body, 40)))
         return __word(0)
+    aio_checkpoint()
     loop = aio_loop()
-    task = loop.current
-    assert task is not None, "no running task"
-    loop.last_wait = loop.last_wait + 1
-    task.wait = loop.last_wait
-    aio_push_timer(loop, AioTimer(aio_now() + seconds, task, task.wait))
+    task = aio_current()
+    wait = aio_wait(True)
+    aio_push_timer(loop, AioTimer(aio_now() + seconds, task, wait))
     coroutine_yield(__word(0))
+    aio_checkpoint()
     return __word(0)
 
 # Some deferred library operations report their creation site while the frames
@@ -3517,3 +3557,212 @@ def fail_at(class_name: str, message: str, path: str, line: int, col: int):
 
 def locate(e: ptr, path: str, line: int, col: int):
     __store8(e, 8, __word(path + ":" + int_to_str(line) + ":" + int_to_str(col)))
+
+
+def aio_cancel() -> ptr:
+    return __ptr(__word(0))
+
+def aio_current() -> AioTask:
+    task = aio_loop().current
+    assert task is not None, "no running task"
+    return task
+
+def aio_scope() -> AioGroup | None:
+    return aio_current().scope
+
+def aio_set_scope(scope: AioGroup | None):
+    task = aio_current()
+    task.scope = scope
+
+def aio_pending(task: AioTask) -> bool:
+    group = task.scope
+    while group is not None:
+        if group.cancelled:
+            return True
+        group = group.parent
+    return False
+
+def aio_checkpoint():
+    if aio_pending(aio_current()):
+        coroutine_set_pending(aio_cancel())
+
+def aio_exception(error: ptr) -> ptr:
+    if error == aio_cancel():
+        return __ptr(__word(0))
+    return error
+
+def aio_wait(interruptible: bool) -> int:
+    loop = aio_loop()
+    task = aio_current()
+    loop.last_wait = loop.last_wait + 1
+    task.wait = loop.last_wait
+    task.interruptible = interruptible
+    loop.waiting[task.wait] = task
+    return task.wait
+
+def aio_request(group: AioGroup):
+    if group.cancelled:
+        return
+    group.cancelled = True
+    loop = aio_loop()
+    woken: list[AioTask] = []
+    for id in loop.waiting:
+        task = loop.waiting[id]
+        if task.interruptible and aio_pending(task):
+            woken.append(task)
+    for task in woken:
+        aio_wake(loop, task, task.wait)
+
+def aio_spawn(body: ptr, group: AioGroup | None, location: str) -> AioTask:
+    task = AioTask(None, body, __word(0), __ptr(__word(0)), 0, 0, group, group, [], False, location)
+    task.context = coroutine_create(aio_task_address(), __word(0))
+    aio_loop().ready.append(task)
+    return task
+
+def aio_finish(task: AioTask):
+    if __addr_is_null(task.error):
+        task.state = 1
+    elif task.error == aio_cancel():
+        task.state = 3
+    else:
+        task.state = 2
+        if task.location != "":
+            frames = ""
+            saved_frames = __ptr(__load8(task.error, 16))
+            if not __addr_is_null(saved_frames):
+                frames = __str(__word(saved_frames))
+            if str_find(frames, "\n  in task started at ") < 0:
+                __store8(task.error, 16, __word(frames + "\n  in task started at " + task.location))
+    task.body = __ptr(__word(0))
+    loop = aio_loop()
+    group = task.group
+    if group is not None:
+        group.count = group.count - 1
+        if task.state == 2 and __addr_is_null(group.failure):
+            group.failure = task.error
+            aio_request(group)
+        joiner = group.joiner
+        if group.count == 0 and joiner is not None:
+            aio_wake(loop, joiner, group.join_wait)
+    for waiter in task.waiters:
+        aio_wake(loop, waiter.task, waiter.id)
+    task.waiters = []
+
+def aio_outcome(task: AioTask) -> word:
+    if task.state == 1:
+        return task.result
+    if task.state == 2:
+        coroutine_set_pending(task.error)
+        return __word(0)
+    fail("RuntimeError", "task was cancelled")
+    return __word(0)
+
+def aio_task_result(task: AioTask) -> word:
+    if task.state == 0:
+        fail("RuntimeError", "task is not finished")
+        return __word(0)
+    return aio_outcome(task)
+
+def aio_await_task(task: AioTask) -> word:
+    aio_checkpoint()
+    while task.state == 0:
+        id = aio_wait(True)
+        task.waiters.append(AioWait(aio_current(), id))
+        coroutine_yield(__word(0))
+        aio_checkpoint()
+    return aio_outcome(task)
+
+def aio_task_group() -> AioGroup:
+    return AioGroup(0, None, 0, False, __ptr(__word(0)), None, 0)
+
+def aio_group_enter(group: AioGroup):
+    if group.state != 0:
+        fail("RuntimeError", "task group was already entered")
+        return
+    task = aio_current()
+    group.state = 1
+    group.parent = task.scope
+    task.scope = group
+
+def aio_group_exit(group: AioGroup, error: ptr) -> ptr:
+    task = aio_current()
+    task.scope = group.parent
+    if not __addr_is_null(error) and error != aio_cancel() and __addr_is_null(group.failure):
+        group.failure = error
+        aio_request(group)
+    while group.count > 0:
+        id = aio_wait(False)
+        group.joiner = task
+        group.join_wait = id
+        coroutine_yield(__word(0))
+    group.state = 2
+    group.joiner = None
+    if not __addr_is_null(group.failure):
+        return group.failure
+    if aio_pending(task):
+        return aio_cancel()
+    return __ptr(__word(0))
+
+def aio_group_start(group: AioGroup, coroutine: ptr, path: str, line: int, col: int) -> AioTask:
+    if group.state != 1 or group.cancelled:
+        fail("RuntimeError", "task group is not accepting tasks")
+        return AioTask(None, __ptr(__word(0)), __word(0), __ptr(__word(0)), 0, 0, None, None, [], False, "")
+    body = async_consume(coroutine)
+    group.count = group.count + 1
+    return aio_spawn(body, group, path + ":" + int_to_str(line) + ":" + int_to_str(col))
+
+def aio_group_cancel(group: AioGroup):
+    if group.state != 1:
+        fail("RuntimeError", "task group is not active")
+        return
+    aio_request(group)
+
+def aio_semaphore(value: int) -> AioSemaphore:
+    if value <= 0:
+        fail("ValueError", "semaphore value must be positive")
+    return AioSemaphore(value, value, [])
+
+def aio_give_permit(semaphore: AioSemaphore):
+    while len(semaphore.waiters) > 0:
+        waiter = semaphore.waiters[0]
+        semaphore.waiters = semaphore.waiters[1:]
+        if waiter.task.wait == waiter.id:
+            waiter.granted = True
+            aio_wake(aio_loop(), waiter.task, waiter.id)
+            return
+    semaphore.value = semaphore.value + 1
+
+def aio_semaphore_acquire(semaphore: AioSemaphore) -> ptr:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return __ptr(__word(0))
+
+def aio_semaphore_body(body: ptr) -> word:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return __word(0)
+
+def aio_semaphore_wait(semaphore: AioSemaphore):
+    aio_checkpoint()
+    if semaphore.value > 0:
+        semaphore.value = semaphore.value - 1
+        return
+    task = aio_current()
+    waiter = AioWait(task, aio_wait(True))
+    semaphore.waiters.append(waiter)
+    coroutine_yield(__word(0))
+    if waiter.granted:
+        if aio_pending(task):
+            aio_give_permit(semaphore)
+            coroutine_set_pending(aio_cancel())
+        return
+    kept: list[AioWait] = []
+    for queued in semaphore.waiters:
+        if queued.id != waiter.id:
+            kept.append(queued)
+    semaphore.waiters = kept
+    aio_checkpoint()
+
+def aio_semaphore_release(semaphore: AioSemaphore):
+    if semaphore.value == semaphore.maximum:
+        fail("ValueError", "semaphore released too many times")
+        return
+    aio_give_permit(semaphore)

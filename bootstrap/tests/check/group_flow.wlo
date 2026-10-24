@@ -1,0 +1,37 @@
+import aio
+
+async def number() -> int:
+    return 1
+
+async def value() -> int:
+    async with aio.task_group():
+        try:
+            await aio.sleep(0.0)
+        finally:
+            assigned = 2
+    return assigned
+
+async def main():
+    async with aio.task_group():
+        before = 1
+        await aio.sleep(0.0)
+    print(before)
+    print(await value())
+    async with aio.task_group():
+        try:
+            pass
+        finally:
+            await aio.sleep(0.0)
+            assigned = 3
+    print(assigned)
+    async with aio.task_group():
+        async with aio.task_group():
+            nested = 4
+    print(nested)
+    for i in range(2):
+        async with aio.task_group() as group:
+            group.start(number())
+            if i == 0:
+                continue
+            break
+    print("departed")

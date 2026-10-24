@@ -1,0 +1,75 @@
+import aio
+
+class Resource:
+    def enter(self) -> Resource:
+        return self
+
+    def exit(self, error: Exception | None):
+        print(error is None)
+
+async def enter_then_wait():
+    print("entered")
+    try:
+        with Resource():
+            await aio.sleep(0.0)
+    except Exception:
+        print("caught cancellation")
+    finally:
+        await aio.sleep(0.0)
+        print("cleaned")
+
+async def immediate() -> str:
+    return "direct await entered"
+
+async def stop(group: aio.TaskGroup):
+    await aio.sleep(0.0)
+    group.cancel()
+
+async def protected():
+    async with aio.task_group() as outer:
+        outer.start(stop(outer))
+        try:
+            pass
+        finally:
+            async with aio.task_group() as inner:
+                inner.start(stop(inner))
+                await aio.sleep(1.0)
+            print("protected group exited")
+        await aio.sleep(0.0)
+        print("not reached")
+    print("outer stopped")
+
+async def first_failure():
+    try:
+        raise ValueError("body failure")
+    finally:
+        raise ValueError("final failure")
+
+async def later_failure():
+    try:
+        await aio.sleep(1.0)
+    finally:
+        print("later cleanup")
+        raise ValueError("later failure")
+
+async def main():
+    async with aio.task_group() as group:
+        group.start(enter_then_wait())
+        group.cancel()
+        print(await immediate())
+    await protected()
+    try:
+        async with aio.task_group() as group:
+            group.start(later_failure())
+            group.start(first_failure())
+            await aio.sleep(1.0)
+    except ValueError as failure:
+        print(failure.message)
+    async with aio.task_group() as group:
+        done = group.start(immediate())
+        await aio.sleep(0.0)
+        group.cancel()
+        print("cancel returned")
+        await done
+        print("not reached")
+    print("finished")

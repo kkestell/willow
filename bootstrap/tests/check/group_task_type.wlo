@@ -1,0 +1,8 @@
+import aio
+
+async def number() -> int:
+    return 1
+
+async def main():
+    async with aio.task_group() as group:
+        task: aio.Task[int | None] = group.start(number())

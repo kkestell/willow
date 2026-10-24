@@ -1,0 +1,11 @@
+import aio
+
+async def value() -> int:
+    async with aio.task_group():
+        return await number()
+
+async def number() -> int:
+    return 1
+
+def main():
+    pass

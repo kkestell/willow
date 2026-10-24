@@ -1,0 +1,1 @@
+group_manager_type.wlo:2:16: error: expected aio.TaskGroup, received int

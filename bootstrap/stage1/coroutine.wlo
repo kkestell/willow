@@ -107,6 +107,36 @@ def function(name: str) -> str:
             "    ret",
             "}",
         ])
+    if name == "aio_cancel":
+        return "\n".join([
+            "function l $W.core.aio_cancel() {",
+            "@start",
+            "    ret $W.aio.cancel",
+            "}",
+        ])
+    if name == "aio_semaphore_body":
+        return "\n".join([
+            "function l $W.core.aio_semaphore_body(l %body) {",
+            "@start",
+            "    %address =l add %body, 16",
+            "    %semaphore =l loadl %address",
+            "    call $W.core.aio_semaphore_wait(l %semaphore)",
+            "    ret 0",
+            "}",
+        ])
+    if name == "aio_semaphore_acquire":
+        return "\n".join([
+            "function l $W.core.aio_semaphore_acquire(l %semaphore) {",
+            "@start",
+            "    %body =l call $W.core.object_new(l 0, l 2)",
+            "    %entry =l add %body, 8",
+            "    storel $W.core.aio_semaphore_body, %entry",
+            "    %argument =l add %body, 16",
+            "    storel %semaphore, %argument",
+            "    %result =l call $W.core.async_coroutine(l %body)",
+            "    ret %result",
+            "}",
+        ])
     if name in ["aio_task_address", "aio_sleep_address"]:
         entry = "$W.core.aio_task_run"
         if name == "aio_sleep_address":
@@ -134,7 +164,7 @@ def function(name: str) -> str:
     return ""
 
 def data() -> str:
-    return "data $W.coroutine.current = { l 0 }\ndata $W.aio.loop = { l 0 }"
+    return "data $W.coroutine.current = { l 0 }\ndata $W.aio.loop = { l 0 }\ndata $W.aio.cancel = { l 0 }"
 
 def assembly(target: str) -> str:
     prefix = ""

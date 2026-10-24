@@ -71,6 +71,7 @@ class Emitter:
     function_name: str = ""
     path: str = ""
     frames: bool = False
+    async_body: bool = False
     # Where a pending exception goes: the innermost handler, or `@unwind`,
     # which returns, and whether the function uses `@unwind`.
     target: str = ""
@@ -182,6 +183,7 @@ class Emitter:
         self.function_name = frame_name(function)
         self.path = self.module_paths[module]
         self.frames = module != "core"
+        self.async_body = function.is_async
         for param in function.params:
             self.line(f"%v.{param.name} =l alloc8 8")
             param_symbol = param.symbol
@@ -296,6 +298,7 @@ class Emitter:
         self.target = "@unwind"
         self.unwinds = False
         self.frames = False
+        self.async_body = False
         self.returns = returns
         result = ""
         if returns:
@@ -634,6 +637,8 @@ class Emitter:
             self.emit_try(node)
         elif isinstance(node, ast.With):
             self.emit_with(node, 0)
+        elif isinstance(node, ast.AsyncWith):
+            self.emit_async_with(node)
         elif isinstance(node, ast.FunctionDef):
             closure = ""
             if len(node.function.type_params) > 0:
@@ -729,10 +734,11 @@ class Emitter:
         normal = end
         raising = outside
         has_finally = len(node.finally_body) > 0
+        protect = Protect(node.finally_body, outside, len(self.loop_end), len(self.handled))
         if has_finally:
             normal = self.new_label()
             raising = self.new_label()
-            self.protects.append(Protect(node.finally_body, outside, len(self.loop_end), len(self.handled)))
+            self.protects.append(protect)
         handlers = raising
         if len(node.handlers) > 0:
             handlers = self.new_label()
@@ -745,6 +751,15 @@ class Emitter:
             exception = self.temp()
             self.line(f"{exception} =l loadl $W.pending")
             self.line("storel 0, $W.pending")
+            cancelling = self.temp()
+            cancelled = self.new_label()
+            catching = self.new_label()
+            self.line(f"{cancelling} =l ceql {exception}, $W.aio.cancel")
+            self.jump(f"jnz {cancelling}, {cancelled}, {catching}")
+            self.label(cancelled)
+            self.line(f"storel {exception}, $W.pending")
+            self.propagate()
+            self.label(catching)
             kind = self.temp()
             self.line(f"{kind} =l loadl {exception}")
             for handler in node.handlers:
@@ -770,13 +785,13 @@ class Emitter:
         if has_finally:
             self.protects.pop()
             self.label(normal)
-            self.block(node.finally_body)
+            self.cleanup(protect, "0")
             self.jump(f"jmp {end}")
             self.label(raising)
             exception = self.temp()
             self.line(f"{exception} =l loadl $W.pending")
             self.line("storel 0, $W.pending")
-            self.block(node.finally_body)
+            self.cleanup(protect, "0")
             # A finally clause that raises replaces the exception.
             if not self.ended:
                 self.line(f"storel {exception}, $W.pending")
@@ -803,11 +818,71 @@ class Emitter:
         self.target = target
 
     def cleanup(self, protect: Protect, error: str):
+        if protect.group:
+            self.emit_group_exit(protect.manager, error)
+            return
+        scope = ""
+        outside = self.target
+        failed = ""
+        end = ""
+        if self.async_body:
+            scope = self.call_text("$W.core.aio_scope", [], True)
+            self.call_text("$W.core.aio_set_scope", ["l 0"], False)
+            failed = self.new_label()
+            end = self.new_label()
+            self.target = failed
         call = protect.exit_call
         if call is None:
             self.block(protect.finally_body)
         else:
+            error = self.core_call("aio_exception", [error], True)
             self.saved_method(call, protect.manager, [error])
+        if self.async_body:
+            if not self.ended:
+                self.call_text("$W.core.aio_set_scope", ["l " + scope], False)
+            self.jump("jmp " + end)
+            self.label(failed)
+            exception = self.temp()
+            self.line(f"{exception} =l loadl $W.pending")
+            self.line("storel 0, $W.pending")
+            self.call_text("$W.core.aio_set_scope", ["l " + scope], False)
+            self.line(f"storel {exception}, $W.pending")
+            self.target = outside
+            self.propagate()
+            self.label(end)
+
+    def emit_group_exit(self, group: str, error: str):
+        outcome = self.core_call("aio_group_exit", [group, error], True)
+        self.line(f"storel {outcome}, $W.pending")
+        ok = self.new_label()
+        self.use_target()
+        self.jump(f"jnz {outcome}, {self.target}, {ok}")
+        self.label(ok)
+
+    def emit_async_with(self, node: ast.AsyncWith):
+        group = self.expr(node.manager)
+        self.core_call("aio_group_enter", [group], False)
+        pattern = node.target
+        if pattern is not None:
+            self.store_pattern(pattern, group, self.concrete_type(node.manager.ty))
+        outside = self.target
+        raising = self.new_label()
+        end = self.new_label()
+        protect = Protect([], outside, len(self.loop_end), len(self.handled), group, None, True)
+        self.protects.append(protect)
+        self.target = raising
+        self.block(node.body)
+        self.protects.pop()
+        self.target = outside
+        if not self.ended:
+            self.emit_group_exit(group, "0")
+        self.jump("jmp " + end)
+        self.label(raising)
+        error = self.temp()
+        self.line(f"{error} =l loadl $W.pending")
+        self.line("storel 0, $W.pending")
+        self.emit_group_exit(group, error)
+        self.label(end)
 
     def emit_with(self, node: ast.With, index: int):
         if index == len(node.items):
@@ -1555,6 +1630,12 @@ class Emitter:
 
     # The descriptor symbol of the built-in type, class, or enum `type_name`.
     def descriptor(self, type_name: str) -> str:
+        if type_name == "aio.Task":
+            type_name = "core.AioTask"
+        elif type_name == "aio.TaskGroup":
+            type_name = "core.AioGroup"
+        elif type_name == "aio.Semaphore":
+            type_name = "core.AioSemaphore"
         if type_name in builtin_types() or type_name in self.exceptions or "." in type_name:
             return f"$W.{type_name}.type"
         return f"$W.{self.entry}.{type_name}.type"
@@ -1645,7 +1726,11 @@ class Emitter:
             assert function is not None, "unbound lambda"
             return self.closure(function)
         elif isinstance(node, ast.Await):
-            return self.core_call("async_await", [self.expr(node.operand)], True)
+            name = "async_await"
+            operand = self.concrete_type(node.operand.ty)
+            if isinstance(operand, types.ClassType) and operand.decl.type_name == "aio.Task":
+                name = "aio_await_task"
+            return self.core_call(name, [self.expr(node.operand)], True)
         elif isinstance(node, ast.Typed):
             return f"%p.{node.index}"
         return self.unchecked("expression")
@@ -2097,6 +2182,8 @@ class Emitter:
                 result = types.substitute(method.result, types.record_map(ty))
                 result = types.substitute(result, types.bind_vars(method.typevars, types.substitute_all(own, self.bindings)))
                 if ty.decl.native:
+                    if ty.decl.type_name == "aio.TaskGroup" and name == "start":
+                        passed.extend([self.string(self.path), str(self.at_line), str(self.at_col)])
                     return self.core_call(ty.decl.prefix + "_" + name, passed, not is_none(result))
                 symbol = self.specialization(method, ty.args, own)
                 return self.willow_call(symbol, typed(passed), not is_none(self.concrete_type(result)))
@@ -2194,6 +2281,10 @@ class Emitter:
             args = self.arg_values(node.args, node.order)
             args.extend([self.string(self.path), str(self.at_line), str(self.at_col)])
             return self.core_call("aio_sleep_coroutine", args, True)
+        elif name == "aio.task_group":
+            return self.core_call("aio_task_group", [], True)
+        elif name == "aio.semaphore":
+            return self.core_call("aio_semaphore", self.arg_values(node.args, node.order), True)
         return self.unchecked(f"'{name}'")
 
     def saved_method(self, expr: ast.Expr, object: str, supplied: list[str]) -> str:
@@ -3003,6 +3094,7 @@ class Protect:
     handled: int
     manager: str = ""
     exit_call: ast.Expr | None = None
+    group: bool = False
 
 # The name of `function` in frames, and in its symbol.
 def frame_name(function: ast.FunctionDecl) -> str:

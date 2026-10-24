@@ -1,0 +1,14 @@
+import aio
+
+def optional() -> int | None:
+    return 1
+
+async def main():
+    value = optional()
+    def clear():
+        nonlocal value
+        value = None
+    if value is not None:
+        async with aio.task_group():
+            pass
+        print(value + 1)

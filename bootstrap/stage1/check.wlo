@@ -11,6 +11,16 @@ import diagnostic
 import stdlib
 import types
 
+class GroupFlow:
+    finally_depth: int
+    loops: int
+    exits: list[dict[int, types.Type]]
+    departures: list[dict[int, types.Type]]
+
+class GroupMark:
+    exits: int
+    departures: int
+
 class Checker:
     module: ast.Module
     function: ast.FunctionDecl
@@ -18,6 +28,7 @@ class Checker:
     error: diagnostic.Diagnostic | None
     # The parameters and the locals assigned so far, by id.
     symbols: dict[int, ast.Symbol]
+    groups: list[GroupFlow]
     loops: int = 0
     # The number of `finally` clauses enclosing the statement being checked,
     # and that number at the innermost loop.
@@ -179,6 +190,7 @@ class Checker:
             if self.finally_depth > 0:
                 self.fail(line, col, "'return' cannot leave a 'finally' clause")
             self.check_return(statement, node, state)
+            self.departure(state, True)
             return True
         elif isinstance(node, ast.Yield):
             if self.finally_depth > 0:
@@ -203,6 +215,8 @@ class Checker:
             return self.check_try(node, state)
         elif isinstance(node, ast.With):
             return self.check_with(statement, node, state)
+        elif isinstance(node, ast.AsyncWith):
+            return self.check_async_with(node, state)
         elif isinstance(node, ast.FunctionDef):
             self.check_nested(statement, node, state)
         elif isinstance(node, ast.Nonlocal):
@@ -210,9 +224,9 @@ class Checker:
             pass
         elif isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
-                return self.check_transfer(statement, "break")
+                return self.check_transfer(statement, "break", state)
             elif node == ast.SimpleStatement.CONTINUE:
-                return self.check_transfer(statement, "continue")
+                return self.check_transfer(statement, "continue", state)
         else:
             self.unsupported(line, col, "this statement")
         return False
@@ -324,12 +338,90 @@ class Checker:
         assert ty is not None, "a symbol in the state has no type"
         return ty
 
-    def check_transfer(self, statement: ast.Stmt, name: str) -> bool:
+    def check_transfer(self, statement: ast.Stmt, name: str, state: dict[int, types.Type]) -> bool:
         if self.loops == 0:
             self.fail(statement.line, statement.col, f"'{name}' outside of a loop")
         elif self.loop_finally < self.finally_depth:
             self.fail(statement.line, statement.col, f"'{name}' cannot leave a 'finally' clause")
+        self.departure(state, False)
         return True
+
+    def graceful_exit(self, state: dict[int, types.Type]):
+        i = len(self.groups) - 1
+        while i >= 0:
+            group = self.groups[i]
+            if group.finally_depth != self.finally_depth:
+                break
+            group.exits.append(copy(state))
+            i = i - 1
+
+    def departure(self, state: dict[int, types.Type], returning: bool):
+        i = len(self.groups) - 1
+        while i >= 0:
+            group = self.groups[i]
+            if not returning and group.loops != self.loops:
+                break
+            group.departures.append(copy(state))
+            i = i - 1
+
+    def group_mark(self) -> list[GroupMark]:
+        marks: list[GroupMark] = []
+        for group in self.groups:
+            marks.append(GroupMark(len(group.exits), len(group.departures)))
+        return marks
+
+    def group_states(self, marks: list[GroupMark]) -> list[dict[int, types.Type]]:
+        states: list[dict[int, types.Type]] = []
+        for i in range(len(marks)):
+            group = self.groups[i]
+            states.extend(group.exits[marks[i].exits:])
+            states.extend(group.departures[marks[i].departures:])
+        return states
+
+    def drop_group_states(self, marks: list[GroupMark]):
+        for i in range(len(marks)):
+            group = self.groups[i]
+            group.exits = group.exits[:marks[i].exits]
+            group.departures = group.departures[:marks[i].departures]
+
+    def join_states(self, states: list[dict[int, types.Type]]) -> dict[int, types.Type]:
+        result = states[0]
+        for state in states[1:]:
+            result = join(result, state, self.symbols)
+        return result
+
+    def check_async_with(self, node: ast.AsyncWith, state: dict[int, types.Type]) -> bool:
+        group_type = types.ClassType(stdlib.aio_module().classes["TaskGroup"], [])
+        self.check_against(node.manager, state, group_type)
+        pattern = node.target
+        if pattern is not None:
+            self.check_pattern(pattern, group_type, state)
+        marks = self.group_mark()
+        frame = GroupFlow(self.finally_depth, self.loops, [], [])
+        self.groups.append(frame)
+        body_state = copy(state)
+        transfers = self.check_block(node.body, body_state)
+        self.groups.pop()
+        self.calls = self.calls + 1
+        for recorded in self.group_states(marks):
+            self.forget_captured(recorded)
+        ends: list[dict[int, types.Type]] = []
+        if not transfers:
+            ends.append(body_state)
+        ends.extend(frame.exits)
+        reached: list[dict[int, types.Type]] = []
+        reached.extend(ends)
+        reached.extend(frame.departures)
+        if len(reached) > 0:
+            boundary = self.join_states(reached)
+            self.forget_captured(boundary)
+            self.graceful_exit(boundary)
+        if len(ends) == 0:
+            return True
+        after = self.join_states(ends)
+        self.forget_captured(after)
+        replace(state, after)
+        return False
 
     def check_raise(self, node: ast.Raise, state: dict[int, types.Type]):
         value = node.value
@@ -348,6 +440,7 @@ class Checker:
         finally_entry = copy(handler_entry)
         body_state = copy(state)
         before = self.calls
+        marks = self.group_mark()
         transfers = self.check_block(node.body, body_state)
         # A clause may start after any call in the parts before it.
         if self.calls != before:
@@ -400,19 +493,24 @@ class Checker:
             finally_transfers = self.check_block(node.finally_body, finally_state)
             self.finally_depth = self.finally_depth - 1
             if finally_transfers:
+                self.drop_group_states(marks)
                 return True
-            if self.calls != before:
-                self.forget_captured(result)
+            finally_calls = self.calls != before
             # The finally clause runs after whichever part completed. A local
             # it assigns on some paths only may no longer be narrowed.
             assigned: dict[int, bool] = {}
             assigned_symbols(node.finally_body, assigned)
-            for id in assigned:
-                if id in result:
-                    result[id] = self.declared(id)
-            for id in finally_state:
-                if id in assigned or not types.same(finally_state[id], self.declared(id)):
-                    result[id] = finally_state[id]
+            states = self.group_states(marks)
+            states.append(result)
+            for exit in states:
+                if finally_calls:
+                    self.forget_captured(exit)
+                for id in assigned:
+                    if id in exit:
+                        exit[id] = self.declared(id)
+                for id in finally_state:
+                    if id in assigned or not types.same(finally_state[id], self.declared(id)):
+                        exit[id] = finally_state[id]
         if transfers:
             return True
         replace(state, result)
@@ -524,8 +622,11 @@ class Checker:
             pattern = item.target
             if pattern is not None:
                 self.check_pattern(pattern, enter.result, state)
+        marks = self.group_mark()
         transfers = self.check_block(node.body, state)
         self.forget_captured(state)
+        for recorded in self.group_states(marks):
+            self.forget_captured(recorded)
         return transfers
 
     def check_for_body(self, statement: ast.Stmt, node: ast.For, item: types.Type, state: dict[int, types.Type]):
@@ -873,6 +974,8 @@ class Checker:
         if isinstance(node, ast.Call) or isinstance(node, ast.CallValue) or isinstance(node, ast.MethodCall) or isinstance(node, ast.Await):
             self.calls = self.calls + 1
             self.forget_captured(state)
+        if isinstance(node, ast.Await):
+            self.graceful_exit(state)
         return ty
 
     def check_node(self, expr: ast.Expr, state: dict[int, types.Type]) -> types.Type:
@@ -920,7 +1023,7 @@ class Checker:
             if expected is not None:
                 node.operand.expected = stdlib.coroutine_of(expected)
             operand = self.check_expr(node.operand, state)
-            if isinstance(operand, types.ClassType) and operand.decl.type_name == "Coroutine":
+            if isinstance(operand, types.ClassType) and operand.decl.type_name in ["Coroutine", "aio.Task"]:
                 return operand.args[0]
             self.fail(line, col, f"cannot await a value of type {types.display(operand)}")
             return none()
@@ -1272,7 +1375,7 @@ class Checker:
                 noun = "parameter"
             self.fail(expr.line, expr.col, f"expected {types.display(target)}, received a lambda with {count} {noun}")
             return none()
-        checker = Checker(self.module, function, none(), None, {})
+        checker = Checker(self.module, function, none(), None, {}, [])
         entry: dict[int, types.Type] = {}
         for capture in function.captures:
             captured = capture.symbol
@@ -1600,7 +1703,7 @@ class Checker:
             return self.check_host(expr, node, target, state)
         elif name == "fs.realpath":
             return self.check_host(expr, node, target, state)
-        elif name == "aio.sleep":
+        elif name in ["aio.sleep", "aio.task_group", "aio.semaphore"]:
             return self.check_host(expr, node, target, state)
         # Not in L0.
         return self.unsupported(line, col, f"'{name}'")
@@ -1783,7 +1886,7 @@ def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[i
     if function.is_async:
         assert isinstance(result, types.ClassType), "async function without a coroutine result"
         result = result.args[0]
-    checker = Checker(module, function, result, None, {})
+    checker = Checker(module, function, result, None, {}, [])
     if function.generator:
         result = types.expand(result)
         if not isinstance(result, types.ProtocolType):

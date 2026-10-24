@@ -1,0 +1,3 @@
+async def main():
+    async with 1:
+        pass
