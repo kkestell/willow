@@ -1,0 +1,15 @@
+# A function without a result can return None, or the result of a call that
+# has none.
+def ping():
+    print("ping")
+
+def stop():
+    return None
+
+def relay():
+    return ping()
+
+def main():
+    stop()
+    relay()
+    print("done")

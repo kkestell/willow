@@ -3,7 +3,7 @@
 The functions stage 0 calls to lower the built-ins and operations of L0
 (agents/bootstrap.md §3), and the intrinsic layer core is written over. Every
 function here is `$W.core.<name>`. Core may define other functions; stage 0
-calls only these, and stage 1 calls `run` through `import core`.
+calls only these, and stage 1 calls `os` and `run` through `import core`.
 
 ## Conventions
 
@@ -179,6 +179,7 @@ literal `"None"`.
 
 | Signature | Meaning |
 | --- | --- |
+| `os() -> str` | `__os`, the target's operating system |
 | `run(args: list[str]) -> int` | Runs `args[0]`, searched for in `PATH`, with the remaining arguments and no shell, through `posix_spawnp`; the child inherits stdin, stdout, stderr, and the environment, with SIGPIPE's default action. Waits and returns the exit status, or 128 plus the signal number if a signal ended the child |
 
 ## Inline in stage 0

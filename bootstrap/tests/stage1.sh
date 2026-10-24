@@ -153,6 +153,62 @@ check_bind_driver() {
     done
 }
 
+# The programs in bootstrap/tests/ that willow1 compiles, one per line. Each
+# runs through run.sh as it does with willow0.
+willow1_programs="
+programs/sum_to.wlo
+programs/argument_type.wlo
+programs/missing_return.wlo
+programs/return_none.wlo
+programs/alias_call.wlo
+programs/alias_cycle.wlo
+programs/enum_member.wlo
+programs/import_name_clash.wlo
+programs/isinstance_none.wlo
+programs/keyword_after_condition.wlo
+programs/maybe_unassigned.wlo
+programs/missing_comma.wlo
+programs/module_and_namespace.wlo
+programs/operator_types.wlo
+programs/private_name.wlo
+programs/type_intrinsic_outside_core.wlo
+programs/union_duplicate_member.wlo
+programs/unknown_escape.wlo
+programs/unreachable.wlo
+"
+
+# Writes the module core_source to DIR/core_source.wlo: core's text as one
+# string, which willow1 compiles into every program.
+core_source() {
+    {
+        printf 'def text() -> str:\n    return "'
+        sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/$/\\n/' bootstrap/core/core.wlo | tr -d '\n'
+        printf '"\n'
+    } >"$1/core_source.wlo"
+}
+
+# Builds willow1 from stage 1's sources and core_source and runs the programs
+# above with it. Under --lua there is no willow1, since the Lua
+# implementation has no core module for willow1 to import.
+check_willow1() {
+    [ $lua -eq 1 ] && return
+    mkdir "$work/willow1-src"
+    cp bootstrap/stage1/*.wlo "$work/willow1-src/"
+    core_source "$work/willow1-src"
+    if ! "$willow0" build "$work/willow1-src/willow1.wlo" -o "$work/willow1"; then
+        echo "FAIL willow1: does not compile"
+        failed=1
+        return
+    fi
+    paths=""
+    for program in $willow1_programs; do
+        paths="$paths bootstrap/tests/$program"
+    done
+    echo "willow1:"
+    # shellcheck disable=SC2086 # the paths have no spaces
+    WILLOW0=$work/willow1 bootstrap/tests/run.sh $paths || failed=1
+}
+
 check_test lexer_test
 check_test parser_test
 check_test types_test
@@ -160,5 +216,6 @@ check_test bind_test
 check_driver parse_files
 check_program_driver load_files
 check_bind_driver bind_files
+check_willow1
 
 exit $failed

@@ -109,6 +109,8 @@ class Binder:
     last_id: int
     error: diagnostic.Diagnostic | None
     builtins: dict[str, stdlib.Builtin]
+    # Only core may call these.
+    intrinsics: dict[str, stdlib.Builtin]
     exceptions: dict[str, types.Class]
     protocols: dict[str, types.Protocol]
     provided: dict[str, stdlib.Module]
@@ -520,6 +522,8 @@ class Binder:
                 return types.TupleType(elements)
             if is_scalar(written):
                 return types.prim(written)
+            if module.name == "core" and written in ["ptr", "word"]:
+                return types.prim(written)
             found = scope.find(written)
             if found is not None:
                 if node.has_args:
@@ -618,7 +622,10 @@ class Binder:
     # own, puts its type parameters in scope.
     def resolve_signature(self, module: ast.Module, function: ast.FunctionDecl, outer: TypeScope):
         record = function.record
-        if record is None or function.external:
+        if record is None:
+            return
+        if function.external:
+            self.resolve_extern(module, function, record)
             return
         scope = outer
         self_type: types.Type = types.prim("None")
@@ -652,6 +659,20 @@ class Binder:
             # result.
             result = stdlib.coroutine_of(result)
         record.result = result
+
+    # An extern function's C `int`, `cint`, is an int to its callers; the
+    # emitter reads the annotation to pass it as one.
+    def resolve_extern(self, module: ast.Module, function: ast.FunctionDecl, record: types.Function):
+        root = TypeScope({}, None, 0)
+        for param in function.params:
+            annotation = param.annotation
+            ty: types.Type = types.prim("int")
+            if annotation is not None and not is_cint(annotation):
+                ty = self.resolve_type(annotation, module, root, "")
+            record.params.append(types.Param(param.name, ty, None, False))
+        record.result = types.prim("int")
+        if not is_cint(function.return_type):
+            record.result = self.resolve_type(function.return_type, module, root, "")
 
     # The type of `default`, a default in `module`, whose enum members it
     # resolves. Parameters and locals cannot shadow an enum named there.
@@ -1013,6 +1034,9 @@ class Resolver:
             self.fail(expr.line, expr.col, f"'{node.name}' is used before its nonlocal declaration")
             return
         if symbol is None:
+            if node.name == "__os" and self.module.name == "core":
+                # The target's name, which the checker and emitter fold.
+                return
             if node.name in self.module.roots:
                 self.fail(expr.line, expr.col, f"module '{node.name}' cannot be used as a value")
             elif node.name in self.binder.exceptions:
@@ -1044,6 +1068,8 @@ class Resolver:
                 found = self.binder.builtins[node.name]
             elif node.name in self.binder.exceptions:
                 found = self.binder.exceptions[node.name]
+            elif self.module.name == "core" and node.name in self.binder.intrinsics:
+                found = self.binder.intrinsics[node.name]
             if found is None:
                 self.fail(expr.line, expr.col, f"unknown function '{node.name}'")
                 return
@@ -1345,7 +1371,7 @@ def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | No
         source.tree.name = source.name
         modules.append(source.tree)
         by_name[source.name] = source.tree
-    binder = Binder(modules, by_name, modules[0], 0, None, stdlib.builtins(), stdlib.exceptions(), stdlib.protocols(), stdlib.modules(), stdlib.coroutine(), {}, [], [])
+    binder = Binder(modules, by_name, modules[0], 0, None, stdlib.builtins(), stdlib.intrinsics(), stdlib.exceptions(), stdlib.protocols(), stdlib.modules(), stdlib.coroutine(), {}, [], [])
     for module in modules:
         binder.declare(module)
         if binder.error is not None:
@@ -1634,6 +1660,9 @@ def is_generic_member(found: Member | None) -> bool:
     if isinstance(found, ast.ClassDecl):
         return len(found.type_params) > 0
     return False
+
+def is_cint(node: ast.TypeExpr) -> bool:
+    return isinstance(node, ast.TypeName) and node.module == "" and node.name == "cint"
 
 def is_scalar(name: str) -> bool:
     return name in ["int", "float", "bool", "str", "bytes", "None"]

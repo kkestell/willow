@@ -1,0 +1,631 @@
+# Writes checked functions as QBE intermediate language, with stage 0's value
+# representation and symbols (agents/bootstrap.md §4, §7): every value is an
+# `l` slot, a function is `$W.<module>.<name>`, a string literal
+# `$W.str.<n>`, and a type descriptor `$W.<type>.type`. Locals live in stack
+# slots, which QBE promotes to registers. Output depends only on the order
+# functions are emitted in.
+
+import ast
+import stdlib
+import types
+
+class Emitter:
+    # `__os`, which an `if` that compares it with a literal folds.
+    target_os: str
+    core: ast.Module
+    # The module name of each declared function, by its id.
+    module_names: dict[int, str]
+    lines: list[str]
+    # String literals, numbered in order of first use.
+    strings: dict[str, int]
+    # The core functions the emitted code calls, in order of first call, for
+    # the driver to check and emit, and their names.
+    needed: list[ast.FunctionDecl]
+    requested: dict[str, bool]
+    # Per function: the temporaries and labels used so far, and whether the
+    # current block has ended with a jump or return.
+    temps: int
+    labels: int
+    ended: bool
+    # Whether the current function returns a value.
+    returns: bool
+
+    def write(self, text: str):
+        self.lines.append(text)
+
+    def line(self, text: str):
+        self.lines.append("\t" + text)
+
+    def temp(self) -> str:
+        self.temps = self.temps + 1
+        return f"%.{self.temps}"
+
+    def new_label(self) -> str:
+        self.labels = self.labels + 1
+        return f"@L.{self.labels}"
+
+    def label(self, label: str):
+        self.write(label)
+        self.ended = False
+
+    # Writes a jump or return, unless the block has already ended: the jumps
+    # that close an `if` or `while` body can follow a return.
+    def jump(self, text: str):
+        if not self.ended:
+            self.line(text)
+            self.ended = True
+
+    def string(self, text: str) -> str:
+        if text not in self.strings:
+            self.strings[text] = len(self.strings)
+        return f"$W.str.{self.strings[text]}"
+
+    # Records that core function `name` is called.
+    def require(self, name: str):
+        if name not in self.requested:
+            self.requested[name] = True
+            decl = self.core.names[name]
+            assert isinstance(decl, ast.FunctionDecl), f"core.{name} is not a function"
+            self.needed.append(decl)
+
+    def core_call(self, name: str, args: list[str], returns: bool) -> str:
+        self.require(name)
+        return self.call_text(f"$W.core.{name}", typed(args), returns)
+
+    # Writes call `text` and returns its result, or 0 when there is none.
+    def call_text(self, callee: str, args: list[str], returns: bool) -> str:
+        text = "call " + callee + "(" + ", ".join(args) + ")"
+        if not returns:
+            self.line(text)
+            return "0"
+        t = self.temp()
+        self.line(f"{t} =l {text}")
+        return t
+
+    # Functions
+
+    def function(self, function: ast.FunctionDecl):
+        record = function.record
+        assert record is not None, f"function {function.name} has no signature"
+        self.temps = 0
+        self.labels = 0
+        params: list[str] = []
+        for param in function.params:
+            params.append(f"l %p.{param.name}")
+        returns = not is_none(record.result)
+        self.returns = returns
+        result = ""
+        if returns:
+            result = "l "
+        self.write("function " + result + self.symbol(function) + "(" + ", ".join(params) + ") {")
+        self.label("@start")
+        for param in function.params:
+            self.line(f"%v.{param.name} =l alloc8 8")
+            self.line(f"storel %p.{param.name}, %v.{param.name}")
+        for local in function.locals:
+            self.line(f"%v.{local.name} =l alloc8 8")
+        self.block(function.body)
+        # The checker proves a function with a result never reaches its end.
+        if returns:
+            self.jump("hlt")
+        else:
+            self.jump("ret")
+        self.write("}")
+
+    def symbol(self, function: ast.FunctionDecl) -> str:
+        return "$W." + self.module_names[function.id] + "." + function.name
+
+    # The program entry, descriptors, and string literals, after every
+    # function. The entry saves argc and argv for sys.args (core/API.md).
+    def finish(self, entry: ast.Module) -> str:
+        self.write("export function w $main(w %argc, l %argv) {")
+        self.write("@start")
+        self.line("call $GC_init()")
+        self.line("%argc.l =l extsw %argc")
+        self.line("storel %argc.l, $W.argc")
+        self.line("storel %argv, $W.argv")
+        self.line("call $W.core.init()")
+        self.line(f"call $W.{entry.name}.main()")
+        self.line("ret 0")
+        self.write("}")
+        self.write("data $W.argc = { l 0 }")
+        self.write("data $W.argv = { l 0 }")
+        for name in builtin_types():
+            self.write(f"data $W.{name}.type = " + "{ l " + self.string(name) + " }")
+        for text in self.strings:
+            data = f"l $W.str.type, l {len(utf8(text))}, " + data_bytes(text) + "b 0"
+            self.write(f"data $W.str.{self.strings[text]} = " + "{ " + data + " }")
+        return "\n".join(self.lines) + "\n"
+
+    # Statements
+
+    def block(self, body: list[ast.Stmt]):
+        for statement in body:
+            # Statements after a jump or return cannot run. The checker
+            # rejects them, except after a kept `__os` arm that transfers
+            # control, where they are the other platform's code.
+            if self.ended:
+                return
+            self.stmt(statement)
+
+    def stmt(self, statement: ast.Stmt):
+        node = statement.node
+        if isinstance(node, ast.Assign):
+            value = self.expr(node.value)
+            self.line(f"storel {value}, %v.{node.name}")
+        elif isinstance(node, ast.CallStmt):
+            self.expr(node.call)
+        elif isinstance(node, ast.If):
+            self.emit_if(node)
+        elif isinstance(node, ast.While):
+            self.emit_while(node)
+        elif isinstance(node, ast.Return):
+            self.emit_return(node)
+        elif isinstance(node, ast.IndexAssign):
+            self.unchecked("index assignment")
+        elif isinstance(node, ast.FieldAssign):
+            self.unchecked("field assignment")
+        elif isinstance(node, ast.For):
+            self.unchecked("for loop")
+        elif isinstance(node, ast.Assert):
+            self.unchecked("assert")
+        elif isinstance(node, ast.SimpleStatement):
+            if node == ast.SimpleStatement.BREAK:
+                self.unchecked("break")
+            elif node == ast.SimpleStatement.CONTINUE:
+                self.unchecked("continue")
+        else:
+            self.unchecked("statement")
+
+    # A function without a result returns nothing to QBE, even from
+    # `return None` or the return of a call without a result.
+    def emit_return(self, node: ast.Return):
+        returned = node.value
+        if returned is None:
+            self.jump("ret")
+        elif self.returns:
+            self.jump("ret " + self.expr(returned))
+        else:
+            self.expr(returned)
+            self.jump("ret")
+
+    # Fails on a construct the checker does not accept yet.
+    def unchecked(self, what: str) -> str:
+        assert False, f"unchecked {what}"
+        return "0"
+
+    # An `__os` test emits only the arm it selects, so core can call
+    # functions that exist on only one platform.
+    def emit_if(self, node: ast.If):
+        test = self.os_test(node.condition)
+        if test == "true":
+            self.block(node.body)
+            return
+        if test == "false":
+            self.block(node.else_body)
+            return
+        condition = self.expr(node.condition)
+        then_label = self.new_label()
+        else_label = self.new_label()
+        end = self.new_label()
+        self.jump(f"jnz {condition}, {then_label}, {else_label}")
+        self.label(then_label)
+        self.block(node.body)
+        self.jump(f"jmp {end}")
+        self.label(else_label)
+        self.block(node.else_body)
+        self.label(end)
+
+    # "true" or "false" when `condition` compares `__os` with a string
+    # literal using `==` or `!=`, and "" otherwise.
+    def os_test(self, condition: ast.Expr) -> str:
+        node = condition.node
+        if not isinstance(node, ast.Binary) or node.op not in ["==", "!="]:
+            return ""
+        left = node.left.node
+        right = node.right.node
+        text = ""
+        if is_os(node.left) and isinstance(right, ast.String):
+            text = right.value
+        elif is_os(node.right) and isinstance(left, ast.String):
+            text = left.value
+        else:
+            return ""
+        if (text == self.target_os) == (node.op == "=="):
+            return "true"
+        return "false"
+
+    def emit_while(self, node: ast.While):
+        test = self.new_label()
+        body = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        condition = self.expr(node.condition)
+        self.jump(f"jnz {condition}, {body}, {end}")
+        self.label(body)
+        self.block(node.body)
+        self.jump(f"jmp {test}")
+        self.label(end)
+
+    # Expressions
+
+    # Writes the instructions that compute `expr` and returns its operand.
+    def expr(self, expr: ast.Expr) -> str:
+        node = expr.node
+        if isinstance(node, ast.Int):
+            return node.text
+        elif isinstance(node, ast.String):
+            return self.string(node.value)
+        elif isinstance(node, ast.Constant):
+            if node == ast.Constant.TRUE:
+                return "1"
+            return "0"
+        elif isinstance(node, ast.Name):
+            if node.symbol is None:
+                return self.string(self.target_os)
+            t = self.temp()
+            self.line(f"{t} =l loadl %v.{node.name}")
+            return t
+        elif isinstance(node, ast.Binary):
+            return self.binary(node)
+        elif isinstance(node, ast.Call):
+            return self.call(node)
+        elif isinstance(node, ast.TypeOf):
+            target = node.target
+            assert isinstance(target, ast.TypeName), "unchecked __type"
+            return f"$W.{target.name}.type"
+        elif isinstance(node, ast.Float):
+            return self.unchecked("float")
+        elif isinstance(node, ast.FString):
+            return self.unchecked("f-string")
+        elif isinstance(node, ast.EnumMember):
+            return self.unchecked("enum member")
+        elif isinstance(node, ast.MethodCall):
+            return self.unchecked("method call")
+        elif isinstance(node, ast.Field):
+            return self.unchecked("field")
+        elif isinstance(node, ast.Index):
+            return self.unchecked("index")
+        elif isinstance(node, ast.Slice):
+            return self.unchecked("slice")
+        elif isinstance(node, ast.Unary):
+            return self.unchecked(f"operator '{node.op}'")
+        elif isinstance(node, ast.Is):
+            return self.unchecked("'is'")
+        elif isinstance(node, ast.IsInstance):
+            return self.unchecked("isinstance")
+        elif isinstance(node, ast.ListDisplay):
+            return self.unchecked("list display")
+        elif isinstance(node, ast.DictDisplay):
+            return self.unchecked("dict display")
+        return self.unchecked("expression")
+
+    def binary(self, node: ast.Binary) -> str:
+        op = node.op
+        left_type = node.left.ty
+        assert left_type is not None, "unchecked operand"
+        kind = types.kind(left_type)
+        left = self.expr(node.left)
+        right = self.expr(node.right)
+        if kind == "str":
+            if op == "+":
+                return self.core_call("str_concat", [left, right], True)
+            equal = self.core_call("str_eq", [left, right], True)
+            if op == "==":
+                return equal
+            t = self.temp()
+            self.line(f"{t} =l ceql {equal}, 0")
+            return t
+        if op == "+" or op == "-":
+            return self.checked(arithmetic_instruction(op), left, right)
+        t = self.temp()
+        self.line(f"{t} =l {comparison_instruction(op)} {left}, {right}")
+        return t
+
+    # `left instr right` on ints, failing with an OverflowError when the
+    # result leaves the symmetric int range.
+    def checked(self, instr: str, left: str, right: str) -> str:
+        t = self.temp()
+        self.line(f"{t} =l {instr} {left}, {right}")
+        a = self.temp()
+        b = self.temp()
+        wrapped = self.temp()
+        minimum = self.temp()
+        # The sum wrapped when its sign differs from both operands'; the
+        # difference, when the operands' signs differ and its sign differs
+        # from the left operand's.
+        if instr == "add":
+            self.line(f"{a} =l xor {left}, {t}")
+            self.line(f"{b} =l xor {right}, {t}")
+        else:
+            self.line(f"{a} =l xor {left}, {right}")
+            self.line(f"{b} =l xor {left}, {t}")
+        self.line(f"{a} =l and {a}, {b}")
+        self.line(f"{wrapped} =l csltl {a}, 0")
+        self.line(f"{minimum} =l ceql {t}, -9223372036854775808")
+        self.line(f"{wrapped} =l or {wrapped}, {minimum}")
+        self.guard(wrapped, "OverflowError", "integer overflow")
+        return t
+
+    # Fails with `class_name` and `message` when `condition` is nonzero. In
+    # L0 a failure does not return.
+    def guard(self, condition: str, class_name: str, message: str):
+        failed = self.new_label()
+        ok = self.new_label()
+        self.jump(f"jnz {condition}, {failed}, {ok}")
+        self.label(failed)
+        self.core_call("fail", [self.string(class_name), self.string(message)], False)
+        self.jump("hlt")
+        self.label(ok)
+
+    # Calls
+
+    def call(self, node: ast.Call) -> str:
+        target = node.target
+        if isinstance(target, ast.FunctionDecl):
+            if target.external:
+                return self.extern_call(node, target)
+            args: list[str] = []
+            for arg in node.args:
+                args.append(self.expr(arg))
+            if self.module_names[target.id] == "core":
+                self.require(target.name)
+            record = target.record
+            assert record is not None, f"function {target.name} has no signature"
+            return self.call_text(self.symbol(target), typed(args), not is_none(record.result))
+        if isinstance(target, stdlib.Builtin):
+            return self.builtin(node, target)
+        return self.unchecked("constructor")
+
+    # A call of a built-in function, a host module's function, or an
+    # intrinsic, by the name it is written with.
+    def builtin(self, node: ast.Call, target: stdlib.Builtin) -> str:
+        name = node.name
+        if name.startswith("__"):
+            return self.intrinsic(node, target)
+        elif name == "print":
+            return self.emit_print(node)
+        elif name == "len":
+            return self.unchecked("'len'")
+        elif name == "str":
+            return self.unchecked("'str'")
+        elif name == "int":
+            return self.unchecked("'int'")
+        elif name == "float":
+            return self.unchecked("'float'")
+        elif name == "range":
+            return self.unchecked("'range'")
+        elif name == "ord":
+            return self.unchecked("'ord'")
+        elif name == "chr":
+            return self.unchecked("'chr'")
+        elif name == "sys.args":
+            return self.unchecked("'sys.args'")
+        elif name == "sys.exit":
+            return self.unchecked("'sys.exit'")
+        elif name == "sys.eprint":
+            return self.unchecked("'sys.eprint'")
+        elif name == "fs.read_file":
+            return self.unchecked("'fs.read_file'")
+        elif name == "fs.write_file":
+            return self.unchecked("'fs.write_file'")
+        elif name == "fs.exists":
+            return self.unchecked("'fs.exists'")
+        elif name == "fs.realpath":
+            return self.unchecked("'fs.realpath'")
+        return self.unchecked(f"'{name}'")
+
+    # A C function's `cint` travels as QBE `w` and a float as `d`; a C int
+    # result is sign-extended to fill its slot, and a float result becomes its
+    # bits. Arguments past the declared ones follow a `...` marker.
+    def extern_call(self, node: ast.Call, target: ast.FunctionDecl) -> str:
+        args: list[str] = []
+        for i in range(len(node.args)):
+            arg = node.args[i]
+            value = self.expr(arg)
+            if i == len(target.params):
+                args.append("...")
+            ty = arg.ty
+            assert ty is not None, "unchecked argument"
+            abi = "l"
+            if i < len(target.params):
+                abi = c_type(target.params[i].annotation, ty)
+            elif types.kind(ty) == "float":
+                abi = "d"
+            if abi == "d":
+                d = self.temp()
+                self.line(f"{d} =d cast {value}")
+                value = d
+            args.append(f"{abi} {value}")
+        if target.variadic and len(node.args) == len(target.params):
+            args.append("...")
+        record = target.record
+        assert record is not None, f"function {target.name} has no signature"
+        text = "call $" + target.name + "(" + ", ".join(args) + ")"
+        if is_none(record.result):
+            self.line(text)
+            return "0"
+        result = c_type(target.return_type, record.result)
+        if result == "l":
+            t = self.temp()
+            self.line(f"{t} =l {text}")
+            return t
+        r = self.temp()
+        self.line(f"{r} ={result} {text}")
+        t = self.temp()
+        if result == "w":
+            self.line(f"{t} =l extsw {r}")
+        else:
+            self.line(f"{t} =l cast {r}")
+        return t
+
+    def emit_print(self, node: ast.Call) -> str:
+        arg = node.args[0]
+        value = self.expr(arg)
+        ty = arg.ty
+        assert ty is not None, "unchecked argument"
+        kind = types.kind(ty)
+        if kind == "int":
+            value = self.core_call("int_to_str", [value], True)
+        elif kind == "bool":
+            value = self.core_call("bool_to_str", [value], True)
+        return self.core_call("print_str", [value], False)
+
+    def intrinsic(self, node: ast.Call, target: stdlib.Builtin) -> str:
+        args: list[str] = []
+        for arg in node.args:
+            args.append(self.expr(arg))
+        name = target.name
+        if name == "__alloc":
+            return self.call_text("$GC_malloc", typed(args), True)
+        if name == "__alloc_atomic":
+            return self.call_text("$GC_malloc_atomic", typed(args), True)
+        if name in ["__load1", "__load4", "__load8"]:
+            address = self.temp()
+            self.line(f"{address} =l add {args[0]}, {args[1]}")
+            t = self.temp()
+            self.line(f"{t} =l {load_instruction(name)} {address}")
+            return t
+        if name in ["__store1", "__store4", "__store8"]:
+            address = self.temp()
+            self.line(f"{address} =l add {args[0]}, {args[1]}")
+            self.line(f"{store_instruction(name)} {args[2]}, {address}")
+            return "0"
+        if name == "__addr_is_null":
+            t = self.temp()
+            self.line(f"{t} =l ceql {args[0]}, 0")
+            return t
+        if name == "__dtosi":
+            d = self.temp()
+            self.line(f"{d} =d cast {args[0]}")
+            t = self.temp()
+            self.line(f"{t} =l dtosi {d}")
+            return t
+        # Addresses are not ints, so their arithmetic is not checked.
+        if name == "__offset":
+            t = self.temp()
+            self.line(f"{t} =l add {args[0]}, {args[1]}")
+            return t
+        # Reinterpretations change only the static type.
+        return args[0]
+
+# An emitter for a program whose modules are `modules`, core among them, and
+# whose target's `__os` is `target_os`. Descriptors' names are the first
+# strings, as in stage 0.
+def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
+    module_names: dict[int, str] = {}
+    core: ast.Module | None = None
+    for module in modules:
+        if module.name == "core":
+            core = module
+        for decl in module.declarations:
+            if isinstance(decl, ast.FunctionDecl):
+                module_names[decl.id] = module.name
+    assert core is not None, "the program has no core module"
+    result = Emitter(target_os, core, module_names, [], {}, [], {}, 0, 0, False, False)
+    for name in builtin_types():
+        result.string(name)
+    result.require("init")
+    return result
+
+# The built-in types with descriptors, which every program emits.
+def builtin_types() -> list[str]:
+    return ["int", "float", "bool", "str", "list", "dict"]
+
+def is_none(t: types.Type) -> bool:
+    return isinstance(t, types.Prim) and t.name == "None"
+
+def is_os(expr: ast.Expr) -> bool:
+    node = expr.node
+    return isinstance(node, ast.Name) and node.symbol is None and node.name == "__os"
+
+def typed(args: list[str]) -> list[str]:
+    result: list[str] = []
+    for arg in args:
+        result.append("l " + arg)
+    return result
+
+# The QBE type of an extern parameter or result annotated `annotation`
+# whose Willow type is `ty`.
+def c_type(annotation: ast.TypeExpr | None, ty: types.Type) -> str:
+    if isinstance(annotation, ast.TypeName) and annotation.module == "" and annotation.name == "cint":
+        return "w"
+    if types.kind(ty) == "float":
+        return "d"
+    return "l"
+
+def arithmetic_instruction(op: str) -> str:
+    if op == "+":
+        return "add"
+    return "sub"
+
+def comparison_instruction(op: str) -> str:
+    if op == "==":
+        return "ceql"
+    if op == "!=":
+        return "cnel"
+    if op == "<":
+        return "csltl"
+    if op == "<=":
+        return "cslel"
+    if op == ">":
+        return "csgtl"
+    return "csgel"
+
+def load_instruction(name: str) -> str:
+    if name == "__load1":
+        return "loadub"
+    if name == "__load4":
+        return "loadsw"
+    return "loadl"
+
+def store_instruction(name: str) -> str:
+    if name == "__store1":
+        return "storeb"
+    if name == "__store4":
+        return "storew"
+    return "storel"
+
+# The UTF-8 bytes of `text`.
+def utf8(text: str) -> list[int]:
+    result: list[int] = []
+    for c in text:
+        n = ord(c)
+        if n < 128:
+            result.append(n)
+        elif n < 2048:
+            result.append(192 + n // 64)
+            result.append(128 + n % 64)
+        elif n < 65536:
+            result.append(224 + n // 4096)
+            result.append(128 + n // 64 % 64)
+            result.append(128 + n % 64)
+        else:
+            result.append(240 + n // 262144)
+            result.append(128 + n // 4096 % 64)
+            result.append(128 + n // 64 % 64)
+            result.append(128 + n % 64)
+    return result
+
+# The bytes of `text` as QBE data items, each followed by a comma and a
+# space. Only printable ASCII other than quotes and backslashes goes inside
+# quotes, because QBE passes quoted text to the assembler, which reads
+# escapes in it.
+def data_bytes(text: str) -> str:
+    parts: list[str] = []
+    quoted = False
+    for b in utf8(text):
+        plain = b >= 32 and b < 127 and b != 34 and b != 92
+        if plain and not quoted:
+            parts.append("b \"")
+            quoted = True
+        elif not plain and quoted:
+            parts.append("\", ")
+            quoted = False
+        if plain:
+            parts.append(chr(b))
+        else:
+            parts.append(f"b {b}, ")
+    if quoted:
+        parts.append("\", ")
+    return "".join(parts)
