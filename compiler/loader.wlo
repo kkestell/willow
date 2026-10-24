@@ -29,10 +29,17 @@ class Source:
     name: str
     tree: ast.Module
 
+# Where a program's modules are looked for, before the standard library:
+# directory prefixes that end in "/", or are "" for the current directory.
+# A module is looked for in `primary` and then in each of `dependencies`,
+# where finding it twice is an error. `entry` is the entry module's name.
+class Roots:
+    primary: str
+    dependencies: list[str]
+    entry: str
+
 class Loader:
-    # The entry file's directory with a trailing "/", or "" for the current
-    # directory.
-    root: str
+    roots: Roots
     # In the order load returns them.
     sources: list[Source]
     # Names of the program's modules that are loaded or being loaded,
@@ -45,16 +52,21 @@ class Loader:
     names_by_file: dict[str, str]
     error: diagnostic.Diagnostic | None
 
-    # Loads module `name` from the file at `path`. `importer` is the path of
-    # the module whose `importing` names it, or "" for the entry.
-    def visit(self, name: str, path: str, importer: str, importing: ast.Import | None):
+    # Loads module `name` from the file at `path`, which the import
+    # `importing` in the module at `importer` names.
+    def visit(self, name: str, path: str, importer: str, importing: ast.Import):
         file = fs.realpath(path)
         other = self.names_by_file.get(file)
-        if other is not None and importing is not None:
+        if other is not None:
             self.fail(importer, importing, f"module '{name}' is the same file as module '{other}'")
             return
         self.names_by_file[file] = name
-        self.add(name, path, fs.read_file(path), False)
+        try:
+            text = fs.read_file(path)
+        except OSError as error:
+            self.fail(importer, importing, f"cannot load module '{name}': {read_reason(error)}")
+            return
+        self.add(name, path, text, False)
 
     # Loads module `name` from `text`, read from `path`, and, depth first,
     # every module it imports that is not loaded yet.
@@ -82,20 +94,29 @@ class Loader:
     # stdlib.wlo declares. A program's module is looked for in the program's
     # files first; a library module's imports, and core, never are.
     #
-    # L0 cannot see why a file failed to open, so this differs from spec §12
-    # in two ways. A path through a file that is not a directory, as `a/b.wlo`
-    # is when `a` is a file, is reported as "No such file or directory" rather
-    # than "Not a directory". A path that exists but cannot be read, such as a
-    # directory, ends the program with a fatal OSError from fs.read_file
-    # instead of a diagnostic.
+    # Modules are found with fs.exists, so this differs from spec §12 in one
+    # way: a path through a file that is not a directory, as `a/b.wlo` is
+    # when `a` is a file, is reported as "No such file or directory" rather
+    # than "Not a directory".
     def load_import(self, importer: str, item: ast.Import, privileged: bool):
         path = "lib/" + item.name + ".wlo"
         if not privileged and item.name != "core":
             if self.loaded.get(item.name) is not None:
                 return
-            path = self.root + item.name.replace(".", "/") + ".wlo"
+            relative = item.name.replace(".", "/") + ".wlo"
+            path = self.roots.primary + relative
             if fs.exists(path):
                 self.visit(item.name, path, importer, item)
+                return
+            found: list[str] = []
+            for dependency in self.roots.dependencies:
+                if fs.exists(dependency + relative):
+                    found.append(dependency + relative)
+            if len(found) > 1:
+                self.fail(importer, item, f"module '{item.name}' is ambiguous: found in {found[0]} and {found[1]}")
+                return
+            if len(found) == 1:
+                self.visit(item.name, found[0], importer, item)
                 return
         if self.libraries.get(item.name) is not None:
             return
@@ -128,15 +149,35 @@ def directory_of(path: str) -> str:
 def entry_name(path: str) -> str:
     return path[len(directory_of(path)):].removesuffix(".wlo")
 
-# The modules of the program whose entry file is at `path`: the entry first,
-# then each module in the order a depth-first walk of the imports first
-# reaches it, and last core if `with_core` and nothing imported it. Standard
-# library modules that stdlib.wlo declares are not included. Returns the
-# first error instead when a module cannot be loaded, lexed, or parsed.
-# Clashes between imports are the binder's to report, in its order.
-def load(path: str, with_core: bool) -> list[Source] | diagnostic.Diagnostic:
-    loader = Loader(directory_of(path), [], {}, {}, {}, None)
-    loader.visit(entry_name(path), path, "", None)
+# Whether `name` is an identifier, as each component of a module name is.
+def is_identifier(name: str) -> bool:
+    if name == "" or not (name[0].isalpha() or name[0] == "_"):
+        return False
+    for c in name:
+        if not (c.isalnum() or c == "_") or ord(c) > 127:
+            return False
+    return True
+
+# The roots of the entry file at `path` outside a project: its own directory.
+def file_roots(path: str) -> Roots:
+    return Roots(directory_of(path), [], entry_name(path))
+
+# The reason in an OSError from fs.read_file: the path and the system's
+# message.
+def read_reason(error: OSError) -> str:
+    return error.message.removeprefix("cannot read ")
+
+# The modules of the program whose entry file is at `path` and has the text
+# `text`: the entry first, then each module in the order a depth-first walk
+# of the imports first reaches it, and last core if `with_core` and nothing
+# imported it. Standard library modules that stdlib.wlo declares are not
+# included. Returns the first error instead when a module cannot be loaded,
+# lexed, or parsed. Clashes between imports are the binder's to report, in
+# its order.
+def load(path: str, text: str, roots: Roots, with_core: bool) -> list[Source] | diagnostic.Diagnostic:
+    loader = Loader(roots, [], {}, {}, {}, None)
+    loader.names_by_file[fs.realpath(path)] = roots.entry
+    loader.add(roots.entry, path, text, False)
     if with_core and loader.error is None and loader.libraries.get("core") is None:
         loader.add_core()
     error = loader.error

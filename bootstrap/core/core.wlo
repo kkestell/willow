@@ -2763,6 +2763,20 @@ def fs_stat(path: ptr, buf: ptr, follow_symlinks: bool) -> int:
             return stat(path, buf)
         return lstat(path, buf)
 
+# Whether `source` and `destination` name the same existing file, following
+# symlinks.
+def fs_same_file(source: str, destination: str) -> bool:
+    layout = fs_layout()
+    first = __alloc_atomic(layout.buffer_size)
+    second = __alloc_atomic(layout.buffer_size)
+    if fs_stat(str_bytes(source), first, True) != 0 or fs_stat(str_bytes(destination), second, True) != 0:
+        return False
+    if __int(__load8(first, layout.inode_offset)) != __int(__load8(second, layout.inode_offset)):
+        return False
+    if layout.device_size == 4:
+        return __load4(first, layout.device_offset) == __load4(second, layout.device_offset)
+    return __int(__load8(first, layout.device_offset)) == __int(__load8(second, layout.device_offset))
+
 # The process's environment, a C array of strings. L0 cannot name the C
 # variable environ, so Darwin's accessor function or, on Linux, dlsym with
 # RTLD_DEFAULT, 0, finds it. glibc has dlsym in libc itself since 2.34.

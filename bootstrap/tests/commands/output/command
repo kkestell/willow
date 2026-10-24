@@ -1,0 +1,32 @@
+# Built and compiled output, written through a temporary file.
+"$WILLOW" build prog.wlo -o "out file"
+echo "status $?"
+mkdir elsewhere
+cp "out file" elsewhere/copy
+(cd elsewhere && ./copy)
+"$WILLOW" build uses_json.wlo -o elsewhere/json
+(cd elsewhere && ./json)
+"$WILLOW" build prog_self.wlo -o self && ./self
+"$WILLOW" compile prog.wlo -o out.ssa
+echo "status $?"
+grep -c '^export function w \$main' out.ssa
+
+# A failed compile leaves the old output.
+echo old >old.ssa
+"$WILLOW" compile bad.wlo -o old.ssa
+echo "status $?"
+cat old.ssa
+
+# The output cannot be the program's own files.
+ln -s prog.wlo link.ssa
+ln prog.wlo hard.ssa
+for output in prog.wlo ./prog.wlo "../$(basename "$PWD")/prog.wlo" link.ssa hard.ssa util.wlo; do
+    "$WILLOW" compile prog.wlo -o "$output"
+    echo "status $?"
+done
+"$WILLOW" build prog.wlo -o util.wlo
+echo "status $?"
+cat util.wlo
+"$WILLOW" compile prog.wlo -o missing/out.ssa
+echo "status $?"
+ls

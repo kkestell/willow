@@ -1,0 +1,2 @@
+prog.wlo:1:8: error: cannot load module 'util': util.wlo: Is a directory
+status 1

@@ -6,6 +6,7 @@
 # any program has an error.
 
 import diagnostic
+import fs
 import loader
 import sys
 
@@ -16,7 +17,7 @@ def main():
         args = args[1:]
     failed = False
     for path in args:
-        result = loader.load(path, False)
+        result = loader.load(path, fs.read_file(path), loader.file_roots(path), False)
         if isinstance(result, diagnostic.Diagnostic):
             # Paths in messages, such as a missing module's, start with the
             # directory too.
