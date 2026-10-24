@@ -1,0 +1,1 @@
+iterator_type_arguments.wlo:2:9: error: type list[int] has no field 'iter'

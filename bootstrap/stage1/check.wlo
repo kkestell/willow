@@ -1191,15 +1191,15 @@ class Checker:
 
     def check_method(self, expr: ast.Expr, node: ast.MethodCall, state: dict[int, types.Type]) -> types.Type:
         object = bound_type(types.expand(self.check_expr(node.object, state)))
+        if isinstance(object, types.ClassType):
+            return self.check_class_method(expr, node, object, state)
+        if node.type_args is not None:
+            return self.field_type(expr.line, expr.col, node.name, object)
         if node.name == "iter" and types.iteration_item(object) is not None:
             self.bind_args(expr, node, [], "")
             item = types.iteration_item(object)
             assert item is not None, "missing native item"
             return types.iterator(item)
-        if isinstance(object, types.ClassType):
-            return self.check_class_method(expr, node, object, state)
-        if node.type_args is not None:
-            return self.field_type(expr.line, expr.col, node.name, object)
         if isinstance(object, types.ProtocolType):
             signature = types.method(object, node.name)
             if signature is not None:
