@@ -1,0 +1,5 @@
+def choose[T](left: T, right: T) -> T:
+    return left
+
+def main():
+    value = choose(1, "two")

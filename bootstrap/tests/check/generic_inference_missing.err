@@ -1,0 +1,1 @@
+generic_inference_missing.wlo:5:13: error: cannot infer type parameter 'T' of 'empty'

@@ -1,0 +1,54 @@
+type Items[T] = list[T | None]
+
+class Slot[T]:
+    value: T | None = None
+
+    def set(self, value: T):
+        self.value = value
+
+    def get(self) -> T | None:
+        return self.value
+
+    def choose[U](self, value: U) -> U | None:
+        return value
+
+def optional[T](value: T) -> T | None:
+    return value
+
+def store[T](value: T) -> Items[T]:
+    local: T | None = value
+    values: Items[T] = [local, value]
+    values.append(value)
+    values[0] = value
+    table: dict[str, T | None] = {"a": value}
+    table["b"] = value
+    for key, item in table.items():
+        values.append(item)
+    pair: tuple[T | None] = (value,)
+    slot: Slot[T] = Slot()
+    slot.set(value)
+    values.append(slot.get())
+    values.append(optional[T](value))
+    values.append(slot.choose(pair[0]))
+    return values
+
+def main():
+    integers = store(7)
+    assert len(integers) == 8
+    for integer in integers:
+        assert integer == 7
+    for number in store(2.5):
+        assert number == 2.5
+    for text in store("text"):
+        assert text == "text"
+    for mixed in store[int | float](2.5):
+        assert isinstance(mixed, float)
+    for missing in store[None](None):
+        assert missing == None
+    print("stored")
+    slot: Slot[float] = Slot()
+    print(slot.get())
+    slot.set(3.5)
+    print(slot.get())
+    print(slot.choose[int](4))
+    print(slot.choose[str]("word"))

@@ -1,0 +1,1 @@
+generic_inference_conflict.wlo:5:13: error: cannot infer type parameter 'T' of 'choose' from int and str

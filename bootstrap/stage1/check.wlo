@@ -809,31 +809,28 @@ class Checker:
         return self.check_constructor(expr, node, target, state)
 
     def check_constructor(self, expr: ast.Expr, node: ast.Call, target: types.Class, state: dict[int, types.Type]) -> types.Type:
-        if target.native or target.exception or len(target.typevars) > 0:
+        if target.native or target.exception:
             return self.unsupported(expr.line, expr.col, "this constructor")
-        params: list[stdlib.BuiltinParam] = []
+        params: list[types.Param] = []
         for field in target.fields:
-            params.append(stdlib.BuiltinParam(field.name, field.ty, field.default, False))
-        self.bind_args(expr, node, params, "field")
-        if self.failed():
-            return none()
-        order = node.order
-        assert order is not None, "unbound constructor"
-        for i in order:
-            self.check_against(node.args[i], state, target.fields[i].ty)
-        return types.ClassType(target, [])
+            params.append(types.Param(field.name, field.ty, field.default, False))
+        result: types.Type = types.class_self(target)
+        return self.check_generic_call(expr, node, params, result, target.typevars, state, "field")
 
     def field_type(self, line: int, col: int, name: str, object: types.Type) -> types.Type:
-        object = types.expand(object)
+        object = bound_type(types.expand(object))
         if not isinstance(object, types.ClassType) or object.decl.native:
             self.fail(line, col, f"type {types.display(object)} has no field '{name}'")
             return none()
         for field in object.decl.fields:
             if field.name == name:
-                return field.ty
+                return types.substitute(field.ty, types.record_map(object))
         for method in object.decl.methods:
             if method.name == name:
-                self.fail(line, col, f"cannot use method '{types.display(object)}.{name}' as a value")
+                if len(method.typevars) > 0:
+                    self.fail(line, col, f"generic method '{name}' cannot be used as a value")
+                else:
+                    self.fail(line, col, f"cannot use method '{types.display(object)}.{name}' as a value")
                 return none()
         self.fail(line, col, f"class {types.display(object)} has no field '{name}'")
         return none()
@@ -843,33 +840,128 @@ class Checker:
         self.check_against(node.value, state, field)
 
     def check_method(self, expr: ast.Expr, node: ast.MethodCall, state: dict[int, types.Type]) -> types.Type:
-        object = types.expand(self.check_expr(node.object, state))
+        object = bound_type(types.expand(self.check_expr(node.object, state)))
         if isinstance(object, types.ClassType):
             return self.check_class_method(expr, node, object, state)
+        if isinstance(object, types.ProtocolType):
+            signature = types.method(object, node.name)
+            if signature is not None:
+                return self.check_generic_call(expr, node, signature.params, signature.result, [], state, "parameter")
+        if node.type_args is not None:
+            self.fail(expr.line, expr.col, f"'{node.name}' is not generic")
+            return none()
         if isinstance(object, types.ListType):
             return self.check_list_method(expr, node, state, object)
         if types.kind(object) == "str":
             return self.check_str_method(expr, node, state, object)
         if isinstance(object, types.DictType):
             return self.check_dict_method(expr, node, object, state)
-        return self.unsupported(expr.line, expr.col, "method calls")
-
-    def check_class_method(self, expr: ast.Expr, node: ast.MethodCall, object: types.ClassType, state: dict[int, types.Type]) -> types.Type:
-        for method in object.decl.methods:
-            if method.name == node.name:
-                if len(method.typevars) > 0 or len(object.args) > 0:
-                    return self.unsupported(expr.line, expr.col, "generic methods")
-                params = method.params[1:]
-                self.bind_args(expr, node, call_params(params), "parameter")
-                if self.failed():
-                    return none()
-                order = node.order
-                assert order is not None, "unbound class method"
-                for i in order:
-                    self.check_against(node.args[i], state, params[i].ty)
-                return method.result
         self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{node.name}'")
         return none()
+
+    def check_class_method(self, expr: ast.Expr, node: ast.MethodCall, object: types.ClassType, state: dict[int, types.Type]) -> types.Type:
+        bindings = types.record_map(object)
+        for method in object.decl.methods:
+            if method.name == node.name:
+                params: list[types.Param] = []
+                for param in method.params[1:]:
+                    params.append(types.Param(param.name, types.substitute(param.ty, bindings), param.default, param.keyword_only))
+                vars: list[types.TypeVar] = []
+                for var in method.typevars:
+                    bound = var.bound
+                    if bound is not None:
+                        bound = types.substitute(bound, bindings)
+                    vars.append(types.TypeVar(var.id, var.name, bound))
+                return self.check_generic_call(expr, node, params, types.substitute(method.result, bindings), vars, state, "parameter")
+        self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{node.name}'")
+        return none()
+
+    def check_generic_call(self, expr: ast.Expr, node: ast.Call | ast.MethodCall, params: list[types.Param], result: types.Type, vars: list[types.TypeVar], state: dict[int, types.Type], noun: str) -> types.Type:
+        name = ""
+        explicit: list[types.Type] | None = None
+        if isinstance(node, ast.Call):
+            name = node.name
+            if len(node.type_args) > 0:
+                explicit = node.type_args
+        else:
+            name = node.name
+            explicit = node.type_args
+        if explicit is not None:
+            if len(vars) == 0:
+                self.fail(expr.line, expr.col, f"'{name}' is not generic")
+            elif len(explicit) != len(vars):
+                self.fail(expr.line, expr.col, f"'{name}' expects {len(vars)} {bind.plural(len(vars), 'type argument')}, received {len(explicit)}")
+        if self.failed():
+            return none()
+        self.bind_args(expr, node, call_params(params), noun)
+        if self.failed():
+            return none()
+        call_args: list[ast.Expr] = []
+        order: list[int] | None = None
+        if isinstance(node, ast.Call):
+            call_args = node.args
+            order = node.order
+        else:
+            call_args = node.args
+            order = node.order
+        assert order is not None, "unbound generic call"
+        bindings: dict[str, types.Type] = {}
+        if len(vars) > 0:
+            args: list[types.Type] = []
+            if explicit is not None:
+                args = explicit
+            else:
+                candidates: dict[str, list[types.Type]] = {}
+                for var in vars:
+                    candidates[types.var_key(var)] = []
+                for i in order:
+                    param = params[i].ty
+                    known: types.Type | None = None
+                    if not types.mentions_any(param, vars):
+                        known = param
+                    call_args[i].expected = known
+                    actual = self.check_expr(call_args[i], state)
+                    if self.failed():
+                        return none()
+                    collect(param, actual, candidates, [])
+                expected = expr.expected
+                for var in vars:
+                    key = types.var_key(var)
+                    if len(candidates[key]) == 0 and expected is not None:
+                        collect(result, expected, {key: candidates[key]}, [])
+                    choices = candidates[key]
+                    chosen = choose(choices)
+                    if chosen is None:
+                        message = f"cannot infer type parameter '{var.name}' of '{name}'"
+                        if len(choices) > 0:
+                            other = choices[0]
+                            for choice in choices:
+                                if not types.assignable(choices[0], choice):
+                                    other = choice
+                                    break
+                            message = message + f" from {types.display(choices[0])} and {types.display(other)}"
+                        self.fail(expr.line, expr.col, message)
+                        return none()
+                    args.append(chosen)
+            for i in range(len(vars)):
+                message = types.unsatisfied(vars[i], args[i])
+                if message != "":
+                    self.fail(expr.line, expr.col, message)
+                    return none()
+            bindings = types.bind_vars(vars, args)
+            if isinstance(node, ast.Call):
+                node.type_args = args
+            else:
+                node.type_args = args
+        for i in order:
+            param = types.substitute(params[i].ty, bindings)
+            if len(vars) > 0 and explicit is None:
+                checked = call_args[i].ty
+                assert checked is not None, "unchecked inferred argument"
+                self.expect(call_args[i], param, checked)
+            else:
+                self.check_against(call_args[i], state, param)
+        return types.substitute(result, bindings)
 
     def check_fstring(self, node: ast.FString, state: dict[int, types.Type]) -> types.Type:
         spec = node.format_spec
@@ -941,17 +1033,9 @@ class Checker:
     def check_function_call(self, expr: ast.Expr, node: ast.Call, target: ast.FunctionDecl, state: dict[int, types.Type]) -> types.Type:
         record = target.record
         assert record is not None, f"function {target.name} has no signature"
-        if len(record.typevars) > 0:
-            return self.unsupported(expr.line, expr.col, "generic functions")
         params = record.params
         if not target.external:
-            self.bind_args(expr, node, call_params(params), "parameter")
-            if self.failed():
-                return none()
-            order = node.order
-            assert order is not None, "unbound function call"
-            for i in order:
-                self.check_against(node.args[i], state, params[i].ty)
+            return self.check_generic_call(expr, node, params, record.result, record.typevars, state, "parameter")
         else:
             if len(node.keywords) > 0:
                 keyword = node.keywords[0]
@@ -1252,3 +1336,73 @@ def call_params(params: list[types.Param]) -> list[stdlib.BuiltinParam]:
     for param in params:
         result.append(stdlib.BuiltinParam(param.name, param.ty, param.default, param.keyword_only))
     return result
+
+
+def bound_type(t: types.Type) -> types.Type:
+    if isinstance(t, types.TypeVar):
+        bound = t.bound
+        if bound is not None:
+            return bound
+    return t
+
+
+def choose(candidates: list[types.Type]) -> types.Type | None:
+    for candidate in candidates:
+        fits = True
+        for other in candidates:
+            if not types.assignable(candidate, other):
+                fits = False
+        if fits:
+            return candidate
+    return None
+
+
+def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types.Type]], matching: list[str]):
+    param = types.expand(param)
+    arg = types.expand(arg)
+    if isinstance(param, types.TypeVar) and types.var_key(param) in candidates:
+        candidates[types.var_key(param)].append(arg)
+    elif isinstance(param, types.UnionType):
+        rest: list[types.Type] = []
+        for member in types.members(arg):
+            if types.kind(member) != "None":
+                rest.append(member)
+        for part in param.members:
+            if isinstance(part, types.TypeVar) and types.var_key(part) in candidates:
+                if len(rest) > 0:
+                    collect(part, types.union(rest), candidates, matching)
+            else:
+                for member in rest:
+                    collect(part, member, candidates, matching)
+    elif isinstance(param, types.ListType) and isinstance(arg, types.ListType):
+        collect(param.element, arg.element, candidates, matching)
+    elif isinstance(param, types.DictType) and isinstance(arg, types.DictType):
+        collect(param.key, arg.key, candidates, matching)
+        collect(param.value, arg.value, candidates, matching)
+    elif isinstance(param, types.TupleType) and isinstance(arg, types.TupleType):
+        if len(param.elements) == len(arg.elements):
+            for i in range(len(param.elements)):
+                collect(param.elements[i], arg.elements[i], candidates, matching)
+    elif isinstance(param, types.ClassType) and isinstance(arg, types.ClassType):
+        if param.decl.type_name == arg.decl.type_name:
+            for i in range(len(param.args)):
+                collect(param.args[i], arg.args[i], candidates, matching)
+    elif isinstance(param, types.ProtocolType):
+        if isinstance(arg, types.ProtocolType) and param.decl.type_name == arg.decl.type_name:
+            for i in range(len(param.args)):
+                collect(param.args[i], arg.args[i], candidates, matching)
+            return
+        pair = types.display(param) + " <- " + types.display(arg)
+        if pair in matching:
+            return
+        matching.append(pair)
+        for method in param.decl.methods:
+            want = types.method(param, method.name)
+            have = types.method(bound_type(arg), method.name)
+            if want is not None and have is not None:
+                for p in want.params:
+                    for h in have.params:
+                        if p.name == h.name:
+                            collect(p.ty, h.ty, candidates, matching)
+                collect(want.result, have.result, candidates, matching)
+        matching.pop()

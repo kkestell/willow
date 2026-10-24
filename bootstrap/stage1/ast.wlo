@@ -264,6 +264,7 @@ class MethodCall:
     args: list[Expr]
     keywords: list[Keyword]
     order: list[int] | None = None
+    type_args: list[types.Type] | None = None
 
 class Keyword:
     line: int
