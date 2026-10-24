@@ -3,4 +3,6 @@
 echo "status $?"
 "$WILLOW" check bad.wlo
 echo "status $?"
-ls
+"$WILLOW" check no-such.wlo
+echo "status $?"
+LC_ALL=C ls

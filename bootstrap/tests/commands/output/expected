@@ -23,7 +23,11 @@ error: output util.wlo is the module file util.wlo
 status 1
 def twice(n: int) -> int:
     return n * 2
-error: cannot write missing/out.ssa: No such file or directory
+error: cannot write missing/out.ssa: missing/out.ssa.tmp: No such file or directory
+status 1
+error: cannot write read-only/out.ssa: read-only/out.ssa.tmp: Permission denied
+status 1
+error: cannot write read-only/out: read-only/out.tmp: Permission denied
 status 1
 bad.wlo
 command
@@ -35,6 +39,7 @@ out file
 out.ssa
 prog.wlo
 prog_self.wlo
+read-only
 self
 uses_json.wlo
 util.wlo

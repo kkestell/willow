@@ -29,4 +29,10 @@ echo "status $?"
 cat util.wlo
 "$WILLOW" compile prog.wlo -o missing/out.ssa
 echo "status $?"
-ls
+mkdir read-only
+chmod 555 read-only
+"$WILLOW" compile prog.wlo -o read-only/out.ssa
+echo "status $?"
+"$WILLOW" build prog.wlo -o read-only/out
+echo "status $?"
+LC_ALL=C ls

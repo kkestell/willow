@@ -95,15 +95,14 @@ def main():
         roots = loader.Roots(project.source, project.dependencies, project.entry_name)
     else:
         roots = loader.file_roots(path)
-        if not loader.is_identifier(roots.entry):
-            fail(f"error: {path}: '{roots.entry}' cannot be a module name")
-    if roots.entry == "core":
-        fail(f"error: {path}: 'core' cannot be a module name")
     try:
         text = fs.read_file(path)
     except OSError as error:
         fail("error: " + loader.read_reason(error))
         return
+    # A project's entry name was checked with its manifest.
+    if roots.entry == "core" or command.input is not None and not loader.is_identifier(roots.entry):
+        fail(f"error: {path}: '{roots.entry}' cannot be a module name")
     output = command.output
     if output is not None and core.fs_same_file(path, output):
         fail(f"error: output {output} is the input file")
@@ -163,12 +162,13 @@ def write_output(output: str, text: str):
     except OSError as error:
         if fs.exists(temp):
             fs.remove(temp)
-        fail(f"error: cannot write {output}: {reason(error)}")
+        cannot_write(output, error)
 
-# The system's reason in an OSError from fs, after the operation and path.
-def reason(error: OSError) -> str:
+# Fails for an OSError from fs while writing `output` through its temporary
+# file, naming that file as cli.lua does.
+def cannot_write(output: str, error: OSError):
     parts = error.message.split(": ")
-    return parts[len(parts) - 1]
+    fail(f"error: cannot write {output}: {output}.tmp: {parts[len(parts) - 1]}")
 
 # Assembles `il` with qbe and links it with libgc into the executable
 # `output`, through a sibling file renamed into place. The intermediate files
@@ -179,6 +179,12 @@ def build(il: str, output: str):
     asm = directory + "/program.s"
     scratch = directory + "/scratch"
     linked = output + ".tmp"
+    # Creating the file first reports an unwritable output before cc does.
+    try:
+        fs.write_file(linked, "")
+    except OSError as error:
+        core.run(["rm", "-rf", directory])
+        cannot_write(output, error)
     fs.write_file(ssa, il)
     target = qbe_target(scratch)
     message = ""
@@ -200,7 +206,7 @@ def build(il: str, output: str):
         fs.rename(linked, output)
     except OSError as error:
         fs.remove(linked)
-        fail(f"error: cannot write {output}: {reason(error)}")
+        cannot_write(output, error)
 
 # The QBE target for the host, whose architecture `uname -m` names.
 def qbe_target(scratch: str) -> str:

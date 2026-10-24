@@ -1,6 +1,8 @@
 status 0
 bad.wlo:2:11: error: unknown name 'x'
 status 1
+error: no-such.wlo: No such file or directory
+status 1
 bad.wlo
 command
 prog.wlo
