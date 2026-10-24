@@ -89,8 +89,8 @@ function $coroutine_test() {
     %repeat =l call $W.core.coroutine_resume(l %second)
     %repeat.ok =l ceql %repeat, 0
     call $require(l %repeat.ok)
-    call $GC_gcollect()
-    %released =l loadl %weak2
+    %stack.address =l add %second, 16
+    %released =l loadl %stack.address
     %released.ok =l ceql %released, 0
     call $require(l %released.ok)
     %retained.finished =l call $W.core.coroutine_finished(l %second)
