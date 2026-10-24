@@ -2103,6 +2103,11 @@ class Emitter:
 
     def checked_multiply(self, left: str, right: str) -> str:
         t = self.temp()
+        wide = self.temp()
+        ext = self.temp()
+        fits_left = self.temp()
+        fits_right = self.temp()
+        fits = self.temp()
         zero = self.temp()
         minimum = self.temp()
         skip = self.temp()
@@ -2110,7 +2115,20 @@ class Emitter:
         b = self.temp()
         divisor = self.temp()
         wrapped = self.temp()
+        slow = self.new_label()
+        done = self.new_label()
         self.line(f"{t} =l mul {left}, {right}")
+        # Operands that fit in a signed 32-bit int cannot overflow: their
+        # product's magnitude is at most 2^62, so skip the division check.
+        self.line(f"{wide} =w copy {left}")
+        self.line(f"{ext} =l extsw {wide}")
+        self.line(f"{fits_left} =l ceql {ext}, {left}")
+        self.line(f"{wide} =w copy {right}")
+        self.line(f"{ext} =l extsw {wide}")
+        self.line(f"{fits_right} =l ceql {ext}, {right}")
+        self.line(f"{fits} =l and {fits_left}, {fits_right}")
+        self.jump(f"jnz {fits}, {done}, {slow}")
+        self.label(slow)
         # Use 1 as the divisor when the left operand is zero or the product
         # is -2^63, so the overflow check cannot divide by zero or trap.
         self.line(f"{zero} =l ceql {left}, 0")
@@ -2126,6 +2144,8 @@ class Emitter:
         self.line(f"{wrapped} =l and {a}, {b}")
         self.line(f"{wrapped} =l or {wrapped}, {minimum}")
         self.guard(wrapped, "OverflowError", "integer overflow")
+        self.jump(f"jmp {done}")
+        self.label(done)
         return t
 
     # Above 2^53, converting both operands before division would round
