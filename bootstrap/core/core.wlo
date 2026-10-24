@@ -24,11 +24,20 @@ extern def rmdir(path: ptr) -> cint
 extern def rename(source: ptr, destination: ptr) -> cint
 extern def getenv(name: ptr) -> ptr
 extern def getcwd(buf: ptr, size: int) -> ptr
-extern def posix_spawnp(pid: ptr, file: ptr, actions: ptr, attributes: ptr, argv: ptr, envp: ptr) -> cint
+extern def posix_spawn(pid: ptr, file: ptr, actions: ptr, attributes: ptr, argv: ptr, envp: ptr) -> cint
 extern def posix_spawnattr_init(attributes: ptr) -> cint
 extern def posix_spawnattr_destroy(attributes: ptr) -> cint
 extern def posix_spawnattr_setflags(attributes: ptr, flags: cint) -> cint
 extern def posix_spawnattr_setsigdefault(attributes: ptr, signals: ptr) -> cint
+extern def posix_spawn_file_actions_init(actions: ptr) -> cint
+extern def posix_spawn_file_actions_destroy(actions: ptr) -> cint
+extern def posix_spawn_file_actions_adddup2(actions: ptr, fd: cint, target: cint) -> cint
+extern def posix_spawn_file_actions_addchdir_np(actions: ptr, path: ptr) -> cint
+extern def pipe(fds: ptr) -> cint
+extern def fcntl(fd: cint, command: cint, ...) -> cint
+extern def ioctl(fd: cint, request: int, ...) -> cint
+extern def lseek(fd: cint, offset: int, whence: cint) -> int
+extern def kill(pid: cint, sig: cint) -> cint
 extern def sigemptyset(signals: ptr) -> cint
 extern def sigaddset(signals: ptr, sig: cint) -> cint
 extern def waitpid(pid: cint, status: ptr, options: cint) -> cint
@@ -2538,19 +2547,22 @@ def str_from_bytes(p: ptr, size: int) -> str:
     return __str(__word(s))
 
 # Read buffers hold the next unread offset and the end offset, followed by
-# 4096 octets. Both emitters provide the same zeroed storage for stdin.
+# a read marker and 4096 octets. Both emitters provide the same zeroed
+# storage for stdin.
 def stdin_buffer() -> ptr:
     fail("RuntimeError", "stdin buffer was not emitted")
     return __ptr(__word(0))
 
 def file_buffer() -> ptr:
-    buffer = __alloc_atomic(4112)
+    buffer = __alloc_atomic(4120)
     __store8(buffer, 0, __word(0))
     __store8(buffer, 8, __word(0))
+    __store8(buffer, 16, __word(0))
     return buffer
 
 def fill_buffer(fd: int, buffer: ptr, path: str, fatal: bool) -> int:
-    count = read(fd, __offset(buffer, 16), 4096)
+    __store8(buffer, 16, __word(1))
+    count = read(fd, __offset(buffer, 24), 4096)
     if count < 0:
         if fatal:
             eprint_str("error: cannot read input: " + os_reason())
@@ -2570,7 +2582,7 @@ def file_read(fd: int, buffer: ptr, size: int, path: str) -> ptr:
     if count > size:
         count = size
     data = str_alloc(count)
-    memcpy(__offset(data, 16), __offset(buffer, 16 + start), count)
+    memcpy(__offset(data, 16), __offset(buffer, 24 + start), count)
     __store8(buffer, 0, __word(start + count))
     return bytes_tag(__str(__word(data)))
 
@@ -2586,7 +2598,7 @@ def file_readline(fd: int, buffer: ptr, path: str, fatal: bool) -> str | None:
             start = 0
             if stop == 0:
                 break
-        byte = __load1(buffer, 16 + start)
+        byte = __load1(buffer, 24 + start)
         __store8(buffer, 0, __word(start + 1))
         if byte == 10:
             if size > 0 and __load1(line, size - 1) == 13:
@@ -2776,10 +2788,73 @@ def environment() -> ptr:
 def os() -> str:
     return __os
 
-# Runs args[0], found in PATH, with the remaining arguments, without a shell,
-# and returns its exit status, or 128 plus the signal number if a signal ended
-# it. The child inherits stdin, stdout, stderr, and the environment.
-def run(args: list[str]) -> int:
+class Child:
+    pid: int
+    code: int | None = None
+
+def process_error(program: str, code: int):
+    text = strerror(code)
+    reason = str_from_bytes(text, strlen(text))
+    fail("OSError", "cannot run " + program + ": " + reason)
+
+def duplicate_command() -> int:
+    # F_DUPFD_CLOEXEC
+    if __os == "linux":
+        return 1030
+    return 67
+
+def nonblocking_flag() -> int:
+    if __os == "linux":
+        return 2048
+    return 4
+
+def would_block(code: int) -> bool:
+    if __os == "linux":
+        return code == 11
+    return code == 35
+
+def process_nonblocking(fd: int):
+    flags = fcntl(fd, 3)
+    if flags < 0:
+        fail_os("configure", "pipe")
+    flag = nonblocking_flag()
+    if flags % (flag * 2) < flag:
+        flags = flags + flag
+    if fcntl(fd, 4, flags) < 0:
+        fail_os("configure", "pipe")
+
+def close_on_exec(fd: int) -> bool:
+    return fcntl(fd, 2, 1) == 0
+
+def process_pipe() -> list[int]:
+    fds = __alloc_atomic(8)
+    if pipe(fds) < 0:
+        fail_os("create", "pipe")
+    result = [__load4(fds, 0), __load4(fds, 4)]
+    code = 0
+    for fd in result:
+        if not close_on_exec(fd):
+            code = errno()
+            break
+    if code != 0:
+        for fd in result:
+            close(fd)
+        text = strerror(code)
+        fail("OSError", "cannot configure pipe: " + str_from_bytes(text, strlen(text)))
+    return result
+
+# Snapshot the bytes present after the direct child exits. Descendants may
+# keep writing, so draining until EOF or EAGAIN could wait indefinitely.
+def process_available(fd: int) -> int:
+    request = 21531
+    if __os == "darwin":
+        request = 1074030207
+    count = __alloc_atomic(4)
+    if ioctl(fd, request, count) < 0:
+        fail_os("read", "pipe")
+    return __load4(count, 0)
+
+def process_start(args: list[str], cwd: str | None, env: dict[str, str] | None, redirects: list[int]) -> Child:
     if len(args) == 0 or args[0] == "":
         fail("ValueError", "args must contain a nonempty executable name")
     argv = __alloc((len(args) + 1) * 8)
@@ -2790,35 +2865,127 @@ def run(args: list[str]) -> int:
         __store8(argv, i * 8, __word(str_bytes(arg)))
         i = i + 1
     __store8(argv, i * 8, __word(0))
-    # posix_spawnattr_t is 336 bytes in glibc and a pointer on Darwin, and
-    # sigset_t 128 bytes and 4. init ignores SIGPIPE, which a child would
-    # inherit, so the child gets SIGPIPE's default action back through
-    # POSIX_SPAWN_SETSIGDEF, 4. SIGPIPE is 13 on both systems.
+    if cwd is not None:
+        path_bytes(cwd)
+    search = "/usr/bin:/bin"
+    strings: list[str] = []
+    if env is None:
+        envp = environment()
+        pointer = getenv(str_bytes("PATH"))
+        if not __addr_is_null(pointer):
+            search = str_from_bytes(pointer, strlen(pointer))
+    else:
+        for name in env:
+            if name == "" or str_contains(name, "=") or str_contains(name, "\x00"):
+                fail("ValueError", "invalid environment variable name")
+            value = env[name]
+            if str_contains(value, "\x00"):
+                fail("ValueError", "environment value contains a NUL character")
+            strings.append(name + "=" + value)
+            if name == "PATH":
+                search = value
+        envp = __alloc((len(strings) + 1) * 8)
+        i = 0
+        for text in strings:
+            __store8(envp, i * 8, __word(str_bytes(text)))
+            i = i + 1
+        __store8(envp, i * 8, __word(0))
+    candidates: list[str] = []
+    if str_contains(args[0], "/"):
+        candidates.append(args[0])
+    else:
+        for directory in search.split(":"):
+            if directory == "":
+                directory = "."
+            candidates.append(directory + "/" + args[0])
+    # The opaque spawn structures fit in 512 bytes on Linux and Darwin;
+    # sigset_t needs 128. No Willow code runs in the spawned child.
+    actions = __alloc_atomic(512)
     attributes = __alloc_atomic(512)
     signals = __alloc_atomic(128)
-    posix_spawnattr_init(attributes)
-    sigemptyset(signals)
-    sigaddset(signals, 13)
-    posix_spawnattr_setsigdefault(attributes, signals)
-    posix_spawnattr_setflags(attributes, 4)
-    pid = __alloc_atomic(8)
-    code = posix_spawnp(pid, str_bytes(args[0]), __ptr(__word(0)), attributes, argv, environment())
+    code = posix_spawn_file_actions_init(actions)
+    if code != 0:
+        process_error(args[0], code)
+    code = posix_spawnattr_init(attributes)
+    if code != 0:
+        posix_spawn_file_actions_destroy(actions)
+        process_error(args[0], code)
+    copies: list[int] = []
+    for target in range(3):
+        source = redirects[target]
+        if source >= 0:
+            if source < 3 and source != target:
+                source = fcntl(source, duplicate_command(), 3)
+                if source < 0:
+                    code = errno()
+                    break
+                copies.append(source)
+            code = posix_spawn_file_actions_adddup2(actions, source, target)
+            if code != 0:
+                break
+    if code == 0 and cwd is not None:
+        code = posix_spawn_file_actions_addchdir_np(actions, str_bytes(cwd))
+    if code == 0:
+        sigemptyset(signals)
+        sigaddset(signals, 13)
+        code = posix_spawnattr_setsigdefault(attributes, signals)
+    if code == 0:
+        code = posix_spawnattr_setflags(attributes, 4)
+    pid = __alloc_atomic(4)
+    if code == 0:
+        denied = False
+        for candidate in candidates:
+            code = posix_spawn(pid, str_bytes(candidate), actions, attributes, argv, envp)
+            if code == 0:
+                break
+            if code == 13:
+                denied = True
+            elif code != 2 and code != 20:
+                break
+        if (code == 2 or code == 20) and denied:
+            code = 13
+    for fd in copies:
+        close(fd)
+    posix_spawn_file_actions_destroy(actions)
     posix_spawnattr_destroy(attributes)
     if code != 0:
-        reason = strerror(code)
-        fail("OSError", "cannot run " + args[0] + ": " + str_from_bytes(reason, strlen(reason)))
-    status = __alloc_atomic(8)
-    # EINTR is 4 on both systems.
-    while waitpid(__load4(pid, 0), status, 0) < 0:
+        process_error(args[0], code)
+    return Child(__load4(pid, 0), None)
+
+def process_poll(child: Child, block: bool) -> int | None:
+    if child.code is not None:
+        return child.code
+    options = 1
+    if block:
+        options = 0
+    status = __alloc_atomic(4)
+    result = waitpid(child.pid, status, options)
+    while result < 0:
         if errno() != 4:
-            fail_os("wait for", args[0])
-    # The low 7 bits of a wait status are 0 for a normal exit, whose code is
-    # the next 8 bits, and otherwise the signal number; without WUNTRACED no
-    # child is reported as stopped.
+            fail_os("wait for", int_to_str(child.pid))
+        result = waitpid(child.pid, status, options)
+    if result == 0:
+        return None
     value = __load4(status, 0)
     if value % 128 == 0:
-        return value // 256 % 256
-    return 128 + value % 128
+        child.code = value // 256 % 256
+    else:
+        child.code = -(value % 128)
+    return child.code
+
+def process_signal(child: Child, sig: int):
+    if child.code is None:
+        if kill(child.pid, sig) < 0:
+            fail_os("signal", int_to_str(child.pid))
+
+# The compiler's driver keeps its original 128 + signal convention.
+def run(args: list[str]) -> int:
+    child = process_start(args, None, None, [-1, -1, -1])
+    code = process_poll(child, True)
+    assert code is not None, "blocking wait did not reap the child"
+    if code < 0:
+        return 128 - code
+    return code
 
 # An optional sign and one or more decimal digits (spec §6). The magnitude is
 # checked before each step so it never leaves the int range, which is

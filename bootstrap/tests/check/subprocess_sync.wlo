@@ -1,0 +1,61 @@
+import core
+import io
+import subprocess
+
+def main():
+    result = subprocess.run(["tool"], cwd="subprocess_path", env={"PATH": "."}, capture_output=True)
+    assert result.stdout == "child path".encode()
+    assert subprocess.run(["true"], env={}).returncode == 0
+    assert subprocess.run(["sh", "-c", "kill -PIPE $$"]).returncode == -13
+    result = subprocess.run(["sh", "-c", "printf out; printf err >&2"], capture_output=True)
+    assert result.stdout == "out".encode()
+    assert result.stderr == "err".encode()
+    result = subprocess.run(["cat"], input=bytes([0, 255]), capture_output=True)
+    assert result.stdout == bytes([0, 255])
+    for kind in ["cwd", "name", "value", "timeout"]:
+        try:
+            if kind == "cwd":
+                subprocess.run(["true"], cwd="bad\x00path")
+            elif kind == "name":
+                subprocess.run(["true"], env={"a=b": "x"})
+            elif kind == "value":
+                subprocess.run(["true"], env={"A": "x\x00y"})
+            else:
+                subprocess.run(["true"], timeout=float("inf"))
+            assert False
+        except ValueError:
+            pass
+
+    path = "subprocess_sync.tmp"
+    try:
+        with io.open(path, "w") as writer:
+            writer.write_text("one\ntwo\n")
+        with io.open(path) as reader:
+            assert reader.readline() == "one"
+            try:
+                subprocess.spawn(["true"], stdin=reader)
+                assert False
+            except ValueError as error:
+                assert error.message == "stdin has buffered input"
+            assert reader.readline() == "two"
+            assert reader.readline() is None
+            child = subprocess.spawn(["cat"], stdin=reader)
+            assert child.wait() == 0
+            assert child.poll() == 0
+            child.terminate()
+            child.kill()
+    finally:
+        subprocess.run(["rm", "-f", path])
+
+    fds = core.process_pipe()
+    core.close(fds[1])
+    try:
+        with io.open("/dev/fd/" + str(fds[0])) as pipe:
+            assert len(pipe.read(1)) == 0
+            try:
+                subprocess.spawn(["true"], stdin=pipe)
+                assert False
+            except ValueError as buffered:
+                assert buffered.message == "stdin has buffered input"
+    finally:
+        core.close(fds[0])

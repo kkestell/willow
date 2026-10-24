@@ -52,6 +52,21 @@ class File:
         if core.close(self._fd) < 0:
             core.fail_os("close", self._path)
 
+    def _child_fd(self, name: str, reading: bool) -> int:
+        if self._closed:
+            raise ValueError("I/O operation on closed file")
+        if reading != (self._mode == "r"):
+            direction = "writing"
+            if reading:
+                direction = "reading"
+            raise ValueError(name + " must be open for " + direction)
+        if reading and __int(__load8(self._buffer, 16)) != 0:
+            if __int(__load8(self._buffer, 0)) != __int(__load8(self._buffer, 8)) or core.lseek(self._fd, 0, 1) < 0:
+                raise ValueError("stdin has buffered input")
+        if not reading:
+            self.flush()
+        return self._fd
+
     def enter(self) -> File:
         if self._borrowed:
             raise ValueError("cannot close a standard stream")
@@ -85,6 +100,10 @@ def open(path: str, mode: str = "r") -> File:
     fd = core.open(core.path_bytes(path), flags, 438)
     if fd < 0:
         core.fail_os("open", path)
+    if not core.close_on_exec(fd):
+        reason = core.os_reason()
+        core.close(fd)
+        raise OSError("cannot open " + path + ": " + reason)
     return File(fd, path, mode, False, core.file_buffer())
 
 def stdin() -> File:
