@@ -286,6 +286,9 @@ class MethodCall:
     index: Expr | None = None
     index_error: diagnostic.Diagnostic | None = None
     iterables: list[Iteration] | None = None
+    # How many of the indexes in `order` are of written arguments; a call
+    # through a protocol tells the implementation which ones those are.
+    written: int = 0
 
 class Keyword:
     line: int
