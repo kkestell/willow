@@ -166,9 +166,18 @@ core_source() {
 }
 
 # Builds willow1 from stage 1's sources and core_source and runs all top-level
-# programs in bootstrap/tests/programs/, core/, and check/ through run.sh.
+# programs in bootstrap/tests/programs/, core/, and check/ through run.sh, then
+# the programs in tests/programs/ except those named in
+# bootstrap/tests/stage1-pending, which stage 1 does not pass yet.
 # Under --lua there is no willow1, since the Lua implementation has no core
 # module for willow1 to import.
+# The programs in tests/programs/ that stage 1 passes.
+conformance() {
+    for file in tests/programs/*.wlo; do
+        grep -qxF "$(basename "$file" .wlo)" bootstrap/tests/stage1-pending || echo "$file"
+    done
+}
+
 check_willow1() {
     [ $lua -eq 1 ] && return
     mkdir "$work/willow1-src"
@@ -182,6 +191,9 @@ check_willow1() {
     echo "willow1:"
     WILLOW0=$work/willow1 bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
         bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo || failed=1
+    echo "willow1 tests/programs:"
+    # shellcheck disable=SC2046 # the paths have no spaces
+    WILLOW0=$work/willow1 bootstrap/tests/run.sh $(conformance) || failed=1
     if ! "$work/willow1" build "$work/willow1-src/willow1.wlo" -o "$work/willow1-self"; then
         echo "FAIL willow1-self: does not compile"
         failed=1
