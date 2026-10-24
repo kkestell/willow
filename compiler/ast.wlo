@@ -1,0 +1,525 @@
+# The syntax tree of one source file. Expressions and statements are wrappers
+# that hold a position and a node, so every one of them has a position in the
+# same place; the node's class says what it is. Lists stand in for optional
+# blocks: an `if` without `else` has an empty `else_body`. An empty string
+# stands in for an optional name.
+#
+# The binder fills in the fields marked as its own, which hold its symbols
+# and the records and types of types.wlo, and replaces some nodes: a name of
+# a function becomes a FunctionValue or BuiltinValue, a field of an enum an
+# EnumMember, a library constant a Float, and a call through a local or a
+# module a CallValue or Call.
+
+import diagnostic
+import stdlib
+import types
+
+class Module:
+    path: str
+    # Set by the loader.
+    name: str
+    # Whether the module is core or comes from the standard library's lib/,
+    # which may use the intrinsic layer (agents/bootstrap.md §5) and declare
+    # constants. Set by the loader, by where the module came from.
+    privileged: bool
+    imports: list[Import]
+    # In source order.
+    declarations: list[Decl]
+    # A privileged module's float constants, such as math.pi.
+    constants: dict[str, float]
+    # The binder's: declarations by name, imported program and library
+    # modules by full name, the names imports bind, and for a test entry its
+    # test functions by name.
+    names: dict[str, Decl]
+    imported: dict[str, Module]
+    provided: dict[str, stdlib.Module]
+    roots: dict[str, bool]
+    tests: list[FunctionDecl]
+
+# `import a.b.c` has the name "a.b.c" and the root "a", which it binds.
+class Import:
+    line: int
+    col: int
+    name: str
+    root: str
+
+type Decl = FunctionDecl | ClassDecl | ProtocolDecl | EnumDecl | AliasDecl
+
+class TypeParam:
+    line: int
+    col: int
+    name: str
+    bound: TypeExpr | None
+
+# A protocol method signature has an empty body. A function without `-> R`
+# has the return type None at its name.
+class FunctionDecl:
+    line: int
+    col: int
+    name: str
+    type_params: list[TypeParam]
+    params: list[Param]
+    return_type: TypeExpr
+    body: list[Stmt]
+    is_async: bool
+    # The binder's: the symbols assigned in the body in order of first
+    # assignment, the enclosing functions' variables it uses, an id that
+    # tells functions apart, given where the binder first declares the
+    # function, the enclosing function, the class or protocol of a method,
+    # the name types write ("f", "module.f", "Class.m", "f.g",
+    # "f.<lambda>"), and whether it yields.
+    locals: list[Symbol]
+    captures: list[Capture]
+    id: int = 0
+    parent: FunctionDecl | None = None
+    owner: ClassDecl | ProtocolDecl | None = None
+    type_name: str = ""
+    generator: bool = False
+    # The binder's signature. A lambda has none until the checker gives it
+    # the one its expected type or body determines.
+    record: types.Function | None = None
+    # `extern def`, which only core may declare: a C function with no body,
+    # variadic when its parameters end with `...`.
+    external: bool = False
+    variadic: bool = False
+
+# A method's `self` and a lambda's parameters have no annotation.
+class Param:
+    line: int
+    col: int
+    name: str
+    annotation: TypeExpr | None
+    default: Expr | None
+    keyword_only: bool
+    symbol: Symbol | None = None
+
+# An exception class's first field is `message: str`, at the class name.
+class ClassDecl:
+    line: int
+    col: int
+    name: str
+    type_params: list[TypeParam]
+    fields: list[FieldDecl]
+    methods: list[FunctionDecl]
+    exception: bool
+    # The binder's: the name types write, qualified outside the entry module,
+    # and the class's record, with its resolved fields and methods.
+    type_name: str = ""
+    record: types.Class | None = None
+
+class FieldDecl:
+    line: int
+    col: int
+    name: str
+    annotation: TypeExpr
+    default: Expr | None
+
+class ProtocolDecl:
+    line: int
+    col: int
+    name: str
+    type_params: list[TypeParam]
+    methods: list[FunctionDecl]
+    type_name: str = ""
+    record: types.Protocol | None = None
+
+class EnumDecl:
+    line: int
+    col: int
+    name: str
+    members: list[Ident]
+    type_name: str = ""
+    record: types.Enum | None = None
+
+class AliasDecl:
+    line: int
+    col: int
+    name: str
+    type_params: list[TypeParam]
+    value: TypeExpr
+    type_name: str = ""
+
+# A name with its position: an enum member or a `nonlocal` name.
+class Ident:
+    line: int
+    col: int
+    name: str
+
+type TypeExpr = TypeName | UnionType | CallableType
+
+# A reserved type name or a possibly module-qualified name, with the type
+# arguments in its brackets: a list's element, a dict's key and value, a
+# tuple's positions, or a named type's arguments. `tuple[()]` has no
+# arguments; `has_args` tells `Box[]` from `Box`. `isinstance` and `except`
+# name their class with a TypeName too.
+class TypeName:
+    line: int
+    col: int
+    name: str
+    module: str
+    args: list[TypeExpr]
+    has_args: bool
+    # The binder's, for `isinstance` and `except`: the class or enum named.
+    record: types.Class | types.Enum | None = None
+
+# At its first member.
+class UnionType:
+    line: int
+    col: int
+    members: list[TypeExpr]
+
+# At its `(`.
+class CallableType:
+    line: int
+    col: int
+    params: list[TypeExpr]
+    result: TypeExpr
+
+# An assignment target: a name, or a tuple of targets when `name` is empty.
+class Target:
+    line: int
+    col: int
+    name: str
+    elements: list[Target]
+    symbol: Symbol | None = None
+
+# The checker's: `ty`, the expression's type where it is evaluated, and
+# `expected`, the type a value of it was checked against where it is
+# assigned, passed, returned, or stored, as compiler/check.lua records.
+class Expr:
+    line: int
+    col: int
+    node: ExprNode
+    ty: types.Type | None = None
+    expected: types.Type | None = None
+
+type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | BuiltinValue | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay | TypeOf | Typed
+
+# The decimal digits, with "-" before a negative default. The lexer has
+# checked the range.
+class Int:
+    text: str
+
+class Float:
+    value: float
+
+class String:
+    value: str
+
+# Text parts are Strings at the f-string's start. `specs[i]` is the format
+# specification of `parts[i]`, with defaults for text and fields without one.
+class FString:
+    parts: list[Expr]
+    specs: list[FormatSpec]
+
+class FormatSpec:
+    align: str = ""
+    width: int = 0
+    precision: int = 6
+    kind: str = ""
+
+enum Constant:
+    TRUE
+    FALSE
+    NONE
+
+# A reserved name is a conversion named as a value, as in `x = int`.
+class Name:
+    name: str
+    reserved: bool
+    symbol: Symbol | None = None
+
+# The binder's: a function named as a value. `qualified` when named through
+# its module, which reaches it even where a local hides the name.
+class FunctionValue:
+    target: FunctionDecl
+    qualified: bool
+    type_args: list[types.Type]
+    symbol: Symbol | None = None
+
+# The binder's: `E.MEMBER`.
+class EnumMember:
+    decl: EnumDecl
+    name: str
+
+# The binder's: a built-in or library function named as a value, as in
+# `f = str` or `f = sys.args`, with the name it was written as.
+class BuiltinValue:
+    builtin: stdlib.Builtin
+    name: str
+    # The checker's: a call of the built-in with the expected callable's
+    # parameters as Typed arguments, which the value runs.
+    call: Expr | None = None
+
+# A call by bare name, at the name. Keyword arguments follow the positional
+# ones in the source, so the two lists keep the written order. The binder
+# makes `module.f(...)` a Call too, named "module.f", and sets the target: a
+# function, a built-in or library function, or a class, exception class, or
+# library class to construct. Its type arguments are a generic call's.
+class Call:
+    name: str
+    args: list[Expr]
+    keywords: list[Keyword]
+    type_args: list[types.Type]
+    target: FunctionDecl | stdlib.Builtin | types.Class | None = None
+    # Parameter indexes in evaluation order: written arguments, then defaults.
+    order: list[int] | None = None
+    has_type_args: bool = False
+    iterables: list[Iteration] | None = None
+
+# A call of any other callee, at its `(`.
+class CallValue:
+    callee: Expr
+    args: list[Expr]
+    keywords: list[Keyword]
+    type_args: list[types.Type]
+    order: list[int] | None = None
+
+# At the method name.
+class MethodCall:
+    object: Expr
+    name: str
+    args: list[Expr]
+    keywords: list[Keyword]
+    order: list[int] | None = None
+    type_args: list[types.Type] | None = None
+    index: Expr | None = None
+    index_error: diagnostic.Diagnostic | None = None
+    iterables: list[Iteration] | None = None
+    # How many of the indexes in `order` are of written arguments; a call
+    # through a protocol tells the implementation which ones those are.
+    written: int = 0
+
+class Keyword:
+    line: int
+    col: int
+    name: str
+    value: Expr
+
+# At the field name.
+class Field:
+    object: Expr
+    name: str
+
+# At the `[`.
+class Index:
+    object: Expr
+    index: Expr
+    position: int = 0
+
+class Slice:
+    object: Expr
+    start: Expr | None
+    stop: Expr | None
+
+# `name[...]` after a name or field, at the callee, read as type arguments.
+# Only the binder knows whether the callee is generic, so the node also keeps
+# the brackets read as an index, or the error from reading them as one.
+class Specialized:
+    callee: Expr
+    type_args: list[TypeExpr]
+    index: Expr | None
+    index_error: diagnostic.Diagnostic | None
+
+class SpecializedCall:
+    callee: Expr
+    type_args: list[TypeExpr]
+    index: Expr | None
+    index_error: diagnostic.Diagnostic | None
+    args: list[Expr]
+    keywords: list[Keyword]
+
+# At the operator. `op` is "-", "+", or "not".
+class Unary:
+    op: str
+    operand: Expr
+
+# At the operator, which is written as in the source, with "not in" as one.
+class Binary:
+    op: str
+    left: Expr
+    right: Expr
+    # The checker's, for `and` and `or`: whether the right operand calls
+    # something, which may rebind a captured variable the left tested.
+    calls: bool = False
+
+# `operand is None` or `operand is not None`, at `is`.
+class Is:
+    negated: bool
+    operand: Expr
+
+# At `isinstance`.
+class IsInstance:
+    operand: Expr
+    type_name: TypeName
+
+class Await:
+    operand: Expr
+
+class Lambda:
+    params: list[Param]
+    body: Expr
+    # The binder's: a function whose body returns `body`.
+    function: FunctionDecl | None = None
+    infer_result: bool = False
+
+# The `__type(T)` intrinsic, which only core may use: the descriptor of the
+# built-in type T.
+class TypeOf:
+    target: TypeExpr
+
+# The checker's: parameter `index` of the function that runs a built-in
+# function value's call.
+class Typed:
+    index: int
+    ty: types.Type
+
+# At the `(`, or at the first element of an unparenthesized assignment target.
+class TupleDisplay:
+    elements: list[Expr]
+
+class ListDisplay:
+    elements: list[Expr]
+
+class DictDisplay:
+    keys: list[Expr]
+    values: list[Expr]
+
+# Statements are at their keyword, assignments at their target, and call
+# statements at the call.
+class Stmt:
+    line: int
+    col: int
+    node: StmtNode
+
+type StmtNode = Assign | Unpack | IndexAssign | FieldAssign | CallStmt | If | While | For | With | AsyncWith | Try | FunctionDef | Nonlocal | Return | Assert | Raise | Yield | SimpleStatement
+
+# The binder's `declared`: the annotation's type.
+class Assign:
+    name: str
+    annotation: TypeExpr | None
+    value: Expr
+    symbol: Symbol | None = None
+    declared: types.Type | None = None
+
+class Unpack:
+    target: Target
+    value: Expr
+
+class IndexAssign:
+    object: Expr
+    index: Expr
+    value: Expr
+
+class FieldAssign:
+    object: Expr
+    name: str
+    value: Expr
+
+# A call or `await` used as a statement.
+class CallStmt:
+    call: Expr
+
+# `elif` is an If, at the `elif`, that is the whole `else_body`.
+class If:
+    condition: Expr
+    body: list[Stmt]
+    else_body: list[Stmt]
+
+# The binder's `calls`: whether a call can run before a later iteration.
+class While:
+    condition: Expr
+    body: list[Stmt]
+    calls: bool = False
+
+class For:
+    target: Target
+    iterable: Expr
+    body: list[Stmt]
+    calls: bool = False
+    item: types.Type | None = None
+    iteration: Iteration | None = None
+
+class Iteration:
+    item: types.Type
+    iter_call: Expr
+    next_call: Expr
+
+class With:
+    items: list[WithItem]
+    body: list[Stmt]
+
+class WithItem:
+    manager: Expr
+    target: Target | None
+    enter_call: Expr | None = None
+    exit_call: Expr | None = None
+
+class AsyncWith:
+    manager: Expr
+    target: Target | None
+    body: list[Stmt]
+
+class Try:
+    body: list[Stmt]
+    handlers: list[Handler]
+    finally_body: list[Stmt]
+
+# At `except`; `name` is the bound name, or empty.
+class Handler:
+    line: int
+    col: int
+    type_name: TypeName
+    name: str
+    body: list[Stmt]
+    symbol: Symbol | None = None
+
+class FunctionDef:
+    function: FunctionDecl
+    symbol: Symbol | None = None
+
+class Nonlocal:
+    names: list[Ident]
+
+class Return:
+    value: Expr | None
+
+class Assert:
+    condition: Expr
+    message: Expr | None
+
+# The binder's `handler`: the innermost `try` with an `except` clause whose
+# handler holds a bare `raise`.
+class Raise:
+    value: Expr | None
+    handler: Try | None = None
+
+class Yield:
+    value: Expr
+
+enum SimpleStatement:
+    PASS
+    BREAK
+    CONTINUE
+
+# The binder's: a parameter, or a variable assigned in a function body, at its
+# first assignment. `id` tells symbols apart. A local that a nested `def`
+# assigns has the function a call of it reaches.
+class Symbol:
+    id: int
+    name: str
+    line: int
+    col: int
+    is_param: bool
+    owner: FunctionDecl
+    captured: bool = False
+    function: FunctionDecl | None = None
+    # A parameter's type, from its function's signature; the checker gives
+    # locals theirs.
+    ty: types.Type | None = None
+
+# A use of an enclosing function's variable, at its first use.
+class Capture:
+    symbol: Symbol
+    line: int
+    col: int

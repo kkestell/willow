@@ -1,0 +1,199 @@
+# Token kinds and tokens for the full language (docs/spec.md §2).
+
+enum Kind:
+    NAME
+    INT_LITERAL
+    FLOAT_LITERAL
+    STRING_LITERAL
+    # An f-string is FSTRING_START, then text runs and fields in source order,
+    # then FSTRING_END. A field is its expression's tokens followed by
+    # FIELD_END, whose text is the field's format specification.
+    FSTRING_START
+    FSTRING_TEXT
+    FIELD_END
+    FSTRING_END
+    NEWLINE
+    INDENT
+    DEDENT
+    EOF
+
+    FALSE
+    NONE
+    TRUE
+    AND
+    AS
+    ASSERT
+    ASYNC
+    AWAIT
+    BREAK
+    CASE
+    CLASS
+    CONTINUE
+    DEF
+    DEL
+    ELIF
+    ELSE
+    ENUM
+    EXCEPT
+    FINALLY
+    FOR
+    FROM
+    GLOBAL
+    IF
+    IMPORT
+    IN
+    IS
+    LAMBDA
+    MATCH
+    NONLOCAL
+    NOT
+    OR
+    PASS
+    PROTOCOL
+    RAISE
+    RETURN
+    TRY
+    TYPE
+    WHILE
+    WITH
+    YIELD
+
+    INT
+    FLOAT
+    BOOL
+    STR
+    BYTES
+    LIST
+    DICT
+    TUPLE
+    ITERABLE
+    ITERATOR
+    CONTEXT_MANAGER
+    GENERATOR
+    COROUTINE
+
+    ARROW
+    EQUAL_EQUAL
+    NOT_EQUAL
+    LESS_EQUAL
+    GREATER_EQUAL
+    LESS
+    GREATER
+    EQUAL
+    PLUS
+    MINUS
+    STAR
+    SLASH
+    SLASH_SLASH
+    PERCENT
+    PIPE
+    LPAREN
+    RPAREN
+    LBRACKET
+    RBRACKET
+    LBRACE
+    RBRACE
+    COMMA
+    COLON
+    DOT
+
+# A token's text is the identifier for NAME, the source digits for numbers,
+# the decoded value for STRING_LITERAL and FSTRING_TEXT, the format
+# specification for FIELD_END, the source text for keywords and operators, and
+# empty otherwise. Columns count code points.
+class Token:
+    kind: Kind
+    text: str
+    line: int
+    col: int
+
+# The reserved words of spec §2, including the reserved type names.
+def keywords() -> dict[str, Kind]:
+    return {
+        "False": Kind.FALSE,
+        "None": Kind.NONE,
+        "True": Kind.TRUE,
+        "and": Kind.AND,
+        "as": Kind.AS,
+        "assert": Kind.ASSERT,
+        "async": Kind.ASYNC,
+        "await": Kind.AWAIT,
+        "break": Kind.BREAK,
+        "case": Kind.CASE,
+        "class": Kind.CLASS,
+        "continue": Kind.CONTINUE,
+        "def": Kind.DEF,
+        "del": Kind.DEL,
+        "elif": Kind.ELIF,
+        "else": Kind.ELSE,
+        "enum": Kind.ENUM,
+        "except": Kind.EXCEPT,
+        "finally": Kind.FINALLY,
+        "for": Kind.FOR,
+        "from": Kind.FROM,
+        "global": Kind.GLOBAL,
+        "if": Kind.IF,
+        "import": Kind.IMPORT,
+        "in": Kind.IN,
+        "is": Kind.IS,
+        "lambda": Kind.LAMBDA,
+        "match": Kind.MATCH,
+        "nonlocal": Kind.NONLOCAL,
+        "not": Kind.NOT,
+        "or": Kind.OR,
+        "pass": Kind.PASS,
+        "protocol": Kind.PROTOCOL,
+        "raise": Kind.RAISE,
+        "return": Kind.RETURN,
+        "try": Kind.TRY,
+        "type": Kind.TYPE,
+        "while": Kind.WHILE,
+        "with": Kind.WITH,
+        "yield": Kind.YIELD,
+        "int": Kind.INT,
+        "float": Kind.FLOAT,
+        "bool": Kind.BOOL,
+        "str": Kind.STR,
+        "bytes": Kind.BYTES,
+        "list": Kind.LIST,
+        "dict": Kind.DICT,
+        "tuple": Kind.TUPLE,
+        "Iterable": Kind.ITERABLE,
+        "Iterator": Kind.ITERATOR,
+        "ContextManager": Kind.CONTEXT_MANAGER,
+        "Generator": Kind.GENERATOR,
+        "Coroutine": Kind.COROUTINE,
+    }
+
+def operators() -> dict[str, Kind]:
+    return {
+        "->": Kind.ARROW,
+        "==": Kind.EQUAL_EQUAL,
+        "!=": Kind.NOT_EQUAL,
+        "<=": Kind.LESS_EQUAL,
+        ">=": Kind.GREATER_EQUAL,
+        "<": Kind.LESS,
+        ">": Kind.GREATER,
+        "=": Kind.EQUAL,
+        "+": Kind.PLUS,
+        "-": Kind.MINUS,
+        "*": Kind.STAR,
+        "/": Kind.SLASH,
+        "//": Kind.SLASH_SLASH,
+        "%": Kind.PERCENT,
+        "|": Kind.PIPE,
+        "(": Kind.LPAREN,
+        ")": Kind.RPAREN,
+        "[": Kind.LBRACKET,
+        "]": Kind.RBRACKET,
+        "{": Kind.LBRACE,
+        "}": Kind.RBRACE,
+        ",": Kind.COMMA,
+        ":": Kind.COLON,
+        ".": Kind.DOT,
+    }
+
+# Operators from other languages that Willow reports by name instead of
+# lexing as a sequence of shorter operators.
+def unsupported_operators() -> list[str]:
+    return ["**=", "//=", "<<=", ">>=", "**", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", ":=", "&", "^", "~"]

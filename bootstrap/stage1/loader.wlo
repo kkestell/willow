@@ -5,7 +5,7 @@
 # program may hold its own module and the library's of the same name. The
 # standard library's lib/ and core are compiled into the compiler: their text
 # comes from the modules lib_source and core_source, which the build generates
-# (see bootstrap/tests/stage1.sh).
+# (see bootstrap/prepare.sh).
 
 import ast
 import core_source

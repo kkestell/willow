@@ -53,6 +53,12 @@ stage 1 freezes. Stage 1 then only has to accept the subset of the language
 that stage 2's source actually uses. Stage 2 keeps its own source
 conservative so stage 1 never needs to change again.
 
+Stage 2 started as a copy of stage 1's modules, unit tests, and file drivers
+in `compiler/`, and stage 1 froze then: compiler changes go to `compiler/`,
+and stage 1 changes only when `willow1` needs it to build stage 2. `willow1`
+compiles `compiler/`, core, and the `lib/` modules `compiler/` imports, so
+those use only what stage 1 compiles correctly.
+
 Escape hatch: stage 0 is small Rust, so extending L0 during stage 1
 development is cheap when a missing feature turns out to hurt. Candidates are
 keyword arguments and defaults, and tuples. Exceptions, closures, generators,
@@ -307,20 +313,23 @@ through the escape hatch in §2.
 - `bootstrap/tests/run.sh` drives the L0 programs: it builds each with
   `willow0`, runs it from its own directory, and compares stdout, stderr, and
   exit status with the same conventions as `tests/run.lua`.
-  `bootstrap/tests/stage1.sh` builds stage 1's tests and drivers with
-  `willow0` and runs them natively, the drivers over every `.wlo` file in
-  `tests/` and `examples/`; `--lua` runs them under the Lua implementation
-  instead. It also builds the `willow1` driver and runs `run.sh` with it over
-  every top-level program in `bootstrap/tests/programs/` and
-  `bootstrap/tests/core/`, plus every case in `bootstrap/tests/check/` and
-  every `bootstrap/tests/modules/*/main.wlo`, using globs so new programs run
-  automatically, and every program in
-  `tests/programs/` except those named in `bootstrap/tests/stage1-pending`,
-  which stage 1 does not pass yet. It checks the fixpoint by
-  building `willow1` with itself and comparing the IL both compilers emit for
-  the same source. `make bootstrap` builds stage 0 and `make bootstrap-test`
-  runs both without LuaJIT. The runners move to a Willow program once stage 2
-  exists.
+  `bootstrap/tests/stage1.sh` builds stage 1's unit tests with `willow0` and
+  runs them natively, or under the Lua implementation with `--lua`, and
+  checks `willow1`'s fixpoint by building it with itself and comparing the IL
+  both compilers emit for the same source. `bootstrap/tests/stage2.sh` builds
+  stage 2's unit tests and drivers with `willow1` and runs them, the drivers
+  over every `.wlo` file in `tests/` and `examples/`. It builds stage 2's
+  driver as `willow2` and runs `run.sh` with it over every top-level program
+  in `bootstrap/tests/programs/` and `bootstrap/tests/core/`, plus every case
+  in `bootstrap/tests/check/` and every `bootstrap/tests/modules/*/main.wlo`,
+  using globs so new programs run automatically, and every program in
+  `tests/programs/` except those named in `bootstrap/tests/pending`, which
+  stage 2 does not pass yet; then it checks `willow2`'s fixpoint.
+  `bootstrap/prepare.sh` writes the generated modules that embed core and
+  `lib/` for both scripts and the Makefile. `make bootstrap` builds the chain
+  in §2 into `build/` and checks the stage 2 fixpoint, and `make
+  bootstrap-test` runs all three scripts, without LuaJIT. The runners move to
+  a Willow program once stage 2 has its full driver.
 
 ## 9. Specification changes
 
@@ -357,7 +366,8 @@ bootstrap/
   stage0/      Rust crate willow0
   core/        core module in L0
   stage1/      stage 1 compiler in L0
-  tests/       run.sh, stage1.sh, and programs/ with L0 programs and core tests
+  prepare.sh   writes the generated modules that embed core and lib/
+  tests/       run.sh, stage1.sh, stage2.sh, and the test programs
 compiler/      stage 2 in full Willow (replaces the Lua compiler when ready)
 lib/           standard library in Willow (replaces runtime/*.lua)
 ```
