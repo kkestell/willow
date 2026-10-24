@@ -1,0 +1,2 @@
+def main():
+    f: (int) -> int = lambda x, y: x

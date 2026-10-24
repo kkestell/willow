@@ -39,6 +39,12 @@ class Emitter:
     # and the exceptions the enclosing `except` clauses handle.
     protects: list[Protect]
     handled: list[str]
+    # The functions emitted after the top-level function that uses them, in
+    # order of first use, how many of them have been emitted, and the symbols
+    # of the wrappers among them, which are emitted once.
+    later: list[Later]
+    wrappers: dict[str, bool]
+    emitted: int = 0
     # Per function: its name in frames, its module's path, and whether it
     # records frames, which core's functions do not (agents/bootstrap.md §6).
     function_name: str = ""
@@ -104,9 +110,9 @@ class Emitter:
 
     # Functions
 
+    # Emits a file-level function or method, then the functions it uses
+    # that are emitted later.
     def function(self, function: ast.FunctionDecl):
-        record = function.record
-        assert record is not None, f"function {function.name} has no signature"
         module = self.module_names[function.id]
         if module == "core":
             body = coroutine.function(function.name)
@@ -116,38 +122,72 @@ class Emitter:
         if module == "core" and function.name == "fail":
             self.emit_fail()
             return
-        self.temps = 0
-        self.labels = 0
+        self.emit_function(function, self.symbol(function), [])
+        while self.emitted < len(self.later):
+            self.emitted = self.emitted + 1
+            self.emit_later(self.later[self.emitted - 1])
+
+    # Emits `function` as `symbol`, whose parameters start with `first`. A
+    # captured parameter or local lives in a cell that its closures share.
+    def emit_function(self, function: ast.FunctionDecl, symbol: str, first: list[str]):
+        record = function.record
+        assert record is not None, f"function {function.name} has no signature"
+        module = self.module_of(function)
+        params: list[str] = []
+        params.extend(first)
+        for param in function.params:
+            params.append(f"l %p.{param.name}")
+        self.begin(symbol, params, not is_none(record.result))
         self.function_name = frame_name(function)
         self.path = self.module_paths[module]
         self.frames = module != "core"
+        for param in function.params:
+            self.line(f"%v.{param.name} =l alloc8 8")
+            param_symbol = param.symbol
+            if param_symbol is not None and param_symbol.captured:
+                self.new_cell(param.name)
+            self.line(f"storel %p.{param.name}, {self.local_address(param_symbol, param.name)}")
+        for local in function.locals:
+            self.line(f"%v.{local.name} =l alloc8 8")
+            if local.captured:
+                self.new_cell(local.name)
+        for i in range(len(function.captures)):
+            name = function.captures[i].symbol.name
+            self.line(f"%v.{name} =l alloc8 8")
+            cell = self.load_field("%env", 16 + i * 8)
+            self.line(f"storel {cell}, %v.{name}")
+        self.block(function.body)
+        # The checker proves a function with a result never reaches its end.
+        if self.returns:
+            self.jump("hlt")
+        self.end("0")
+
+    # Starts function `symbol` with `params`, which returns a value when
+    # `returns`. Its frames are recorded only when the caller says so.
+    def begin(self, symbol: str, params: list[str], returns: bool):
+        self.temps = 0
+        self.labels = 0
         self.target = "@unwind"
         self.unwinds = False
-        params: list[str] = []
-        for param in function.params:
-            params.append(f"l %p.{param.name}")
-        returns = not is_none(record.result)
+        self.frames = False
         self.returns = returns
         result = ""
         if returns:
             result = "l "
-        self.write("function " + result + self.symbol(function) + "(" + ", ".join(params) + ") {")
+        self.write("function " + result + symbol + "(" + ", ".join(params) + ") {")
         self.label("@start")
-        for param in function.params:
-            self.line(f"%v.{param.name} =l alloc8 8")
-            self.line(f"storel %p.{param.name}, %v.{param.name}")
-        for local in function.locals:
-            self.line(f"%v.{local.name} =l alloc8 8")
-        self.block(function.body)
-        # The checker proves a function with a result never reaches its end.
-        if returns:
-            self.jump("hlt")
+
+    # Returns `value`, or nothing when the function has no result, and ends
+    # the function.
+    def end(self, value: str):
+        if self.returns:
+            self.jump("ret " + value)
         else:
             self.jump("ret")
         # An exception leaves with a dummy result, which no caller reads.
         if self.unwinds:
             self.label("@unwind")
-            if returns:
+            if self.returns:
                 self.jump("ret 0")
             else:
                 self.jump("ret")
@@ -165,6 +205,14 @@ class Emitter:
 
     def symbol(self, function: ast.FunctionDecl) -> str:
         return "$W." + self.module_names[function.id] + "." + frame_name(function)
+
+    # The module of `function`, which may be nested.
+    def module_of(self, function: ast.FunctionDecl) -> str:
+        parent = function.parent
+        while parent is not None:
+            function = parent
+            parent = function.parent
+        return self.module_names[function.id]
 
     # The program entry, descriptors, and string literals, after every
     # function. The entry saves argc and argv for sys.args (core/API.md).
@@ -203,6 +251,16 @@ class Emitter:
             for text in self.descriptors[symbol]:
                 values.append("l " + self.string(text))
             self.write("data " + symbol + " = { " + ", ".join(values) + " }")
+        # A file-level or built-in function value is a closure with no
+        # captures, which needs no allocation.
+        for later in self.later:
+            code = ""
+            if isinstance(later, ValueWrapper):
+                code = later.symbol
+            elif isinstance(later, BuiltinWrapper):
+                code = later.symbol
+            if code != "":
+                self.write(f"data {code}.closure = " + "{ l $W.function.type, l " + code + " }")
         for kinds in self.tuple_kinds:
             values = []
             if kinds == "":
@@ -240,7 +298,7 @@ class Emitter:
         node = statement.node
         if isinstance(node, ast.Assign):
             value = self.expr(node.value)
-            self.line(f"storel {value}, %v.{node.name}")
+            self.line(f"storel {value}, {self.local_address(node.symbol, node.name)}")
         elif isinstance(node, ast.Unpack):
             value = self.expr(node.value)
             ty = node.value.ty
@@ -266,6 +324,11 @@ class Emitter:
             self.emit_raise(node)
         elif isinstance(node, ast.Try):
             self.emit_try(node)
+        elif isinstance(node, ast.FunctionDef):
+            closure = self.closure(node.function)
+            self.line(f"storel {closure}, {self.local_address(node.symbol, node.function.name)}")
+        elif isinstance(node, ast.Nonlocal):
+            pass
         elif isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
                 self.leave(self.loop_protects())
@@ -379,7 +442,7 @@ class Emitter:
                     self.jump(f"jnz {matches}, {body}, {next}")
                 self.label(body)
                 if handler.name != "":
-                    self.line(f"storel {exception}, %v.{handler.name}")
+                    self.line(f"storel {exception}, {self.local_address(handler.symbol, handler.name)}")
                 self.handled.append(exception)
                 self.block(handler.body)
                 self.handled.pop()
@@ -697,7 +760,7 @@ class Emitter:
             declared = symbol.ty
             assert declared is not None, "unchecked target"
             value = self.convert(value, ty, declared)
-            self.line(f"storel {value}, %v.{target.name}")
+            self.line(f"storel {value}, {self.local_address(symbol, target.name)}")
             return
         assert isinstance(ty, types.TupleType), "unchecked tuple target"
         for i in range(len(target.elements)):
@@ -950,6 +1013,11 @@ class Emitter:
     def convert(self, value: str, source: types.Type, target: types.Type) -> str:
         source = types.expand(source)
         target = types.expand(target)
+        if adapts(source, target):
+            value = self.adapt(value, source, target)
+            # The union's tuple member may convert too.
+            if not is_union(source):
+                return value
         from_tuple = types.tuple_member(source)
         to_tuple = types.tuple_member(target)
         if from_tuple is not None and to_tuple is not None and representation_changes(from_tuple, to_tuple):
@@ -1012,7 +1080,7 @@ class Emitter:
             if symbol is None:
                 return self.string(self.target_os)
             t = self.temp()
-            self.line(f"{t} =l loadl %v.{node.name}")
+            self.line(f"{t} =l loadl {self.local_address(symbol, node.name)}")
             declared = symbol.ty
             ty = expr.ty
             assert declared is not None and ty is not None, "unchecked name"
@@ -1040,6 +1108,9 @@ class Emitter:
             return self.method_call(expr, node)
         elif isinstance(node, ast.Field):
             object = self.expr(node.object)
+            method = expr.ty
+            if isinstance(method, types.FunctionType):
+                return self.bound_method(node.object, method.fn, object)
             address = self.field_address(node.object, node.name, object)
             value = self.temp()
             self.line(f"{value} =l loadl {address}")
@@ -1060,6 +1131,24 @@ class Emitter:
             return self.tuple_display(expr, node)
         elif isinstance(node, ast.DictDisplay):
             return self.dict_display(expr, node)
+        elif isinstance(node, ast.CallValue):
+            return self.call_value(node)
+        elif isinstance(node, ast.FunctionValue):
+            code = self.symbol(node.target) + ".value"
+            self.wrap(code, ValueWrapper(code, node.target))
+            return code + ".closure"
+        elif isinstance(node, ast.BuiltinValue):
+            call = node.call
+            assert call is not None, "unchecked built-in value"
+            code = f"$W.builtin.{len(self.later)}"
+            self.later.append(BuiltinWrapper(code, call))
+            return code + ".closure"
+        elif isinstance(node, ast.Lambda):
+            function = node.function
+            assert function is not None, "unbound lambda"
+            return self.closure(function)
+        elif isinstance(node, ast.Typed):
+            return f"%p.{node.index}"
         return self.unchecked("expression")
 
     def binary(self, node: ast.Binary) -> str:
@@ -1708,6 +1797,191 @@ class Emitter:
         # Reinterpretations change only the static type.
         return args[0]
 
+    # Function values
+
+    # The address of the value of local `symbol`, named `name`: its stack
+    # slot, or the slot of its cell when a nested function captures it.
+    def local_address(self, symbol: ast.Symbol | None, name: str) -> str:
+        if symbol is None or not symbol.captured:
+            return f"%v.{name}"
+        cell = self.temp()
+        self.line(f"{cell} =l loadl %v.{name}")
+        address = self.temp()
+        self.line(f"{address} =l add {cell}, 8")
+        return address
+
+    # Stores a new cell in the stack slot of local `name`.
+    def new_cell(self, name: str):
+        cell = self.call_text("$W.core.object_new", ["l 0", "l 1"], True)
+        self.line(f"storel {cell}, %v.{name}")
+
+    def load_field(self, object: str, offset: int) -> str:
+        address = self.temp()
+        self.line(f"{address} =l add {object}, {offset}")
+        value = self.temp()
+        self.line(f"{value} =l loadl {address}")
+        return value
+
+    def store_field(self, object: str, offset: int, value: str):
+        address = self.temp()
+        self.line(f"{address} =l add {object}, {offset}")
+        self.line(f"storel {value}, {address}")
+
+    # A closure: the function descriptor, the code, and `values`, which the
+    # code reads from its first parameter.
+    def new_closure(self, code: str, values: list[str]) -> str:
+        closure = self.call_text("$W.core.object_new", ["l $W.function.type", f"l {len(values) + 1}"], True)
+        self.store_field(closure, 8, code)
+        for i in range(len(values)):
+            self.store_field(closure, 16 + i * 8, values[i])
+        return closure
+
+    # A closure of nested function or lambda `function` over the cells of
+    # the variables it captures.
+    def closure(self, function: ast.FunctionDecl) -> str:
+        symbol = "$W." + self.module_of(function) + "." + frame_name(function).replace("<lambda>", "lambda") + "." + str(function.id)
+        self.later.append(Lifted(symbol, function))
+        cells: list[str] = []
+        for capture in function.captures:
+            cell = self.temp()
+            self.line(f"{cell} =l loadl %v.{capture.symbol.name}")
+            cells.append(cell)
+        return self.new_closure(symbol, cells)
+
+    # A closure of `method` that keeps the receiver `object`, of the type of
+    # `receiver`.
+    def bound_method(self, receiver: ast.Expr, method: types.Function, object: str) -> str:
+        ty = receiver.ty
+        assert ty is not None, "unchecked receiver"
+        ty = types.expand(ty)
+        assert isinstance(ty, types.ClassType), "unchecked receiver"
+        symbol = self.descriptor(ty.decl.type_name).removesuffix(".type") + "." + method.name
+        self.wrap(symbol + ".bound", BoundWrapper(symbol + ".bound", symbol, method))
+        return self.new_closure(symbol + ".bound", [object])
+
+    # Emits `wrapper`, whose symbol is `symbol`, unless it already is.
+    def wrap(self, symbol: str, wrapper: Later):
+        if symbol not in self.wrappers:
+            self.wrappers[symbol] = True
+            self.later.append(wrapper)
+
+    # A call through a closure passes the closure first. The callee is
+    # evaluated before the arguments.
+    def call_value(self, node: ast.CallValue) -> str:
+        callee = self.expr(node.callee)
+        args = [callee]
+        args.extend(self.arg_values(node.args, node.order))
+        ty = node.callee.ty
+        assert ty is not None, "unchecked callee"
+        code = self.load_field(callee, 8)
+        return self.willow_call(code, typed(args), not is_none(value_result(types.expand(ty))))
+
+    # `value`, a function value of `source`, wrapped to serve the callable
+    # member of `target`. A union holds a function only some of the time.
+    def adapt(self, value: str, source: types.Type, target: types.Type) -> str:
+        member = function_member(source)
+        callable = types.callable_member(target)
+        assert member is not None and callable is not None, "unchecked adapter"
+        symbol = f"$W.adapter.{len(self.later)}"
+        self.later.append(Adapter(symbol, member, callable))
+        if not is_union(source):
+            return self.new_closure(symbol, [value])
+        take = self.new_label()
+        done = self.new_label()
+        result = self.temp()
+        self.line(f"{result} =l copy {value}")
+        held = self.core_call("is_instance", [value, "$W.function.type"], True)
+        self.jump(f"jnz {held}, {take}, {done}")
+        self.label(take)
+        adapted = self.new_closure(symbol, [value])
+        self.line(f"{result} =l copy {adapted}")
+        self.label(done)
+        return result
+
+    def emit_later(self, later: Later):
+        if isinstance(later, Lifted):
+            self.emit_function(later.function, later.symbol, ["l %env"])
+        elif isinstance(later, ValueWrapper):
+            self.emit_value_wrapper(later)
+        elif isinstance(later, BoundWrapper):
+            self.emit_bound_wrapper(later)
+        elif isinstance(later, BuiltinWrapper):
+            self.emit_builtin_wrapper(later)
+        else:
+            self.emit_adapter(later)
+
+    # The wrappers pass on a pending exception with the dummy result.
+    def emit_value_wrapper(self, wrapper: ValueWrapper):
+        record = wrapper.function.record
+        assert record is not None, "function value without a signature"
+        args = wrapper_args(len(record.params))
+        self.begin(wrapper.symbol, with_env(args), not is_none(record.result))
+        self.end(self.call_text(self.symbol(wrapper.function), args, self.returns))
+
+    def emit_bound_wrapper(self, wrapper: BoundWrapper):
+        args = wrapper_args(len(wrapper.method.params) - 1)
+        self.begin(wrapper.symbol, with_env(args), not is_none(wrapper.method.result))
+        receiver = ["l " + self.load_field("%env", 16)]
+        receiver.extend(args)
+        self.end(self.call_text(wrapper.method_symbol, receiver, self.returns))
+
+    def emit_builtin_wrapper(self, wrapper: BuiltinWrapper):
+        call = wrapper.call.node
+        expected = wrapper.call.expected
+        assert isinstance(call, ast.Call) and expected is not None, "unchecked built-in value"
+        self.begin(wrapper.symbol, with_env(wrapper_args(len(call.args))), not is_none(expected))
+        self.end(self.expr(wrapper.call))
+
+    # Converts each argument, supplies the omitted defaults, and converts
+    # the result once no exception is pending.
+    def emit_adapter(self, adapter: Adapter):
+        target = adapter.target
+        params = value_params(adapter.source)
+        result = value_result(adapter.source)
+        self.begin(adapter.symbol, with_env(wrapper_args(len(target.params))), not is_none(target.result))
+        wrapped = self.load_field("%env", 16)
+        code = self.load_field(wrapped, 8)
+        args = [wrapped]
+        for i in range(len(target.params)):
+            args.append(self.convert(f"%p.{i}", target.params[i], params[i].ty))
+        for i in range(len(target.params), len(params)):
+            default = params[i].default
+            assert default is not None, "unchecked adapter default"
+            args.append(self.expr(default))
+        value = self.willow_call(code, typed(args), not is_none(result))
+        self.end(self.convert(value, result, target.result))
+
+# A function emitted after the top-level function that uses it: a nested
+# function or lambda, or the code of a closure that runs a function.
+type Later = Lifted | ValueWrapper | BoundWrapper | BuiltinWrapper | Adapter
+
+class Lifted:
+    symbol: str
+    function: ast.FunctionDecl
+
+# The code of a file-level function's closure.
+class ValueWrapper:
+    symbol: str
+    function: ast.FunctionDecl
+
+# The code of a bound method's closure, which holds the receiver.
+class BoundWrapper:
+    symbol: str
+    method_symbol: str
+    method: types.Function
+
+# The code of a built-in function value's closure, which runs its call.
+class BuiltinWrapper:
+    symbol: str
+    call: ast.Expr
+
+# The code of a closure that holds a function value of `source` and serves
+# callable `target`.
+class Adapter:
+    symbol: str
+    source: types.FunctionType | types.CallableType
+    target: types.CallableType
+
 # An emitter for a program whose modules are `modules`, core among them, and
 # whose target's `__os` is `target_os`. Descriptors' names are the first
 # strings, as in stage 0.
@@ -1722,7 +1996,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
             elif isinstance(decl, ast.ClassDecl):
                 for method in decl.methods:
                     module_names[method.id] = module.name
-    result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [], {}, module_paths, stdlib.exceptions(), [], [])
+    result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [], {}, module_paths, stdlib.exceptions(), [], [], [], {})
     for name in builtin_types():
         result.string(name)
     for name in result.exceptions:
@@ -1755,6 +2029,9 @@ class Protect:
 
 # The name of `function` in frames, and in its symbol.
 def frame_name(function: ast.FunctionDecl) -> str:
+    parent = function.parent
+    if parent is not None:
+        return frame_name(parent) + "." + function.name
     owner = function.owner
     if isinstance(owner, ast.ClassDecl):
         return owner.name + "." + function.name
@@ -1769,7 +2046,7 @@ def field_base(decl: types.Class) -> int:
 
 # The built-in types with descriptors, which every program emits.
 def builtin_types() -> list[str]:
-    return ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple"]
+    return ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple", "function"]
 
 def equality_kind(t: types.Type) -> str:
     kind = types.kind(types.expand(t))
@@ -1798,7 +2075,60 @@ def representation_changes(source: types.Type, target: types.Type) -> bool:
         for i in range(len(a.elements)):
             if representation_changes(a.elements[i], b.elements[i]):
                 return True
-    return False
+    return adapts(source, target)
+
+# Whether a function value of `source` needs an adapter to serve the
+# callable member of `target`: to supply defaults, convert an argument or
+# the result, or give a result where the function has none.
+def adapts(source: types.Type, target: types.Type) -> bool:
+    member = function_member(source)
+    callable = types.callable_member(target)
+    if member is None or callable is None:
+        return False
+    params = value_params(member)
+    if len(params) != len(callable.params):
+        return True
+    for i in range(len(params)):
+        if representation_changes(callable.params[i], params[i].ty):
+            return True
+    result = value_result(member)
+    return representation_changes(result, callable.result) or is_none(result) and not is_none(callable.result)
+
+# The function or callable member of `t`, or None.
+def function_member(t: types.Type) -> types.FunctionType | types.CallableType | None:
+    for m in types.members(t):
+        if isinstance(m, types.FunctionType):
+            return m
+        if isinstance(m, types.CallableType):
+            return m
+    return None
+
+# The parameters a function value's code takes after its closure.
+def value_params(t: types.FunctionType | types.CallableType) -> list[types.Param]:
+    if isinstance(t, types.FunctionType):
+        return types.function_params(t)
+    result: list[types.Param] = []
+    for param in t.params:
+        result.append(types.Param("", param, None, False))
+    return result
+
+def value_result(t: types.Type) -> types.Type:
+    if isinstance(t, types.FunctionType):
+        return types.function_result(t)
+    assert isinstance(t, types.CallableType), "call of a value that is not a function"
+    return t.result
+
+# The parameters of a closure's code: the closure, then `args`.
+def with_env(args: list[str]) -> list[str]:
+    result = ["l %env"]
+    result.extend(args)
+    return result
+
+def wrapper_args(count: int) -> list[str]:
+    result: list[str] = []
+    for i in range(count):
+        result.append(f"l %p.{i}")
+    return result
 
 def is_union(t: types.Type) -> bool:
     return isinstance(types.expand(t), types.UnionType)

@@ -1,0 +1,1 @@
+builtin_value_type.wlo:2:9: error: function 'len' needs an expected callable type

@@ -69,7 +69,8 @@ class FunctionDecl:
     owner: ClassDecl | ProtocolDecl | None = None
     type_name: str = ""
     generator: bool = False
-    # The binder's signature, which lambdas do not have.
+    # The binder's signature. A lambda has none until the checker gives it
+    # the one its expected type or body determines.
     record: types.Function | None = None
     # `extern def`, which only core may declare: a C function with no body,
     # variadic when its parameters end with `...`.
@@ -186,7 +187,7 @@ class Expr:
     ty: types.Type | None = None
     expected: types.Type | None = None
 
-type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | BuiltinValue | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay | TypeOf
+type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | BuiltinValue | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay | TypeOf | Typed
 
 # The decimal digits, with "-" before a negative default. The lexer has
 # checked the range.
@@ -240,6 +241,9 @@ class EnumMember:
 class BuiltinValue:
     builtin: stdlib.Builtin
     name: str
+    # The checker's: a call of the built-in with the expected callable's
+    # parameters as Typed arguments, which the value runs.
+    call: Expr | None = None
 
 # A call by bare name, at the name. Keyword arguments follow the positional
 # ones in the source, so the two lists keep the written order. The binder
@@ -261,6 +265,7 @@ class CallValue:
     args: list[Expr]
     keywords: list[Keyword]
     type_args: list[types.Type]
+    order: list[int] | None = None
 
 # At the method name.
 class MethodCall:
@@ -319,6 +324,9 @@ class Binary:
     op: str
     left: Expr
     right: Expr
+    # The checker's, for `and` and `or`: whether the right operand calls
+    # something, which may rebind a captured variable the left tested.
+    calls: bool = False
 
 # `operand is None` or `operand is not None`, at `is`.
 class Is:
@@ -343,6 +351,12 @@ class Lambda:
 # built-in type T.
 class TypeOf:
     target: TypeExpr
+
+# The checker's: parameter `index` of the function that runs a built-in
+# function value's call.
+class Typed:
+    index: int
+    ty: types.Type
 
 # At the `(`, or at the first element of an unparenthesized assignment target.
 class TupleDisplay:

@@ -1,0 +1,5 @@
+def apply(f: (int) -> int) -> int:
+    return f(x=1)
+
+def main():
+    pass
