@@ -16,6 +16,8 @@ class Checker:
     function: ast.FunctionDecl
     result: types.Type
     error: diagnostic.Diagnostic | None
+    # The parameters and the locals assigned so far, by id.
+    symbols: dict[int, ast.Symbol]
     loops: int = 0
 
     def fail(self, line: int, col: int, message: str):
@@ -38,14 +40,18 @@ class Checker:
         if not types.assignable(expected, actual):
             self.fail(expr.line, expr.col, f"expected {types.display(expected)}, received {types.display(actual)}")
             return
-        if not types.same(expected, actual) and (is_union(expected) or is_union(actual)):
-            self.unsupported(expr.line, expr.col, "unions")
-            return
         expr.expected = expected
 
     def check_against(self, expr: ast.Expr, state: dict[int, types.Type], expected: types.Type):
         expr.expected = expected
         self.expect(expr, expected, self.check_expr(expr, state))
+
+    # Checks the condition `expr` and returns what it proves.
+    def check_condition(self, expr: ast.Expr, state: dict[int, types.Type]) -> Facts:
+        self.check_against(expr, state, types.prim("bool"))
+        if self.failed():
+            return Facts({}, {})
+        return self.facts(expr)
 
     def check_arity(self, expr: ast.Expr, name: str, count: int, received: int):
         if received != count:
@@ -89,7 +95,7 @@ class Checker:
         elif isinstance(node, ast.For):
             self.check_for(statement, node, state)
         elif isinstance(node, ast.Assert):
-            self.unsupported(line, col, "assert")
+            self.check_assert(node, state)
         elif isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
                 return self.check_transfer(statement, "break")
@@ -116,19 +122,20 @@ class Checker:
             if symbol.ty is not None:
                 self.fail(statement.line, statement.col, f"only the first assignment to '{node.name}' can have an annotation")
             symbol.ty = declared
+        self.symbols[symbol.id] = symbol
         ty = symbol.ty
         if ty is not None:
             self.expect(node.value, ty, value_type)
-            state[symbol.id] = ty
+            state[symbol.id] = assigned_type(ty, value_type)
         else:
             symbol.ty = value_type
             state[symbol.id] = value_type
 
     def check_if(self, node: ast.If, state: dict[int, types.Type]) -> bool:
-        self.check_against(node.condition, state, types.prim("bool"))
-        body_state = copy(state)
+        facts = self.check_condition(node.condition, state)
+        body_state = narrow(state, facts.when_true)
         body_transfers = self.check_block(node.body, body_state)
-        else_state = copy(state)
+        else_state = narrow(state, facts.when_false)
         else_transfers = self.check_block(node.else_body, else_state)
         if body_transfers and else_transfers:
             return True
@@ -137,16 +144,37 @@ class Checker:
         elif else_transfers:
             replace(state, body_state)
         else:
-            replace(state, join(body_state, else_state))
+            replace(state, join(body_state, else_state, self.symbols))
         return False
 
     def check_while(self, node: ast.While, state: dict[int, types.Type]):
-        self.check_against(node.condition, state, types.prim("bool"))
+        # Narrowing before the loop holds in it and after it only for the
+        # locals the loop does not assign.
+        assigned: dict[int, bool] = {}
+        assigned_symbols(node.body, assigned)
+        for id in assigned:
+            if id in state:
+                state[id] = self.declared(id)
+        facts = self.check_condition(node.condition, state)
         # The body may run zero times, so its assignments are not definite
         # after the loop.
         self.loops = self.loops + 1
-        self.check_block(node.body, copy(state))
+        self.check_block(node.body, narrow(state, facts.when_true))
         self.loops = self.loops - 1
+
+    # The message runs only when the condition is false, and what follows
+    # only when it is true.
+    def check_assert(self, node: ast.Assert, state: dict[int, types.Type]):
+        facts = self.check_condition(node.condition, state)
+        message = node.message
+        if message is not None:
+            self.check_against(message, narrow(state, facts.when_false), types.prim("str"))
+        replace(state, narrow(state, facts.when_true))
+
+    def declared(self, id: int) -> types.Type:
+        ty = self.symbols[id].ty
+        assert ty is not None, "a symbol in the state has no type"
+        return ty
 
     def check_transfer(self, statement: ast.Stmt, name: str) -> bool:
         if self.loops == 0:
@@ -201,6 +229,14 @@ class Checker:
                 self.unsupported(statement.line, statement.col, "unions")
         else:
             symbol.ty = item
+        self.symbols[symbol.id] = symbol
+        # As in a while loop, narrowing holds in the body only for the
+        # locals it does not assign.
+        assigned: dict[int, bool] = {}
+        assigned_symbols(node.body, assigned)
+        for id in assigned:
+            if id in state:
+                state[id] = self.declared(id)
         body_state = copy(state)
         body_state[symbol.id] = item
         self.loops = self.loops + 1
@@ -226,6 +262,12 @@ class Checker:
         if part != "items" and target.name == "":
             self.fail(target.line, target.col, f"cannot unpack a value of type {types.display(items[0])}")
             return
+        assigned: dict[int, bool] = {}
+        assigned_symbols(node.body, assigned)
+        target_symbols(target, assigned)
+        for id in assigned:
+            if id in state:
+                state[id] = self.declared(id)
         body_state = copy(state)
         for i in range(len(targets)):
             current = targets[i]
@@ -241,6 +283,7 @@ class Checker:
                     self.fail(current.line, current.col, f"expected {types.display(declared)}, received {types.display(item)}")
             else:
                 symbol.ty = item
+            self.symbols[symbol.id] = symbol
             body_state[symbol.id] = item
         self.loops = self.loops + 1
         self.check_block(node.body, body_state)
@@ -460,9 +503,9 @@ class Checker:
         elif isinstance(node, ast.Unary):
             return self.check_unary(expr, node, state)
         elif isinstance(node, ast.Is):
-            return self.unsupported(line, col, "'is'")
+            return self.check_is(expr, node, state)
         elif isinstance(node, ast.IsInstance):
-            return self.unsupported(line, col, "isinstance")
+            return self.check_isinstance(node, state)
         elif isinstance(node, ast.ListDisplay):
             return self.check_list(expr, node, state)
         elif isinstance(node, ast.DictDisplay):
@@ -492,10 +535,14 @@ class Checker:
 
     def check_binary(self, expr: ast.Expr, node: ast.Binary, state: dict[int, types.Type]) -> types.Type:
         op = node.op
+        if op == "and" or op == "or":
+            return self.check_logic(expr, node, state)
         left = self.check_expr(node.left, state)
         right = self.check_expr(node.right, state)
         if self.failed():
             return none()
+        if (op == "==" or op == "!=") and (may_be_none(left) or may_be_none(right)):
+            return self.check_union_equality(expr, node, left, right)
         pair = types.kind(left) + " " + types.kind(right)
         ty: types.Type | None = None
         supported = False
@@ -512,10 +559,6 @@ class Checker:
         elif op in ["+", "-", "*", "/", "//", "%"]:
             ty = arithmetic_type(op, pair)
             supported = pair in ["int int", "float float"] or op == "+" and pair == "str str"
-        elif op == "and" or op == "or":
-            if pair == "bool bool":
-                ty = types.prim("bool")
-                supported = True
         elif op == "in" or op == "not in":
             container = types.expand(right)
             if isinstance(container, types.DictType):
@@ -527,14 +570,111 @@ class Checker:
                 if types.comparable(left) and types.comparable(element) and (types.assignable(element, left) or types.assignable(left, element)):
                     ty = types.prim("bool")
                     supported = True
-                    if is_union(left) or is_union(element):
+                    # The item is boxed to compare with a union element.
+                    if not types.assignable(element, left):
                         return self.unsupported(expr.line, expr.col, "unions")
+                    self.expect(node.left, element, left)
         if ty is None:
             self.fail(expr.line, expr.col, f"operator '{op}' cannot be applied to {types.display(left)} and {types.display(right)}")
             return none()
         if not supported:
             return self.unsupported(expr.line, expr.col, f"operator '{op}' on {types.display(left)} and {types.display(right)}")
         return ty
+
+    # The right operand of `and` runs only when the left is true, and of `or`
+    # only when it is false.
+    def check_logic(self, expr: ast.Expr, node: ast.Binary, state: dict[int, types.Type]) -> types.Type:
+        left = self.check_expr(node.left, state)
+        if self.failed():
+            return none()
+        facts = self.facts(node.left)
+        right_state = narrow(state, facts.when_false)
+        if node.op == "and":
+            right_state = narrow(state, facts.when_true)
+        right = self.check_expr(node.right, right_state)
+        if self.failed():
+            return none()
+        if types.kind(left) != "bool" or types.kind(right) != "bool":
+            self.fail(expr.line, expr.col, f"operator '{node.op}' cannot be applied to {types.display(left)} and {types.display(right)}")
+        return types.prim("bool")
+
+    # `==` or `!=` with a union or None, which compares both operands as the
+    # type the other is assignable to.
+    def check_union_equality(self, expr: ast.Expr, node: ast.Binary, left: types.Type, right: types.Type) -> types.Type:
+        target: types.Type | None = None
+        if types.comparable(left) and types.comparable(right):
+            if types.assignable(right, left):
+                target = right
+            elif types.assignable(left, right):
+                target = left
+        if target is None:
+            self.fail(expr.line, expr.col, f"operator '{node.op}' cannot be applied to {types.display(left)} and {types.display(right)}")
+            return none()
+        self.expect(node.left, target, left)
+        self.expect(node.right, target, right)
+        return types.prim("bool")
+
+    def check_is(self, expr: ast.Expr, node: ast.Is, state: dict[int, types.Type]) -> types.Type:
+        operand = self.check_expr(node.operand, state)
+        if not self.failed() and not types.is_optional(operand):
+            op = "is"
+            if node.negated:
+                op = "is not"
+            self.fail(expr.line, expr.col, f"operator '{op}' cannot be applied to {types.display(operand)}")
+        return types.prim("bool")
+
+    def check_isinstance(self, node: ast.IsInstance, state: dict[int, types.Type]) -> types.Type:
+        operand = self.check_expr(node.operand, state)
+        if self.failed():
+            return none()
+        if isinstance_member(operand, node.type_name) is None:
+            named = node.type_name
+            self.fail(named.line, named.col, f"type {types.display(operand)} has no member {type_name_text(named)}")
+        return types.prim("bool")
+
+    # What `expr`, a checked condition, proves when it is true and when it
+    # is false about the locals it tests, from its operands' recorded types.
+    def facts(self, expr: ast.Expr) -> Facts:
+        node = expr.node
+        if isinstance(node, ast.Is):
+            symbol = local(node.operand)
+            ty = node.operand.ty
+            if symbol is None or ty is None:
+                return Facts({}, {})
+            kept: list[types.Type] = []
+            for m in types.members(ty):
+                if types.kind(m) != "None":
+                    kept.append(m)
+            # Only the outcome that rules out None narrows.
+            some = {symbol.id: types.subset(ty, kept)}
+            if node.negated:
+                return Facts(some, {})
+            return Facts({}, some)
+        if isinstance(node, ast.IsInstance):
+            symbol = local(node.operand)
+            ty = node.operand.ty
+            if symbol is None or ty is None or not is_union(ty):
+                return Facts({}, {})
+            member = isinstance_member(ty, node.type_name)
+            if member is None:
+                return Facts({}, {})
+            others: list[types.Type] = []
+            for m in types.members(ty):
+                if not types.same(m, member):
+                    others.append(m)
+            return Facts({symbol.id: member}, {symbol.id: types.subset(ty, others)})
+        if isinstance(node, ast.Unary) and node.op == "not":
+            inner = self.facts(node.operand)
+            return Facts(inner.when_false, inner.when_true)
+        if isinstance(node, ast.Binary) and node.op == "and":
+            left = self.facts(node.left)
+            right = self.facts(node.right)
+            return Facts(narrow(left.when_true, right.when_true), {})
+        if isinstance(node, ast.Binary) and node.op == "or":
+            left = self.facts(node.left)
+            right = self.facts(node.right)
+            return Facts({}, narrow(left.when_false, right.when_false))
+        return Facts({}, {})
 
     # Calls
 
@@ -620,7 +760,7 @@ class Checker:
             return none()
         if not types.printable(ty):
             self.fail(arg.line, arg.col, f"cannot print a value of type {types.display(ty)}")
-        elif types.kind(ty) not in ["int", "float", "bool", "str", "None"]:
+        elif types.kind(ty) not in ["int", "float", "bool", "str", "None", "union"]:
             self.unsupported(arg.line, arg.col, f"printing {types.display(ty)}")
         return none()
 
@@ -664,7 +804,7 @@ class Checker:
 def check_function(module: ast.Module, function: ast.FunctionDecl) -> diagnostic.Diagnostic | None:
     record = function.record
     assert record is not None, f"function {function.name} has no signature"
-    checker = Checker(module, function, record.result, None)
+    checker = Checker(module, function, record.result, None, {})
     if function.owner is not None:
         checker.unsupported(function.line, function.col, "methods")
         return checker.error
@@ -673,6 +813,7 @@ def check_function(module: ast.Module, function: ast.FunctionDecl) -> diagnostic
         symbol = function.params[i].symbol
         assert symbol is not None, "parameter without a symbol"
         symbol.ty = record.params[i].ty
+        checker.symbols[symbol.id] = symbol
         state[symbol.id] = record.params[i].ty
     transfers = checker.check_block(function.body, state)
     if not checker.failed() and not transfers and not types.assignable(record.result, none()):
@@ -733,11 +874,109 @@ def replace(state: dict[int, types.Type], result: dict[int, types.Type]):
     for id in result:
         state[id] = result[id]
 
-# The symbols assigned in both states. Without narrowing, a symbol has its
-# declared type in both.
-def join(a: dict[int, types.Type], b: dict[int, types.Type]) -> dict[int, types.Type]:
+# The symbols assigned in both states, each with the members of its
+# declared type, in `symbols`, that either state allows.
+def join(a: dict[int, types.Type], b: dict[int, types.Type], symbols: dict[int, ast.Symbol]) -> dict[int, types.Type]:
     result: dict[int, types.Type] = {}
     for id in a:
         if id in b:
-            result[id] = a[id]
+            if types.same(a[id], b[id]):
+                result[id] = a[id]
+            else:
+                declared = symbols[id].ty
+                assert declared is not None, "a symbol in the state has no type"
+                kept: list[types.Type] = []
+                for m in types.members(declared):
+                    if has_member(a[id], m) or has_member(b[id], m):
+                        kept.append(m)
+                result[id] = types.subset(declared, kept)
     return result
+
+# What a condition proves about the locals it tests when it is true and when
+# it is false: their narrowed types, by symbol id.
+class Facts:
+    when_true: dict[int, types.Type]
+    when_false: dict[int, types.Type]
+
+# `state` with the narrowed types of `facts`.
+def narrow(state: dict[int, types.Type], facts: dict[int, types.Type]) -> dict[int, types.Type]:
+    result = copy(state)
+    for id in facts:
+        result[id] = facts[id]
+    return result
+
+def has_member(t: types.Type, member: types.Type) -> bool:
+    for m in types.members(t):
+        if types.same(m, member):
+            return True
+    return False
+
+# The type a local declared `declared` has after a value of `value` is
+# assigned to it: a value of one type other than None narrows a union to the
+# member it is assignable to.
+def assigned_type(declared: types.Type, value: types.Type) -> types.Type:
+    result = declared
+    if is_union(declared) and not is_union(value) and types.kind(value) != "None":
+        for m in types.members(declared):
+            if types.assignable(m, value):
+                result = m
+    return result
+
+# Adds the id of every symbol that `body` assigns, including in nested
+# blocks, to `result`.
+def assigned_symbols(body: list[ast.Stmt], result: dict[int, bool]):
+    for statement in body:
+        node = statement.node
+        if isinstance(node, ast.Assign):
+            symbol = node.symbol
+            if symbol is not None:
+                result[symbol.id] = True
+        elif isinstance(node, ast.If):
+            assigned_symbols(node.body, result)
+            assigned_symbols(node.else_body, result)
+        elif isinstance(node, ast.While):
+            assigned_symbols(node.body, result)
+        elif isinstance(node, ast.For):
+            target_symbols(node.target, result)
+            assigned_symbols(node.body, result)
+
+def target_symbols(target: ast.Target, result: dict[int, bool]):
+    symbol = target.symbol
+    if symbol is not None:
+        result[symbol.id] = True
+    for element in target.elements:
+        target_symbols(element, result)
+
+def may_be_none(t: types.Type) -> bool:
+    return is_union(t) or types.kind(t) == "None"
+
+# The local that `expr` names, or None.
+def local(expr: ast.Expr) -> ast.Symbol | None:
+    node = expr.node
+    if isinstance(node, ast.Name):
+        return node.symbol
+    return None
+
+# The member of `t` that `isinstance` with `named` tests for, or None: a
+# class or enum by declaration, and a built-in type by kind.
+def isinstance_member(t: types.Type, named: ast.TypeName) -> types.Type | None:
+    record = named.record
+    found: types.Type | None = None
+    for m in types.members(t):
+        if isinstance(record, types.Class):
+            if isinstance(m, types.ClassType) and m.decl.type_name == record.type_name:
+                found = m
+        elif isinstance(record, types.Enum):
+            if isinstance(m, types.EnumType) and m.decl.type_name == record.type_name:
+                found = m
+        elif types.kind(m) == named.name:
+            found = m
+    return found
+
+def type_name_text(named: ast.TypeName) -> str:
+    record = named.record
+    if isinstance(record, types.Class):
+        return record.type_name
+    if isinstance(record, types.Enum):
+        return record.type_name
+    return named.name
