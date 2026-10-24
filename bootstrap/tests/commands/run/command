@@ -1,0 +1,18 @@
+# run passes the arguments after the file to the program and exits with its
+# status.
+"$WILLOW" run prog.wlo a -o --x 'b c'
+echo "status $?"
+"$WILLOW" build prog.wlo -o prog
+./prog a -o --x 'b c'
+"$WILLOW" run three.wlo
+echo "status $?"
+"$WILLOW" run finally.wlo
+echo "status $?"
+for value in 256 -1; do
+    printf 'import sys\n\ndef main():\n    sys.exit(%s)\n' "$value" >range.wlo
+    "$WILLOW" run range.wlo
+    echo "status $?"
+done
+"$WILLOW" run prog_self.wlo
+ln -s "$WILLOW" willow
+./willow run uses_json.wlo

@@ -563,6 +563,15 @@ class Emitter:
         self.line(f"{result} =l add {mask}, {shifted}")
         return result
 
+    # Calls `function`, `main` or a test of the entry module, an async one
+    # as the event loop's root task.
+    def call_entry(self, entry: ast.Module, function: ast.FunctionDecl):
+        if function.is_async:
+            self.line(f"%root =l call $P.{entry.name}.{function.name}()")
+            self.line("%result =l call $W.core.aio_run(l %root)")
+        else:
+            self.line(f"call $P.{entry.name}.{function.name}()")
+
     def emit_instantiations(self):
         function_index = 0
         witness_index = 0
@@ -596,22 +605,44 @@ class Emitter:
 
     # The program entry, descriptors, and string literals, after every
     # function. The entry saves argc and argv for sys.args (core/API.md).
-    def finish(self, entry: ast.Module) -> str:
+    #
+    # The entry of a test file (`test`) runs the test that its first argument
+    # names, and once it returns, creates the file its second argument names;
+    # the program's own arguments are the rest.
+    def finish(self, entry: ast.Module, test: bool) -> str:
         self.emit_instantiations()
         self.write("export function w $main(w %argc, l %argv) {")
         self.write("@start")
         self.line("call $GC_init()")
         self.line("%argc.l =l extsw %argc")
-        self.line("storel %argc.l, $W.argc")
-        self.line("storel %argv, $W.argv")
-        self.line("call $W.core.init()")
-        main = entry.names["main"]
-        assert isinstance(main, ast.FunctionDecl), "entry without main"
-        if main.is_async:
-            self.line(f"%root =l call $P.{entry.name}.main()")
-            self.line("%result =l call $W.core.aio_run(l %root)")
+        if test:
+            self.line("%args =l call $W.core.sys_args(l %argc.l, l %argv)")
+            self.line("%name =l call $W.core.list_get(l %args, l 0)")
+            self.line("%marker =l call $W.core.list_get(l %args, l 1)")
+            # The marker becomes the program name, which sys.args leaves out.
+            self.line("%argc.rest =l sub %argc.l, 2")
+            self.line("%argv.rest =l add %argv, 16")
+            self.line("storel %argc.rest, $W.argc")
+            self.line("storel %argv.rest, $W.argv")
         else:
-            self.line(f"call $P.{entry.name}.main()")
+            self.line("storel %argc.l, $W.argc")
+            self.line("storel %argv, $W.argv")
+        self.line("call $W.core.init()")
+        if test:
+            for i in range(len(entry.tests)):
+                function = entry.tests[i]
+                self.line(f"%is.{i} =l call $W.core.str_eq(l %name, l {self.string(function.name)})")
+                self.line(f"jnz %is.{i}, @test.{i}, @next.{i}")
+                self.write(f"@test.{i}")
+                self.call_entry(entry, function)
+                self.line("jmp @ran")
+                self.write(f"@next.{i}")
+            self.line("ret 2")
+            self.write("@ran")
+        else:
+            main = entry.names["main"]
+            assert isinstance(main, ast.FunctionDecl), "entry without main"
+            self.call_entry(entry, main)
         # Output is not buffered, so there is nothing to flush.
         self.line("%e =l loadl $W.pending")
         self.line("jnz %e, @uncaught, @done")
@@ -620,6 +651,8 @@ class Emitter:
         self.line("call $W.core.report(l %e)")
         self.line("ret 1")
         self.write("@done")
+        if test:
+            self.line(f"call $W.core.fs_write_file(l %marker, l {self.string('')})")
         self.line("ret 0")
         self.write("}")
         self.write("data $W.argc = { l 0 }")

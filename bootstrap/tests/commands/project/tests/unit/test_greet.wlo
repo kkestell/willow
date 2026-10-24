@@ -1,0 +1,4 @@
+import app.greet
+
+def test_greet():
+    assert app.greet.greet('x') == 'HELLO, X!'

@@ -1,0 +1,16 @@
+# init creates a project that runs and tests.
+mkdir app
+cd app || exit 1
+"$WILLOW" init
+echo "status $?"
+cat .gitignore
+grep -c 'compiles to native code' AGENTS.md
+"$WILLOW" run
+echo "status $?"
+"$WILLOW" test
+echo "status $?"
+git status --short
+"$WILLOW" init
+echo "status $?"
+"$WILLOW" init extra
+echo "status $?"

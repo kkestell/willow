@@ -1,0 +1,4 @@
+import json
+
+def main():
+    print(json.dump(json.parse("[1, 2.5]")))

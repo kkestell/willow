@@ -7,6 +7,17 @@ mkdir elsewhere
 (cd elsewhere && ../app.bin && ../app.bin Ada --verbose)
 "$WILLOW" compile -o out.ssa
 echo "status $?"
+"$WILLOW" run
+"$WILLOW" run -- Ada --verbose
+
+# Tests import from the project's roots, and the test directory is searched
+# recursively.
+"$WILLOW" test
+echo "status $?"
+"$WILLOW" test tests/unit
+echo "status $?"
+"$WILLOW" test --check
+echo "status $?"
 
 # An explicit file keeps the file workflow and ignores the manifest.
 "$WILLOW" check src/app/main.wlo

@@ -1,0 +1,31 @@
+created willow.json
+created src/main.wlo
+created tests/test_main.wlo
+created AGENTS.md
+created .gitignore
+initialized a git repository
+status 0
+/app
+/app.ssa
+1
+Hello, Willow!
+status 0
+PASS tests/test_main.wlo test_main_runs
+1 passed, 0 failed
+status 0
+?? .gitignore
+?? AGENTS.md
+?? src/
+?? tests/
+?? willow.json
+error: willow.json already exists
+status 1
+error: unexpected argument 'extra'
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
