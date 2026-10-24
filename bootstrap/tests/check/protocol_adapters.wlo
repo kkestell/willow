@@ -35,6 +35,10 @@ class PairBox:
     def get(self) -> tuple[Box[int]]:
         return (Box(8),)
 
+class FailedPair:
+    def get(self) -> tuple[Box[int]]:
+        raise ValueError("failed")
+
 class Link:
     tail: Link | None
 
@@ -46,6 +50,9 @@ def take[T](source: Source[T]) -> T:
 
 def bounded[T: Source[int]](value: T) -> int:
     return value.get()
+
+def read_pair[T: Pair](pair: T) -> tuple[Source[int]]:
+    return pair.get()
 
 def main():
     tagged: Tagged[int] = Box(3)
@@ -65,3 +72,8 @@ def main():
     next = chain.next()
     if next is not None:
         print(next.next() is None)
+    failed: Pair = FailedPair()
+    try:
+        read_pair(failed)
+    except ValueError as error:
+        print(error.message)

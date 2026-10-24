@@ -1,0 +1,3 @@
+union_flow.wlo:42:5: error: AssertionError: both None
+  in first at union_flow.wlo:42:5
+  called from main at union_flow.wlo:79:11

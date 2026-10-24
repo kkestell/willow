@@ -1,0 +1,2 @@
+list_index_out_of_range.wlo:4:16: error: IndexError: list index out of range
+  in main at list_index_out_of_range.wlo:4:16

@@ -1,0 +1,1 @@
+except_unassigned.wlo:5:15: error: variable 'y' may be used before assignment

@@ -1,0 +1,1 @@
+raise_optional.wlo:3:11: error: expected an exception, received Exception | None

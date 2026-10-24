@@ -1,0 +1,2 @@
+split_empty_separator.wlo:3:21: error: ValueError: empty separator
+  in main at split_empty_separator.wlo:3:21
