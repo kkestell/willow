@@ -1,3 +1,0 @@
-def main():
-    width = 3
-    print(f"{width:>4}")

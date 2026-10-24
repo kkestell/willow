@@ -236,6 +236,7 @@ def main():
         ["a in b and c not in d", "((a in b) and (c not in d))"],
         ["f\"a{b}c{x + 1}\"", "f[\"a\", b, \"c\", (x + 1)]"],
         ["f\"\"", "f[]"],
+        ["f\"{a b}\"", "2:14: expected '}', found 'b'"],
         ["float(1) / 0.5", "(float(1) / 0.5)"],
         ["a == (not b)", "(a == (not b))"],
         ["a[:]", "a[:]"],

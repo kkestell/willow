@@ -1,0 +1,1 @@
+format_type.wlo:2:14: error: format type 'f' requires float, received int

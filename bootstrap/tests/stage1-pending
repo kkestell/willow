@@ -17,7 +17,6 @@ coroutine_traceback
 coroutines
 dictionary_changed_size
 division_by_zero
-enums
 eprint_values
 exceptions
 file_lines

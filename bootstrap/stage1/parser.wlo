@@ -444,14 +444,12 @@ class Parser:
                 self.advance()
                 if token.text != "":
                     fstring.parts.append(ast.Expr(start.line, start.col, ast.String(token.text)))
-                    fstring.specs.append("")
+                    fstring.specs.append(ast.FormatSpec())
             else:
                 fstring.parts.append(self.parse_expression())
-                end = self.peek()
-                fstring.specs.append(end.text)
-                if end.format_spec and fstring.format_spec is None:
-                    fstring.format_spec = ast.Ident(end.line, end.col, end.text)
-                self.expect(tokens.Kind.FIELD_END, "'}'")
+                end = self.expect(tokens.Kind.FIELD_END, "'}'")
+                if self.error is None:
+                    fstring.specs.append(parse_format_spec(end.text))
         self.advance()
         return ast.Expr(start.line, start.col, fstring)
 
@@ -1104,6 +1102,23 @@ def type_col(t: ast.TypeExpr) -> int:
     if isinstance(t, ast.UnionType):
         return t.col
     return t.col
+
+# The lexer has validated the specification's grammar.
+def parse_format_spec(text: str) -> ast.FormatSpec:
+    spec = ast.FormatSpec()
+    if text[:1] in ["<", ">", "^"]:
+        spec.align = text[0]
+        text = text[1:]
+    if text[-1:] in ["s", "d", "f"]:
+        spec.kind = text[-1]
+        text = text[:-1]
+    dot = text.find(".")
+    if dot >= 0:
+        spec.precision = int(text[dot + 1:])
+        text = text[:dot]
+    if text != "":
+        spec.width = int(text)
+    return spec
 
 # Reserved words with no construct in the language.
 def is_unsupported(kind: tokens.Kind) -> bool:

@@ -346,6 +346,24 @@ def str_rjust(s: str, width: int) -> str:
         return s
     return repeat_byte(32, width - length) + s
 
+def pad(s: str, width: int, align: str) -> str:
+    padding = width - str_len(s)
+    if padding <= 0:
+        return s
+    if align == "<":
+        return s + repeat_byte(32, padding)
+    if align == "^":
+        left = padding // 2
+        return repeat_byte(32, left) + s + repeat_byte(32, padding - left)
+    return repeat_byte(32, padding) + s
+
+def format_union(value: ptr, width: int, align: str) -> str:
+    if align == "":
+        align = ">"
+        if is_instance(value, __type(str)):
+            align = "<"
+    return pad(union_to_str(value), width, align)
+
 # As in Python: with a separator, the pieces between its occurrences, and
 # otherwise the runs of non-whitespace, ignoring whitespace at either end. At
 # most `maxsplit` splits are made, from the left, and the rest of the string
@@ -1090,6 +1108,15 @@ def format_float(format: str, x: float) -> str:
     buf = __alloc_atomic(32)
     snprintf(buf, 32, str_bytes(format), x)
     return str_from_bytes(buf, strlen(buf))
+
+def format_fixed(x: float, precision: int) -> str:
+    if x != x or x > float_max() or x < -float_max():
+        return float_to_str(x)
+    size = 330 + precision
+    result = str_alloc(size)
+    length = snprintf(__offset(result, 16), size, str_bytes("%." + int_to_str(precision) + "f"), x)
+    __store8(result, 8, __word(length))
+    return __str(__word(result))
 
 def str_to_float_unchecked(s: str) -> float:
     return strtod(str_bytes(s), __ptr(__word(0)))

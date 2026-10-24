@@ -1,0 +1,9 @@
+def narrowed(value: int | str) -> str:
+    if isinstance(value, int):
+        return f"{value:d}"
+    return f"{value:s}"
+
+def main():
+    print(f"[{'é→':5}][{'é→':>5s}][{'é→':^5}]")
+    assert narrowed(7) == "7"
+    assert narrowed("é→") == "é→"
