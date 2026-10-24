@@ -1,0 +1,101 @@
+# Reads a project's willow.json (spec §12), with compiler/manifest.lua's
+# messages.
+
+import fs
+import json
+import loader
+
+# A project. `source` and each of `dependencies` are directory prefixes that
+# end in "/", or are "" for the manifest's directory; `entry` is the entry
+# file's path and `entry_name` its module name; `tests` is the test
+# directory, "." for the manifest's directory.
+class Project:
+    entry: str
+    entry_name: str
+    source: str
+    dependencies: list[str]
+    tests: str
+
+# A willow.json that cannot be read or is not a valid manifest. The message
+# names the file.
+class ManifestError(Exception):
+    pass
+
+# The project in the current directory, or None when it has no willow.json.
+def read() -> Project | None:
+    if not fs.exists("willow.json"):
+        return None
+    try:
+        text = fs.read_file("willow.json")
+    except OSError as error:
+        raise ManifestError(loader.read_reason(error))
+    try:
+        data = json.parse(text)
+    except json.JsonError as invalid_json:
+        raise ManifestError("willow.json: " + invalid_json.message)
+    if not isinstance(data, dict):
+        raise invalid("expected an object")
+    entry = "main.wlo"
+    source = "."
+    tests = "tests"
+    dependencies: list[str] = []
+    for key in data:
+        value = data[key]
+        if key == "dependencies":
+            if not isinstance(value, list):
+                raise invalid("'dependencies' must be a list of strings")
+            dependencies = []
+            for item in value:
+                if not isinstance(item, str):
+                    raise invalid("'dependencies' must be a list of strings")
+                if item == "":
+                    raise invalid("'dependencies' cannot contain an empty path")
+                dependencies.append(item)
+        elif key in ["entry", "source", "tests"]:
+            if not isinstance(value, str):
+                raise invalid(f"'{key}' must be a string")
+            if value == "":
+                raise invalid(f"'{key}' cannot be empty")
+            if key == "entry":
+                entry = value
+            elif key == "source":
+                source = value
+            else:
+                tests = value
+        else:
+            raise invalid(f"unknown key '{key}'")
+    stem = entry.removesuffix(".wlo")
+    valid = entry.endswith(".wlo") and not entry.startswith("/")
+    for component in stem.split("/"):
+        if not loader.is_identifier(component):
+            valid = False
+    if not valid:
+        raise invalid("'entry' must be a .wlo path inside the source root with identifier components")
+    prefixes: list[str] = []
+    for dependency in dependencies:
+        prefixes.append(prefix(dependency))
+    test_directory = under(tests)
+    if test_directory == "":
+        test_directory = "."
+    return Project(prefix(source) + entry, stem.replace("/", "."), prefix(source), prefixes, test_directory)
+
+def invalid(message: str) -> ManifestError:
+    return ManifestError("willow.json: " + message)
+
+# `path`, relative to the manifest's directory, without trailing slashes:
+# "/" for the root directory and "" for the manifest's directory.
+def under(path: str) -> str:
+    if path.replace("/", "") == "":
+        return "/"
+    if path == ".":
+        return ""
+    while path.endswith("/"):
+        path = path[:-1]
+    return path
+
+# The directory prefix of `path`: "" for the manifest's directory.
+def prefix(path: str) -> str:
+    directory = under(path)
+    if directory == "/" or directory == "":
+        return directory
+    return directory + "/"

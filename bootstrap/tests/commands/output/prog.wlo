@@ -1,0 +1,4 @@
+import util
+
+def main():
+    print(util.twice(21))

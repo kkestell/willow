@@ -1,0 +1,30 @@
+# Each invalid willow.json is an error that names it.
+check() {
+    printf '%s\n' "$1" >willow.json
+    "$WILLOW" check
+    echo "status $?"
+}
+check '{"name": "x"}'
+check '{"source": 1}'
+check '{"source": ""}'
+check '{"dependencies": "vendor"}'
+check '{"dependencies": null}'
+check '{"dependencies": [""]}'
+check '{"dependencies": [1-2]}'
+check '[]'
+check 'false'
+check 'null'
+check '{"entry": }'
+check '{"entry": "../main.wlo"}'
+check '{"entry": "main.py"}'
+check '{"entry": "my-app/main.wlo"}'
+
+# The last value of a repeated key is used, and an absolute source root is
+# a root like any other.
+check '{"source": "src", "source": "/", "entry": "willow_missing_entry.wlo"}'
+
+# A willow.json that cannot be read is not a missing one.
+echo '{}' >willow.json
+chmod 000 willow.json
+"$WILLOW" check
+echo "status $?"

@@ -1,0 +1,16 @@
+status 0
+status 0
+HELLO, WORLD!
+HELLO, ADA!
+HELLO, --VERBOSE!
+status 0
+src/app/main.wlo:1:8: error: cannot load module 'app.greet': src/app/app/greet.wlo: No such file or directory
+status 1
+error: no source file given and no willow.json in the current directory
+status 1
+src/app/greet.wlo:3:8: error: module 'textkit.shout' is ambiguous: found in vendor/textkit/shout.wlo and vendor2/textkit/shout.wlo
+status 1
+src/app/main.wlo:2:8: error: module 'greet' is the same file as module 'app.greet'
+status 1
+vendor/textkit/shout.wlo:1:8: error: cannot load module 'textkit.missing': src/textkit/missing.wlo: No such file or directory
+status 1

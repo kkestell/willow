@@ -9,6 +9,7 @@
 
 import bind
 import diagnostic
+import fs
 import loader
 import sys
 
@@ -22,7 +23,7 @@ def main():
         root = loader.directory_of(path)
         test = path[len(root):].startswith("test_")
         error: diagnostic.Diagnostic | None = None
-        result = loader.load(path, False)
+        result = loader.load(path, fs.read_file(path), loader.file_roots(path), False)
         if isinstance(result, diagnostic.Diagnostic):
             error = result
         else:

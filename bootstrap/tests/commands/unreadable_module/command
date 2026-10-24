@@ -1,0 +1,3 @@
+mkdir util.wlo
+"$WILLOW" check prog.wlo
+echo "status $?"
