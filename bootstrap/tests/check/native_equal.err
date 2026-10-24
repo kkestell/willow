@@ -1,0 +1,1 @@
+native_equal.wlo:5:13: error: operator '==' cannot be applied to fixture_store.Handle and fixture_store.Handle

@@ -104,7 +104,9 @@ type Check = Overlap | Bound
 
 class Binder:
     modules: list[ast.Module]
+    # The program's modules, and core and the library's modules, by name.
     by_name: dict[str, ast.Module]
+    libraries: dict[str, ast.Module]
     entry: ast.Module
     last_id: int
     error: diagnostic.Diagnostic | None
@@ -115,7 +117,7 @@ class Binder:
     protocols: dict[str, types.Protocol]
     provided: dict[str, stdlib.Module]
     coroutine: types.Class
-    # By the alias's type_name.
+    # By types.identity of the alias's type_name.
     aliases: dict[str, AliasState]
     pending: list[PendingLazy]
     # Checks that run once the declarations' method signatures and lazy
@@ -165,8 +167,9 @@ class Binder:
             imported[imp.name] = True
             taken[imp.root] = True
             module.roots[imp.root] = True
-            if imp.name in self.by_name:
-                module.imported[imp.name] = self.by_name[imp.name]
+            target = self.imported_module(module, imp.name)
+            if target is not None:
+                module.imported[imp.name] = target
             elif imp.name in self.provided:
                 module.provided[imp.name] = self.provided[imp.name]
         for decl in module.declarations:
@@ -179,11 +182,19 @@ class Binder:
             taken[ident.name] = True
             module.names[ident.name] = decl
             type_name = ident.name
-            if module.name != self.entry.name:
+            if module.privileged or module.name != self.entry.name:
                 type_name = module.name + "." + ident.name
             set_type_name(decl, type_name)
             if not self.declare_record(module, decl, type_name):
                 return
+
+    # The module that `importer` reaches by importing `name`: the program's
+    # own module of that name, except from a library module, or else the
+    # library's.
+    def imported_module(self, importer: ast.Module, name: str) -> ast.Module | None:
+        if not importer.privileged and name in self.by_name:
+            return self.by_name[name]
+        return self.libraries.get(name)
 
     # Reports a declaration or import that takes a built-in name.
     def check_builtin_name(self, module: ast.Module, name: str, line: int, col: int) -> bool:
@@ -209,16 +220,20 @@ class Binder:
                 first = decl.type_params[0]
                 self.fail(module, first.line, first.col, "exception classes cannot be generic")
                 return False
-            decl.record = types.Class(decl.name, type_name, self.new_typevars(decl.type_params), [], [], decl.exception, False, "")
+            native = module.privileged and not decl.exception
+            for field in decl.fields:
+                if not field.name.startswith("_"):
+                    native = False
+            decl.record = types.Class(decl.name, type_name, self.new_typevars(decl.type_params), [], [], decl.exception, native, "", module.privileged)
         elif isinstance(decl, ast.ProtocolDecl):
-            decl.record = types.Protocol(decl.name, type_name, self.new_typevars(decl.type_params), [])
+            decl.record = types.Protocol(decl.name, type_name, self.new_typevars(decl.type_params), [], module.privileged)
         elif isinstance(decl, ast.EnumDecl):
             members: list[str] = []
             for member in decl.members:
                 members.append(member.name)
-            decl.record = types.Enum(decl.name, type_name, members)
+            decl.record = types.Enum(decl.name, type_name, members, module.privileged)
         else:
-            self.aliases[type_name] = AliasState(decl, module, [], None, False, [])
+            self.aliases[types.identity(type_name, module.privileged)] = AliasState(decl, module, [], None, False, [])
         return True
 
     def new_typevars(self, params: list[ast.TypeParam]) -> list[types.TypeVar]:
@@ -303,11 +318,15 @@ class Binder:
     def resolve_named(self, module: ast.Module, ref: ast.TypeName) -> Named | None:
         found: Member | None = None
         written = ref.name
+        # Whether a declaration found is the library's.
+        library = module.privileged
         if ref.module != "":
             written = ref.module + "." + ref.name
             if not self.has_module(module, ref.module):
                 self.fail(module, ref.line, ref.col, f"unknown module '{ref.module}'")
                 return None
+            if ref.module in module.imported:
+                library = module.imported[ref.module].privileged
             found = self.lookup(module, ref.module, ref.name, ref.line, ref.col)
             if found is None:
                 return None
@@ -319,12 +338,12 @@ class Binder:
             return self.protocols[ref.name]
         elif ref.name == "Coroutine":
             found = self.coroutine
-        named = self.as_named(found)
+        named = self.as_named(found, library)
         if named is None:
             self.fail(module, ref.line, ref.col, f"unknown type '{written}'")
         return named
 
-    def as_named(self, found: Member | None) -> Named | None:
+    def as_named(self, found: Member | None, library: bool) -> Named | None:
         if isinstance(found, ast.ClassDecl):
             return found.record
         if isinstance(found, ast.ProtocolDecl):
@@ -332,7 +351,7 @@ class Binder:
         if isinstance(found, ast.EnumDecl):
             return found.record
         if isinstance(found, ast.AliasDecl):
-            return self.aliases[found.type_name]
+            return self.aliases[types.identity(found.type_name, library)]
         if isinstance(found, types.Class):
             return found
         if isinstance(found, ProvidedAlias):
@@ -1401,11 +1420,15 @@ class Resolver:
 def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | None:
     modules: list[ast.Module] = []
     by_name: dict[str, ast.Module] = {}
+    libraries: dict[str, ast.Module] = {}
     for source in sources:
         source.tree.name = source.name
         modules.append(source.tree)
-        by_name[source.name] = source.tree
-    binder = Binder(modules, by_name, modules[0], 0, None, stdlib.builtins(), stdlib.intrinsics(), stdlib.exceptions(), stdlib.protocols(), stdlib.modules(), stdlib.coroutine(), {}, [], [])
+        if source.tree.privileged:
+            libraries[source.name] = source.tree
+        else:
+            by_name[source.name] = source.tree
+    binder = Binder(modules, by_name, libraries, modules[0], 0, None, stdlib.builtins(), stdlib.intrinsics(), stdlib.exceptions(), stdlib.protocols(), stdlib.modules(), stdlib.coroutine(), {}, [], [])
     for module in modules:
         binder.declare(module)
         if binder.error is not None:
@@ -1417,7 +1440,7 @@ def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | No
     for module in modules:
         for decl in module.declarations:
             if isinstance(decl, ast.AliasDecl) and binder.error is None:
-                binder.resolve_alias(binder.aliases[decl.type_name])
+                binder.resolve_alias(binder.aliases[types.identity(decl.type_name, module.privileged)])
     for module in modules:
         if binder.error is None:
             resolve_declarations(binder, module)
@@ -1741,9 +1764,9 @@ def type_key(t: types.Type) -> str:
     if isinstance(t, types.TupleType):
         return "tuple[" + type_keys(t.elements) + "]"
     if isinstance(t, types.ClassType):
-        return "class " + t.decl.type_name + "[" + type_keys(t.args) + "]"
+        return "class " + types.identity(t.decl.type_name, t.decl.library) + "[" + type_keys(t.args) + "]"
     if isinstance(t, types.ProtocolType):
-        return "protocol " + t.decl.type_name + "[" + type_keys(t.args) + "]"
+        return "protocol " + types.identity(t.decl.type_name, t.decl.library) + "[" + type_keys(t.args) + "]"
     if isinstance(t, types.CallableType):
         return "(" + type_keys(t.params) + ") -> " + type_key(t.result)
     if isinstance(t, types.UnionType):

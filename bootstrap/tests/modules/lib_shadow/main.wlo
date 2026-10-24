@@ -1,0 +1,6 @@
+import fixture_store
+import fixture_user
+
+def main():
+    print(fixture_store.describe(fixture_store.make("own")))
+    print(fixture_user.label())

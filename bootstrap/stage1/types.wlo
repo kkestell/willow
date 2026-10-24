@@ -5,8 +5,10 @@
 # and functions appear in types through the records Class, Protocol, Enum,
 # and Function, which the binder creates when it declares a name and fills in
 # as it resolves the declaration. L0 has no object identity, so types compare
-# those records by content: classes, protocols, and enums by type_name, which
-# is unique because they are declared only at file scope, and functions and
+# those records by content: classes, protocols, and enums by type_name and
+# `library`, which together are unique because they are declared only at
+# file scope and a module name is unique among the program's modules and
+# among the library's, and functions and
 # type parameters by an `id` the binder gives each declaration. A nested
 # function's type_name is not unique: redefining one in the same function
 # makes a second function that is not the same type, though both display
@@ -86,7 +88,12 @@ class Lazy:
     id: int = 0
 
 # A class, an exception class, or a standard library native type. A native
-# type has no fields, and its methods lower to helpers named after `prefix`.
+# type has no fields that other modules see. Its methods lower to helpers
+# named after `prefix`, or, when `prefix` is "", it is a class a library
+# module declares, ordinary inside that module. `library` marks a
+# declaration of core or the standard library, whose module names a
+# program's own modules may reuse; it tells apart declarations with the same
+# type_name, as Protocol's and Enum's does.
 class Class:
     name: str
     type_name: str
@@ -96,6 +103,7 @@ class Class:
     exception: bool
     native: bool
     prefix: str
+    library: bool = False
 
 class Field:
     name: str
@@ -107,11 +115,13 @@ class Protocol:
     type_name: str
     typevars: list[TypeVar]
     methods: list[Function]
+    library: bool = False
 
 class Enum:
     name: str
     type_name: str
     members: list[str]
+    library: bool = False
 
 # A function or method. `id` is the binder's id of its declaration, unique
 # among functions; the standard library's functions have id 0, since native
@@ -321,16 +331,31 @@ def is_key(t: Type) -> bool:
 def key(t: Type) -> str:
     t = expand(t)
     if isinstance(t, ClassType):
-        return "record " + t.decl.type_name
+        return "record " + identity(t.decl.type_name, t.decl.library)
     if isinstance(t, ProtocolType):
-        return "protocol " + t.decl.type_name
+        return "protocol " + identity(t.decl.type_name, t.decl.library)
     if isinstance(t, EnumType):
-        return "enum " + t.decl.type_name
+        return "enum " + identity(t.decl.type_name, t.decl.library)
     if isinstance(t, FunctionType):
         return "function " + str(t.fn.id)
     if isinstance(t, TypeVar):
         return "typevar " + var_key(t)
     return kind(t)
+
+# A text that tells declarations apart by their type_name and `library`.
+def identity(type_name: str, library: bool) -> str:
+    if library:
+        return "library " + type_name
+    return type_name
+
+def same_class(a: Class, b: Class) -> bool:
+    return a.type_name == b.type_name and a.library == b.library
+
+def same_protocol(a: Protocol, b: Protocol) -> bool:
+    return a.type_name == b.type_name and a.library == b.library
+
+def same_enum(a: Enum, b: Enum) -> bool:
+    return a.type_name == b.type_name and a.library == b.library
 
 def same(a: Type, b: Type) -> bool:
     return same_in(a, b, [])
@@ -354,11 +379,11 @@ def same_in(a: Type, b: Type, assumed: list[str]) -> bool:
     if isinstance(a, TupleType):
         return isinstance(b, TupleType) and all_same(a.elements, b.elements, assumed)
     if isinstance(a, ClassType):
-        return isinstance(b, ClassType) and a.decl.type_name == b.decl.type_name and all_same(a.args, b.args, assumed)
+        return isinstance(b, ClassType) and same_class(a.decl, b.decl) and all_same(a.args, b.args, assumed)
     if isinstance(a, ProtocolType):
-        return isinstance(b, ProtocolType) and a.decl.type_name == b.decl.type_name and all_same(a.args, b.args, assumed)
+        return isinstance(b, ProtocolType) and same_protocol(a.decl, b.decl) and all_same(a.args, b.args, assumed)
     if isinstance(a, EnumType):
-        return isinstance(b, EnumType) and a.decl.type_name == b.decl.type_name
+        return isinstance(b, EnumType) and same_enum(a.decl, b.decl)
     if isinstance(a, CallableType):
         return isinstance(b, CallableType) and all_same(a.params, b.params, assumed) and same_in(a.result, b.result, assumed)
     if isinstance(a, FunctionType):
@@ -429,13 +454,13 @@ def function_result(t: FunctionType) -> Type:
 
 # The signature of method `name` on `t`, a class, native type, or protocol,
 # with `t`'s type arguments substituted, or None. A declared generic method
-# has no single signature, so it is left out; a native one is not, and its
+# has no single signature, so it is left out; a helper's is not, and its
 # types are not substituted. Built-in collections, strings, and bytes have
 # an `iter` method.
 def method(t: Type, name: str) -> Method | None:
     if isinstance(t, ClassType):
         fns = t.decl.methods
-        native = t.decl.native
+        native = t.decl.native and t.decl.prefix != ""
     elif isinstance(t, ProtocolType):
         fns = t.decl.methods
         native = False

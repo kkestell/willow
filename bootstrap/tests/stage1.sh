@@ -45,11 +45,12 @@ core_source() {
 }
 
 # Writes the module lib_source to DIR/lib_source.wlo: the text of each module
-# in lib/ by name, which the loader finds standard library modules in.
+# in lib/ by name, which the loader finds standard library modules in, and of
+# the test modules in bootstrap/tests/lib/.
 lib_source() {
     {
         printf 'def text(name: str) -> str:\n'
-        for file in lib/*.wlo; do
+        for file in lib/*.wlo bootstrap/tests/lib/*.wlo; do
             printf '    if name == "%s":\n        return "' "$(basename "$file" .wlo)"
             quote "$file"
             printf '"\n'
@@ -193,8 +194,8 @@ check_bind_driver() {
 }
 
 # Builds willow1 from stage 1's sources and the generated modules and runs
-# all top-level programs in bootstrap/tests/programs/, core/, and check/
-# through run.sh, then the programs in tests/programs/ except those named in
+# all top-level programs in bootstrap/tests/programs/, core/, and check/, and
+# each bootstrap/tests/modules/*/main.wlo, through run.sh, then the programs in tests/programs/ except those named in
 # bootstrap/tests/stage1-pending, which stage 1 does not pass yet.
 # Under --lua there is no willow1, since the Lua implementation has no core
 # module for willow1 to import.
@@ -227,7 +228,7 @@ check_willow1() {
     check_coroutines
     echo "willow1:"
     STAGE1=1 WILLOW0=$work/willow1 bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
-        bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo || failed=1
+        bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo bootstrap/tests/modules/*/main.wlo || failed=1
     echo "willow1 tests/programs:"
     # shellcheck disable=SC2046 # the paths have no spaces
     WILLOW0=$work/willow1 bootstrap/tests/run.sh $(conformance) || failed=1
