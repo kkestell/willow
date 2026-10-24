@@ -1,5 +1,4 @@
-# `willow init`: creates a project in the current directory (spec §12), as
-# compiler/init.lua does, with AGENTS.md written for the native compiler.
+# `willow init`: creates a project in the current directory (spec §12).
 
 import fs
 import subprocess

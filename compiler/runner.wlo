@@ -1,6 +1,5 @@
-# The test command's discovery and runs (spec §12), the counterpart of
-# compiler/runner.lua: finds test files, and runs each test of a built test
-# program in its own process.
+# The test command's discovery and runs (spec §12): finds test files and
+# runs each test of a built test program in its own process.
 
 import fs
 import io

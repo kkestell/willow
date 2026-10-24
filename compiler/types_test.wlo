@@ -1,6 +1,5 @@
-# Checks types' equality, display, substitution, and assignability, and a
-# coroutine types. Each expected display text is what the
-# Lua implementation prints for the same type in a diagnostic, as in
+# Checks types' equality, display, substitution, assignability, and
+# coroutine types. Display text is used in diagnostics, as in
 # "expected int, received function Box[int].get". Declarations are built by
 # hand as the binder builds them, with the ids the binder would give their
 # functions and type parameters written out. Prints each mismatch and exits
@@ -120,8 +119,8 @@ def equality(r: Results):
     f = function(21, "f", [], prim("None"))
     r.check("functions", types.same(types.FunctionType(f, False, None), types.FunctionType(f, False, None)), True)
     r.check("bound", types.same(types.FunctionType(f, False, None), types.FunctionType(f, True, None)), False)
-    # A nested `def g` defined twice in `f` makes two functions named f.g, which
-    # Lua reports as "expected function f.g, received function f.g".
+    # A nested `def g` defined twice in `f` makes two distinct functions
+    # with the same display name f.g.
     first_t = types.TypeVar(6, "T", None)
     second_t = types.TypeVar(7, "T", None)
     first = types.Function(22, "g", "f.g", [first_t], [param("x", first_t)], first_t)
@@ -156,7 +155,7 @@ def substitution(r: Results):
     r.shows("method result union", apply.result, "dict[str, str | None]")
     r.shows("bound specialized method", types.FunctionType(specialized.decl.methods[1], True, specialized), "function Pair[int, str].apply")
     # A bound method mentions a type parameter through its receiver's
-    # signature, as `function Box[T].get` does in Lua.
+    # signature, as in `function Box[T].get`.
     generic_box = box()
     own = types.class_self(generic_box)
     get = types.FunctionType(generic_box.methods[0], True, own)

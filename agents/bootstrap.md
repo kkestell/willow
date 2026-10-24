@@ -1,12 +1,11 @@
 # Bootstrap design: a self-hosting native Willow
 
-Status: design agreed 2026-10-23, not yet started. This document records the
-plan for reimplementing Willow as a multi-stage, self-hosting compiler that
-emits QBE intermediate language and links against libgc. It replaces the
-Lua/LuaJIT implementation in `compiler/` and `runtime/` once the native
-compiler passes the existing test programs. `docs/spec.md` remains the
-language specification; the spec changes this plan requires are listed in
-§9.
+Status: milestone 7 complete. The self-hosting native compiler is in
+`compiler/`, the standard library is in `lib/`, and the test runner is in
+`tests/runner.wlo`. Stages 0 and 1 build stage 2 from source, and both
+compiler fixpoints and all conformance programs pass. The Lua implementation
+and vendored LuaJIT have been removed. `docs/spec.md` remains the language
+specification; the changes this design required are recorded in §9.
 
 ## 1. Goals and non-goals
 
@@ -151,7 +150,7 @@ slot holds.
 
 Integers are the symmetric range `-(2^63 - 1)` through `2^63 - 1`. The value
 `-2^63` is treated as overflow so the spec's guarantees hold: `abs` cannot
-overflow and there is no asymmetric minimum. This widens the current `int`
+overflow and there is no asymmetric minimum. This widens the original `int`
 range (§9).
 
 Heap objects start with one header word that points to a type descriptor. The
@@ -270,8 +269,8 @@ Stack overflow and out-of-memory remain fatal as spec §10 says. Detecting
 overflow on coroutine stacks with a guard page is deferred until it is a
 demonstrated problem.
 
-The async event loop is written in Willow over `poll` or `kqueue` through
-`extern`. The existing design in `runtime/aio.lua` carries over.
+The async event loop is written in Willow in `lib/aio.wlo` over `poll`
+through `extern`.
 
 Float formatting is Python `repr`: take the shortest `%.<n>g` through
 `snprintf`, from 1 digit up, that round-trips through `strtod`. Starting at 15
@@ -306,11 +305,9 @@ through the escape hatch in §2.
   `tests/programs/`. They exercise L0 and `core` under stages 0 and 1.
 - `core` has its own tests in L0, using `assert`, run under stages 0 and 1.
   Because a failure in core could be in core or in the compiler that compiled
-  it, and the Lua implementation has no intrinsics to adjudicate, core stays
-  boring: no cleverness that makes it hard to read a failing test.
-- `tests/programs/` is the conformance suite for stage 1 and stage 2. The
-  Lua implementation stays in the repository as the oracle until the native
-  compiler passes all of them.
+  it, core stays boring: no cleverness that makes it hard to read a failing
+  test.
+- `tests/programs/` and `tests/modules/` are the native conformance suite.
 - Fixpoint: a compiler compiled by itself must emit byte-identical `.ssa` for
   its own source. Emission is therefore deterministic: no hash-ordered
   iteration anywhere in the compiler, which Willow's insertion-ordered dicts
@@ -322,9 +319,8 @@ through the escape hatch in §2.
   `.err`, and `.stage1.err` files, and each command case's script, comparing
   its output with `expected`.
   `bootstrap/tests/stage1.sh` builds stage 1's unit tests with `willow0` and
-  runs them natively, or under the Lua implementation with `--lua`, and
-  checks `willow1`'s fixpoint by building it with itself and comparing the IL
-  both compilers emit for the same source. `bootstrap/tests/stage2.sh` builds
+  runs them natively and checks `willow1`'s fixpoint by building it with itself
+  and comparing the IL both compilers emit for the same source. `bootstrap/tests/stage2.sh` builds
   stage 2's unit tests and drivers with `willow1` and runs them, the drivers
   over every `.wlo` file in `tests/` and `examples/`. It builds stage 2's
   driver as `willow2`, with the test library modules, and runs the runner
@@ -337,13 +333,11 @@ through the escape hatch in §2.
 - `make` builds the chain in §2 into `build/`, with `build/willow` the stage 2
   that built itself, and `make install` installs it. `make test` runs the
   runner with `build/willow` over every program in `tests/programs/` and
-  `tests/modules/*/main.wlo` except those named in `bootstrap/tests/pending`,
-  which stage 2 does not pass yet, and the `willow` command cases in
+  `tests/modules/*/main.wlo` and the `willow` command cases in
   `bootstrap/tests/commands/`. `make bootstrap` also checks the stage 2
   fixpoint, and `make bootstrap-test` runs the runner with `willow0` over
   `bootstrap/tests/programs/` and `bootstrap/tests/core/`, then `stage1.sh`,
-  `stage2.sh`, and `make test`. None of these needs LuaJIT. `make lua-test`
-  runs the Lua implementation's tests until it is deleted.
+  `stage2.sh`, and `make test`.
 
 ## 9. Specification changes
 
@@ -382,8 +376,10 @@ bootstrap/
   stage1/      stage 1 compiler in L0
   prepare.sh   writes the generated modules that embed core and lib/
   tests/       stage1.sh, stage2.sh, and the test programs
-compiler/      stage 2 in full Willow (replaces the Lua compiler when ready)
-lib/           standard library in Willow (replaces runtime/*.lua)
+compiler/      stage 2 compiler in Willow
+lib/           standard library in Willow
+tests/         native runner, conformance programs, and module cases
+tools/         Unicode case-table generator in Willow
 ```
 
 ### Portability
@@ -407,9 +403,6 @@ that from being rediscovered per task:
 - Integer-typed `extern` parameters that are C `int`, `mode_t`, or `socklen_t`
   are declared `cint`. `size_t`, `ssize_t`, `off_t`, and pointers are `int`
   or `ptr`.
-
-The Lua `compiler/` and `runtime/` stay in place until stage 2 passes
-`tests/programs/`, then are deleted along with the LuaJIT vendor tree.
 
 ## 11. Milestones
 

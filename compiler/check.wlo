@@ -1,9 +1,7 @@
-# Checks the bodies of a bound program's functions, the counterpart of
-# compiler/check.lua for the part of L0 that stage 1 compiles so far, and
-# annotates the tree for the emitter: each checked expression's `ty` and
-# `expected`, and the type of each parameter's and local's symbol. Errors have
-# the Lua checker's wording, and checking stops at the first one. A construct
-# outside that part is reported as not supported yet.
+# Checks the bodies of a bound program's functions and annotates the tree
+# for the emitter: each checked expression's `ty` and `expected`, and the
+# type of each parameter's and local's symbol. Checking stops at the first
+# error.
 
 import ast
 import bind

@@ -222,7 +222,7 @@ def main():
         ["main.wlo:1:26: error: union members Iterable[int] and list[str] overlap", "def f(x: Iterable[int] | list[str]):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:2:24: error: union members Iterable[int] and list[str] overlap", "def main():\n    x: Iterable[int] | list[str] = []\n"],
         # Bounds are checked once the lazy types in the argument are
-        # resolved; the Lua binder rejects these programs.
+        # resolved.
         ["main.wlo:3:14: error: type argument list[float] does not satisfy the bound Iterable[int | float] of 'T'", "class Box[T: Iterable[int | float]]:\n    item: T\ndef f(b: Box[list[float]]):\n    pass\ndef main():\n    pass\n"],
         ["main [b] [] { b: Box[list[int]] = Box([1]) }", "class Box[T: Iterable[int]]:\n    item: T\ndef main():\n    b: Box[list[int]] = Box([1])\n"],
         ["main.wlo:1:16: error: expected int, received str", "def f(x: int = 'a'):\n    pass\ndef main():\n    pass\n"],
@@ -241,8 +241,6 @@ def main():
         ["main.wlo:4:20: error: expected int, received str", "def main():\n    def g[T](x: T) -> T:\n        return x\n    def h(x: int = 'a'):\n        pass\n"],
         ["main.wlo:2:11: error: type parameter 'T' hides another type parameter", "def f[T](x: T) -> T:\n    def g[T](y: T) -> T:\n        return y\n    return x\ndef main():\n    pass\n"],
         ["main.wlo:2:15: error: dictionary keys must be int, str, or an enum", "type K = int | str\ndef f(d: dict[K, int]):\n    pass\ndef main():\n    pass\n"],
-        # The Lua implementation has neither extern nor __type; these are
-        # stage 0's errors.
         ["main.wlo:1:12: error: extern functions are only allowed in core", "extern def write(fd: int) -> int\ndef main():\n    pass\n"],
         ["main.wlo:2:9: error: intrinsic '__type' is only available in core", "def main():\n    x = __type(str)\n"],
     ]

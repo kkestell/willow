@@ -1,5 +1,3 @@
-/vendor/luajit/
-/runtime/stub
 /build/
 /benchmarks/build/
 /bootstrap/stage0/target/

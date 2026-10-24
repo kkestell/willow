@@ -185,7 +185,7 @@ class Target:
 
 # The checker's: `ty`, the expression's type where it is evaluated, and
 # `expected`, the type a value of it was checked against where it is
-# assigned, passed, returned, or stored, as compiler/check.lua records.
+# assigned, passed, returned, or stored.
 class Expr:
     line: int
     col: int

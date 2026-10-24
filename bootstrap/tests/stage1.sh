@@ -1,21 +1,22 @@
 #!/bin/sh
 # Runs stage 1's unit tests and checks that willow1 compiles itself. Stage 1
 # is frozen: its job is to build stage 2, which bootstrap/tests/stage2.sh
-# tests along with the programs. By default each test is compiled with
-# willow0 and run natively; with --lua each runs under the Lua implementation
-# (./willow run, after make), which helps when a stage 0 bug is suspected.
-# Native runs also check that willow1 and a self-built willow1 emit identical
-# IL for their own source. A test exits with status 1 on a failure.
+# tests along with the programs. Each test is compiled with willow0 and run
+# natively. The fixpoint check builds willow1 with itself and compares the
+# IL both compilers emit for their own source. A test exits with status 1 on
+# a failure.
 #
 # WILLOW0 names the compiler; it defaults to the release build of stage 0.
 
 set -u
+if [ "$#" -ne 0 ]; then
+    echo "usage: stage1.sh" >&2
+    exit 1
+fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root" || exit 1
 willow0=${WILLOW0:-$root/bootstrap/stage0/target/release/willow0}
 case $willow0 in /*) ;; *) willow0=$PWD/$willow0 ;; esac
-lua=0
-[ "${1:-}" = --lua ] && lua=1
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 failed=0
@@ -24,9 +25,8 @@ failed=0
 src=$work/src
 bootstrap/prepare.sh bootstrap/stage1 "$src" || exit 1
 
-# Builds stage 1's NAME.wlo when native.
+# Builds stage 1's NAME.wlo.
 build() {
-    [ $lua -eq 1 ] && return 0
     "$willow0" build "$src/$1.wlo" -o "$work/$1" && return 0
     echo "FAIL $1: does not compile"
     failed=1
@@ -37,11 +37,7 @@ build() {
 run() {
     name=$1
     shift
-    if [ $lua -eq 1 ]; then
-        ./willow run "$src/$name.wlo" "$@"
-    else
-        "$work/$name" "$@"
-    fi
+    "$work/$name" "$@"
 }
 
 check_test() {
@@ -49,10 +45,7 @@ check_test() {
     run "$1" || failed=1
 }
 
-# Under --lua there is no willow1, since the Lua implementation has no core
-# module for willow1 to import.
 check_willow1() {
-    [ $lua -eq 1 ] && return
     if ! "$willow0" build "$src/willow1.wlo" -o "$work/willow1"; then
         echo "FAIL willow1: does not compile"
         failed=1

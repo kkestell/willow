@@ -1,7 +1,6 @@
 # Writes syntax trees compactly, with every operation parenthesized, for the
-# parser's tests and for comparing trees with the Lua implementation's. With
-# positions, each expression, statement, type, parameter, and declaration is
-# followed by @line:col.
+# parser's tests. With positions, each expression, statement, type, parameter,
+# and declaration is followed by @line:col.
 
 import ast
 import types

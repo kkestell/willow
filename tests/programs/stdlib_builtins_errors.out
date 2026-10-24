@@ -4,5 +4,5 @@ cannot compare NaN
 cannot round float to int
 cannot round float to int
 integer overflow
-9007199254740991
+9223372036854775807
 integer overflow

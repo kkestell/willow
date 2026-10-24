@@ -1,4 +1,4 @@
-# The willow command (spec §12), with compiler/cli.lua's usage and messages.
+# The willow command (spec §12).
 #
 # Core is compiled into every program. Its text and the standard library's
 # are compiled into the compiler (see loader.wlo).
@@ -294,7 +294,7 @@ def write_output(output: str, text: str):
         fail(cannot_write(output, error))
 
 # The message for an OSError from fs while writing `output` through its
-# temporary file, which names that file as cli.lua does.
+# temporary file, including that file's name.
 def cannot_write(output: str, error: OSError) -> str:
     parts = error.message.split(": ")
     return f"error: cannot write {output}: {output}.tmp: {parts[len(parts) - 1]}"

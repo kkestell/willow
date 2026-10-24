@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs the native HTTP client against the Willow server, without LuaJIT.
+# Runs the HTTP clients against the Willow server.
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
