@@ -973,8 +973,11 @@ class Emitter:
 
     def to_str(self, arg: ast.Expr) -> str:
         value = self.expr(arg)
-        ty = arg.ty
-        assert ty is not None, "unchecked argument"
+        actual = arg.ty
+        assert actual is not None, "unchecked argument"
+        ty = types.expand(actual)
+        if isinstance(ty, types.UnionType):
+            return self.core_call("union_to_str", [value], True)
         kind = types.kind(ty)
         if kind == "int":
             return self.core_call("int_to_str", [value], True)
