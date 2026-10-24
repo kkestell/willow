@@ -858,10 +858,20 @@ def tuple_set(value: ptr, position: int, item: word):
 def tuple_eq(a: ptr, b: ptr) -> bool:
     if tuple_len(a) != tuple_len(b):
         return False
-    kinds = __ptr(__load8(a, 16))
+    a_kinds = __ptr(__load8(a, 16))
+    b_kinds = __ptr(__load8(b, 16))
     i = 0
     while i < tuple_len(a):
-        if not slots_equal(tuple_get(a, i), tuple_get(b, i), __int(__load8(kinds, i * 8))):
+        left = tuple_get(a, i)
+        right = tuple_get(b, i)
+        a_kind = __int(__load8(a_kinds, i * 8))
+        b_kind = __int(__load8(b_kinds, i * 8))
+        if a_kind == b_kind:
+            equal = slots_equal(left, right, a_kind)
+        else:
+            # Only references and None widen without changing their slots.
+            equal = union_eq(__ptr(left), __ptr(right))
+        if not equal:
             return False
         i = i + 1
     return True
