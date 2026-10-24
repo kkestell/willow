@@ -1,0 +1,3 @@
+iteration_creation_traceback.wlo:3:9: error: ValueError: creation
+  in Source.iter at iteration_creation_traceback.wlo:3:9
+  called from main at iteration_creation_traceback.wlo:6:18

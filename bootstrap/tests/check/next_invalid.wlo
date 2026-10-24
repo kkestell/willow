@@ -1,0 +1,6 @@
+class Source:
+    def next(self) -> int:
+        return 1
+
+def main():
+    next(Source())

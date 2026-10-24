@@ -1,1 +1,1 @@
-extend_element_type.wlo:4:15: error: expected Iterable[int | None], received list[int]
+extend_element_type.wlo:4:15: error: expected Iterable[int | None], received list[str]

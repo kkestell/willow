@@ -4,7 +4,6 @@ aio_sleep
 aio_sleep_invalid
 aio_sockets
 bound_methods
-builtin_iteration
 cancel_after_raising_finally
 cli_parsing
 coroutine_traceback
@@ -17,8 +16,6 @@ generic_function_values
 generics
 host
 http_values
-iteration
-iteration_traceback
 json_example
 json_library
 named_arguments
@@ -37,7 +34,6 @@ stdlib_aio_semaphore
 stdlib_aio_semaphore_deadlock
 stdlib_builtins
 stdlib_builtins_errors
-stdlib_builtins_order
 stdlib_fs
 stdlib_fs_symlinks
 stdlib_http_async

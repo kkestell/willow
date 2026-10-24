@@ -1,0 +1,94 @@
+class Broken:
+    def iter(self) -> Iterator[int]:
+        raise StopIteration("creation")
+
+class Failing:
+    count: int = 0
+
+    def iter(self, unused: int = 0) -> Failing:
+        return self
+
+    def next(self, value: int = 7) -> int:
+        self.count = self.count + 1
+        if self.count == 1:
+            return value
+        raise ValueError("advance")
+
+class PairSource[T]:
+    values: list[T]
+
+    def iter(self) -> Iterator[T]:
+        return iter(self.values)
+
+class Factory[T: Iterator[int]]:
+    value: T
+
+    def iter(self) -> T:
+        return self.value
+
+def wrap[T: Iterator[int]](iterator: T) -> Iterator[tuple[int, int]]:
+    return enumerate(Factory(iterator))
+
+def bounded_optional[T: Iterable[int | None]](source: T) -> int | None:
+    for item in source:
+        return item
+    return None
+
+def pairs[T](source: Iterable[T]) -> Iterator[tuple[T, T]]:
+    return zip(source, source)
+
+def numbered[T](source: Iterable[T]) -> Iterator[tuple[int, T]]:
+    return enumerate(source, 4)
+
+def take(source: Iterable[tuple[float, int | None]]) -> tuple[float, int | None]:
+    return next(iter(source))
+
+def main():
+    try:
+        for n in Broken():
+            pass
+    except StopIteration as stop:
+        assert stop.message == "creation"
+    value = bounded_optional([7])
+    assert value is not None
+    assert value == 7
+    assert next(wrap(Failing())) == (0, 7)
+    failure = Failing()
+    assert next(failure) == 7
+    try:
+        for n in failure:
+            pass
+    except ValueError as error:
+        assert error.message == "advance"
+    assert take(((1.5, 2),)) == (1.5, 2)
+    mixed = iter((1.5, 2))
+    assert isinstance(next(mixed), float)
+    assert isinstance(next(mixed), int)
+    values = PairSource([(2.5, 3)])
+    assert next(pairs(values)) == ((2.5, 3), (2.5, 3))
+    assert next(numbered(values)) == (4, (2.5, 3))
+    convert: (list[int]) -> Iterator[int] = iter
+    advance: (Iterator[int]) -> int = next
+    assert advance(convert([9])) == 9
+    items: list[int | None] = [None]
+    items.extend([3])
+    assert items[1] == 3
+    collected = [1, 2]
+    collected.extend(collected)
+    assert len(collected) == 4
+    before = len(collected)
+    try:
+        collected.extend(Failing())
+    except ValueError:
+        pass
+    assert len(collected) == before
+    values_by_key = {"a": 1, "b": 2}
+    assert list(values_by_key.keys())[0] == "a"
+    assert list(values_by_key.values())[1] == 2
+    assert list(values_by_key.items())[1] == ("b", 2)
+    view = values_by_key.items()
+    values_by_key["c"] = 3
+    try:
+        next(view)
+    except RuntimeError as mutation:
+        assert mutation.message == "dictionary changed size during iteration"
