@@ -13,6 +13,8 @@ class Emitter:
     # `__os`, which an `if` that compares it with a literal folds.
     target_os: str
     core: ast.Module
+    # The entry module's name, which its types' names leave out.
+    entry: str
     # The module name of each declared function, by its id.
     module_names: dict[int, str]
     lines: list[str]
@@ -168,7 +170,7 @@ class Emitter:
         elif isinstance(node, ast.For):
             self.unchecked("for loop")
         elif isinstance(node, ast.Assert):
-            self.unchecked("assert")
+            self.emit_assert(node)
         elif isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
                 self.unchecked("break")
@@ -188,6 +190,21 @@ class Emitter:
         else:
             self.expr(returned)
             self.jump("ret")
+
+    # The message is evaluated only when the condition is false.
+    def emit_assert(self, node: ast.Assert):
+        condition = self.expr(node.condition)
+        ok = self.new_label()
+        failed = self.new_label()
+        self.jump(f"jnz {condition}, {ok}, {failed}")
+        self.label(failed)
+        message = self.string("assertion failed")
+        written = node.message
+        if written is not None:
+            message = self.expr(written)
+        self.core_call("fail", [self.string("AssertionError"), message], False)
+        self.jump("hlt")
+        self.label(ok)
 
     # Fails on a construct the checker does not accept yet.
     def unchecked(self, what: str) -> str:
@@ -249,8 +266,45 @@ class Emitter:
 
     # Expressions
 
-    # Writes the instructions that compute `expr` and returns its operand.
+    # Writes the instructions that compute `expr` and returns its operand, as
+    # a value of the type it is checked against, if any.
     def expr(self, expr: ast.Expr) -> str:
+        value = self.node_value(expr)
+        ty = expr.ty
+        expected = expr.expected
+        if ty is None or expected is None:
+            return value
+        return self.convert(value, ty, expected)
+
+    # A value of type `source` as a value of type `target`: a scalar is boxed
+    # when it enters a union and unboxed when narrowing takes it out of one.
+    # Every other value is the same slot in both (agents/bootstrap.md §4).
+    def convert(self, value: str, source: types.Type, target: types.Type) -> str:
+        if is_union(target) and not is_union(source):
+            descriptor = self.box_descriptor(source)
+            if descriptor != "":
+                return self.core_call("box", [descriptor, value], True)
+        elif is_union(source) and not is_union(target):
+            if self.box_descriptor(target) != "":
+                return self.core_call("unbox", [value], True)
+        return value
+
+    # The descriptor of a scalar type that is boxed in a union, or "".
+    def box_descriptor(self, t: types.Type) -> str:
+        t = types.expand(t)
+        if isinstance(t, types.EnumType):
+            return self.descriptor(t.decl.type_name)
+        if types.kind(t) in ["int", "float", "bool"]:
+            return self.descriptor(types.kind(t))
+        return ""
+
+    # The descriptor symbol of the built-in type, class, or enum `type_name`.
+    def descriptor(self, type_name: str) -> str:
+        if type_name in builtin_types() or "." in type_name:
+            return f"$W.{type_name}.type"
+        return f"$W.{self.entry}.{type_name}.type"
+
+    def node_value(self, expr: ast.Expr) -> str:
         node = expr.node
         if isinstance(node, ast.Int):
             return node.text
@@ -261,11 +315,15 @@ class Emitter:
                 return "1"
             return "0"
         elif isinstance(node, ast.Name):
-            if node.symbol is None:
+            symbol = node.symbol
+            if symbol is None:
                 return self.string(self.target_os)
             t = self.temp()
             self.line(f"{t} =l loadl %v.{node.name}")
-            return t
+            declared = symbol.ty
+            ty = expr.ty
+            assert declared is not None and ty is not None, "unchecked name"
+            return self.convert(t, declared, ty)
         elif isinstance(node, ast.Binary):
             return self.binary(node)
         elif isinstance(node, ast.Call):
@@ -289,11 +347,11 @@ class Emitter:
         elif isinstance(node, ast.Slice):
             return self.unchecked("slice")
         elif isinstance(node, ast.Unary):
-            return self.unchecked(f"operator '{node.op}'")
+            return self.unary(node)
         elif isinstance(node, ast.Is):
-            return self.unchecked("'is'")
+            return self.emit_is(node)
         elif isinstance(node, ast.IsInstance):
-            return self.unchecked("isinstance")
+            return self.emit_isinstance(node)
         elif isinstance(node, ast.ListDisplay):
             return self.unchecked("list display")
         elif isinstance(node, ast.DictDisplay):
@@ -302,8 +360,13 @@ class Emitter:
 
     def binary(self, node: ast.Binary) -> str:
         op = node.op
+        if op == "and" or op == "or":
+            return self.logic(node)
         left_type = node.left.ty
-        assert left_type is not None, "unchecked operand"
+        right_type = node.right.ty
+        assert left_type is not None and right_type is not None, "unchecked operand"
+        if (op == "==" or op == "!=") and (may_be_none(left_type) or may_be_none(right_type)):
+            return self.union_equality(node)
         kind = types.kind(left_type)
         left = self.expr(node.left)
         right = self.expr(node.right)
@@ -321,6 +384,71 @@ class Emitter:
         t = self.temp()
         self.line(f"{t} =l {comparison_instruction(op)} {left}, {right}")
         return t
+
+    # The left operand decides when it is false for `and` and true for `or`,
+    # and is then the result.
+    def logic(self, node: ast.Binary) -> str:
+        t = self.temp()
+        left = self.expr(node.left)
+        self.line(f"{t} =l copy {left}")
+        rhs = self.new_label()
+        end = self.new_label()
+        if node.op == "and":
+            self.jump(f"jnz {t}, {rhs}, {end}")
+        else:
+            self.jump(f"jnz {t}, {end}, {rhs}")
+        self.label(rhs)
+        right = self.expr(node.right)
+        self.line(f"{t} =l copy {right}")
+        self.jump(f"jmp {end}")
+        self.label(end)
+        return t
+
+    # Both operands are converted to one union type, or to None, by the
+    # checker's `expected`.
+    def union_equality(self, node: ast.Binary) -> str:
+        left = self.expr(node.left)
+        right = self.expr(node.right)
+        equal = self.core_call("union_eq", [left, right], True)
+        if node.op == "==":
+            return equal
+        t = self.temp()
+        self.line(f"{t} =l ceql {equal}, 0")
+        return t
+
+    def unary(self, node: ast.Unary) -> str:
+        if node.op == "not":
+            operand = self.expr(node.operand)
+            t = self.temp()
+            self.line(f"{t} =l ceql {operand}, 0")
+            return t
+        return self.unchecked(f"operator '{node.op}'")
+
+    def emit_is(self, node: ast.Is) -> str:
+        operand = self.expr(node.operand)
+        t = self.temp()
+        if node.negated:
+            self.line(f"{t} =l cnel {operand}, 0")
+        else:
+            self.line(f"{t} =l ceql {operand}, 0")
+        return t
+
+    # The checker has made sure the type is a member of the operand's, so
+    # only a union needs a test.
+    def emit_isinstance(self, node: ast.IsInstance) -> str:
+        operand = self.expr(node.operand)
+        ty = node.operand.ty
+        assert ty is not None, "unchecked operand"
+        if not is_union(ty):
+            return "1"
+        named = node.type_name
+        type_name = named.name
+        record = named.record
+        if isinstance(record, types.Class):
+            type_name = record.type_name
+        elif isinstance(record, types.Enum):
+            type_name = record.type_name
+        return self.core_call("is_instance", [operand, self.descriptor(type_name)], True)
 
     # `left instr right` on ints, failing with an OverflowError when the
     # result leaves the symmetric int range.
@@ -469,6 +597,10 @@ class Emitter:
             value = self.core_call("int_to_str", [value], True)
         elif kind == "bool":
             value = self.core_call("bool_to_str", [value], True)
+        elif kind == "union":
+            value = self.core_call("union_to_str", [value], True)
+        elif kind == "None":
+            value = self.string("None")
         return self.core_call("print_str", [value], False)
 
     def intrinsic(self, node: ast.Call, target: stdlib.Builtin) -> str:
@@ -522,7 +654,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
             if isinstance(decl, ast.FunctionDecl):
                 module_names[decl.id] = module.name
     assert core is not None, "the program has no core module"
-    result = Emitter(target_os, core, module_names, [], {}, [], {}, 0, 0, False, False)
+    result = Emitter(target_os, core, modules[0].name, module_names, [], {}, [], {}, 0, 0, False, False)
     for name in builtin_types():
         result.string(name)
     result.require("init")
@@ -531,6 +663,12 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
 # The built-in types with descriptors, which every program emits.
 def builtin_types() -> list[str]:
     return ["int", "float", "bool", "str", "list", "dict"]
+
+def is_union(t: types.Type) -> bool:
+    return isinstance(types.expand(t), types.UnionType)
+
+def may_be_none(t: types.Type) -> bool:
+    return is_union(t) or types.kind(t) == "None"
 
 def is_none(t: types.Type) -> bool:
     return isinstance(t, types.Prim) and t.name == "None"

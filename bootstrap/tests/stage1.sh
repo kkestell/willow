@@ -156,23 +156,29 @@ check_bind_driver() {
 # The programs in bootstrap/tests/ that willow1 compiles, one per line. Each
 # runs through run.sh as it does with willow0.
 willow1_programs="
-programs/sum_to.wlo
-programs/argument_type.wlo
-programs/missing_return.wlo
-programs/return_none.wlo
 programs/alias_call.wlo
 programs/alias_cycle.wlo
+programs/argument_type.wlo
+programs/assert_message.wlo
 programs/enum_member.wlo
 programs/import_name_clash.wlo
+programs/is_none_not_optional.wlo
 programs/isinstance_none.wlo
+programs/isinstance_not_member.wlo
 programs/keyword_after_condition.wlo
+programs/loop_assignment_narrowing.wlo
 programs/maybe_unassigned.wlo
 programs/missing_comma.wlo
+programs/missing_return.wlo
 programs/module_and_namespace.wlo
 programs/operator_types.wlo
 programs/private_name.wlo
+programs/return_none.wlo
+programs/sum_to.wlo
 programs/type_intrinsic_outside_core.wlo
+programs/union_arithmetic.wlo
 programs/union_duplicate_member.wlo
+programs/union_flow.wlo
 programs/unknown_escape.wlo
 programs/unreachable.wlo
 "
