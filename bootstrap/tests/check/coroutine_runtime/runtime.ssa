@@ -132,6 +132,8 @@ function $coroutine_test() {
     %released =l loadl %weak2
     %released.ok =l ceql %released, 0
     call $require(l %released.ok)
+    %retained.finished =l call $W.core.coroutine_finished(l %second)
+    call $require(l %retained.finished)
     call $W.core.coroutine_yield(l 0)
     %outside =l loadl $W.pending
     %outside.ok =l cnel %outside, 0
