@@ -1,0 +1,63 @@
+class Manager:
+    name: str
+    log: list[str]
+
+    def enter(self) -> str:
+        self.log.append("enter " + self.name)
+        return self.name
+
+    def exit(self, error: Exception | None):
+        assert error is None
+        self.log.append("exit " + self.name)
+
+def guarded(log: list[str]) -> Generator[int]:
+    try:
+        with Manager("outer", log), Manager("inner", log):
+            try:
+                yield 1
+                log.append("resumed")
+            except Exception:
+                log.append("caught inner")
+            finally:
+                log.append("finally")
+    except Exception:
+        log.append("caught outer")
+
+def own(manager: ContextManager[Generator[int]]):
+    with manager as source:
+        assert next(source) == 1
+
+def main():
+    log: list[str] = []
+    source = guarded(log)
+    assert len(log) == 0
+    own(source)
+    assert ",".join(log) == "enter outer,enter inner,finally,exit inner,exit outer"
+    try:
+        next(source)
+        assert False
+    except StopIteration:
+        pass
+
+    def cleanup() -> Generator[int]:
+        try:
+            yield 1
+        finally:
+            def inner() -> Generator[int]:
+                yield 2
+            assert next(inner()) == 2
+    pending = cleanup()
+    assert next(pending) == 1
+    pending.close()
+
+    holder: list[Generator[int]] = []
+    def reentrant() -> Generator[int]:
+        holder[0].close()
+        yield 1
+    holder.append(reentrant())
+    try:
+        next(holder[0])
+        assert False
+    except RuntimeError as error:
+        assert error.message == "generator already running"
+

@@ -205,7 +205,7 @@ starting with a newline. The exception reporting functions run with
 `CoroutineContext` is an internal core class; its field order is shared with
 stage 1's low-level helpers and switch assembly. An entry is a raw function
 address taking one `word` argument and returning no value. Generator and async
-lowering supply the addresses and slot conversions. No syntax uses this API yet.
+lowering supply the addresses and slot conversions.
 
 | Signature | Meaning |
 | --- | --- |
@@ -215,9 +215,10 @@ lowering supply the addresses and slot conversions. No syntax uses this API yet.
 | `coroutine_finished(coroutine: CoroutineContext) -> bool` | Whether the entry has returned, normally or with an exception |
 
 Resuming a finished coroutine returns 0 again. Resuming a running coroutine
-or yielding outside one raises `RuntimeError`. Each inactive context holds its
-own pending exception; a callback failure is transferred once. Finished
-contexts release their stack references after switching to the caller.
+or yielding outside one raises `RuntimeError`. A callback failure is transferred
+once; generator advancement converts an escaping `StopIteration` to `RuntimeError`.
+Switches run with no pending exception. Finished contexts release their stack
+references after switching to the caller.
 
 ## Inline in stage 0
 

@@ -1,0 +1,5 @@
+def values() -> Iterator[int]:
+    yield 1
+
+def main():
+    values().close()

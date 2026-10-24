@@ -9,9 +9,6 @@ cli_parsing
 coroutine_traceback
 coroutines
 file_lines
-generator_cleanup
-generator_traceback
-generators
 generics
 host
 http_values
@@ -53,4 +50,3 @@ terminal_styles
 text_collections
 text_conversions
 type_errors
-with_statements

@@ -1,0 +1,83 @@
+class Box[T]:
+    value: T
+
+    def values(self) -> Generator[T]:
+        yield self.value
+
+def once[T](value: T) -> Generator[T]:
+    yield value
+
+def floats(start: float) -> Generator[float]:
+    number = start + 0.25
+    text = "kept across suspension"
+    yield number
+    assert text == "kept across suspension"
+    yield number + 1.0
+
+def nested() -> Generator[float]:
+    child = floats(2.5)
+    yield next(child)
+    yield next(child)
+
+def factory() -> Generator[int]:
+    def inner() -> Generator[int]:
+        yield 0
+    return inner()
+
+def consume(source: Iterable[tuple[float, int | None]]) -> tuple[float, int | None]:
+    return next(iter(source))
+
+def main():
+    left = floats(1.5)
+    right = nested()
+    assert next(left) == 1.75
+    assert next(right) == 2.75
+    assert next(left) == 2.75
+    assert next(right) == 3.75
+    left.close()
+    right.close()
+    assert next(factory()) == 0
+    assert not next(once(False))
+    next(once(None))
+    assert consume(once((1.5, 2))) == (1.5, 2)
+    assert next(Box(2.5).values()) == 2.5
+    callback: (float) -> Generator[float] = once
+    assert next(callback(3.5)) == 3.5
+
+    captured = 1
+    def changing() -> Generator[int]:
+        yield captured
+        yield captured
+    generator = changing()
+    captured = 2
+    assert next(generator) == 2
+    captured = 3
+    assert next(generator) == 3
+
+    def handled() -> Generator[str]:
+        try:
+            raise ValueError("saved")
+        except ValueError as error:
+            yield error.message
+            raise
+    saved = handled()
+    assert next(saved) == "saved"
+    try:
+        next(saved)
+        assert False
+    except ValueError as error:
+        assert error.message == "saved"
+    try:
+        next(saved)
+        assert False
+    except StopIteration:
+        pass
+
+    numbered = list(enumerate(once(4)))
+    assert len(numbered) == 1
+    assert numbered[0] == (0, 4)
+    zipped = list(zip(once(2.5), once(0)))
+    assert len(zipped) == 1
+    assert zipped[0] == (2.5, 0)
+    assert sum(once(3)) == 3
+

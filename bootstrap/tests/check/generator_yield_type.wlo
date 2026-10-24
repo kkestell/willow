@@ -1,0 +1,5 @@
+def values() -> Iterator[int]:
+    yield "wrong"
+
+def main():
+    pass

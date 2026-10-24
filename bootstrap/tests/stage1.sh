@@ -178,7 +178,7 @@ conformance() {
     done
 }
 
-# Raw callback addresses are supplied by QBE until generator lowering exists.
+# Weak links and forced collection need callbacks outside ordinary Willow.
 check_coroutines() {
     fixture=$root/bootstrap/tests/check/coroutine_runtime
     cp "$fixture/build.wlo" "$work/willow1-src/coroutine_fixture.wlo"
