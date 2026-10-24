@@ -6,7 +6,6 @@ json_library
 overflow_add
 overflow_sub
 processes
-protocols
 scoped_resources
 sockets
 stdlib_builtins_errors
