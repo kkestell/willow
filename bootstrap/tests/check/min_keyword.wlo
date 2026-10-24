@@ -1,0 +1,2 @@
+def main():
+    min([1], default=0)

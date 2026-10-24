@@ -1,4 +1,4 @@
 def main():
-    xs: list[int] = [1]
+    xs: list[str] = ["x"]
     ys: list[int | None] = [None]
     ys.extend(xs)

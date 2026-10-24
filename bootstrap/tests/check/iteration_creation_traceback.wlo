@@ -1,0 +1,7 @@
+class Source:
+    def iter(self) -> Iterator[int]:
+        raise ValueError("creation")
+
+def main():
+    for value in Source():
+        pass

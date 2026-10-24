@@ -259,6 +259,7 @@ class Call:
     # Parameter indexes in evaluation order: written arguments, then defaults.
     order: list[int] | None = None
     has_type_args: bool = False
+    iterables: list[Iteration] | None = None
 
 # A call of any other callee, at its `(`.
 class CallValue:
@@ -278,6 +279,7 @@ class MethodCall:
     type_args: list[types.Type] | None = None
     index: Expr | None = None
     index_error: diagnostic.Diagnostic | None = None
+    iterables: list[Iteration] | None = None
 
 class Keyword:
     line: int
@@ -427,6 +429,12 @@ class For:
     body: list[Stmt]
     calls: bool = False
     item: types.Type | None = None
+    iteration: Iteration | None = None
+
+class Iteration:
+    item: types.Type
+    iter_call: Expr
+    next_call: Expr
 
 class With:
     items: list[WithItem]
@@ -435,6 +443,8 @@ class With:
 class WithItem:
     manager: Expr
     target: Target | None
+    enter_call: Expr | None = None
+    exit_call: Expr | None = None
 
 class AsyncWith:
     manager: Expr

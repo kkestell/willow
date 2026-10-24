@@ -522,6 +522,8 @@ class Emitter:
             self.emit_raise(node)
         elif isinstance(node, ast.Try):
             self.emit_try(node)
+        elif isinstance(node, ast.With):
+            self.emit_with(node, 0)
         elif isinstance(node, ast.FunctionDef):
             closure = ""
             if len(node.function.type_params) > 0:
@@ -684,11 +686,54 @@ class Emitter:
             self.protects = protects[:i]
             self.handled = handled[:protect.handled]
             self.target = protect.outside
-            self.block(protect.finally_body)
+            self.cleanup(protect, "0")
             i = i - 1
         self.protects = protects
         self.handled = handled
         self.target = target
+
+    def cleanup(self, protect: Protect, error: str):
+        call = protect.exit_call
+        if call is None:
+            self.block(protect.finally_body)
+        else:
+            self.saved_method(call, protect.manager, [error])
+
+    def emit_with(self, node: ast.With, index: int):
+        if index == len(node.items):
+            self.block(node.body)
+            return
+        item = node.items[index]
+        manager = self.expr(item.manager)
+        enter = item.enter_call
+        exit = item.exit_call
+        assert enter is not None and exit is not None, "unchecked context manager"
+        value = self.saved_method(enter, manager, [])
+        outside = self.target
+        normal = self.new_label()
+        raising = self.new_label()
+        end = self.new_label()
+        protect = Protect([], outside, len(self.loop_end), len(self.handled), manager, exit)
+        self.protects.append(protect)
+        self.target = raising
+        target = item.target
+        if target is not None:
+            self.store_pattern(target, value, self.concrete_type(enter.ty))
+        self.emit_with(node, index + 1)
+        self.jump("jmp " + normal)
+        self.protects.pop()
+        self.target = outside
+        self.label(normal)
+        self.cleanup(protect, "0")
+        self.jump("jmp " + end)
+        self.label(raising)
+        error = self.temp()
+        self.line(f"{error} =l loadl $W.pending")
+        self.line("storel 0, $W.pending")
+        self.cleanup(protect, error)
+        self.line(f"storel {error}, $W.pending")
+        self.propagate()
+        self.label(end)
 
     # The number of protects outside the innermost loop.
     def loop_protects(self) -> int:
@@ -783,9 +828,13 @@ class Emitter:
 
     def emit_for(self, node: ast.For):
         call = node.iterable.node
-        if isinstance(call, ast.Call) and call.name == "range" and isinstance(call.target, stdlib.Builtin):
+        declared = node.iterable.ty
+        assert declared is not None, "unchecked iterable"
+        if isinstance(types.expand(declared), types.TypeVar):
+            self.for_protocol(node)
+        elif isinstance(call, ast.Call) and call.name == "range" and isinstance(call.target, stdlib.Builtin):
             self.for_range(node, call)
-        elif isinstance(call, ast.MethodCall) and call.name in ["keys", "values", "items"]:
+        elif isinstance(call, ast.MethodCall) and call.name in ["keys", "values", "items"] and types.kind(self.concrete_type(call.object.ty)) == "dict":
             self.for_dict(node, call.object, call.name)
         else:
             ty = self.concrete_type(node.iterable.ty)
@@ -795,8 +844,54 @@ class Emitter:
                 self.for_sequence(node)
             elif isinstance(types.expand(ty), types.TupleType):
                 self.for_tuple(node)
-            else:
+            elif types.kind(ty) == "list":
                 self.for_list(node)
+            else:
+                self.for_protocol(node)
+
+    def for_protocol(self, node: ast.For):
+        iteration = node.iteration
+        assert iteration is not None, "unchecked iterable"
+        source = self.expr(node.iterable)
+        iterator = self.saved_method(iteration.iter_call, source, [])
+        test = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        item = self.advance(iterator, iteration.next_call, end)
+        self.for_body(node, item, test, end)
+        self.label(end)
+
+    # Only advancement consumes StopIteration. Creation, assignment, and the
+    # body keep the surrounding exception target.
+    def advance(self, iterator: str, call: ast.Expr, end: str) -> str:
+        outside = self.target
+        failed = self.new_label()
+        ready = self.new_label()
+        self.target = failed
+        frames = self.frames
+        self.frames = False
+        value = self.saved_method(call, iterator, [])
+        self.frames = frames
+        self.target = outside
+        self.jump("jmp " + ready)
+        self.label(failed)
+        error = self.temp()
+        kind = self.temp()
+        stop = self.temp()
+        propagate = self.new_label()
+        exhausted = self.new_label()
+        self.line(f"{error} =l loadl $W.pending")
+        self.line(f"{kind} =l loadl {error}")
+        self.line(f"{stop} =l ceql {kind}, $W.StopIteration.type")
+        self.jump(f"jnz {stop}, {exhausted}, {propagate}")
+        self.label(exhausted)
+        self.line("storel 0, $W.pending")
+        self.jump("jmp " + end)
+        self.label(propagate)
+        self.check_pending()
+        self.jump("jmp " + ready)
+        self.label(ready)
+        return value
 
     def for_dict(self, node: ast.For, source: ast.Expr, part: str):
         object = self.expr(source)
@@ -982,22 +1077,7 @@ class Emitter:
         self.jump(f"jnz {more}, {body}, {end}")
         self.label(body)
         raw = self.core_call("tuple_get", [source, index], True)
-        item = self.temp()
-        self.line(f"{item} =l copy 0")
-        ready = self.new_label()
-        for i in range(len(ty.elements)):
-            take = self.new_label()
-            skip = self.new_label()
-            at = self.temp()
-            self.line(f"{at} =l ceql {index}, {i}")
-            self.jump(f"jnz {at}, {take}, {skip}")
-            self.label(take)
-            converted = self.convert(raw, ty.elements[i], item_type)
-            self.line(f"{item} =l copy {converted}")
-            self.jump(f"jmp {ready}")
-            self.label(skip)
-        self.jump("hlt")
-        self.label(ready)
+        item = self.tuple_item(raw, index, ty, item_type)
         self.line(f"{index} =l add {index}, 1")
         self.for_body(node, item, test, end)
         self.label(end)
@@ -1033,6 +1113,13 @@ class Emitter:
     def list_method(self, node: ast.MethodCall) -> str:
         args = [self.expr(node.object)]
         args.extend(self.arg_values(node.args, node.order))
+        if node.name == "extend":
+            iterations = node.iterables
+            assert iterations is not None, "unchecked list extension"
+            ty = self.concrete_type(node.object.ty)
+            assert isinstance(ty, types.ListType), "unchecked list extension receiver"
+            collected = self.collect(args[1], iterations[0], types.expand(ty.element))
+            return self.core_call("list_extend", [args[0], collected], False)
         return self.core_call("list_" + node.name, args, node.name == "pop")
 
     def dict_display(self, expr: ast.Expr, node: ast.DictDisplay) -> str:
@@ -1063,6 +1150,8 @@ class Emitter:
                     object = self.convert(self.expr(node.object), ty, receiver_type)
                     args = self.arg_values(node.args, node.order)
                     return self.protocol_call(object, receiver_type, node.name, args)
+        if node.name == "iter" and types.iteration_item(ty) is not None:
+            return self.native_iter(self.expr(node.object), ty, "")
         if isinstance(ty, types.ClassType):
             return self.class_method(node, ty)
         if isinstance(ty, types.ProtocolType):
@@ -1080,6 +1169,8 @@ class Emitter:
     def dict_method(self, expr: ast.Expr, node: ast.MethodCall) -> str:
         object = self.expr(node.object)
         args = self.arg_values(node.args, node.order)
+        if node.name in ["keys", "values", "items"]:
+            return self.native_iter(object, self.concrete_type(node.object.ty), node.name)
         key = args[0]
         if node.name == "pop":
             return self.core_call("dict_pop", [object, key], True)
@@ -1430,7 +1521,9 @@ class Emitter:
             call = node.call
             assert call is not None, "unchecked built-in value"
             code = f"$W.builtin.{len(self.later)}"
-            self.later.append(BuiltinWrapper(code, call))
+            callable = self.concrete_type(expr.ty)
+            assert isinstance(callable, types.CallableType), "unchecked built-in signature"
+            self.later.append(BuiltinWrapper(code, call, len(callable.params)))
             return code + ".closure"
         elif isinstance(node, ast.Lambda):
             function = node.function
@@ -1877,6 +1970,8 @@ class Emitter:
     def dispatch_method(self, object: str, ty: types.Type, name: str, args: list[str], own: list[types.Type]) -> str:
         if isinstance(ty, types.ProtocolType):
             return self.protocol_call(object, ty, name, args)
+        if name == "iter" and types.iteration_item(ty) is not None:
+            return self.native_iter(object, ty, "")
         assert isinstance(ty, types.ClassType), "unchecked method receiver"
         for method in ty.decl.methods:
             if method.name == name:
@@ -1940,7 +2035,24 @@ class Emitter:
         elif name == "input":
             return self.core_call("input_line", [], True)
         elif name == "range":
-            return self.unchecked("'range'")
+            values: list[str] = []
+            for arg in node.args:
+                values.append(self.expr(arg))
+            first = "0"
+            stop = values[0]
+            step = "1"
+            if len(values) > 1:
+                first = values[0]
+                stop = values[1]
+            if len(values) > 2:
+                step = values[2]
+            value = self.core_call("range_new", [first, stop, step], True)
+            adapter = self.native_adapter(types.prim("ptr"), types.prim("int"), "range")
+            return self.protocol_value(adapter.symbol + ".range.type", value)
+        elif name == "round":
+            return self.core_call("float_round", self.arg_values(node.args, node.order), True)
+        elif name in ["abs", "min", "max", "sum", "any", "all", "list", "enumerate", "zip"]:
+            return self.iterable_builtin(node)
         elif name == "ord":
             return self.core_call("str_ord", [self.expr(node.args[0])], True)
         elif name == "chr":
@@ -1960,6 +2072,294 @@ class Emitter:
         elif name == "fs.realpath":
             return self.host(node, target)
         return self.unchecked(f"'{name}'")
+
+    def saved_method(self, expr: ast.Expr, object: str, supplied: list[str]) -> str:
+        line = self.at_line
+        col = self.at_col
+        self.at_line = expr.line
+        self.at_col = expr.col
+        node = expr.node
+        assert isinstance(node, ast.MethodCall), "unchecked saved method"
+        declared = node.object.ty
+        assert declared is not None, "unchecked saved receiver"
+        ty = self.concrete_type(declared)
+        if isinstance(declared, types.TypeVar):
+            bound = declared.bound
+            if bound is not None:
+                target = self.concrete_type(bound)
+                object = self.convert(object, ty, target)
+                ty = target
+        args: list[str] = []
+        for i in range(len(node.args)):
+            if i < len(supplied):
+                arg = node.args[i]
+                value = supplied[i]
+                expected = arg.expected
+                if expected is not None:
+                    value = self.convert(value, self.concrete_type(arg.ty), expected)
+                args.append(value)
+            else:
+                args.append(self.expr(node.args[i]))
+        own = node.type_args
+        if own is None:
+            own = []
+        value = self.dispatch_method(object, ty, node.name, args, own)
+        self.at_line = line
+        self.at_col = col
+        return value
+
+    def protocol_value(self, descriptor: str, receiver: str) -> str:
+        object = self.core_call("object_new", [descriptor, "1"], True)
+        self.store_field(object, 8, receiver)
+        return object
+
+    def native_adapter(self, source: types.Type, item: types.Type, part: str) -> NativeIterator:
+        for later in self.later:
+            if isinstance(later, NativeIterator) and later.part == part and types.same(later.source, source) and types.same(later.item, item):
+                return later
+        adapter = NativeIterator(f"$W.iterator.{len(self.later)}", source, item, part)
+        self.later.append(adapter)
+        return adapter
+
+    def native_iter(self, source: str, ty: types.Type, part: str) -> str:
+        item = types.iteration_item(ty)
+        assert item is not None, "unchecked native iteration"
+        version = "0"
+        if isinstance(ty, types.DictType):
+            version = self.core_call("dict_version", [source], True)
+            if part == "values":
+                item = types.expand(ty.value)
+            elif part == "items":
+                item = types.TupleType([ty.key, types.expand(ty.value)])
+        assert item is not None, "missing native item"
+        state = self.core_call("iterator_state", [source, version], True)
+        adapter = self.native_adapter(ty, item, part)
+        return self.protocol_value(adapter.symbol + ".type", state)
+
+    def iterator_descriptor(self, symbol: str, item: types.Type):
+        marker = self.protocol_marker(types.iterator(item))
+        self.write(f"data {symbol}.type = " + "{ l " + marker + f", l {symbol}.iter, l {symbol}.next" + " }")
+        self.begin(symbol + ".iter", ["l %state"], True)
+        self.end(self.protocol_value(symbol + ".type", "%state"))
+
+    def emit_native_iterator(self, adapter: NativeIterator):
+        self.bindings = {}
+        self.iterator_descriptor(adapter.symbol, adapter.item)
+        if adapter.part == "range":
+            marker = self.protocol_marker(types.ProtocolType(stdlib.protocols()["Iterable"], [types.prim("int")]))
+            self.write(f"data {adapter.symbol}.range.type = " + "{ l " + marker + f", l {adapter.symbol}.range.iter" + " }")
+            self.begin(adapter.symbol + ".range.iter", ["l %source"], True)
+            state = self.core_call("range_iter", ["%source"], True)
+            self.end(self.protocol_value(adapter.symbol + ".type", state))
+        self.begin(adapter.symbol + ".next", ["l %state"], True)
+        source_type = adapter.source
+        kind = types.kind(source_type)
+        if adapter.part == "range":
+            kind = "range"
+        index = "0"
+        if kind == "tuple":
+            index = self.core_call("iterator_cursor", ["%state"], True)
+        value = self.core_call("iterator_" + kind + "_next", ["%state"], True)
+        if isinstance(source_type, types.DictType):
+            source = self.core_call("iterator_source", ["%state"], True)
+            if adapter.part == "values":
+                value = self.core_call("dict_value_at", [source, value], True)
+            elif adapter.part == "items":
+                key = self.core_call("dict_key_at", [source, value], True)
+                item = self.core_call("dict_value_at", [source, value], True)
+                ty = adapter.item
+                assert isinstance(ty, types.TupleType), "unchecked dictionary items"
+                value = self.tuple_value(ty, [key, item])
+            else:
+                value = self.core_call("dict_key_at", [source, value], True)
+        elif isinstance(source_type, types.TupleType):
+            value = self.tuple_item(value, index, source_type, adapter.item)
+        self.end(value)
+
+    def tuple_item(self, raw: str, index: str, source: types.TupleType, item: types.Type) -> str:
+        value = self.temp()
+        self.line(f"{value} =l copy 0")
+        done = self.new_label()
+        for i in range(len(source.elements)):
+            take = self.new_label()
+            skip = self.new_label()
+            at = self.temp()
+            self.line(f"{at} =l ceql {index}, {i}")
+            self.jump(f"jnz {at}, {take}, {skip}")
+            self.label(take)
+            converted = self.convert(raw, source.elements[i], item)
+            self.line(f"{value} =l copy {converted}")
+            self.jump("jmp " + done)
+            self.label(skip)
+        self.jump("hlt")
+        self.label(done)
+        return value
+
+    def collect(self, source: str, iteration: ast.Iteration, element: types.Type) -> str:
+        iterator = self.saved_method(iteration.iter_call, source, [])
+        result = self.core_call("list_new", ["0"], True)
+        test = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        value = self.advance(iterator, iteration.next_call, end)
+        value = self.convert(value, self.concrete_type(iteration.item), element)
+        self.core_call("list_append", [result, value], False)
+        self.jump("jmp " + test)
+        self.label(end)
+        return result
+
+    def validate_nan(self, value: str, ty: types.Type):
+        if isinstance(ty, types.TupleType):
+            for i in range(len(ty.elements)):
+                item = self.core_call("tuple_get", [value, str(i)], True)
+                self.validate_nan(item, ty.elements[i])
+        elif types.kind(ty) == "float":
+            d = self.as_float(value)
+            nan = self.temp()
+            self.line(f"{nan} =l cned {d}, {d}")
+            self.guard(nan, "ValueError", "cannot compare NaN")
+
+    def ordered(self, left: str, right: str, ty: types.Type, op: str) -> str:
+        if isinstance(ty, types.TupleType):
+            return self.tuple_order(op, left, right, ty)
+        if types.kind(ty) == "float":
+            return self.float_binary(op, left, right)
+        if types.kind(ty) == "str":
+            left = self.core_call("str_compare", [left, right], True)
+            right = "0"
+        result = self.temp()
+        self.line(f"{result} =l {comparison_instruction(op)} {left}, {right}")
+        return result
+
+    def select_extreme(self, name: str, left: str, right: str, ty: types.Type) -> str:
+        op = "<"
+        if name == "max":
+            op = ">"
+        select = self.ordered(right, left, ty, op)
+        take = self.new_label()
+        done = self.new_label()
+        self.jump(f"jnz {select}, {take}, {done}")
+        self.label(take)
+        self.line(f"{left} =l copy {right}")
+        self.label(done)
+        return left
+
+    def iterable_builtin(self, node: ast.Call) -> str:
+        values = self.arg_values(node.args, node.order)
+        name = node.name
+        ty = self.concrete_type(node.args[0].ty)
+        if name == "abs":
+            if types.kind(ty) == "float":
+                return self.core_call("float_abs", values, True)
+            value = self.temp()
+            self.line(f"{value} =l copy {values[0]}")
+            negative = self.temp()
+            self.line(f"{negative} =l csltl {value}, 0")
+            take = self.new_label()
+            end = self.new_label()
+            self.jump(f"jnz {negative}, {take}, {end}")
+            self.label(take)
+            self.line(f"{value} =l neg {value}")
+            self.label(end)
+            return value
+        if name in ["min", "max"] and len(values) == 2:
+            self.validate_nan(values[0], ty)
+            self.validate_nan(values[1], ty)
+            result = self.temp()
+            self.line(f"{result} =l copy {values[0]}")
+            return self.select_extreme(name, result, values[1], ty)
+        iterations = node.iterables
+        assert iterations is not None, "unchecked iterable built-in"
+        iteration = iterations[0]
+        item = self.concrete_type(iteration.item)
+        if name == "list":
+            return self.collect(values[0], iteration, item)
+        iterator = self.saved_method(iteration.iter_call, values[0], [])
+        if name in ["enumerate", "zip"]:
+            calls = [iteration.next_call]
+            elements: list[types.Type] = []
+            state = ""
+            if name == "enumerate":
+                elements = [types.prim("int"), item]
+                state = self.core_call("iterator_enumerate_state", [iterator, values[1]], True)
+            else:
+                other = iterations[1]
+                right = self.saved_method(other.iter_call, values[1], [])
+                calls.append(other.next_call)
+                elements = [item, self.concrete_type(other.item)]
+                state = self.core_call("iterator_zip_state", [iterator, right], True)
+            adapter = LazyIterator(f"$W.iterator.{len(self.later)}", name, types.TupleType(elements), calls, self.bindings)
+            self.later.append(adapter)
+            return self.protocol_value(adapter.symbol + ".type", state)
+        result = self.temp()
+        initial = "0"
+        if name == "all":
+            initial = "1"
+        self.line(f"{result} =l copy {initial}")
+        seen = self.temp()
+        self.line(f"{seen} =l copy 0")
+        test = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        value = self.advance(iterator, iteration.next_call, end)
+        if name in ["min", "max"]:
+            self.validate_nan(value, item)
+            first = self.new_label()
+            compare = self.new_label()
+            ready = self.new_label()
+            self.jump(f"jnz {seen}, {compare}, {first}")
+            self.label(first)
+            self.line(f"{result} =l copy {value}")
+            self.line(f"{seen} =l copy 1")
+            self.jump("jmp " + ready)
+            self.label(compare)
+            self.select_extreme(name, result, value, item)
+            self.label(ready)
+        elif name == "sum":
+            added = ""
+            if types.kind(item) == "float":
+                added = self.float_binary("+", result, value)
+            else:
+                added = self.checked("add", result, value)
+            self.line(f"{result} =l copy {added}")
+        else:
+            self.line(f"{result} =l copy {value}")
+            keep = self.new_label()
+            if name == "any":
+                self.jump(f"jnz {value}, {end}, {keep}")
+            else:
+                self.jump(f"jnz {value}, {keep}, {end}")
+            self.label(keep)
+        self.jump("jmp " + test)
+        self.label(end)
+        if name in ["min", "max"]:
+            empty = self.temp()
+            self.line(f"{empty} =l ceql {seen}, 0")
+            self.guard(empty, "ValueError", name + "() of an empty iterable")
+        return result
+
+    def emit_lazy_iterator(self, adapter: LazyIterator):
+        self.bindings = adapter.bindings
+        self.iterator_descriptor(adapter.symbol, adapter.item)
+        self.begin(adapter.symbol + ".next", ["l %state"], True)
+        self.core_call("iterator_check", ["%state"], False)
+        source = self.core_call("iterator_source", ["%state"], True)
+        exhausted = self.new_label()
+        left = self.advance(source, adapter.calls[0], exhausted)
+        values: list[str] = []
+        if adapter.name == "enumerate":
+            count = self.core_call("iterator_enumerate_count", ["%state"], True)
+            values = [count, left]
+        else:
+            source = self.core_call("iterator_right", ["%state"], True)
+            right = self.advance(source, adapter.calls[1], exhausted)
+            values = [left, right]
+        value = self.tuple_value(adapter.item, values)
+        self.jump("ret " + value)
+        self.label(exhausted)
+        self.core_call("iterator_exhaust", ["%state"], False)
+        self.jump("ret 0")
+        self.end("0")
 
     # A C function's `cint` travels as QBE `w` and a float as `d`; a C int
     # result is sign-extended to fill its slot, and a float result becomes its
@@ -2247,8 +2647,16 @@ class Emitter:
             bindings = self.bindings
             self.emit_specialized_value(later)
             self.bindings = bindings
-        else:
+        elif isinstance(later, Adapter):
             self.emit_adapter(later)
+        elif isinstance(later, NativeIterator):
+            bindings = self.bindings
+            self.emit_native_iterator(later)
+            self.bindings = bindings
+        else:
+            bindings = self.bindings
+            self.emit_lazy_iterator(later)
+            self.bindings = bindings
 
     # The wrappers pass on a pending exception with the dummy result.
     def emit_value_wrapper(self, wrapper: ValueWrapper):
@@ -2285,10 +2693,9 @@ class Emitter:
         self.end(self.call_text(instance.symbol, passed, self.returns))
 
     def emit_builtin_wrapper(self, wrapper: BuiltinWrapper):
-        call = wrapper.call.node
         expected = wrapper.call.expected
-        assert isinstance(call, ast.Call) and expected is not None, "unchecked built-in value"
-        self.begin(wrapper.symbol, with_env(wrapper_args(len(call.args))), not is_none(expected))
+        assert expected is not None, "unchecked built-in value"
+        self.begin(wrapper.symbol, with_env(wrapper_args(wrapper.params)), not is_none(expected))
         self.end(self.expr(wrapper.call))
 
     # Converts each argument, supplies the omitted defaults, and converts
@@ -2312,7 +2719,21 @@ class Emitter:
 
 # A function emitted after the top-level function that uses it: a nested
 # function or lambda, or the code of a closure that runs a function.
-type Later = Lifted | ValueWrapper | BoundWrapper | BuiltinWrapper | SpecializedValue | Adapter
+type Later = Lifted | ValueWrapper | BoundWrapper | BuiltinWrapper | SpecializedValue | Adapter | NativeIterator | LazyIterator
+
+class NativeIterator:
+    symbol: str
+    source: types.Type
+    item: types.Type
+    part: str
+
+class LazyIterator:
+    symbol: str
+    name: str
+    item: types.TupleType
+    calls: list[ast.Expr]
+    bindings: dict[str, types.Type]
+
 
 class Lifted:
     symbol: str
@@ -2342,6 +2763,7 @@ class SpecializedValue:
 class BuiltinWrapper:
     symbol: str
     call: ast.Expr
+    params: int
 
 # The code of a closure that holds a function value of `source` and serves
 # callable `target`.
@@ -2400,6 +2822,8 @@ class Protect:
     # How many loops and handled exceptions enclose the statement.
     loops: int
     handled: int
+    manager: str = ""
+    exit_call: ast.Expr | None = None
 
 # The name of `function` in frames, and in its symbol.
 def frame_name(function: ast.FunctionDecl) -> str:

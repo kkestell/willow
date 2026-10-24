@@ -1,0 +1,10 @@
+class Manager:
+    def enter(self) -> int:
+        raise ValueError("entry")
+
+    def exit(self, error: Exception | None):
+        pass
+
+def main():
+    with Manager():
+        pass

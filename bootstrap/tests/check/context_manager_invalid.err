@@ -1,0 +1,1 @@
+context_manager_invalid.wlo:9:10: error: type Manager is not a context manager

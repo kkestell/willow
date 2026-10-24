@@ -1597,3 +1597,148 @@ def union_to_str(value: ptr) -> str:
     if kind == __type(bool):
         return bool_to_str(__bool(unbox(value)))
     return enum_to_str(kind, __int(unbox(value)))
+
+# Iterator state keeps raw slots; emitted adapters supply static conversions.
+# source, cursor, exhausted, dictionary version, range stop, range step,
+# second zip iterator, and enumerate's count-overflow flag.
+def iterator_state(source: ptr, version: int) -> ptr:
+    state = __alloc(64)
+    __store8(state, 0, __word(source))
+    __store8(state, 8, __word(0))
+    __store8(state, 16, __word(False))
+    __store8(state, 24, __word(version))
+    __store8(state, 32, __word(0))
+    __store8(state, 40, __word(0))
+    __store8(state, 48, __word(0))
+    __store8(state, 56, __word(False))
+    return state
+
+def iterator_source(state: ptr) -> ptr:
+    return __ptr(__load8(state, 0))
+
+def iterator_cursor(state: ptr) -> int:
+    return __int(__load8(state, 8))
+
+def iterator_set_cursor(state: ptr, cursor: int):
+    __store8(state, 8, __word(cursor))
+
+def iterator_exhaust(state: ptr):
+    __store8(state, 16, __word(True))
+    fail("StopIteration", "")
+
+def iterator_check(state: ptr):
+    if __bool(__load8(state, 16)):
+        fail("StopIteration", "")
+
+def iterator_list_next(state: ptr) -> word:
+    iterator_check(state)
+    source = iterator_source(state)
+    cursor = iterator_cursor(state)
+    if cursor >= list_len(source):
+        iterator_exhaust(state)
+    iterator_set_cursor(state, cursor + 1)
+    return list_get(source, cursor)
+
+def iterator_tuple_next(state: ptr) -> word:
+    iterator_check(state)
+    source = iterator_source(state)
+    cursor = iterator_cursor(state)
+    if cursor >= tuple_len(source):
+        iterator_exhaust(state)
+    iterator_set_cursor(state, cursor + 1)
+    return tuple_get(source, cursor)
+
+def iterator_str_next(state: ptr) -> str:
+    iterator_check(state)
+    source = __str(__word(iterator_source(state)))
+    cursor = iterator_cursor(state)
+    if cursor >= str_size(source):
+        iterator_exhaust(state)
+    value = str_char_at(source, cursor)
+    iterator_set_cursor(state, cursor + str_size(value))
+    return value
+
+def iterator_bytes_next(state: ptr) -> int:
+    iterator_check(state)
+    source = __str(__word(iterator_source(state)))
+    cursor = iterator_cursor(state)
+    if cursor >= str_size(source):
+        iterator_exhaust(state)
+    iterator_set_cursor(state, cursor + 1)
+    return str_byte(source, cursor)
+
+def iterator_dict_next(state: ptr) -> int:
+    iterator_check(state)
+    source = iterator_source(state)
+    entry = dict_next(source, iterator_cursor(state), __int(__load8(state, 24)))
+    if entry < 0:
+        iterator_exhaust(state)
+    iterator_set_cursor(state, entry + 1)
+    return entry
+
+def range_new(first: int, stop: int, step: int) -> ptr:
+    if step == 0:
+        fail("ValueError", "range step must not be zero")
+    value = __alloc(24)
+    __store8(value, 0, __word(first))
+    __store8(value, 8, __word(stop))
+    __store8(value, 16, __word(step))
+    return value
+
+def range_iter(value: ptr) -> ptr:
+    state = iterator_state(value, 0)
+    iterator_set_cursor(state, __int(__load8(value, 0)))
+    __store8(state, 32, __load8(value, 8))
+    __store8(state, 40, __load8(value, 16))
+    return state
+
+def iterator_range_next(state: ptr) -> int:
+    iterator_check(state)
+    current = iterator_cursor(state)
+    stop = __int(__load8(state, 32))
+    step = __int(__load8(state, 40))
+    if (step > 0 and current >= stop) or (step < 0 and current <= stop):
+        iterator_exhaust(state)
+    if (step > 0 and current > 0 and step > 9223372036854775807 - current) or (step < 0 and current < 0 and step < -9223372036854775807 - current):
+        __store8(state, 16, __word(True))
+    else:
+        iterator_set_cursor(state, current + step)
+    return current
+
+def iterator_zip_state(left: ptr, right: ptr) -> ptr:
+    state = iterator_state(left, 0)
+    __store8(state, 48, __word(right))
+    return state
+
+def iterator_right(state: ptr) -> ptr:
+    return __ptr(__load8(state, 48))
+
+def iterator_enumerate_state(source: ptr, start: int) -> ptr:
+    state = iterator_state(source, 0)
+    iterator_set_cursor(state, start)
+    return state
+
+# A terminal count is valid; overflow matters only after producing another item.
+def iterator_enumerate_count(state: ptr) -> int:
+    if __bool(__load8(state, 56)):
+        fail("OverflowError", "integer overflow")
+    count = iterator_cursor(state)
+    if count == 9223372036854775807:
+        __store8(state, 56, __word(True))
+    else:
+        iterator_set_cursor(state, count + 1)
+    return count
+
+def float_abs(x: float) -> float:
+    return copysign(x, 1.0)
+
+def float_round(x: float) -> int:
+    if x != x or x >= 9223372036854775808.0 or x <= -9223372036854775808.0:
+        fail("ValueError", "cannot round float to int")
+    lower = floor(x)
+    part = x - lower
+    if part > 0.5 or (part == 0.5 and fmod(lower, 2.0) != 0.0):
+        lower = lower + 1.0
+    if lower >= 9223372036854775808.0 or lower <= -9223372036854775808.0:
+        fail("ValueError", "cannot round float to int")
+    return __dtosi(lower)

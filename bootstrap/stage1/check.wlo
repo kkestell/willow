@@ -190,6 +190,8 @@ class Checker:
             return True
         elif isinstance(node, ast.Try):
             return self.check_try(node, state)
+        elif isinstance(node, ast.With):
+            return self.check_with(statement, node, state)
         elif isinstance(node, ast.FunctionDef):
             self.check_nested(statement, node, state)
         elif isinstance(node, ast.Nonlocal):
@@ -458,48 +460,62 @@ class Checker:
             if id in state:
                 state[id] = self.declared(id)
 
-    def check_for(self, statement: ast.Stmt, node: ast.For, state: dict[int, types.Type]):
-        iterable = node.iterable
-        call = iterable.node
-        item: types.Type = none()
-        if isinstance(call, ast.Call) and call.name == "range" and isinstance(call.target, stdlib.Builtin):
-            if len(call.keywords) > 0:
-                keyword = call.keywords[0]
-                self.fail(keyword.line, keyword.col, "'range' does not accept keyword arguments")
-            count = len(call.args)
-            if count < 1 or count > 3:
-                self.fail(iterable.line, iterable.col, f"'range' expects 1 to 3 arguments, received {count}")
-            for arg in call.args:
-                self.check_against(arg, state, types.prim("int"))
-            item = types.prim("int")
-        elif isinstance(call, ast.MethodCall) and call.name in ["keys", "values", "items"]:
-            source = types.expand(self.check_expr(call.object, state))
-            if not isinstance(source, types.DictType):
-                self.fail(iterable.line, iterable.col, f"type {types.display(source)} has no method '{call.name}'")
-                return
-            self.bind_args(iterable, call, [], "")
-            self.check_for_dict(statement, node, source, call.name, state)
-            return
-        else:
-            source = types.expand(self.check_expr(iterable, state))
-            if isinstance(source, types.ListType):
-                item = types.expand(source.element)
-            elif isinstance(source, types.TupleType):
+    def checked_method(self, expr: ast.Expr, source: types.Type, name: str, args: list[ast.Expr], state: dict[int, types.Type]) -> ast.Expr:
+        receiver = ast.Expr(expr.line, expr.col, ast.Typed(0, source))
+        call = ast.Expr(expr.line, expr.col, ast.MethodCall(receiver, name, args, []))
+        self.check_expr(call, state)
+        return call
+
+    def check_iterable(self, expr: ast.Expr, source: types.Type, state: dict[int, types.Type]) -> ast.Iteration:
+        source = types.expand(source)
+        item = iterable_item(bound_type(source))
+        if item is None:
+            message = ""
+            if isinstance(source, types.TupleType):
                 result = types.items(source)
                 if isinstance(result, str):
-                    self.fail(iterable.line, iterable.col, f"cannot iterate over {types.display(source)}: {result}")
-                    return
-                item = result
-            elif types.kind(source) == "str":
-                item = source
-            elif types.kind(source) == "bytes":
-                item = types.prim("int")
-            elif isinstance(source, types.DictType):
-                self.check_for_dict(statement, node, source, "keys", state)
-                return
-            else:
-                self.fail(iterable.line, iterable.col, f"cannot iterate over {types.display(source)}")
-        self.check_for_body(statement, node, item, state)
+                    message = ": " + result
+            self.fail(expr.line, expr.col, f"cannot iterate over {types.display(source)}{message}")
+            item = none()
+        creation = self.checked_method(expr, source, "iter", [], state)
+        iterator: types.Type = none()
+        created = creation.ty
+        if created is not None:
+            iterator = created
+        advance = self.checked_method(expr, iterator, "next", [], state)
+        assert item is not None, "missing iterable item"
+        return ast.Iteration(item, creation, advance)
+
+    def check_for(self, statement: ast.Stmt, node: ast.For, state: dict[int, types.Type]):
+        source = self.check_expr(node.iterable, state)
+        iteration = self.check_iterable(node.iterable, source, state)
+        node.iteration = iteration
+        self.check_for_body(statement, node, iteration.item, state)
+
+    def check_with(self, statement: ast.Stmt, node: ast.With, state: dict[int, types.Type]) -> bool:
+        for item in node.items:
+            manager = self.check_expr(item.manager, state)
+            enter = types.method(bound_type(types.expand(manager)), "enter")
+            if enter is None:
+                self.fail(item.manager.line, item.manager.col, f"type {types.display(manager)} is not a context manager")
+                return False
+            target = types.ProtocolType(stdlib.protocols()["ContextManager"], [enter.result])
+            if not types.assignable(target, bound_type(types.expand(manager))):
+                self.fail(item.manager.line, item.manager.col, f"type {types.display(manager)} is not a context manager")
+                return False
+            item.enter_call = self.checked_method(item.manager, manager, "enter", [], state)
+            pending = ast.Expr(item.manager.line, item.manager.col, ast.Typed(0, stdlib.optional_exception()))
+            exit_call = self.checked_method(item.manager, manager, "exit", [pending], state)
+            exit_call.line = statement.line
+            exit_call.col = statement.col
+            item.exit_call = exit_call
+            self.forget_captured(state)
+            pattern = item.target
+            if pattern is not None:
+                self.check_pattern(pattern, enter.result, state)
+        transfers = self.check_block(node.body, state)
+        self.forget_captured(state)
+        return transfers
 
     def check_for_body(self, statement: ast.Stmt, node: ast.For, item: types.Type, state: dict[int, types.Type]):
         node.item = item
@@ -517,14 +533,6 @@ class Checker:
         else:
             self.check_pattern(node.target, item, body_state)
         self.check_loop_body(node.body, body_state)
-
-    def check_for_dict(self, statement: ast.Stmt, node: ast.For, source: types.DictType, part: str, state: dict[int, types.Type]):
-        item: types.Type = source.key
-        if part == "values":
-            item = types.expand(source.value)
-        elif part == "items":
-            item = types.TupleType([source.key, types.expand(source.value)])
-        self.check_for_body(statement, node, item, state)
 
     def check_index_assign(self, statement: ast.Stmt, node: ast.IndexAssign, state: dict[int, types.Type]):
         object = types.expand(self.check_expr(node.object, state))
@@ -642,11 +650,14 @@ class Checker:
             self.check_against(node.args[0], state, types.expand(object.element))
         elif name == "extend":
             arg = node.args[0]
+            target = types.ProtocolType(stdlib.protocols()["Iterable"], [types.expand(object.element)])
             arg.expected = object
             actual = self.check_expr(arg, state)
-            if not self.failed() and not types.assignable(object, actual):
-                element = types.display(types.expand(object.element))
-                self.fail(arg.line, arg.col, f"expected Iterable[{element}], received {types.display(actual)}")
+            iteration = self.check_iterable(arg, actual, state)
+            node.iterables = [iteration]
+            if not self.failed() and (not types.assignable(types.expand(object.element), iteration.item) or types.converts(iteration.item, types.expand(object.element))):
+                self.fail(arg.line, arg.col, f"expected {types.display(target)}, received {types.display(actual)}")
+            arg.expected = None
         elif name == "pop":
             return types.expand(object.element)
         return none()
@@ -704,8 +715,13 @@ class Checker:
     def check_dict_method(self, expr: ast.Expr, node: ast.MethodCall, object: types.DictType, state: dict[int, types.Type]) -> types.Type:
         name = node.name
         if name in ["keys", "values", "items"]:
-            self.fail(expr.line, expr.col, f"'{types.display(object)}.{name}' can only be the source of a for loop")
-            return none()
+            self.bind_args(expr, node, [], "")
+            item: types.Type = object.key
+            if name == "values":
+                item = types.expand(object.value)
+            elif name == "items":
+                item = types.TupleType([object.key, types.expand(object.value)])
+            return types.iterator(item)
         if name not in ["get", "pop"]:
             self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{name}'")
             return none()
@@ -1217,6 +1233,11 @@ class Checker:
             return self.check_class_method(expr, node, object, state)
         if node.type_args is not None:
             return self.field_type(expr.line, expr.col, node.name, object)
+        if node.name == "iter" and types.iteration_item(object) is not None:
+            self.bind_args(expr, node, [], "")
+            item = types.iteration_item(object)
+            assert item is not None, "missing native item"
+            return types.iterator(item)
         if isinstance(object, types.ProtocolType):
             signature = types.method(object, node.name)
             if signature is not None:
@@ -1428,11 +1449,15 @@ class Checker:
                 self.fail(keyword.line, keyword.col, f"'{name}' does not accept keyword arguments")
                 return none()
             if name == "range":
-                self.fail(line, col, "'range' can only be the source of a for loop")
-                return none()
+                count = len(node.args)
+                if count < 1 or count > 3:
+                    self.fail(line, col, f"'range' expects 1 to 3 arguments, received {count}")
+                for arg in node.args:
+                    self.check_against(arg, state, types.prim("int"))
+                return types.ProtocolType(stdlib.protocols()["Iterable"], [types.prim("int")])
             return self.check_intrinsic(expr, node, target, state)
-        if name == "min" or name == "max":
-            return self.unsupported(line, col, f"'{name}'")
+        if name in ["min", "max", "abs", "sum", "any", "all", "list", "enumerate", "zip", "iter", "next"]:
+            return self.check_iterable_builtin(expr, node, target, state)
         noun = ""
         if len(target.params) > 0 and target.params[0].name != "":
             noun = "parameter"
@@ -1449,7 +1474,7 @@ class Checker:
             return self.check_conversion(expr, node, state)
         elif name == "float":
             return self.check_conversion(expr, node, state)
-        elif name in ["bytes", "bytes.fromhex", "input"]:
+        elif name in ["bytes", "bytes.fromhex", "input", "round"]:
             return self.check_host(expr, node, target, state)
         elif name == "ord":
             return self.check_host(expr, node, target, state)
@@ -1471,6 +1496,82 @@ class Checker:
             return self.check_host(expr, node, target, state)
         # Not in L0.
         return self.unsupported(line, col, f"'{name}'")
+
+    def check_iterable_builtin(self, expr: ast.Expr, node: ast.Call, target: stdlib.Builtin, state: dict[int, types.Type]) -> types.Type:
+        name = node.name
+        params = target.params
+        if name in ["min", "max"]:
+            if len(node.keywords) > 0:
+                keyword = node.keywords[0]
+                self.fail(keyword.line, keyword.col, f"'{name}' does not accept keyword arguments")
+                return none()
+            count = len(node.args)
+            if count < 1 or count > 2:
+                self.fail(expr.line, expr.col, f"'{name}' expects 1 to 2 arguments, received {count}")
+                return none()
+            params = params[:count]
+        noun = "parameter"
+        if params[0].name == "":
+            noun = ""
+        self.bind_args(expr, node, params, noun)
+        if self.failed():
+            return none()
+        order = node.order
+        assert order is not None, "unbound built-in"
+        for i in order:
+            param = params[i].ty
+            if param is None:
+                self.check_expr(node.args[i], state)
+            else:
+                self.check_against(node.args[i], state, param)
+        if self.failed():
+            return none()
+        first = node.args[0].ty
+        assert first is not None, "unchecked built-in argument"
+        if name in ["iter", "next"]:
+            protocol_item = iterable_item(bound_type(types.expand(first)))
+            if name == "next":
+                protocol_item = advancement(bound_type(types.expand(first)))
+            if protocol_item is None:
+                self.fail(expr.line, expr.col, f"'{name}' cannot be applied to {types.display(first)}")
+                return none()
+            method = ast.MethodCall(node.args[0], name, [], [])
+            expr.node = method
+            return self.check_method(expr, method, state)
+        if name == "abs":
+            if types.kind(first) not in ["int", "float"]:
+                self.fail(expr.line, expr.col, f"'abs' cannot be applied to {types.display(first)}")
+            return first
+        if name in ["min", "max"] and len(node.args) == 2:
+            second = node.args[1].ty
+            assert second is not None, "unchecked operand"
+            if not types.ordered(first, second):
+                self.fail(expr.line, expr.col, f"'{name}' cannot be applied to {types.display(first)} and {types.display(second)}")
+            return first
+        iteration = self.check_iterable(node.args[0], first, state)
+        node.iterables = [iteration]
+        item = iteration.item
+        if name in ["min", "max"]:
+            if not types.ordered(item, item):
+                self.fail(expr.line, expr.col, f"'{name}' cannot be applied to {types.display(first)}")
+            return item
+        if name == "sum":
+            if types.kind(item) not in ["int", "float"]:
+                self.fail(expr.line, expr.col, f"'sum' cannot be applied to {types.display(first)}")
+            return item
+        if name in ["any", "all"]:
+            if types.kind(item) != "bool":
+                self.fail(expr.line, expr.col, f"'{name}' cannot be applied to {types.display(first)}")
+            return types.prim("bool")
+        if name == "list":
+            return types.ListType(item)
+        if name == "enumerate":
+            return types.iterator(types.TupleType([types.prim("int"), item]))
+        second = node.args[1].ty
+        assert second is not None, "unchecked zip argument"
+        other = self.check_iterable(node.args[1], second, state)
+        node.iterables = [iteration, other]
+        return types.iterator(types.TupleType([item, other.item]))
 
     # A call of a program's or core's function, or of an extern function,
     # whose variadic arguments are ints, floats, or ptrs.
@@ -1711,6 +1812,12 @@ def assigned_symbols(body: list[ast.Stmt], result: dict[int, bool]):
         elif isinstance(node, ast.For):
             target_symbols(node.target, result)
             assigned_symbols(node.body, result)
+        elif isinstance(node, ast.With):
+            for item in node.items:
+                target = item.target
+                if target is not None:
+                    target_symbols(target, result)
+            assigned_symbols(node.body, result)
         elif isinstance(node, ast.Try):
             assigned_symbols(node.body, result)
             for handler in node.handlers:
@@ -1875,3 +1982,22 @@ def callee_name(callee: ast.Expr) -> str:
         if isinstance(ty, types.FunctionType):
             return ty.fn.name
     return "callable"
+
+def advancement(t: types.Type) -> types.Type | None:
+    method = types.method(t, "next")
+    if method is not None and types.assignable(types.iterator(method.result), t):
+        return method.result
+    return None
+
+def iterable_item(t: types.Type) -> types.Type | None:
+    item = types.iteration_item(t)
+    if item is not None:
+        return item
+    method = types.method(t, "iter")
+    if method is not None:
+        item = advancement(bound_type(types.expand(method.result)))
+        if item is not None:
+            target = types.ProtocolType(stdlib.protocols()["Iterable"], [item])
+            if types.assignable(target, t):
+                return item
+    return None
