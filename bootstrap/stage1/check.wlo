@@ -163,7 +163,9 @@ class Checker:
         elif isinstance(node, ast.Unpack):
             self.check_pattern(node.target, self.check_expr(node.value, state), state)
         elif isinstance(node, ast.CallStmt):
-            self.check_expr(node.call, state)
+            ty = self.check_expr(node.call, state)
+            if stdlib.has_coroutine(ty):
+                self.fail(line, col, f"cannot discard a value of type {types.display(ty)}; a discarded coroutine never runs")
             # sys.exit never returns, so it transfers control.
             call = node.call.node
             if isinstance(call, ast.Call):
@@ -641,8 +643,16 @@ class Checker:
 
     def check_list_method(self, expr: ast.Expr, node: ast.MethodCall, state: dict[int, types.Type], object: types.ListType) -> types.Type:
         name = node.name
-        if name not in ["append", "pop", "extend", "reverse"]:
+        if name not in ["append", "pop", "extend", "reverse", "sort"]:
             self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{name}'")
+            return none()
+        if name == "sort":
+            self.bind_args(expr, node, stdlib.sort_params(), "parameter")
+            if self.failed():
+                return none()
+            self.check_sort_args(node.args, node.order, 1, state)
+            if not self.failed():
+                self.check_sort_key(expr, object, types.expand(object.element), node.args[1], state)
             return none()
         params: list[stdlib.BuiltinParam] = []
         if name == "append":
@@ -670,6 +680,80 @@ class Checker:
         elif name == "pop":
             return types.expand(object.element)
         return none()
+
+    # Checks the arguments of a sort whose key is at `key`, except a lambda or
+    # built-in function value key, which takes its parameter type from the
+    # items and is checked last. Creating either calls nothing.
+    def check_sort_args(self, args: list[ast.Expr], order: list[int] | None, key: int, state: dict[int, types.Type]):
+        assert order is not None, "unbound sort"
+        for i in order:
+            node = args[i].node
+            if i == key:
+                if not isinstance(node, ast.Lambda) and not isinstance(node, ast.BuiltinValue):
+                    self.check_expr(args[i], state)
+            elif i == key - 1:
+                self.check_against(args[i], state, types.prim("bool"))
+            else:
+                self.check_expr(args[i], state)
+
+    # Checks that the items of `container`, of type `item`, sort by `key`,
+    # which is None when there is none. A key takes one item and returns an orderable
+    # value; a lambda's body or a built-in's result gives that value's type.
+    def check_sort_key(self, expr: ast.Expr, container: types.Type, item: types.Type, key: ast.Expr, state: dict[int, types.Type]):
+        node = key.node
+        if isinstance(node, ast.Constant) and node == ast.Constant.NONE:
+            if not types.ordered(item, item):
+                self.fail(expr.line, expr.col, f"cannot sort a value of type {types.display(container)}")
+            return
+        key_type = key.ty
+        if isinstance(node, ast.Lambda):
+            function = node.function
+            assert function is not None, "unbound lambda"
+            count = len(function.params)
+            if count != 1:
+                self.fail(key.line, key.col, f"a sort key takes 1 parameter, received a lambda with {count} parameters")
+                return
+            node.infer_result = True
+            key.expected = types.CallableType([item], none())
+            key_type = self.check_expr(key, state)
+        elif isinstance(node, ast.BuiltinValue):
+            # `abs` returns the type of its argument.
+            returns = none()
+            declared = node.builtin.result
+            if declared is not None:
+                returns = declared
+            elif node.name == "abs":
+                returns = item
+            key.expected = types.CallableType([item], returns)
+            key_type = self.check_expr(key, state)
+        if self.failed():
+            return
+        assert key_type is not None, "unchecked sort key"
+        expanded = types.expand(key_type)
+        result: types.Type = none()
+        if isinstance(expanded, types.CallableType):
+            result = expanded.result
+        elif isinstance(expanded, types.FunctionType):
+            result = types.function_result(expanded)
+        else:
+            self.fail(key.line, key.col, f"a sort key must be a function, received {types.display(key_type)}")
+            return
+        if not types.ordered(result, result):
+            self.fail(key.line, key.col, f"cannot sort by a key of type {types.display(result)}")
+            return
+        self.expect(key, types.CallableType([item], result), key_type)
+
+    def check_sorted(self, node: ast.Call, state: dict[int, types.Type]) -> types.Type:
+        self.check_sort_args(node.args, node.order, 2, state)
+        if self.failed():
+            return none()
+        items = node.args[0]
+        source = items.ty
+        assert source is not None, "unchecked sort items"
+        iteration = self.check_iterable(items, source, state)
+        node.iterables = [iteration]
+        self.check_sort_key(items, source, iteration.item, node.args[2], state)
+        return types.ListType(iteration.item)
 
     def check_sequence_method(self, expr: ast.Expr, node: ast.MethodCall, state: dict[int, types.Type], object: types.Type) -> types.Type:
         name = node.name
@@ -788,7 +872,7 @@ class Checker:
         ty = self.check_node(expr, state)
         expr.ty = ty
         node = expr.node
-        if isinstance(node, ast.Call) or isinstance(node, ast.CallValue) or isinstance(node, ast.MethodCall):
+        if isinstance(node, ast.Call) or isinstance(node, ast.CallValue) or isinstance(node, ast.MethodCall) or isinstance(node, ast.Await):
             self.calls = self.calls + 1
             self.forget_captured(state)
         return ty
@@ -833,6 +917,15 @@ class Checker:
             return self.check_lambda(expr, node, state)
         elif isinstance(node, ast.CallValue):
             return self.check_call_value(expr, node, state)
+        elif isinstance(node, ast.Await):
+            expected = expr.expected
+            if expected is not None:
+                node.operand.expected = stdlib.coroutine_of(expected)
+            operand = self.check_expr(node.operand, state)
+            if isinstance(operand, types.ClassType) and operand.decl.type_name == "Coroutine":
+                return operand.args[0]
+            self.fail(line, col, f"cannot await a value of type {types.display(operand)}")
+            return none()
         elif isinstance(node, ast.Typed):
             return node.ty
         elif isinstance(node, ast.Index):
@@ -1487,6 +1580,8 @@ class Checker:
             return self.check_conversion(expr, node, state)
         elif name == "float":
             return self.check_conversion(expr, node, state)
+        elif name == "sorted":
+            return self.check_sorted(node, state)
         elif name in ["bytes", "bytes.fromhex", "input", "round"]:
             return self.check_host(expr, node, target, state)
         elif name == "ord":
@@ -1506,6 +1601,8 @@ class Checker:
         elif name == "fs.exists":
             return self.check_host(expr, node, target, state)
         elif name == "fs.realpath":
+            return self.check_host(expr, node, target, state)
+        elif name == "aio.sleep":
             return self.check_host(expr, node, target, state)
         # Not in L0.
         return self.unsupported(line, col, f"'{name}'")
@@ -1684,9 +1781,13 @@ class Checker:
 def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[int, ast.Symbol]) -> diagnostic.Diagnostic | None:
     record = function.record
     assert record is not None, f"function {function.name} has no signature"
-    checker = Checker(module, function, record.result, None, {})
+    result = record.result
+    if function.is_async:
+        assert isinstance(result, types.ClassType), "async function without a coroutine result"
+        result = result.args[0]
+    checker = Checker(module, function, result, None, {})
     if function.generator:
-        result = types.expand(record.result)
+        result = types.expand(result)
         if not isinstance(result, types.ProtocolType):
             checker.fail(function.line, function.col, "a generator function must be annotated Generator[T], Iterator[T], or Iterable[T]")
             return checker.error
@@ -1708,7 +1809,7 @@ def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[i
         if default is not None:
             checker.check_against(default, {}, record.params[i].ty)
     transfers = checker.check_block(function.body, state)
-    if not checker.failed() and not function.generator and not transfers and not types.assignable(record.result, none()):
+    if not checker.failed() and not function.generator and not transfers and not types.assignable(result, none()):
         name = "function '" + function.name
         owner = function.owner
         if isinstance(owner, ast.ClassDecl):

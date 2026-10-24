@@ -147,8 +147,8 @@ class Emitter:
             if body != "":
                 self.write(body)
                 return
-        if module == "core" and function.name == "fail":
-            self.emit_fail()
+        if module == "core" and function.name in ["fail", "fail_at"]:
+            self.emit_fail(function.name)
             return
         self.emit_function(function, self.symbol(function), [], {})
         while self.emitted < len(self.later):
@@ -161,6 +161,12 @@ class Emitter:
         self.bindings = bindings
         record = function.record
         assert record is not None, f"function {function.name} has no signature"
+        result = self.concrete_type(record.result)
+        if function.is_async:
+            self.emit_async_constructor(function, symbol, first)
+            symbol = symbol + ".body"
+            assert isinstance(result, types.ClassType), "async function without a coroutine result"
+            result = result.args[0]
         params: list[str] = []
         params.extend(first)
         for param in function.params:
@@ -168,7 +174,7 @@ class Emitter:
         if function.generator:
             self.emit_generator_factory(function, symbol, params)
             return
-        self.begin(symbol, params, not is_none(self.concrete_type(record.result)))
+        self.begin(symbol, params, not is_none(result))
         self.function_body(function)
 
     def function_body(self, function: ast.FunctionDecl):
@@ -260,6 +266,28 @@ class Emitter:
         self.jump("ret")
         self.label(resume)
 
+    def emit_async_constructor(self, function: ast.FunctionDecl, symbol: str, first: list[str]):
+        params: list[str] = []
+        params.extend(first)
+        values: list[str] = []
+        if len(first) > 0:
+            values.append("%env")
+        for param in function.params:
+            params.append(f"l %p.{param.name}")
+            values.append(f"%p.{param.name}")
+        self.begin(symbol, params, True)
+        body = self.new_closure(symbol + ".await", values)
+        self.end(self.core_call("async_coroutine", [body], True))
+        self.begin(symbol + ".await", ["l %env"], True)
+        args: list[str] = []
+        for i in range(len(values)):
+            args.append("l " + self.load_field("%env", 16 + i * 8))
+        record = function.record
+        assert record is not None, "async function without a signature"
+        result = self.concrete_type(record.result)
+        assert isinstance(result, types.ClassType), "async function without a coroutine result"
+        self.end(self.call_text(symbol + ".body", args, not is_none(result.args[0])))
+
     # Starts function `symbol` with `params`, which returns a value when
     # `returns`. Its frames are recorded only when the caller says so.
     def begin(self, symbol: str, params: list[str], returns: bool):
@@ -293,10 +321,15 @@ class Emitter:
 
     # Stage 0 compiles core's `fail`, which ends the program. Stage 1 replaces
     # its body with one that raises the built-in exception it names.
-    def emit_fail(self):
-        self.write("function $W.core.fail(l %p.class_name, l %p.message) {")
+    def emit_fail(self, name: str):
+        params = "l %p.class_name, l %p.message"
+        if name == "fail_at":
+            params = params + ", l %p.path, l %p.line, l %p.col"
+        self.write("function $W.core." + name + "(" + params + ") {")
         self.label("@start")
         self.line("%e =l call $W.core.failure(l $W.exceptions, l %p.class_name, l %p.message)")
+        if name == "fail_at":
+            self.line("call $W.core.locate(l %e, l %p.path, l %p.line, l %p.col)")
         self.line("storel %e, $W.pending")
         self.jump("ret")
         self.write("}")
@@ -490,7 +523,13 @@ class Emitter:
         self.line("storel %argc.l, $W.argc")
         self.line("storel %argv, $W.argv")
         self.line("call $W.core.init()")
-        self.line(f"call $W.{entry.name}.main()")
+        main = entry.names["main"]
+        assert isinstance(main, ast.FunctionDecl), "entry without main"
+        if main.is_async:
+            self.line(f"%root =l call $W.{entry.name}.main()")
+            self.line("%result =l call $W.core.aio_run(l %root)")
+        else:
+            self.line(f"call $W.{entry.name}.main()")
         # Output is not buffered, so there is nothing to flush.
         self.line("%e =l loadl $W.pending")
         self.line("jnz %e, @uncaught, @done")
@@ -1191,6 +1230,11 @@ class Emitter:
             assert isinstance(ty, types.ListType), "unchecked list extension receiver"
             collected = self.collect(args[1], iterations[0], types.expand(ty.element))
             return self.core_call("list_extend", [args[0], collected], False)
+        if node.name == "sort":
+            ty = self.concrete_type(node.object.ty)
+            assert isinstance(ty, types.ListType), "unchecked list sort receiver"
+            self.sort(args[0], types.expand(ty.element), node.args[1], args[2], args[1], True)
+            return "0"
         return self.core_call("list_" + node.name, args, node.name == "pop")
 
     def dict_display(self, expr: ast.Expr, node: ast.DictDisplay) -> str:
@@ -1600,6 +1644,8 @@ class Emitter:
             function = node.function
             assert function is not None, "unbound lambda"
             return self.closure(function)
+        elif isinstance(node, ast.Await):
+            return self.core_call("async_await", [self.expr(node.operand)], True)
         elif isinstance(node, ast.Typed):
             return f"%p.{node.index}"
         return self.unchecked("expression")
@@ -2122,6 +2168,8 @@ class Emitter:
             return self.protocol_value(adapter.symbol + ".range.type", value)
         elif name == "round":
             return self.core_call("float_round", self.arg_values(node.args, node.order), True)
+        elif name == "sorted":
+            return self.emit_sorted(node)
         elif name in ["abs", "min", "max", "sum", "any", "all", "list", "enumerate", "zip"]:
             return self.iterable_builtin(node)
         elif name == "ord":
@@ -2142,6 +2190,10 @@ class Emitter:
             return self.host(node, target)
         elif name == "fs.realpath":
             return self.host(node, target)
+        elif name == "aio.sleep":
+            args = self.arg_values(node.args, node.order)
+            args.extend([self.string(self.path), str(self.at_line), str(self.at_col)])
+            return self.core_call("aio_sleep_coroutine", args, True)
         return self.unchecked(f"'{name}'")
 
     def saved_method(self, expr: ast.Expr, object: str, supplied: list[str]) -> str:
@@ -2278,6 +2330,53 @@ class Emitter:
         self.jump("jmp " + test)
         self.label(end)
         return result
+
+    def emit_sorted(self, node: ast.Call) -> str:
+        values = self.arg_values(node.args, node.order)
+        iterations = node.iterables
+        assert iterations is not None, "unchecked sorted"
+        item = self.concrete_type(iterations[0].item)
+        items = self.collect(values[0], iterations[0], item)
+        self.sort(items, item, node.args[2], values[2], values[1], False)
+        return items
+
+    # Sorts list `xs` of `item`s in place by `key`, the key argument, whose
+    # value is `key_value`. Each key is computed once, in order, before
+    # anything moves. When `checked`, the key function must leave `xs` as it
+    # was.
+    def sort(self, xs: str, item: types.Type, key: ast.Expr, key_value: str, reverse: str, checked: bool):
+        expected = key.expected
+        if expected is None:
+            self.core_call("list_sort", [xs, xs, equality_kind(item), reverse], False)
+            return
+        callable = types.callable_member(self.concrete_type(expected))
+        assert callable is not None, "unchecked sort key"
+        source = xs
+        if checked:
+            source = self.core_call("list_slice", [xs, "0", self.core_call("list_len", [xs], True)], True)
+        count = self.core_call("list_len", [source], True)
+        keys = self.core_call("list_new", [count], True)
+        index = self.temp()
+        self.line(f"{index} =l copy 0")
+        test = self.new_label()
+        body = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        more = self.temp()
+        self.line(f"{more} =l csltl {index}, {count}")
+        self.jump(f"jnz {more}, {body}, {end}")
+        self.label(body)
+        value = self.core_call("list_get", [source, index], True)
+        code = self.load_field(key_value, 8)
+        result = self.willow_call(code, typed([key_value, value]), True)
+        self.core_call("list_append", [keys, result], False)
+        self.line(f"{index} =l add {index}, 1")
+        self.jump(f"jmp {test}")
+        self.label(end)
+        if checked:
+            changed = self.core_call("list_changed", [xs, source], True)
+            self.guard(changed, "RuntimeError", "list changed during sort")
+        self.core_call("list_sort", [xs, keys, equality_kind(callable.result), reverse], False)
 
     def validate_nan(self, value: str, ty: types.Type):
         if isinstance(ty, types.TupleType):
@@ -2942,7 +3041,7 @@ def field_base(decl: types.Class) -> int:
 
 # The built-in types with descriptors, which every program emits.
 def builtin_types() -> list[str]:
-    return ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple", "function"]
+    return ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple", "function", "Coroutine"]
 
 def equality_kind(t: types.Type) -> str:
     kind = types.kind(types.expand(t))

@@ -1,13 +1,9 @@
 aio_listener_outside_loop
-aio_protocols
 aio_sleep
-aio_sleep_invalid
 aio_sockets
 bound_methods
 cancel_after_raising_finally
 cli_parsing
-coroutine_traceback
-coroutines
 file_lines
 generics
 host
@@ -23,12 +19,9 @@ protocol_native_failure
 protocols
 scoped_resources
 sockets
-sort_keys
-sorting
 square_root
 stdlib_aio_semaphore
 stdlib_aio_semaphore_deadlock
-stdlib_builtins
 stdlib_builtins_errors
 stdlib_fs
 stdlib_fs_symlinks

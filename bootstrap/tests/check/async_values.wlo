@@ -1,0 +1,48 @@
+import aio
+
+protocol Source:
+    def read(self, value: float) -> Coroutine[float]
+
+class Scale[T]:
+    values: list[T]
+
+    async def first(self, *, fallback: T) -> T:
+        await aio.sleep(0.0)
+        if len(self.values) > 0:
+            return self.values[0]
+        return fallback
+
+class Number:
+    async def read(self, value: float) -> float:
+        await aio.sleep(0.0)
+        return value * 2.0
+
+async def identity[T](value: T) -> T:
+    await aio.sleep(0.0)
+    return value
+
+async def through(source: Source) -> float:
+    return await source.read(value=1.25)
+
+def pending_value() -> Coroutine[int] | None:
+    return identity(7)
+
+async def main():
+    values = Scale([1.5])
+    print(await values.first(fallback=0.0))
+    print(await through(Number()))
+    run: (float) -> Coroutine[float] = identity
+    print(await run(2.5))
+    suffix = "before"
+    async def nested[T](value: T, end: str = "!") -> tuple[T, str]:
+        await aio.sleep(0.0)
+        return (value, suffix + end)
+    pending = nested(3.5)
+    suffix = "after"
+    value, text = await pending
+    print(value)
+    print(text)
+    print(await identity(None))
+    pending_number = pending_value()
+    if pending_number is not None:
+        print(await pending_number)

@@ -1,0 +1,9 @@
+protocol Source:
+    async def read(self) -> int
+
+class Number:
+    def read(self) -> int:
+        return 1
+
+def main():
+    source: Source = Number()

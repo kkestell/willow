@@ -1,0 +1,3 @@
+def main():
+    value: () -> Coroutine[int] | None = lambda: None
+    value()

@@ -71,10 +71,70 @@ def function(name: str) -> str:
             "    ret",
             "}",
         ])
+    if name == "async_coroutine":
+        return "\n".join([
+            "function l $W.core.async_coroutine(l %body) {",
+            "@start",
+            "    %result =l call $W.core.object_new(l $W.Coroutine.type, l 2)",
+            "    %address =l add %result, 8",
+            "    storel %body, %address",
+            "    ret %result",
+            "}",
+        ])
+    if name == "async_invoke":
+        return "\n".join([
+            "function l $W.core.async_invoke(l %body) {",
+            "@start",
+            "    %address =l add %body, 8",
+            "    %entry =l loadl %address",
+            "    %result =l call %entry(l %body)",
+            "    ret %result",
+            "}",
+        ])
+    if name == "aio_loop":
+        return "\n".join([
+            "function l $W.core.aio_loop() {",
+            "@start",
+            "    %loop =l loadl $W.aio.loop",
+            "    ret %loop",
+            "}",
+        ])
+    if name == "aio_set_loop":
+        return "\n".join([
+            "function $W.core.aio_set_loop(l %loop) {",
+            "@start",
+            "    storel %loop, $W.aio.loop",
+            "    ret",
+            "}",
+        ])
+    if name in ["aio_task_address", "aio_sleep_address"]:
+        entry = "$W.core.aio_task_run"
+        if name == "aio_sleep_address":
+            entry = "$W.core.aio_sleep_body"
+        return "\n".join([
+            "function l $W.core." + name + "() {",
+            "@start",
+            "    ret " + entry,
+            "}",
+        ])
+    if name == "aio_resume":
+        return "\n".join([
+            "function $W.core.aio_resume(l %task) {",
+            "@start",
+            "    %address =l add %task, 8",
+            "    %context =l loadl %address",
+            "    %result =l call $W.core.coroutine_resume(l %context)",
+            "    %pending =l loadl $W.pending",
+            "    %error =l add %task, 32",
+            "    storel %pending, %error",
+            "    storel 0, $W.pending",
+            "    ret",
+            "}",
+        ])
     return ""
 
 def data() -> str:
-    return "data $W.coroutine.current = { l 0 }"
+    return "data $W.coroutine.current = { l 0 }\ndata $W.aio.loop = { l 0 }"
 
 def assembly(target: str) -> str:
     prefix = ""

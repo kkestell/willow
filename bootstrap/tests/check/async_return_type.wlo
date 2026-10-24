@@ -1,0 +1,5 @@
+async def value() -> int:
+    return "text"
+
+def main():
+    pass

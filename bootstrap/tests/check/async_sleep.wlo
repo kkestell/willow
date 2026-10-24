@@ -1,0 +1,24 @@
+import aio
+
+async def main():
+    pending = aio.sleep(-1.0)
+    print("created")
+    try:
+        await pending
+    except ValueError as error:
+        print(error.message)
+    try:
+        await pending
+    except RuntimeError as consumed:
+        print(consumed.message)
+    for text in ["nan", "inf", "-inf"]:
+        try:
+            await aio.sleep(float(text))
+        except ValueError as error:
+            print(error.message)
+    try:
+        await aio.sleep(0.001)
+        raise ValueError("body")
+    finally:
+        await aio.sleep(seconds=0.0)
+        print("cleanup")
