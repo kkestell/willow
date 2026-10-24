@@ -420,6 +420,8 @@ class Checker:
                 item = result
             elif types.kind(source) == "str":
                 item = source
+            elif types.kind(source) == "bytes":
+                item = types.prim("int")
             elif isinstance(source, types.DictType):
                 self.check_for_dict(statement, node, source, "keys", state)
                 return
@@ -457,7 +459,7 @@ class Checker:
             self.check_against(node.value, state, types.expand(object.value))
             return
         if not isinstance(object, types.ListType):
-            if types.kind(object) in ["str", "tuple"]:
+            if types.kind(object) in ["str", "bytes", "tuple"]:
                 self.fail(statement.line, statement.col, f"cannot assign to an index of a value of type {types.display(object)}")
             else:
                 self.fail(statement.line, statement.col, f"cannot index a value of type {types.display(object)}")
@@ -497,6 +499,8 @@ class Checker:
             return types.expand(object.value)
         elif types.kind(object) == "str":
             item = object
+        elif types.kind(object) == "bytes":
+            item = types.prim("int")
         else:
             self.fail(expr.line, expr.col, f"cannot index a value of type {types.display(object)}")
         self.check_against(node.index, state, types.prim("int"))
@@ -504,7 +508,7 @@ class Checker:
 
     def check_slice(self, expr: ast.Expr, node: ast.Slice, state: dict[int, types.Type]) -> types.Type:
         object = self.check_expr(node.object, state)
-        if types.kind(object) not in ["list", "str"]:
+        if types.kind(object) not in ["list", "str", "bytes"]:
             self.fail(expr.line, expr.col, f"cannot slice a value of type {types.display(object)}")
         start = node.start
         stop = node.stop
@@ -573,11 +577,13 @@ class Checker:
             return types.expand(object.element)
         return none()
 
-    def check_str_method(self, expr: ast.Expr, node: ast.MethodCall, state: dict[int, types.Type], object: types.Type) -> types.Type:
+    def check_sequence_method(self, expr: ast.Expr, node: ast.MethodCall, state: dict[int, types.Type], object: types.Type) -> types.Type:
         name = node.name
         methods = stdlib.str_methods()
+        if types.kind(object) == "bytes":
+            methods = stdlib.bytes_methods()
         if name not in methods:
-            if name in ["rsplit", "splitlines", "lstrip", "rstrip", "isascii", "encode", "lower", "upper"]:
+            if types.kind(object) == "str" and name in ["rsplit", "splitlines", "lstrip", "rstrip", "isascii", "lower", "upper"]:
                 return self.unsupported(expr.line, expr.col, f"'str.{name}'")
             self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{name}'")
             return none()
@@ -590,13 +596,13 @@ class Checker:
         if self.failed():
             return none()
         order = node.order
-        assert order is not None, "unbound string method"
+        assert order is not None, "unbound sequence method"
         for i in order:
             param = params[i].ty
-            assert param is not None, f"str.{name} has an untyped parameter"
+            assert param is not None, f"{types.kind(object)}.{name} has an untyped parameter"
             self.check_against(node.args[i], state, param)
         result = method.result
-        assert result is not None, f"str.{name} has no result"
+        assert result is not None, f"{types.kind(object)}.{name} has no result"
         return result
 
     def check_dict(self, expr: ast.Expr, node: ast.DictDisplay, state: dict[int, types.Type]) -> types.Type:
@@ -659,7 +665,7 @@ class Checker:
         self.check_arity(expr, "len", 1, len(node.args))
         if not self.failed():
             arg = self.check_expr(node.args[0], state)
-            if types.kind(arg) not in ["list", "str", "dict", "tuple"]:
+            if types.kind(arg) not in ["list", "str", "bytes", "dict", "tuple"]:
                 self.fail(expr.line, expr.col, f"'len' cannot be applied to {types.display(arg)}")
         return types.prim("int")
 
@@ -769,14 +775,14 @@ class Checker:
                 ty = types.prim("bool")
             elif pair == "ptr ptr" and self.module.name == "core":
                 ty = types.prim("bool")
-            supported = pair in ["int int", "float float", "bool bool", "str str", "ptr ptr", "enum enum"]
+            supported = pair in ["int int", "float float", "bool bool", "str str", "bytes bytes", "ptr ptr", "enum enum"]
         elif op in ["<", "<=", ">", ">="]:
             if types.ordered(left, right):
                 ty = types.prim("bool")
             supported = pair in ["int int", "float float", "str str", "tuple tuple"]
         elif op in ["+", "-", "*", "/", "//", "%"]:
             ty = arithmetic_type(op, pair)
-            supported = pair in ["int int", "float float"] or op == "+" and pair == "str str"
+            supported = pair in ["int int", "float float"] or op == "+" and pair in ["str str", "bytes bytes"]
         elif op == "in" or op == "not in":
             container = types.expand(right)
             if isinstance(container, types.DictType):
@@ -794,6 +800,9 @@ class Checker:
                             return self.unsupported(expr.line, expr.col, "unions")
                     else:
                         self.expect(node.left, element, left)
+            elif types.kind(container) == "bytes" and types.kind(types.expand(left)) == "int":
+                ty = types.prim("bool")
+                supported = True
             elif types.kind(container) == "str" and types.kind(types.expand(left)) == "str":
                 ty = types.prim("bool")
                 supported = True
@@ -952,8 +961,8 @@ class Checker:
                 return self.check_generic_call(expr, node, signature.params, signature.result, [], state, "parameter")
         if isinstance(object, types.ListType):
             return self.check_list_method(expr, node, state, object)
-        if types.kind(object) == "str":
-            return self.check_str_method(expr, node, state, object)
+        if types.kind(object) in ["str", "bytes"]:
+            return self.check_sequence_method(expr, node, state, object)
         if isinstance(object, types.DictType):
             return self.check_dict_method(expr, node, object, state)
         if types.kind(object) in ["protocol", "int", "float", "bool", "None", "enum", "typevar", "union", "callable", "function", "ptr", "word", "cint"]:
@@ -1130,6 +1139,8 @@ class Checker:
             return self.check_conversion(expr, node, state)
         elif name == "float":
             return self.check_conversion(expr, node, state)
+        elif name in ["bytes", "bytes.fromhex", "input"]:
+            return self.check_host(expr, node, target, state)
         elif name == "ord":
             return self.check_host(expr, node, target, state)
         elif name == "chr":

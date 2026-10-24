@@ -1020,8 +1020,8 @@ class Resolver:
                 self.fail(expr.line, expr.col, "intrinsic '__type' is only available in core")
                 return
             target = node.target
-            if not isinstance(target, ast.TypeName) or target.module != "" or target.name not in ["int", "float", "bool", "str", "list", "dict", "tuple"]:
-                self.fail(parser.type_line(target), parser.type_col(target), "'__type' takes int, float, bool, str, list, dict, or tuple")
+            if not isinstance(target, ast.TypeName) or target.module != "" or target.name not in ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple"]:
+                self.fail(parser.type_line(target), parser.type_col(target), "'__type' takes int, float, bool, str, bytes, list, dict, or tuple")
 
     def resolve_name(self, expr: ast.Expr, node: ast.Name, callee: bool):
         symbol = self.scope.find(node.name)

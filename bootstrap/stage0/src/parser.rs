@@ -570,7 +570,7 @@ impl Parser<'_> {
     fn descriptor_type(&mut self) -> Result<TypeName, Diag> {
         let pos = self.pos();
         match self.peek().clone() {
-            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "list" | "dict" | "tuple")) => {
+            Kind::Word(w @ ("int" | "float" | "bool" | "str" | "bytes" | "list" | "dict" | "tuple")) => {
                 self.i += 1;
                 Ok(TypeName {
                     pos,

@@ -1,0 +1,10 @@
+import core
+
+def main():
+    data = core.str_encode("a\x00é")
+    assert core.bytes_decode(data) == "a\x00é"
+    assert core.bytes_hex(data) == "6100c3a9"
+    assert core.bytes_index(data, -1) == 169
+    assert core.bytes_find(data, core.bytes_fromhex("a9")) == 3
+    assert core.bytes_decode(core.bytes_slice(data, 0, 2)) == "a\x00"
+    assert core.bytes_hex(core.bytes_concat(data, data)) == "6100c3a96100c3a9"
