@@ -1,4 +1,4 @@
-# Exercises the http module against tests/http_server.lua, whose base URL is
+# Exercises the http module against tests/http/server.wlo, whose base URL is
 # the first argument and whose download directory is the second.
 
 import fs

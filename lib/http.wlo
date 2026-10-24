@@ -1,0 +1,661 @@
+import aio
+import core
+import fs
+import time
+
+extern def curl_global_init(flags: int) -> cint
+extern def curl_easy_init() -> ptr
+extern def curl_easy_cleanup(handle: ptr)
+extern def curl_easy_setopt(handle: ptr, option: cint, ...) -> cint
+extern def curl_easy_getinfo(handle: ptr, info: cint, ...) -> cint
+extern def curl_easy_strerror(code: cint) -> ptr
+extern def curl_slist_append(items: ptr, text: ptr) -> ptr
+extern def curl_slist_free_all(items: ptr)
+extern def curl_multi_init() -> ptr
+extern def curl_multi_add_handle(multi: ptr, handle: ptr) -> cint
+extern def curl_multi_remove_handle(multi: ptr, handle: ptr) -> cint
+extern def curl_multi_perform(multi: ptr, running: ptr) -> cint
+extern def curl_multi_timeout(multi: ptr, milliseconds: ptr) -> cint
+extern def curl_multi_info_read(multi: ptr, queued: ptr) -> ptr
+extern def curl_multi_cleanup(multi: ptr) -> cint
+extern def open_memstream(buffer: ptr, size: ptr) -> ptr
+extern def fmemopen(buffer: ptr, size: int, mode: ptr) -> ptr
+extern def fopen(path: ptr, mode: ptr) -> ptr
+extern def fclose(file: ptr) -> cint
+extern def fflush(file: ptr) -> cint
+extern def free(buffer: ptr)
+extern def unlink(path: ptr) -> cint
+extern def mkstemps(template: ptr, suffix: cint) -> cint
+extern def umask(mask: cint) -> cint
+extern def fchmod(fd: cint, mode: cint) -> cint
+
+class Header:
+    name: str
+    value: str
+
+class Response:
+    status: int
+    headers: list[Header]
+    body: bytes
+    url: str
+
+class Download:
+    status: int
+    headers: list[Header]
+    url: str
+    bytes_written: int
+
+def _null() -> ptr:
+    return __ptr(__word(0))
+
+def _symbol(library: ptr, name: str) -> ptr:
+    address = core.dlsym(library, core.str_bytes(name))
+    if __addr_is_null(address):
+        raise OSError("cannot load libcurl: " + _load_reason())
+    return address
+
+def _load_reason() -> str:
+    reason = core.dlerror()
+    assert not __addr_is_null(reason), "dynamic loader returned no error"
+    return core.str_from_bytes(reason, core.strlen(reason))
+
+class _Curl:
+    _symbols: dict[str, ptr]
+    _options: dict[str, int]
+    _info: dict[str, int]
+
+    def code(self, code: int, url: str):
+        if code != 0:
+            reason = __ccall(curl_easy_strerror, self._symbols["curl_easy_strerror"], code)
+            raise OSError("cannot fetch " + url + ": " + core.str_from_bytes(reason, core.strlen(reason)))
+
+    def set_int(self, handle: ptr, option: str, value: int, url: str):
+        self.code(__ccall(curl_easy_setopt, self._symbols["curl_easy_setopt"], handle, self._options[option], value), url)
+
+    def set_ptr(self, handle: ptr, option: str, value: ptr, url: str):
+        self.code(__ccall(curl_easy_setopt, self._symbols["curl_easy_setopt"], handle, self._options[option], value), url)
+
+    def info(self, handle: ptr, option: str, url: str) -> int:
+        value = __alloc_atomic(8)
+        __store8(value, 0, __word(0))
+        self.code(__ccall(curl_easy_getinfo, self._symbols["curl_easy_getinfo"], handle, self._info[option], value), url)
+        return __int(__load8(value, 0))
+
+    def text(self, handle: ptr, option: str, url: str) -> str | None:
+        value = self.info(handle, option, url)
+        pointer = __ptr(__word(value))
+        if __addr_is_null(pointer):
+            return None
+        return core.str_from_bytes(pointer, core.strlen(pointer))
+
+def _curl() -> _Curl:
+    cache = core.http_cache()
+    library = __ptr(__load8(cache, 0))
+    loaded = not __addr_is_null(library)
+    if not loaded:
+        library = core.dlopen(core.str_bytes(core.http_library_name()), 2)
+        if __addr_is_null(library):
+            raise OSError("cannot load libcurl: " + _load_reason())
+    symbols: dict[str, ptr] = {}
+    try:
+        for name in ["curl_global_init", "curl_easy_init", "curl_easy_cleanup", "curl_easy_setopt", "curl_easy_getinfo", "curl_easy_strerror", "curl_slist_append", "curl_slist_free_all", "curl_multi_init", "curl_multi_add_handle", "curl_multi_remove_handle", "curl_multi_perform", "curl_multi_timeout", "curl_multi_info_read", "curl_multi_cleanup"]:
+            symbols[name] = _symbol(library, name)
+        if not loaded:
+            code = __ccall(curl_global_init, symbols["curl_global_init"], 3)
+            if code != 0:
+                raise OSError("cannot load libcurl: initialization failed")
+            __store8(cache, 0, __word(library))
+    except Exception:
+        if not loaded:
+            core.dlclose(library)
+        raise
+    options = {
+        "url": 10002,
+        "errorbuffer": 10010,
+        "writedata": 10001,
+        "headerdata": 10029,
+        "protocols_str": 10318,
+        "proxy": 10004,
+        "noproxy": 10177,
+        "nosignal": 99,
+        "followlocation": 52,
+        "ssl_verifypeer": 64,
+        "ssl_verifyhost": 81,
+        "cainfo": 10065,
+        "capath": 10097,
+        "post": 47,
+        "postfieldsize_large": 30120,
+        "readdata": 10009,
+        "nobody": 44,
+        "httpget": 80,
+        "customrequest": 10036,
+        "httpheader": 10023,
+    }
+    info = {
+        "downloaded": 6291464,
+        "uploaded": 6291463,
+        "namelookup_time": 6291507,
+        "primary_ip": 1048608,
+        "status": 2097154,
+        "redirect_url": 1048607,
+    }
+    return _Curl(symbols, options, info)
+
+def _token(text: str) -> bool:
+    if text == "":
+        return False
+    for c in text:
+        if not (("a" <= c and c <= "z") or ("A" <= c and c <= "Z") or ("0" <= c and c <= "9") or c in "!#$%&'*+-.^_`|~"):
+            return False
+    return True
+
+def _percent(byte: int) -> str:
+    digits = "0123456789ABCDEF"
+    return "%" + digits[byte // 16] + digits[byte % 16]
+
+def _encode(text: str, query: bool) -> str:
+    data = text.encode()
+    parts: list[str] = []
+    i = 0
+    while i < len(data):
+        byte = data[i]
+        c = chr(byte)
+        safe = "-._~"
+        if not query:
+            safe = safe + "!$&'()*+,;=:@/?"
+        if ("a" <= c and c <= "z") or ("A" <= c and c <= "Z") or ("0" <= c and c <= "9") or c in safe:
+            parts.append(c)
+        elif query and c == " ":
+            parts.append("+")
+        elif not query and c == "%" and i + 2 < len(data) and chr(data[i + 1]) in "0123456789abcdefABCDEF" and chr(data[i + 2]) in "0123456789abcdefABCDEF":
+            parts.append("%" + chr(data[i + 1]) + chr(data[i + 2]))
+            i = i + 2
+        else:
+            parts.append(_percent(byte))
+        i = i + 1
+    return "".join(parts)
+
+class _URL:
+    text: str
+    scheme: str
+    origin: str
+
+def _url(text: str) -> _URL:
+    clean = text.split("#")[0]
+    split = clean.find("://")
+    scheme = clean[:split].lower()
+    if split < 0 or scheme not in ["http", "https"]:
+        raise ValueError(f"invalid URL '{text}'")
+    rest = clean[split + 3:]
+    end = len(rest)
+    for i in range(len(rest)):
+        if rest[i] in "/?":
+            end = i
+            break
+    authority = rest[:end]
+    path = rest[end:]
+    if "@" in authority:
+        raise ValueError("URL user information is not allowed")
+    port = ""
+    host = authority
+    if authority.startswith("["):
+        close = authority.find("]")
+        if close < 0:
+            raise ValueError(f"invalid URL '{text}'")
+        host = authority[:close + 1]
+        port = authority[close + 1:]
+        if close == 1 or not core.http_ipv6(host[1:close]):
+            raise ValueError(f"invalid URL '{text}'")
+        for c in host[1:close]:
+            if c not in "0123456789abcdefABCDEF:.":
+                raise ValueError(f"invalid URL '{text}'")
+    else:
+        colon = authority.find(":")
+        if colon >= 0:
+            host = authority[:colon]
+            port = authority[colon:]
+        if host == "":
+            raise ValueError(f"invalid URL '{text}'")
+        for c in host:
+            if not (("a" <= c and c <= "z") or ("A" <= c and c <= "Z") or ("0" <= c and c <= "9") or c in ".-"):
+                raise ValueError(f"invalid URL '{text}'")
+    effective = 80
+    if scheme == "https":
+        effective = 443
+    if port != "":
+        if not port.startswith(":") or len(port) == 1:
+            raise ValueError(f"invalid URL '{text}'")
+        effective = 0
+        for c in port[1:]:
+            if c < "0" or c > "9" or effective > 65535:
+                raise ValueError(f"invalid URL '{text}'")
+            effective = effective * 10 + ord(c) - 48
+        if effective < 1 or effective > 65535:
+            raise ValueError(f"invalid URL '{text}'")
+    host = host.lower()
+    if path == "" or path.startswith("?"):
+        path = "/" + path
+    return _URL(scheme + "://" + host + port + _encode(path, False), scheme, scheme + "://" + host + ":" + str(effective))
+
+def _headers(headers: list[Header] | None) -> list[str]:
+    lines: list[str] = []
+    if headers is not None:
+        for item in headers:
+            if not _token(item.name):
+                raise ValueError(f"invalid header name '{item.name}'")
+            if item.name.lower() in ["host", "content-length", "transfer-encoding"]:
+                raise ValueError(f"header '{item.name}' is managed by the transport")
+            for c in item.value:
+                if c != "\t" and (ord(c) < 32 or ord(c) > 126):
+                    raise ValueError(f"invalid header value for '{item.name}'")
+            if item.value == "":
+                lines.append(item.name + ";")
+            else:
+                lines.append(item.name + ": " + item.value)
+    return lines
+
+def _header_value(text: str) -> str:
+    start = 0
+    end = len(text)
+    while start < end and text[start] in " \t":
+        start = start + 1
+    while end > start and text[end - 1] in " \t":
+        end = end - 1
+    return text[start:end]
+
+def _response_headers(data: str) -> list[Header]:
+    headers: list[Header] = []
+    for line in data.split("\n"):
+        line = line.removesuffix("\r")
+        if line.startswith("HTTP/"):
+            headers = []
+        elif (line.startswith(" ") or line.startswith("\t")) and len(headers) > 0:
+            headers[len(headers) - 1].value = headers[len(headers) - 1].value + " " + _header_value(line)
+        else:
+            colon = line.find(":")
+            if colon >= 0:
+                headers.append(Header(line[:colon], _header_value(line[colon + 1:])))
+    return headers
+
+class _Stream:
+    _file: ptr
+    _slots: ptr
+    _memory: bool
+
+    def flush(self, failure: str):
+        if fflush(self._file) != 0:
+            raise OSError(failure + ": " + core.os_reason())
+
+    def size(self) -> int:
+        return __int(__load8(self._slots, 8))
+
+    def body(self) -> bytes:
+        buffer = __ptr(__load8(self._slots, 0))
+        data = core.str_alloc(self.size())
+        core.memcpy(__offset(data, 16), buffer, self.size())
+        return __bytes(__word(core.bytes_tag(__str(__word(data)))))
+
+    def headers(self) -> list[Header]:
+        buffer = __ptr(__load8(self._slots, 0))
+        parts: list[str] = []
+        for i in range(self.size()):
+            parts.append(chr(__load1(buffer, i)))
+        return _response_headers("".join(parts))
+
+    def close(self, failure: str):
+        if __addr_is_null(self._file):
+            return
+        status = fclose(self._file)
+        reason = core.os_reason()
+        self._file = _null()
+        if self._memory:
+            free(__ptr(__load8(self._slots, 0)))
+        if status != 0:
+            raise OSError(failure + ": " + reason)
+
+def _memory(url: str) -> _Stream:
+    slots = __alloc_atomic(16)
+    __store8(slots, 0, __word(0))
+    __store8(slots, 8, __word(0))
+    file = open_memstream(slots, __offset(slots, 8))
+    if __addr_is_null(file):
+        raise OSError("cannot fetch " + url + ": " + core.os_reason())
+    return _Stream(file, slots, True)
+
+class _Exchange:
+    _curl: _Curl
+    _handle: ptr
+    _multi: ptr
+    _output: _Stream
+    _headers: _Stream
+    _input: ptr
+    _body: bytes | None
+    _items: ptr
+    _errors: ptr
+    _url: str
+    _timeout: float
+    _failure: str
+    _resolved: bool = False
+    _last: float = 0.0
+    _downloaded: int = 0
+    _uploaded: int = 0
+    _head_size: int = 0
+
+    def step(self) -> bool:
+        curl = self._curl
+        symbols = curl._symbols
+        running = __alloc_atomic(4)
+        code = __ccall(curl_multi_perform, symbols["curl_multi_perform"], self._multi, running)
+        if code != 0:
+            raise OSError("cannot fetch " + self._url + ": cannot advance transfer")
+        self._output.flush(self._failure)
+        self._headers.flush(self._failure)
+        downloaded = curl.info(self._handle, "downloaded", self._url)
+        uploaded = curl.info(self._handle, "uploaded", self._url)
+        head_size = self._headers.size()
+        now = time.monotonic()
+        if not self._resolved:
+            address = curl.text(self._handle, "primary_ip", self._url)
+            if curl.info(self._handle, "namelookup_time", self._url) > 0 or (address is not None and address != "") or head_size > 0:
+                self._resolved = True
+                self._last = now
+        if downloaded != self._downloaded or uploaded != self._uploaded or head_size != self._head_size:
+            self._downloaded = downloaded
+            self._uploaded = uploaded
+            self._head_size = head_size
+            self._last = now
+        if __load4(running, 0) == 0:
+            queued = __alloc_atomic(4)
+            message = __ccall(curl_multi_info_read, symbols["curl_multi_info_read"], self._multi, queued)
+            assert not __addr_is_null(message), "completed transfer has no result"
+            result = core.http_result(message)
+            if result != 0:
+                if result == 28:
+                    raise TimeoutError(f"request timed out after {self._timeout} seconds")
+                reason = core.str_from_bytes(self._errors, core.strlen(self._errors))
+                if reason == "":
+                    curl.code(result, self._url)
+                raise OSError("cannot fetch " + self._url + ": " + reason)
+            return True
+        if self._resolved and now - self._last >= self._timeout:
+            raise TimeoutError(f"request timed out after {self._timeout} seconds")
+        return False
+
+    def delay(self) -> float:
+        milliseconds = __alloc_atomic(8)
+        code = __ccall(curl_multi_timeout, self._curl._symbols["curl_multi_timeout"], self._multi, milliseconds)
+        assert code == 0, "cannot get transfer timeout"
+        value = __int(__load8(milliseconds, 0))
+        delay = 0.01
+        if value >= 0:
+            delay = min(delay, float(value) / 1000.0)
+        if self._resolved:
+            delay = min(delay, max(0.0, self._last + self._timeout - time.monotonic()))
+        return delay
+
+    def close(self):
+        symbols = self._curl._symbols
+        if not __addr_is_null(self._multi):
+            __ccall(curl_multi_remove_handle, symbols["curl_multi_remove_handle"], self._multi, self._handle)
+            __ccall(curl_multi_cleanup, symbols["curl_multi_cleanup"], self._multi)
+            self._multi = _null()
+        if not __addr_is_null(self._handle):
+            __ccall(curl_easy_cleanup, symbols["curl_easy_cleanup"], self._handle)
+            self._handle = _null()
+        __ccall(curl_slist_free_all, symbols["curl_slist_free_all"], self._items)
+        self._items = _null()
+        if not __addr_is_null(self._input):
+            fclose(self._input)
+            self._input = _null()
+        try:
+            self._headers.close(self._failure)
+        finally:
+            self._output.close(self._failure)
+
+    def status(self) -> int:
+        return self._curl.info(self._handle, "status", self._url)
+
+    def redirect(self) -> str | None:
+        return self._curl.text(self._handle, "redirect_url", self._url)
+
+def _exchange(curl: _Curl, method: str, url: str, lines: list[str], body: bytes | None, timeout: float, ca_file: str | None, path: str, target: str) -> _Exchange:
+    failure = "cannot fetch " + url
+    if path != "":
+        failure = "cannot write " + target
+        file = fopen(core.path_bytes(path), core.str_bytes("wb"))
+        if __addr_is_null(file):
+            raise OSError(failure + ": " + core.os_reason())
+        output = _Stream(file, _null(), False)
+    else:
+        output = _memory(url)
+    try:
+        headers = _memory(url)
+    except Exception:
+        output.close(failure)
+        raise
+    errors = __alloc_atomic(256)
+    __store1(errors, 0, 0)
+    exchange = _Exchange(curl, _null(), _null(), output, headers, _null(), body, _null(), errors, url, timeout, failure)
+    symbols = curl._symbols
+    try:
+        exchange._handle = __ccall(curl_easy_init, symbols["curl_easy_init"])
+        if __addr_is_null(exchange._handle):
+            raise OSError("cannot fetch " + url + ": cannot initialize transfer")
+        handle = exchange._handle
+        curl.set_ptr(handle, "url", core.str_bytes(url), url)
+        curl.set_ptr(handle, "errorbuffer", errors, url)
+        curl.set_ptr(handle, "writedata", output._file, url)
+        curl.set_ptr(handle, "headerdata", headers._file, url)
+        curl.set_ptr(handle, "protocols_str", core.str_bytes("http,https"), url)
+        curl.set_ptr(handle, "proxy", core.str_bytes(""), url)
+        curl.set_ptr(handle, "noproxy", core.str_bytes("*"), url)
+        curl.set_int(handle, "nosignal", 1, url)
+        curl.set_int(handle, "followlocation", 0, url)
+        curl.set_int(handle, "ssl_verifypeer", 1, url)
+        curl.set_int(handle, "ssl_verifyhost", 2, url)
+        if ca_file is not None:
+            curl.set_ptr(handle, "cainfo", core.path_bytes(ca_file), url)
+            # Secure Transport has no CA directory; CAINFO replaces its anchors.
+            code = __ccall(curl_easy_setopt, symbols["curl_easy_setopt"], handle, curl._options["capath"], _null())
+            if code != 4:
+                curl.code(code, url)
+        if body is not None:
+            exchange._input = fmemopen(__offset(__ptr(__word(body)), 16), max(1, len(body)), core.str_bytes("rb"))
+            if __addr_is_null(exchange._input):
+                raise OSError("cannot fetch " + url + ": " + core.os_reason())
+            curl.set_int(handle, "post", 1, url)
+            curl.set_int(handle, "postfieldsize_large", len(body), url)
+            curl.set_ptr(handle, "readdata", exchange._input, url)
+        if method == "HEAD":
+            curl.set_int(handle, "nobody", 1, url)
+        elif method == "GET" and body is None:
+            curl.set_int(handle, "httpget", 1, url)
+        else:
+            curl.set_ptr(handle, "customrequest", core.str_bytes(method), url)
+        for line in lines:
+            items = __ccall(curl_slist_append, symbols["curl_slist_append"], exchange._items, core.str_bytes(line))
+            if __addr_is_null(items):
+                raise OSError("cannot fetch " + url + ": cannot allocate headers")
+            exchange._items = items
+        if len(lines) > 0:
+            curl.set_ptr(handle, "httpheader", exchange._items, url)
+        exchange._multi = __ccall(curl_multi_init, symbols["curl_multi_init"])
+        if __addr_is_null(exchange._multi):
+            raise OSError("cannot fetch " + url + ": cannot initialize transfer")
+        code = __ccall(curl_multi_add_handle, symbols["curl_multi_add_handle"], exchange._multi, handle)
+        assert code == 0, "cannot add transfer"
+        return exchange
+    except Exception:
+        exchange.close()
+        raise
+
+class _Fetch:
+    _curl: _Curl
+    _method: str
+    _current: _URL
+    _lines: list[str]
+    _body: bytes | None
+    _timeout: float
+    _follow: bool
+    _ca_file: str | None
+    _path: str
+    _temp: str
+    _exchange: _Exchange | None = None
+    _hops: int = 0
+
+    def step(self) -> bool:
+        exchange = self._exchange
+        if exchange is None:
+            exchange = _exchange(self._curl, self._method, self._current.text, self._lines, self._body, self._timeout, self._ca_file, self._temp, self._path)
+            self._exchange = exchange
+        if not exchange.step():
+            return False
+        status = exchange.status()
+        redirect = exchange.redirect()
+        if self._follow and self._method in ["GET", "HEAD"] and status in [301, 302, 303, 307, 308] and redirect is not None:
+            self._hops = self._hops + 1
+            if self._hops > 10:
+                raise OSError("too many redirects")
+            try:
+                target = _url(redirect)
+            except ValueError:
+                raise OSError(f"invalid redirect target '{redirect}'")
+            if self._current.scheme == "https" and target.scheme == "http":
+                raise OSError("refusing to follow a redirect from https to http")
+            if self._current.origin != target.origin:
+                self._lines = []
+            self._current = target
+            exchange.close()
+            self._exchange = None
+            return False
+        return True
+
+    def delay(self) -> float:
+        exchange = self._exchange
+        if exchange is None:
+            return 0.0
+        return exchange.delay()
+
+    def response(self) -> Response:
+        exchange = self._exchange
+        assert exchange is not None
+        return Response(exchange.status(), exchange._headers.headers(), exchange._output.body(), self._current.text)
+
+    def download(self) -> Download:
+        exchange = self._exchange
+        assert exchange is not None
+        status = exchange.status()
+        headers = exchange._headers.headers()
+        written = exchange._downloaded
+        if written < 0:
+            raise OverflowError("download size out of range")
+        exchange.close()
+        if 200 <= status and status <= 299:
+            if core.rename(core.str_bytes(self._temp), core.path_bytes(self._path)) != 0:
+                raise OSError("cannot write " + self._path + ": " + core.os_reason())
+            self._temp = ""
+        else:
+            written = 0
+        return Download(status, headers, self._current.text, written)
+
+    def close(self):
+        try:
+            exchange = self._exchange
+            if exchange is not None:
+                exchange.close()
+        finally:
+            if self._temp != "":
+                unlink(core.str_bytes(self._temp))
+                self._temp = ""
+
+def _fetch(method: str, url: str, headers: list[Header] | None, body: bytes | None, timeout: float, follow: bool, ca_file: str | None, path: str | None) -> _Fetch:
+    if not _token(method):
+        raise ValueError(f"invalid method '{method}'")
+    current = _url(url)
+    lines = _headers(headers)
+    if not (timeout > 0.0 and timeout - timeout == 0.0):
+        raise ValueError("timeout must be finite and positive")
+    curl = _curl()
+    temp = ""
+    target = ""
+    if path is not None:
+        core.path_bytes(path)
+        target = path
+        directory = fs.dirname(path)
+        if directory == "":
+            directory = "."
+        text = fs.join(directory, "." + fs.basename(path) + ".XXXXXX.part")
+        template = __alloc_atomic(core.str_size(text) + 1)
+        core.memcpy(template, core.str_bytes(text), core.str_size(text) + 1)
+        fd = mkstemps(template, 5)
+        if fd < 0:
+            raise OSError("cannot write " + path + ": " + core.os_reason())
+        temp = core.str_from_bytes(template, core.strlen(template))
+        # mkstemps starts at 0600; downloads use the normal file creation mode.
+        mask = umask(0)
+        umask(mask)
+        mode = 0
+        for bit in [2, 4, 16, 32, 128, 256]:
+            if mask // bit % 2 == 0:
+                mode = mode + bit
+        if fchmod(fd, mode) != 0:
+            reason = core.os_reason()
+            core.close(fd)
+            unlink(template)
+            raise OSError("cannot write " + path + ": " + reason)
+        if core.close(fd) != 0:
+            reason = core.os_reason()
+            unlink(template)
+            raise OSError("cannot write " + path + ": " + reason)
+    return _Fetch(curl, method, current, lines, body, timeout, follow, ca_file, target, temp)
+
+def request(method: str, url: str, headers: list[Header] | None = None, body: bytes | None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str | None = None) -> Response:
+    fetch = _fetch(method, url, headers, body, timeout, follow_redirects, ca_file, None)
+    try:
+        while not fetch.step():
+            time.sleep(fetch.delay())
+        return fetch.response()
+    finally:
+        fetch.close()
+
+def download(url: str, path: str, headers: list[Header] | None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str | None = None) -> Download:
+    fetch = _fetch("GET", url, headers, None, timeout, follow_redirects, ca_file, path)
+    try:
+        while not fetch.step():
+            time.sleep(fetch.delay())
+        return fetch.download()
+    finally:
+        fetch.close()
+
+async def request_async(method: str, url: str, headers: list[Header] | None = None, body: bytes | None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str | None = None) -> Response:
+    await aio.sleep(0.0)
+    fetch = _fetch(method, url, headers, body, timeout, follow_redirects, ca_file, None)
+    try:
+        while not fetch.step():
+            await aio.sleep(fetch.delay())
+        return fetch.response()
+    finally:
+        fetch.close()
+
+async def download_async(url: str, path: str, headers: list[Header] | None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str | None = None) -> Download:
+    await aio.sleep(0.0)
+    fetch = _fetch("GET", url, headers, None, timeout, follow_redirects, ca_file, path)
+    try:
+        while not fetch.step():
+            await aio.sleep(fetch.delay())
+        return fetch.download()
+    finally:
+        fetch.close()
+
+def header(headers: list[Header], name: str) -> str | None:
+    wanted = name.lower()
+    for item in headers:
+        if item.name.lower() == wanted:
+            return item.value
+    return None
+
+def urlencode(values: dict[str, str]) -> str:
+    pairs: list[str] = []
+    for key in values:
+        pairs.append(_encode(key, True) + "=" + _encode(values[key], True))
+    return "&".join(pairs)

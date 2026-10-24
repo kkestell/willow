@@ -18,9 +18,7 @@ import parser
 # Whether `name` is a standard library module with no source in lib/, which
 # stdlib.wlo declares instead.
 def is_stdlib(name: str) -> bool:
-    return name in [
-        "http",
-    ]
+    return False
 
 # A module read from source: its full name, as in "app.util", and its syntax
 # tree, whose path is the file it was read from.

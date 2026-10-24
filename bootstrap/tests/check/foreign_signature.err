@@ -1,0 +1,1 @@
+lib/foreign_bad_signature.wlo:5:13: error: '__ccall' requires an extern function as its signature

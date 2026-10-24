@@ -1,0 +1,5 @@
+def ordinary():
+    pass
+
+def bad():
+    __ccall(ordinary, __ptr(__word(0)))

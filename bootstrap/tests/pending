@@ -1,9 +1,7 @@
-http_values
 json_library
 overflow_add
 overflow_sub
 runtime_frames
 stdlib_builtins_errors
-stdlib_http_async
 text_conversions
 type_errors

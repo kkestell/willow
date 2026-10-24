@@ -1,0 +1,1 @@
+foreign_call_privilege.wlo:2:5: error: intrinsic '__ccall' is only available in core

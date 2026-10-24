@@ -219,6 +219,11 @@ The layer is:
   `close`, `exit`, `memcpy`, `memcmp`, `strtod`, `snprintf`, `GC_init`, and
   the GC allocation functions.
 
+Stage 2 additionally provides `__ccall(signature, address, args...)` to
+privileged modules. `signature` is an extern declaration; the call through
+`address: ptr` uses its C parameter, result, and variadic ABI. It does not
+create a Willow function value or a C callback.
+
 Core's own failures call `core.fail(class_name, message)`, which writes the
 report and exits in L0 and sets the pending exception in stage 1 (§6).
 

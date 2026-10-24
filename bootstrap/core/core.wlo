@@ -43,6 +43,10 @@ extern def kill(pid: cint, sig: cint) -> cint
 extern def sigemptyset(signals: ptr) -> cint
 extern def sigaddset(signals: ptr, sig: cint) -> cint
 extern def waitpid(pid: cint, status: ptr, options: cint) -> cint
+extern def inet_pton(family: cint, text: ptr, address: ptr) -> cint
+extern def dlopen(name: ptr, flags: cint) -> ptr
+extern def dlerror() -> ptr
+extern def dlclose(handle: ptr) -> cint
 extern def dlsym(handle: ptr, name: ptr) -> ptr
 extern def _NSGetEnviron() -> ptr
 extern def _NSGetExecutablePath(buf: ptr, size: ptr) -> cint
@@ -3056,6 +3060,25 @@ def fs_same_file(source: str, destination: str) -> bool:
     if layout.device_size == 4:
         return __load4(first, layout.device_offset) == __load4(second, layout.device_offset)
     return __int(__load8(first, layout.device_offset)) == __int(__load8(second, layout.device_offset))
+
+def http_cache() -> ptr:
+    fail("RuntimeError", "HTTP library cache was not emitted")
+    return __ptr(__word(0))
+
+def http_library_name() -> str:
+    if __os == "darwin":
+        return "/usr/lib/libcurl.4.dylib"
+    return "libcurl.so.4"
+
+def http_ipv6(host: str) -> bool:
+    family = 10
+    if __os == "darwin":
+        family = 30
+    return inet_pton(family, str_bytes(host), __alloc_atomic(16)) == 1
+
+# CURLMsg is an int, a pointer, and a union on both LP64 targets.
+def http_result(message: ptr) -> int:
+    return __load4(message, 16)
 
 # The process's environment, a C array of strings. L0 cannot name the C
 # variable environ, so Darwin's accessor function or, on Linux, dlsym with
