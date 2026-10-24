@@ -1,0 +1,504 @@
+# Turns source text into tokens (spec §2). Lexing stops at the first error.
+
+import diagnostic
+import tokens
+
+class Lexer:
+    path: str
+    # The source as code points, so an index is also a column offset.
+    chars: list[str]
+    size: int
+    pos: int
+    line: int
+    line_start: int
+    # Indentation level, and bracket nesting outside f-string fields.
+    level: int
+    depth: int
+    tokens: list[tokens.Token]
+    keywords: dict[str, tokens.Kind]
+    operators: dict[str, tokens.Kind]
+    unsupported: list[str]
+    error: diagnostic.Diagnostic | None
+
+    # The character at `pos`, or "" past the end.
+    def at(self, pos: int) -> str:
+        if pos < self.size:
+            return self.chars[pos]
+        return ""
+
+    def text(self, start: int, stop: int) -> str:
+        return "".join(self.chars[start:stop])
+
+    # Records the first error and moves to the end of the source, which ends
+    # every loop in the lexer.
+    def fail(self, pos: int, message: str):
+        if self.error is None:
+            line = 1
+            line_start = 0
+            i = 0
+            while i < pos:
+                if self.chars[i] == "\n":
+                    line = line + 1
+                    line_start = i + 1
+                i = i + 1
+            self.error = diagnostic.Diagnostic(self.path, line, pos - line_start + 1, message)
+        self.pos = self.size
+
+    # Adds a token starting at `pos` on the current line.
+    def add(self, kind: tokens.Kind, text: str, pos: int) -> tokens.Token:
+        token = tokens.Token(kind, text, self.line, pos - self.line_start + 1)
+        self.tokens.append(token)
+        return token
+
+    # Called for the LF at `pos`.
+    def newline(self, pos: int):
+        self.line = self.line + 1
+        self.line_start = pos + 1
+
+    def run(self):
+        # A carriage return is only valid before LF, so later scans treat
+        # every CR as the start of a CRLF.
+        i = 0
+        while i < self.size:
+            if self.chars[i] == "\r" and self.at(i + 1) != "\n":
+                self.fail(i, "bare carriage return; line endings must be LF or CRLF")
+                return
+            i = i + 1
+        line_has_tokens = False
+        while self.pos < self.size:
+            c = self.chars[self.pos]
+            if not line_has_tokens and self.depth == 0:
+                line_has_tokens = self.start_line()
+            elif c == "\n" or c == "\r":
+                if self.depth == 0:
+                    self.add(tokens.Kind.NEWLINE, "", self.pos)
+                    line_has_tokens = False
+                if c == "\r":
+                    self.pos = self.pos + 1
+                self.newline(self.pos)
+                self.pos = self.pos + 1
+            else:
+                count = len(self.tokens)
+                self.lex_token()
+                if len(self.tokens) > count:
+                    kind = self.tokens[len(self.tokens) - 1].kind
+                    if opens(kind):
+                        self.depth = self.depth + 1
+                    elif closes(kind) and self.depth > 0:
+                        self.depth = self.depth - 1
+        if self.error is not None:
+            return
+        if line_has_tokens and self.depth == 0:
+            self.add(tokens.Kind.NEWLINE, "", self.size)
+        # A file that ends inside brackets gets no DEDENTs, so the parser
+        # reports the unclosed bracket at the end of the file.
+        if self.depth == 0:
+            while self.level > 0:
+                self.add(tokens.Kind.DEDENT, "", self.size)
+                self.level = self.level - 1
+        self.add(tokens.Kind.EOF, "", self.size)
+
+    # Reads the indentation of the line at `pos`. Skips a blank or
+    # comment-only line, including its newline, and returns False; otherwise
+    # adds any INDENT or DEDENT tokens and returns True.
+    def start_line(self) -> bool:
+        p = self.pos
+        while self.at(p) == " ":
+            p = p + 1
+        c = self.at(p)
+        if c == "\t":
+            self.fail(p, "tabs are not allowed outside strings and comments")
+            return False
+        if c == "#":
+            while self.at(p) != "" and self.at(p) != "\n":
+                p = p + 1
+            c = self.at(p)
+        if c == "" or c == "\n" or c == "\r":
+            if c == "\r":
+                p = p + 1
+            if self.at(p) == "\n":
+                self.newline(p)
+                p = p + 1
+            self.pos = p
+            return False
+        width = p - self.pos
+        if width % 4 != 0:
+            self.fail(p, "indentation must be a multiple of four spaces")
+            return False
+        level = width // 4
+        if level > self.level + 1:
+            self.fail(p, "unexpected indent")
+            return False
+        if level > self.level:
+            self.add(tokens.Kind.INDENT, "", p)
+        while self.level > level:
+            self.add(tokens.Kind.DEDENT, "", p)
+            self.level = self.level - 1
+        self.level = level
+        self.pos = p
+        return True
+
+    # Reads one token, a space, or a comment at `pos`, which is not a newline.
+    def lex_token(self):
+        p = self.pos
+        c = self.chars[p]
+        if c == " ":
+            self.pos = p + 1
+        elif c == "\t":
+            self.fail(p, "tabs are not allowed outside strings and comments")
+        elif c == "#":
+            while self.at(p) != "" and self.at(p) != "\n" and self.at(p) != "\r":
+                p = p + 1
+            self.pos = p
+        elif is_name_start(c):
+            while is_name_char(self.at(p)):
+                p = p + 1
+            word = self.text(self.pos, p)
+            if word == "f" and is_quote(self.at(p)):
+                self.read_string(True)
+            elif word in self.keywords:
+                self.add(self.keywords[word], word, self.pos)
+                self.pos = p
+            else:
+                self.add(tokens.Kind.NAME, word, self.pos)
+                self.pos = p
+        elif is_digit(c):
+            self.read_number()
+        elif is_quote(c):
+            self.read_string(False)
+        else:
+            self.read_operator()
+
+    def read_operator(self):
+        p = self.pos
+        length = 3
+        while length > 0:
+            text = self.text(p, p + length)
+            if text in self.unsupported:
+                self.fail(p, f"unsupported operator '{text}'")
+                return
+            if text in self.operators:
+                self.add(self.operators[text], text, p)
+                self.pos = p + length
+                return
+            length = length - 1
+        self.fail(p, f"unexpected character '{self.chars[p]}'")
+
+    def read_number(self):
+        start = self.pos
+        p = start
+        while is_digit(self.at(p)):
+            p = p + 1
+        integer_digits = p - start
+        is_float = False
+        if self.at(p) == "." and is_digit(self.at(p + 1)):
+            p = p + 1
+            while is_digit(self.at(p)):
+                p = p + 1
+            is_float = True
+        if self.at(p) == "e" or self.at(p) == "E":
+            q = p + 1
+            if self.at(q) == "+" or self.at(q) == "-":
+                q = q + 1
+            if is_digit(self.at(q)):
+                while is_digit(self.at(q)):
+                    q = q + 1
+                p = q
+                is_float = True
+        end = p
+        while is_name_char(self.at(end)) or self.at(end) == "." or (self.at(end) == "+" or self.at(end) == "-") and (self.at(end - 1) == "e" or self.at(end - 1) == "E"):
+            end = end + 1
+        if end > p:
+            self.fail(start, f"invalid number literal '{self.text(start, end)}'")
+            return
+        text = self.text(start, p)
+        kind = "integer"
+        if is_float:
+            kind = "float"
+        if integer_digits > 1 and self.chars[start] == "0":
+            self.fail(start, f"{kind} literal has leading zeros")
+            return
+        if is_float:
+            if float(text) == float("inf"):
+                self.fail(start, "float literal out of range")
+                return
+            self.add(tokens.Kind.FLOAT_LITERAL, text, start)
+        else:
+            # Compare digits so an out-of-range value is never converted.
+            limit = "9223372036854775807"
+            if len(text) > len(limit) or len(text) == len(limit) and text > limit:
+                self.fail(start, "integer literal out of range")
+                return
+            self.add(tokens.Kind.INT_LITERAL, text, start)
+        self.pos = p
+
+    # Reads the string literal at `pos`, or the f-string whose `f` is at `pos`.
+    def read_string(self, formatted: bool):
+        start = self.pos
+        q = start
+        if formatted:
+            q = start + 1
+        quote = self.chars[q]
+        triple = self.at(q + 1) == quote and self.at(q + 2) == quote
+        close = 1
+        if triple:
+            close = 3
+        # `run` is the token that receives the text being collected in `parts`.
+        run: tokens.Token | None = None
+        if formatted:
+            self.add(tokens.Kind.FSTRING_START, "", start)
+        else:
+            run = self.add(tokens.Kind.STRING_LITERAL, "", start)
+        parts: list[str] = []
+        self.pos = q + close
+        while True:
+            p = self.pos
+            c = self.at(p)
+            if c == "":
+                self.fail(start, "unterminated string literal")
+                return
+            if c == quote and (not triple or self.at(p + 1) == quote and self.at(p + 2) == quote):
+                break
+            if formatted and c == "{" and self.at(p + 1) != "{":
+                if run is not None:
+                    run.text = "".join(parts)
+                    run = None
+                    parts = []
+                self.read_field(quote, triple)
+                continue
+            if formatted and c == "}" and self.at(p + 1) != "}":
+                self.fail(p, "single '}' is not allowed in an f-string")
+                return
+            if run is None:
+                run = self.add(tokens.Kind.FSTRING_TEXT, "", p)
+            if c == "\\":
+                parts.append(self.read_escape(start, triple))
+            elif c == "\n" or c == "\r":
+                if not triple:
+                    self.fail(start, "unterminated string literal")
+                    return
+                # The CR of a CRLF is dropped, so each line break becomes "\n".
+                if c == "\n":
+                    parts.append("\n")
+                    self.newline(p)
+                self.pos = p + 1
+            elif formatted and (c == "{" or c == "}"):
+                parts.append(c)
+                self.pos = p + 2
+            else:
+                parts.append(c)
+                self.pos = p + 1
+        if run is not None:
+            run.text = "".join(parts)
+        if formatted:
+            self.add(tokens.Kind.FSTRING_END, "", self.pos)
+        self.pos = self.pos + close
+
+    # Reads the escape sequence at `pos` in the string that starts at `start`
+    # and returns its text.
+    def read_escape(self, start: int, triple: bool) -> str:
+        p = self.pos
+        e = self.at(p + 1)
+        if e == "" or not triple and (e == "\n" or e == "\r"):
+            self.fail(start, "unterminated string literal")
+            return ""
+        self.pos = p + 2
+        if e == "\\" or e == "'" or e == "\"":
+            return e
+        if e == "n":
+            return "\n"
+        if e == "r":
+            return "\r"
+        if e == "t":
+            return "\t"
+        count = 0
+        if e == "x":
+            count = 2
+        elif e == "u":
+            count = 4
+        elif e == "U":
+            count = 8
+        else:
+            self.fail(p, f"unknown escape sequence '\\{e}'")
+            return ""
+        code = 0
+        i = 0
+        while i < count:
+            digit = hex_value(self.at(p + 2 + i))
+            if digit < 0:
+                self.fail(p, f"escape '\\{e}' needs {count} hexadecimal digits")
+                return ""
+            code = code * 16 + digit
+            i = i + 1
+        # Surrogates are U+D800 through U+DFFF; the last code point is U+10FFFF.
+        if code >= 55296 and code <= 57343 or code > 1114111:
+            self.fail(p, f"escape '\\{e}{self.text(p + 2, p + 2 + count)}' is not a valid code point")
+            return ""
+        self.pos = p + 2 + count
+        return chr(code)
+
+    # Reads the f-string field whose `{` is at `pos`, in an f-string delimited
+    # by `quote`. As in the Lua implementation, the field's text is checked
+    # and its end found before its tokens are read, which decides which error
+    # comes first.
+    def read_field(self, quote: str, triple: bool):
+        brace = self.pos
+        p = brace + 1
+        nesting = 0
+        while True:
+            c = self.at(p)
+            if c == "" or not triple and (c == "\n" or c == "\r"):
+                self.fail(brace, "unterminated f-string field")
+                return
+            if c == "\\":
+                self.fail(p, "f-string fields cannot contain a backslash")
+                return
+            if c == "#":
+                self.fail(p, "f-string fields cannot contain '#'")
+                return
+            if c == quote:
+                self.fail(p, "f-string fields cannot contain the f-string's quote character")
+                return
+            if is_quote(c):
+                # A string in the other quote character may hold braces.
+                close = p + 1
+                while self.at(close) != c:
+                    if self.at(close) == "" or self.at(close) == "\n" or self.at(close) == "\r":
+                        self.fail(p, "unterminated string literal")
+                        return
+                    close = close + 1
+                i = p + 1
+                while i < close:
+                    inner = self.chars[i]
+                    if inner == "\\" or inner == "#" or inner == quote:
+                        self.fail(i, f"f-string fields cannot contain '{inner}'")
+                        return
+                    i = i + 1
+                p = close
+            elif c == "(" or c == "[" or c == "{":
+                nesting = nesting + 1
+            elif c == ")" or c == "]":
+                nesting = nesting - 1
+            elif c == "}":
+                if nesting == 0:
+                    break
+                nesting = nesting - 1
+            elif nesting == 0 and c == ":":
+                break
+            elif nesting == 0 and c == "!" and self.at(p + 1) != "=":
+                self.fail(p, "conversions are not supported")
+                return
+            p = p + 1
+        stop = p
+        close = stop
+        spec = ""
+        if self.chars[stop] == ":":
+            close = stop + 1
+            while self.at(close) != "}":
+                if self.at(close) == "" or not triple and (self.at(close) == "\n" or self.at(close) == "\r"):
+                    self.fail(brace, "unterminated f-string field")
+                    return
+                close = close + 1
+            spec = self.text(stop + 1, close)
+            message = spec_error(spec)
+            if message != "":
+                self.fail(stop, message)
+                return
+        empty = True
+        i = brace + 1
+        while i < stop:
+            if self.chars[i] != " " and self.chars[i] != "\n" and self.chars[i] != "\r":
+                empty = False
+            i = i + 1
+        if empty:
+            self.fail(brace, "empty f-string field")
+            return
+        self.pos = brace + 1
+        while self.pos < stop:
+            c = self.chars[self.pos]
+            if c == "\n":
+                self.newline(self.pos)
+                self.pos = self.pos + 1
+            elif c == "\r":
+                self.pos = self.pos + 1
+            else:
+                self.lex_token()
+        self.add(tokens.Kind.FIELD_END, spec, stop)
+        self.pos = close + 1
+
+# The tokens of `source`, or its first lexical error.
+def lex(path: str, source: str) -> list[tokens.Token] | diagnostic.Diagnostic:
+    chars: list[str] = []
+    for c in source:
+        chars.append(c)
+    lexer = Lexer(path, chars, len(chars), 0, 1, 0, 0, 0, [], tokens.keywords(), tokens.operators(), tokens.unsupported_operators(), None)
+    lexer.run()
+    error = lexer.error
+    if error is not None:
+        return error
+    return lexer.tokens
+
+def opens(kind: tokens.Kind) -> bool:
+    return kind == tokens.Kind.LPAREN or kind == tokens.Kind.LBRACKET or kind == tokens.Kind.LBRACE
+
+def closes(kind: tokens.Kind) -> bool:
+    return kind == tokens.Kind.RPAREN or kind == tokens.Kind.RBRACKET or kind == tokens.Kind.RBRACE
+
+def is_digit(c: str) -> bool:
+    return c >= "0" and c <= "9"
+
+def is_name_start(c: str) -> bool:
+    return c >= "a" and c <= "z" or c >= "A" and c <= "Z" or c == "_"
+
+def is_name_char(c: str) -> bool:
+    return is_name_start(c) or is_digit(c)
+
+def is_quote(c: str) -> bool:
+    return c == "'" or c == "\""
+
+# The value of a hexadecimal digit, or -1.
+def hex_value(c: str) -> int:
+    if is_digit(c):
+        return ord(c) - ord("0")
+    if c >= "a" and c <= "f":
+        return ord(c) - ord("a") + 10
+    if c >= "A" and c <= "F":
+        return ord(c) - ord("A") + 10
+    return -1
+
+# The error in the format specification `spec`, which has the form
+# [alignment][width][.precision][type] (spec §7), or "" if it is valid.
+def spec_error(spec: str) -> str:
+    chars: list[str] = []
+    for c in spec:
+        chars.append(c)
+    chars.append("")
+    i = 0
+    if chars[i] == "<" or chars[i] == ">" or chars[i] == "^":
+        i = i + 1
+    width_start = i
+    while is_digit(chars[i]):
+        i = i + 1
+    width_digits = i - width_start
+    has_precision = False
+    precision_start = i
+    precision_digits = 0
+    if chars[i] == ".":
+        has_precision = True
+        i = i + 1
+        precision_start = i
+        while is_digit(chars[i]):
+            i = i + 1
+        precision_digits = i - precision_start
+    kind = ""
+    if chars[i] == "s" or chars[i] == "d" or chars[i] == "f":
+        kind = chars[i]
+        i = i + 1
+    invalid = i != len(chars) - 1 or has_precision and precision_digits == 0
+    if width_digits > 1 and chars[width_start] == "0" or precision_digits > 1 and chars[precision_start] == "0":
+        invalid = True
+    if invalid:
+        return f"invalid format specification '{spec}'"
+    if has_precision and kind != "f":
+        return "format precision requires type 'f'"
+    return ""
