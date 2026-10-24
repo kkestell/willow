@@ -31,7 +31,7 @@ pub fn emit(program: &Program) -> String {
     // The entry saves the arguments for sys.args (core/API.md).
     writeln!(out, "data $W.argc = {{ l 0 }}").unwrap();
     writeln!(out, "data $W.argv = {{ l 0 }}").unwrap();
-    writeln!(out, "data $W.stdin.buffer = {{ z 4112 }}").unwrap();
+    writeln!(out, "data $W.stdin.buffer = {{ z 4120 }}").unwrap();
     // Every heap object's header points at a descriptor holding its type's
     // name, and an enum's descriptor continues with its members' texts.
     for (symbol, texts) in &program.descriptors {

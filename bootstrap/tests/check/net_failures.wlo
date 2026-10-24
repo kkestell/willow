@@ -1,0 +1,47 @@
+import core
+import net
+import sys
+
+def main():
+    # Restore SIGPIPE's default so per-socket protection is exercised.
+    assert sys.getenv("WILLOW_NET_TEST_SIGNAL_DEFAULT") is None
+    core.signal(13, core.getenv(core.str_bytes("WILLOW_NET_TEST_SIGNAL_DEFAULT")))
+    with net.listen("127.0.0.1", 0) as listener:
+        client = net.connect("localhost", listener.local_port())
+        server = listener.accept()
+        server.close()
+        data = "x".encode()
+        while len(data) < 65536:
+            data = data + data
+        failed = False
+        try:
+            for i in range(100):
+                client.sendall(data, timeout=1.0)
+        except OSError as error:
+            assert error.message.startswith("cannot send: ")
+            failed = True
+        assert failed
+        try:
+            client.enter()
+            assert False
+        except ValueError as broken:
+            assert broken.message == "connection is unusable after a failed send"
+        client.close()
+
+        client = net.connect("127.0.0.1", listener.local_port())
+        server = listener.accept()
+        while len(data) < 8388608:
+            data = data + data
+        try:
+            client.sendall(data, timeout=0.01)
+            assert False
+        except TimeoutError as timed_out:
+            assert timed_out.message == "send timed out after 0.01 seconds"
+        try:
+            client.sendall(bytes([]))
+            assert False
+        except ValueError as unusable:
+            assert unusable.message == "connection is unusable after a failed send"
+        client.close()
+        server.close()
+    print("net failures passed")
