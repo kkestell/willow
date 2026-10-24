@@ -1068,7 +1068,10 @@ class Resolver:
                 found = self.binder.builtins[node.name]
             elif node.name in self.binder.exceptions:
                 found = self.binder.exceptions[node.name]
-            elif self.module.name == "core" and node.name in self.binder.intrinsics:
+            elif node.name in self.binder.intrinsics:
+                if self.module.name != "core":
+                    self.fail(expr.line, expr.col, f"intrinsic '{node.name}' is only available in core")
+                    return
                 found = self.binder.intrinsics[node.name]
             if found is None:
                 self.fail(expr.line, expr.col, f"unknown function '{node.name}'")

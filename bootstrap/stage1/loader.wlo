@@ -56,7 +56,8 @@ class Loader:
         for item in tree.imports:
             if self.error is not None:
                 return
-            if self.loaded.get(item.name) is None:
+            # Core is compiled into every program, so it has no file here.
+            if self.loaded.get(item.name) is None and item.name != "core":
                 found = self.find(path, item)
                 if found != "":
                     self.visit(item.name, found, path, item)
