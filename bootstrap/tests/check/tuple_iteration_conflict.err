@@ -1,0 +1,1 @@
+tuple_iteration_conflict.wlo:2:18: error: cannot iterate over tuple[list[int], list[str]]: a union can have only one list member

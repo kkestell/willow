@@ -1,0 +1,1 @@
+tuple_immutable.wlo:3:10: error: cannot assign to an index of a value of type tuple[int, str]
