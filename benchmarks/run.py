@@ -135,12 +135,11 @@ def machine():
 
 def table(results):
     lines = [
-        f"Seconds of wall-clock time, best of {RUNS} runs, on {machine()}. Willow on",
-        "LuaJIT is the earlier implementation, which compiled to Lua, recorded on an",
-        "Apple M4 on 2026-10-21. In parentheses is how many times faster each Willow",
-        "column is than Python.",
+        f"Seconds of wall-clock time, best of {RUNS} runs, on {machine()}. Willow",
+        "(LuaJIT) is the earlier implementation, which compiled to Lua, recorded on an",
+        "Apple M4 on 2026-10-21.",
         "",
-        "| Benchmark (size) | C | LuaJIT | Python | Willow on LuaJIT (vs Python) | Willow (vs Python) |",
+        "| Benchmark (size) | C | LuaJIT | Python | Willow (LuaJIT) | Willow (Native) |",
         "|---|---:|---:|---:|---:|---:|",
     ]
     for _, title, size in BENCHMARKS:
@@ -148,7 +147,7 @@ def table(results):
         old = WILLOW_LUAJIT[title]
         lines.append(
             f"| {title} ({size:,}) | {times['C']:.2f} | {times['LuaJIT']:.2f} | {times['Python']:.2f}"
-            f" | {old:.2f} ({times['Python'] / old:.1f}x) | {times['Willow']:.2f} ({times['Python'] / times['Willow']:.1f}x) |"
+            f" | {old:.2f} | {times['Willow']:.2f} |"
         )
     return "\n".join(lines)
 
