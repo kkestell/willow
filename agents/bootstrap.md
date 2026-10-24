@@ -306,10 +306,10 @@ through the escape hatch in §2.
   `tests/` and `examples/`; `--lua` runs them under the Lua implementation
   instead. It also builds the `willow1` driver and runs `run.sh` with it over
   every top-level program in `bootstrap/tests/programs/` and
-  `bootstrap/tests/core/`, plus selected checker cases, listed in
-  `willow1_programs`. `make bootstrap` builds stage 0 and
-  `make bootstrap-test` runs both without LuaJIT. The runners move to a Willow
-  program once stage 2 exists.
+  `bootstrap/tests/core/`, plus every case in `bootstrap/tests/check/`, using
+  `*.wlo` globs so new programs run automatically. `make bootstrap` builds
+  stage 0 and `make bootstrap-test` runs both without LuaJIT. The runners move
+  to a Willow program once stage 2 exists.
 
 ## 9. Specification changes
 

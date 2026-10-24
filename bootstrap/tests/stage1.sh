@@ -153,125 +153,6 @@ check_bind_driver() {
     done
 }
 
-# The programs in bootstrap/tests/ that willow1 compiles, one per line. Each
-# runs through run.sh as it does with willow0.
-willow1_programs="
-check/dict_items_target.wlo
-check/dict_items_target_type.wlo
-check/dict_loop_target_type.wlo
-check/dict_values_target_type.wlo
-check/dict_view_expression.wlo
-check/list_extend_element_type.wlo
-check/method_value.wlo
-core/dicts_test.wlo
-core/errno_test.wlo
-core/floats_test.wlo
-core/run_missing_test.wlo
-core/run_test.wlo
-core/strings_test.wlo
-programs/alias_call.wlo
-programs/alias_cycle.wlo
-programs/argument_type.wlo
-programs/assert_message.wlo
-programs/assertion_failed.wlo
-programs/assertion_message.wlo
-programs/branches_and_loops.wlo
-programs/break_continue.wlo
-programs/break_outside_loop.wlo
-programs/class_symbols.wlo
-programs/classes.wlo
-programs/constructor_arguments.wlo
-programs/control_flow.wlo
-programs/conversions.wlo
-programs/core_test_intrinsic.wlo
-programs/dict_changed_during_iteration.wlo
-programs/dict_class_method.wlo
-programs/dict_evaluation_order.wlo
-programs/dict_get_default_type.wlo
-programs/dict_iteration.wlo
-programs/dict_key_type.wlo
-programs/dict_operations.wlo
-programs/dicts.wlo
-programs/division_by_zero.wlo
-programs/empty_dict_display.wlo
-programs/empty_list_display.wlo
-programs/enum_member.wlo
-programs/enums.wlo
-programs/exit_unreachable.wlo
-programs/exponent_without_digits.wlo
-programs/extend_element_type.wlo
-programs/field_defaults.wlo
-programs/field_type.wlo
-programs/files.wlo
-programs/float_division_by_zero.wlo
-programs/float_to_int_overflow.wlo
-programs/floats.wlo
-programs/for_assignment_narrowing.wlo
-programs/for_loops.wlo
-programs/format_specification.wlo
-programs/fstring_type.wlo
-programs/fstrings.wlo
-programs/host_args.wlo
-programs/host_exit.wlo
-programs/host_files.wlo
-programs/host_paths.wlo
-programs/host_realpath_missing.wlo
-programs/import_name_clash.wlo
-programs/int_true_division.wlo
-programs/integer_overflow.wlo
-programs/integer_range.wlo
-programs/intrinsic_outside_core.wlo
-programs/invalid_int.wlo
-programs/is_none_not_optional.wlo
-programs/isinstance_none.wlo
-programs/isinstance_not_member.wlo
-programs/key_not_found.wlo
-programs/keyword_after_condition.wlo
-programs/list_evaluation_order.wlo
-programs/list_index_out_of_range.wlo
-programs/list_unions.wlo
-programs/list_values.wlo
-programs/lists.wlo
-programs/loop_assignment_narrowing.wlo
-programs/maybe_unassigned.wlo
-programs/method_arity.wlo
-programs/missing_comma.wlo
-programs/missing_return.wlo
-programs/mixed_number_types.wlo
-programs/module_and_namespace.wlo
-programs/multiplication_min_overflow.wlo
-programs/multiplication_overflow.wlo
-programs/not_int.wlo
-programs/operator_types.wlo
-programs/operators.wlo
-programs/optional_field.wlo
-programs/private_name.wlo
-programs/qualified_names.wlo
-programs/range_zero_step.wlo
-programs/read_missing_file.wlo
-programs/recursive_alias.wlo
-programs/return_none.wlo
-programs/slicing.wlo
-programs/split_empty_separator.wlo
-programs/string_basics.wlo
-programs/string_iteration.wlo
-programs/strings.wlo
-programs/sum_to.wlo
-programs/sys_exit.wlo
-programs/type_aliases.wlo
-programs/type_intrinsic_outside_core.wlo
-programs/union_arithmetic.wlo
-programs/union_boxing.wlo
-programs/union_duplicate_member.wlo
-programs/union_equality.wlo
-programs/union_flow.wlo
-programs/union_narrowing.wlo
-programs/unions.wlo
-programs/unknown_escape.wlo
-programs/unknown_list_method.wlo
-programs/unreachable.wlo
-"
-
 # Writes the module core_source to DIR/core_source.wlo: core's text as one
 # string, which willow1 compiles into every program.
 core_source() {
@@ -282,9 +163,10 @@ core_source() {
     } >"$1/core_source.wlo"
 }
 
-# Builds willow1 from stage 1's sources and core_source and runs the programs
-# above with it. Under --lua there is no willow1, since the Lua
-# implementation has no core module for willow1 to import.
+# Builds willow1 from stage 1's sources and core_source and runs all top-level
+# programs in bootstrap/tests/programs/, core/, and check/ through run.sh.
+# Under --lua there is no willow1, since the Lua implementation has no core
+# module for willow1 to import.
 check_willow1() {
     [ $lua -eq 1 ] && return
     mkdir "$work/willow1-src"
@@ -295,13 +177,9 @@ check_willow1() {
         failed=1
         return
     fi
-    paths=""
-    for program in $willow1_programs; do
-        paths="$paths bootstrap/tests/$program"
-    done
     echo "willow1:"
-    # shellcheck disable=SC2086 # the paths have no spaces
-    WILLOW0=$work/willow1 bootstrap/tests/run.sh $paths || failed=1
+    WILLOW0=$work/willow1 bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
+        bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo || failed=1
 }
 
 check_test lexer_test

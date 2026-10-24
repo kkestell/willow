@@ -18,15 +18,15 @@ next. The swarm runs as `agents/bootstrap-swarm.md` describes. Updated
   it under the Lua implementation instead, which helps when a stage 0 bug is
   suspected.
 - Stage 1's checker, QBE emitter, and `willow1` driver compile L0. For every
-  program, stage 1 checks and emits all of core, keeping `__os` arm pruning. Every
-  top-level program in `bootstrap/tests/programs/` and `bootstrap/tests/core/`
-  is in `willow1_programs` and passes under stage 1.
+  program, stage 1 checks and emits all of core, keeping `__os` arm pruning.
+  Every top-level program in `bootstrap/tests/programs/` and
+  `bootstrap/tests/core/` passes under stage 1.
 - The binder checks type-argument bounds and protocol overlap after lazy
   types resolve, so `Box[list[int]]` satisfies `Box[T: Iterable[int]]`. The
   Lua binder rejects it; the regression cases in `bind_test.wlo` record the
   divergence.
-- `make bootstrap-test` passes on Linux arm64. The operator validates macOS
-  arm64 before merging; amd64 has no test machine.
+- `make bootstrap-test` passes on Linux arm64 and macOS arm64. amd64 has no
+  test machine.
 
 ## Next
 
