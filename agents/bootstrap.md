@@ -161,10 +161,11 @@ type unboxes; widening from a scalar type to a union boxes. The compiler
 inserts these conversions at every assignability point: assignment, argument,
 return, display element, field store, and collection store.
 
-Strings are immutable UTF-8: header, byte length, bytes, and a trailing zero
-so they can be passed to libc. String literals are `data` objects with the
-same layout, so a literal and a heap string are indistinguishable. Code-point
-indexing walks the bytes, as spec §7 allows.
+Strings are immutable UTF-8: header, byte length, cached hash plus one (zero
+when uncomputed), bytes, and a trailing zero so they can be passed to libc.
+String literals are `data` objects with the same layout, so a literal and a
+heap string are indistinguishable. Code-point indexing walks the bytes, as
+spec §7 allows.
 
 Lists are header, length, capacity, and a pointer to a slot array. Dicts keep
 insertion order with an entries array of key, value, and liveness, plus a hash

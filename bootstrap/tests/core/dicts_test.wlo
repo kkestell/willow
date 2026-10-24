@@ -82,3 +82,31 @@ def main():
     # A string equal by contents but a different object is found.
     fresh = "ke" + "y_17"
     assert core.word_int(core.dict_get(many, core.str_word(fresh))) == -17
+
+    # A zero hash is still cacheable, for both literals and allocated strings.
+    empty = core.str_sub("x", 0, 0)
+    assert core.str_hash("") == 0
+    assert core.str_hash("") == 0
+    assert core.str_hash(empty) == 0
+    assert core.str_hash(empty) == 0
+    core.dict_set(s, core.str_word(empty), core.int_word(42))
+    assert core.word_int(core.dict_get(s, core.str_word(""))) == 42
+
+    # Caching preserves the existing hashes and the contents of shared keys.
+    assert core.str_hash("foo_9999") == 955942781
+    assert core.str_hash("foo_9999") == 955942781
+    shared = "é🙂"
+    alias = shared
+    equal = core.str_concat("é", "🙂")
+    other = core.dict_new(2)
+    core.dict_set(s, core.str_word(shared), core.int_word(11))
+    core.dict_set(other, core.str_word(alias), core.int_word(22))
+    assert core.str_hash(shared) == 80726473
+    assert core.str_hash(equal) == 80726473
+    assert core.str_hash(alias) == 80726473
+    assert core.word_int(core.dict_get(s, core.str_word(equal))) == 11
+    assert core.word_int(core.dict_get(other, core.str_word(equal))) == 22
+    assert core.bytes_decode(core.str_encode(shared)) == "é🙂"
+    assert shared == "é🙂" and alias == shared
+    assert core.str_size(shared) == 6
+    assert core.str_len(shared) == 2

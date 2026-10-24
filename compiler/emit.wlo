@@ -698,7 +698,7 @@ class Emitter:
                     values.append("l " + kind)
             self.write(f"data $W.tuple.kinds.{self.tuple_kinds[kinds]} = " + "{ " + ", ".join(values) + " }")
         for text in self.strings:
-            data = f"l $W.str.type, l {len(utf8(text))}, " + data_bytes(text) + "b 0"
+            data = f"l $W.str.type, l {len(utf8(text))}, l 0, " + data_bytes(text) + "b 0"
             self.write(f"data $W.str.{self.strings[text]} = " + "{ " + data + " }")
         return "\n".join(self.lines) + "\n"
 
