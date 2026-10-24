@@ -1120,6 +1120,11 @@ class Emitter:
             assert isinstance(ty, types.ListType), "unchecked list extension receiver"
             collected = self.collect(args[1], iterations[0], types.expand(ty.element))
             return self.core_call("list_extend", [args[0], collected], False)
+        if node.name == "sort":
+            ty = self.concrete_type(node.object.ty)
+            assert isinstance(ty, types.ListType), "unchecked list sort receiver"
+            self.sort(args[0], types.expand(ty.element), node.args[1], args[2], args[1], True)
+            return "0"
         return self.core_call("list_" + node.name, args, node.name == "pop")
 
     def dict_display(self, expr: ast.Expr, node: ast.DictDisplay) -> str:
@@ -2051,6 +2056,8 @@ class Emitter:
             return self.protocol_value(adapter.symbol + ".range.type", value)
         elif name == "round":
             return self.core_call("float_round", self.arg_values(node.args, node.order), True)
+        elif name == "sorted":
+            return self.emit_sorted(node)
         elif name in ["abs", "min", "max", "sum", "any", "all", "list", "enumerate", "zip"]:
             return self.iterable_builtin(node)
         elif name == "ord":
@@ -2207,6 +2214,53 @@ class Emitter:
         self.jump("jmp " + test)
         self.label(end)
         return result
+
+    def emit_sorted(self, node: ast.Call) -> str:
+        values = self.arg_values(node.args, node.order)
+        iterations = node.iterables
+        assert iterations is not None, "unchecked sorted"
+        item = self.concrete_type(iterations[0].item)
+        items = self.collect(values[0], iterations[0], item)
+        self.sort(items, item, node.args[2], values[2], values[1], False)
+        return items
+
+    # Sorts list `xs` of `item`s in place by `key`, the key argument, whose
+    # value is `key_value`. Each key is computed once, in order, before
+    # anything moves. When `checked`, the key function must leave `xs` as it
+    # was.
+    def sort(self, xs: str, item: types.Type, key: ast.Expr, key_value: str, reverse: str, checked: bool):
+        expected = key.expected
+        if expected is None:
+            self.core_call("list_sort", [xs, xs, equality_kind(item), reverse], False)
+            return
+        callable = types.callable_member(self.concrete_type(expected))
+        assert callable is not None, "unchecked sort key"
+        source = xs
+        if checked:
+            source = self.core_call("list_slice", [xs, "0", self.core_call("list_len", [xs], True)], True)
+        count = self.core_call("list_len", [source], True)
+        keys = self.core_call("list_new", [count], True)
+        index = self.temp()
+        self.line(f"{index} =l copy 0")
+        test = self.new_label()
+        body = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        more = self.temp()
+        self.line(f"{more} =l csltl {index}, {count}")
+        self.jump(f"jnz {more}, {body}, {end}")
+        self.label(body)
+        value = self.core_call("list_get", [source, index], True)
+        code = self.load_field(key_value, 8)
+        result = self.willow_call(code, typed([key_value, value]), True)
+        self.core_call("list_append", [keys, result], False)
+        self.line(f"{index} =l add {index}, 1")
+        self.jump(f"jmp {test}")
+        self.label(end)
+        if checked:
+            changed = self.core_call("list_changed", [xs, source], True)
+            self.guard(changed, "RuntimeError", "list changed during sort")
+        self.core_call("list_sort", [xs, keys, equality_kind(callable.result), reverse], False)
 
     def validate_nan(self, value: str, ty: types.Type):
         if isinstance(ty, types.TupleType):

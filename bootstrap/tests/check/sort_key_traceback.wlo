@@ -1,0 +1,8 @@
+def bad(x: int) -> int:
+    if x == 2:
+        raise ValueError("bad key")
+    return x
+
+def main():
+    xs = [3, 2, 1]
+    xs.sort(key=bad)

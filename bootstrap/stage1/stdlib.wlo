@@ -93,9 +93,9 @@ def builtins() -> dict[str, Builtin]:
     add(table, "ord", [arg("", prim("str"))], prim("int"))
     add(table, "chr", [arg("", prim("int"))], prim("str"))
     add(table, "isinstance", [], None)
-    reverse = defaulted("reverse", prim("bool"), bool_default(False))
-    sort_key = BuiltinParam("key", None, none_default(), True)
-    add(table, "sorted", [any_arg("items"), reverse, sort_key], None)
+    sorted_params = [any_arg("items")]
+    sorted_params.extend(sort_params())
+    add(table, "sorted", sorted_params, None)
     add(table, "bytes", [arg("", list_of("int"))], prim("bytes"))
     add_helper(table, "bytes.fromhex", [arg("text", prim("str"))], prim("bytes"), "bytes_fromhex")
     # The checker works out these results from the arguments; min and max
@@ -112,6 +112,11 @@ def builtins() -> dict[str, Builtin]:
     add(table, "enumerate", [any_arg("items"), start], None)
     add(table, "zip", [any_arg("a"), any_arg("b")], None)
     return table
+
+# The parameters of `sorted` after `items`, and of `list.sort`.
+def sort_params() -> list[BuiltinParam]:
+    reverse = defaulted("reverse", prim("bool"), bool_default(False))
+    return [reverse, BuiltinParam("key", None, none_default(), True)]
 
 # The string methods of L0 (agents/bootstrap.md §3), with the spec's
 # parameter names and defaults. Each lowers to core's `str_<name>`.

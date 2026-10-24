@@ -860,6 +860,122 @@ def list_contains(xs: ptr, value: word, kind: int) -> bool:
         i = i + 1
     return False
 
+# The order of two sort keys of equality kind `kind`, neither holding NaN:
+# negative when a sorts before b, zero when they are equal, and positive
+# otherwise. A tuple's own kinds describe its positions.
+def slots_order(a: word, b: word, kind: int) -> int:
+    if kind == 1:
+        x = __float(a)
+        y = __float(b)
+        if x < y:
+            return -1
+        if x > y:
+            return 1
+        return 0
+    if kind == 2:
+        return str_compare(__str(a), __str(b))
+    if kind == 4:
+        left = __ptr(a)
+        kinds = __ptr(__load8(left, 16))
+        i = 0
+        while i < tuple_len(left):
+            order = slots_order(tuple_get(left, i), tuple_get(__ptr(b), i), __int(__load8(kinds, i * 8)))
+            if order != 0:
+                return order
+            i = i + 1
+        return 0
+    if __int(a) < __int(b):
+        return -1
+    if __int(a) > __int(b):
+        return 1
+    return 0
+
+def slot_has_nan(value: word, kind: int) -> bool:
+    if kind == 1:
+        return __float(value) != __float(value)
+    if kind == 4:
+        t = __ptr(value)
+        kinds = __ptr(__load8(t, 16))
+        i = 0
+        while i < tuple_len(t):
+            if slot_has_nan(tuple_get(t, i), __int(__load8(kinds, i * 8))):
+                return True
+            i = i + 1
+    return False
+
+# Whether `xs` differs in length or in any slot from `snapshot`, its copy
+# from before a sort ran the key function.
+def list_changed(xs: ptr, snapshot: ptr) -> bool:
+    if list_len(xs) != list_len(snapshot):
+        return True
+    i = 0
+    while i < list_len(xs):
+        if __int(list_get(xs, i)) != __int(list_get(snapshot, i)):
+            return True
+        i = i + 1
+    return False
+
+# Sorts `xs` in place by `keys`, which holds a sort key of equality kind
+# `kind` for each element and may be `xs` itself. The merge sort is stable,
+# and `reverse` swaps only the comparison, so equal keys keep their order
+# either way. A NaN key fails before anything moves.
+def list_sort(xs: ptr, keys: ptr, kind: int, reverse: bool):
+    n = list_len(keys)
+    i = 0
+    while i < n:
+        if slot_has_nan(list_get(keys, i), kind):
+            fail("ValueError", "cannot sort NaN")
+            return
+        i = i + 1
+    order = __alloc_atomic(n * 8)
+    spare = __alloc_atomic(n * 8)
+    i = 0
+    while i < n:
+        __store8(order, i * 8, __word(i))
+        i = i + 1
+    width = 1
+    while width < n:
+        start = 0
+        while start < n:
+            merge_runs(order, spare, keys, kind, reverse, start, width)
+            start = start + 2 * width
+        swap = order
+        order = spare
+        spare = swap
+        width = width * 2
+    values = list_slice(xs, 0, n)
+    i = 0
+    while i < n:
+        list_set(xs, i, list_get(values, __int(__load8(order, i * 8))))
+        i = i + 1
+
+# Merges the run of `width` indexes at `start` in `source` with the run
+# after it into `target`, taking from the second run only when its key
+# sorts strictly first.
+def merge_runs(source: ptr, target: ptr, keys: ptr, kind: int, reverse: bool, start: int, width: int):
+    n = list_len(keys)
+    middle = start + width
+    if middle > n:
+        middle = n
+    stop = middle + width
+    if stop > n:
+        stop = n
+    left = start
+    right = middle
+    at = start
+    while at < stop:
+        from_right = left == middle
+        if not from_right and right < stop:
+            order = slots_order(list_get(keys, __int(__load8(source, right * 8))), list_get(keys, __int(__load8(source, left * 8))), kind)
+            from_right = order < 0 and not reverse or order > 0 and reverse
+        if from_right:
+            __store8(target, at * 8, __load8(source, right * 8))
+            right = right + 1
+        else:
+            __store8(target, at * 8, __load8(source, left * 8))
+            left = left + 1
+        at = at + 1
+
 # UTF-8 validation for text from outside the program. A code point is one to
 # four bytes; the ranges for the second byte rule out overlong forms,
 # surrogates, and values above U+10FFFF.

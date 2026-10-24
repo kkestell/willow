@@ -1,0 +1,3 @@
+sort_key_traceback.wlo:3:9: error: ValueError: bad key
+  in bad at sort_key_traceback.wlo:3:9
+  called from main at sort_key_traceback.wlo:8:8
