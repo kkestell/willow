@@ -1,5 +1,4 @@
-# The repository's test suites, run from its root, report as under the Lua
-# implementation.
+# The repository's test suites, run from its root.
 cd "$ROOT" || exit 1
 "$WILLOW" test tests/suites/failing
 echo "status $?"

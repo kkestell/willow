@@ -12,4 +12,4 @@ root=$(cd "$(dirname "$self")" && pwd -P)
 # Programs run by `willow run` and `willow test` can start Willow through this.
 WILLOW=$root/willow
 export WILLOW
-exec "$root/vendor/luajit/src/luajit" "$root/compiler/cli.lua" "$@"
+exec "$root/build/willow" "$@"

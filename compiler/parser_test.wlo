@@ -1,6 +1,5 @@
-# Checks the parser's trees and diagnostics, mostly the cases of
-# tests/unit/parser_test.lua. Prints each mismatch and exits with status 1 if
-# there was one.
+# Checks the parser's trees and diagnostics. Prints each mismatch and exits
+# with status 1 if there was one.
 
 import ast
 import diagnostic

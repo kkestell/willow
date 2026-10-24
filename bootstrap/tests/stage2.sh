@@ -13,7 +13,7 @@
 #
 # The bind driver takes the entry programs that are programs: those with a
 # main function, and test files. Its rule is the program drivers', so a
-# program whose first error in the Lua implementation comes from its checker
+# program whose expected first error comes from its checker
 # or at run time must bind without error. Besides, the programs in
 # bind_errors, whose first error comes from loading or binding, and each case
 # in bootstrap/tests/loader/ and bootstrap/tests/bind/ must report the error

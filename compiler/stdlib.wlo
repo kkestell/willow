@@ -1,6 +1,5 @@
-# The built-in functions and exception classes, the standard protocols, and
-# the compiler-provided modules, as the binder sees them: the counterpart of
-# compiler/stdlib.lua. L0 has no module variables, so each table is built
+# The built-in functions, exception classes, and standard protocols, as the
+# binder sees them. L0 has no module variables, so each table is built
 # when it is asked for; the binder builds them once. Types compare
 # declarations by type_name, so tables built twice agree.
 

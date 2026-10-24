@@ -1,2 +1,0 @@
-overflow_add.wlo:3:15: error: OverflowError: integer overflow
-  in main at overflow_add.wlo:3:15

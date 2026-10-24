@@ -1,5 +1,4 @@
-# The types of the full language as the binder and checker see them, the
-# counterpart of compiler/types.lua.
+# The types of the full language as the binder and checker see them.
 #
 # A type is one of the classes in `Type`. Declared classes, protocols, enums,
 # and functions appear in types through the records Class, Protocol, Enum,
@@ -77,11 +76,9 @@ class UnionType:
     alias: str
 
 # A list element or dict value, which the binder fills in once every alias
-# is resolved, so that an alias may refer to itself there. As in
-# compiler/bind.lua, every one is lazy and `name` is its source text, which
-# is how it displays. The binder gives each an `id`, which stands in for the
-# object identity Lua compares when it reuses a generic alias's
-# specialization.
+# is resolved, so that an alias may refer to itself there. Every one is
+# lazy and `name` is its source text, which is how it displays. The binder
+# gives each an `id` to distinguish generic alias specializations.
 class Lazy:
     name: str
     target: Type | None
@@ -187,7 +184,7 @@ def var_types(vars: list[TypeVar]) -> list[Type]:
 def var_key(v: TypeVar) -> str:
     return str(v.id)
 
-# The kind of `t` as compiler/types.lua names it: a scalar's name, or list,
+# The kind of `t`: a scalar's name, or list,
 # dict, tuple, record, protocol, enum, callable, function, typevar, union, or
 # lazy.
 def kind(t: Type) -> str:

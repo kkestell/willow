@@ -1,5 +1,4 @@
-# Reads a project's willow.json (spec §12), with compiler/manifest.lua's
-# messages.
+# Reads a project's willow.json (spec §12).
 
 import fs
 import json

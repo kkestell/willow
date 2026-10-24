@@ -4,8 +4,8 @@ program's output against benchmarks/expected.
 
 By default it times only Willow and prints one line per benchmark, for
 comparing Willow with itself before and after a change. `--all` also times
-the other languages, which needs cc on PATH. `--readme` times every language
-and replaces the results table in README.md.
+the other languages, which needs cc and luajit on PATH. `--readme` times every
+language and replaces the results table in README.md.
 
 Run it from anywhere after `make`.
 """
@@ -13,6 +13,7 @@ Run it from anywhere after `make`.
 import argparse
 import hashlib
 import platform
+import shutil
 import subprocess
 import sys
 import time
@@ -21,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HERE = ROOT / "benchmarks"
 BUILD = HERE / "build"
-LUAJIT = ROOT / "vendor" / "luajit" / "src" / "luajit"
+LUAJIT = "luajit"
 README = ROOT / "README.md"
 START = "<!-- benchmarks:start -->"
 END = "<!-- benchmarks:end -->"
@@ -75,14 +76,14 @@ def build(name, languages):
     """Builds `name` in each of `languages` and returns the command that runs
     it, without the size argument, keyed by language."""
     c = BUILD / f"{name}_c"
-    lua = BUILD / f"{name}.lua"
+    willow = BUILD / f"{name}_willow"
     if "C" in languages:
         subprocess.run(["cc", "-O2", "-o", c, HERE / "c" / f"{name}.c", "-lm"], check=True)
-    subprocess.run([ROOT / "willow", "compile", HERE / "willow" / f"{name}.wlo", "-o", lua], check=True)
+    subprocess.run([ROOT / "willow", "build", HERE / "willow" / f"{name}.wlo", "-o", willow], check=True)
     return {
         "C": [c],
         "LuaJIT": [LUAJIT, HERE / "lua" / f"{name}.lua"],
-        "Willow": [LUAJIT, lua],
+        "Willow": [willow],
         "Python": [sys.executable, HERE / "python" / f"{name}.py"],
     }
 
@@ -141,6 +142,8 @@ def main():
     if args.readme and args.names:
         parser.error("--readme runs every benchmark")
     languages = LANGUAGES if args.all or args.readme else ["Willow"]
+    if "LuaJIT" in languages and shutil.which(LUAJIT) is None:
+        parser.error("--all and --readme need luajit on PATH for the independent Lua benchmarks")
 
     BUILD.mkdir(exist_ok=True)
     results = {}

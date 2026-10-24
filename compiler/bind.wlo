@@ -1,10 +1,9 @@
-# Resolves names and types in a program's modules, the counterpart of
-# compiler/bind.lua: each module's declarations, their signatures, fields,
+# Resolves names and types in a program's modules: each module's
+# declarations, their signatures, fields,
 # aliases, type parameters, and defaults as types.wlo types, the symbols of
 # parameters and locals, nested functions and `nonlocal`, captures, and the
 # names that expressions use, recorded in the tree as ast.wlo describes.
-# Errors have the Lua binder's wording and positions, and binding stops at
-# the first one.
+# Binding stops at the first error.
 
 import ast
 import diagnostic
@@ -90,9 +89,7 @@ class Overlap:
     cols: list[int]
 
 # A type argument whose bound is checked once the lazy types in it are
-# resolved, so that `list[int]` satisfies `Iterable[int]`. The Lua binder
-# checks before they are, and so rejects `Box[list[int]]` for a `Box[T:
-# Iterable[int]]`.
+# resolved, so that `list[int]` satisfies `Iterable[int]`.
 class Bound:
     module: ast.Module
     var: types.TypeVar
@@ -1480,7 +1477,7 @@ def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | No
     return binder.error
 
 # The types the binder gave the functions, methods, and class fields of
-# `module`, one per line, for comparing with the Lua binder's.
+# `module`, one per line.
 def signatures(module: ast.Module) -> list[str]:
     lines: list[str] = []
     for function in functions(module):
@@ -1499,7 +1496,7 @@ def signatures(module: ast.Module) -> list[str]:
     return lines
 
 # The fields and signatures of classes and protocols, and functions'
-# signatures, in the Lua binder's order.
+# signatures, in declaration order.
 def resolve_declarations(binder: Binder, module: ast.Module):
     root = TypeScope({}, None, 0)
     for decl in module.declarations:
@@ -1748,8 +1745,8 @@ def qualified_name(expr: ast.Expr) -> str:
     return ""
 
 # Whether two lists of type arguments are the same, as far as reusing a
-# generic alias's specialization goes: Lua compares the argument objects, so
-# this compares types by structure and lazy types by their ids.
+# generic alias's specialization goes: types compare by structure and lazy
+# types by their ids.
 def same_args(a: list[types.Type], b: list[types.Type]) -> bool:
     if len(a) != len(b):
         return False

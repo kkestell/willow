@@ -1,8 +1,8 @@
 # Willow
 
 Willow is a small, statically typed language with Python-like syntax. The
-compiler translates Willow source files (`.wlo`) into readable Lua, which runs on
-LuaJIT. The language is specified in [docs/spec.md](docs/spec.md).
+self-hosting compiler translates Willow source files (`.wlo`) into native code
+through QBE. The language is specified in [docs/spec.md](docs/spec.md).
 
 ## Setup
 
@@ -31,16 +31,15 @@ willow init                           # scaffold a project in the current direct
 willow check hello.wlo                # check without running
 willow run hello.wlo                  # check and run
 willow run number.wlo out.txt         # pass arguments to sys.args()
-willow compile hello.wlo -o hello.lua # compile to a single Lua file
-luajit hello.lua                      # run with LuaJIT 2.1
+willow compile hello.wlo -o hello.ssa  # emit QBE intermediate language
 willow build hello.wlo -o hello       # build a standalone executable
 ./hello                              # run the executable
 willow test examples/testing          # run tests
 willow test --check examples/testing  # check tests without running
 ```
 
-Compiled Lua files and executables take their own command-line arguments, for
-example `luajit number.lua out.txt` or `./number out.txt`.
+Built executables take their own command-line arguments, for example
+`./number out.txt`.
 
 `willow test` accepts a test file or a directory of `test_*.wlo` files.
 
@@ -97,8 +96,8 @@ programs differ from the official ones: mandelbrot prints a checksum of the
 image instead of the image, and k-nucleotide generates its sequence instead of
 reading one from a file. reverse-complement reads the output of fasta for its
 size, and sumcol reads its size in lines of random integers; the runner writes
-both inputs. Willow runs as the Lua it compiles to, on the same LuaJIT as the
-hand-written Lua. To time the Willow programs, run:
+both inputs. Willow runs as native executables. The hand-written Lua programs
+are independent comparisons. To time the Willow programs, run:
 
 ```sh
 make
@@ -107,8 +106,9 @@ python3 benchmarks/run.py
 
 Name benchmarks, such as `n-body`, to run only those. `--all` also times the
 other languages, and `--readme` times every language and updates the table
-below. Both need `cc` on the `PATH`. The runner checks the SHA-256 digest of
-each program's output against `benchmarks/expected`.
+below. Both need `cc` and an independently installed `luajit` on the `PATH`;
+the default Willow benchmarks need no LuaJIT. The runner checks the SHA-256
+digest of each program's output against `benchmarks/expected`.
 
 Run benchmarks locally on your Mac. To refresh the table below with results
 from your machine, run:
@@ -118,28 +118,7 @@ python3 benchmarks/run.py --readme
 ```
 
 <!-- benchmarks:start -->
-Seconds of wall-clock time, best of 3 runs, on Apple M4, Darwin. In
-parentheses is how many times faster Willow is than Python.
-
-| Benchmark (size) | C | LuaJIT | Python | Willow (vs Python) |
-|---|---:|---:|---:|---:|
-| n-body (5,000,000) | 0.14 | 0.30 | 11.85 | 0.36 (32.6x) |
-| spectral-norm (2,000) | 0.11 | 0.11 | 12.22 | 0.51 (24.0x) |
-| fannkuch-redux (10) | 0.13 | 0.21 | 2.63 | 0.30 (8.7x) |
-| binary-trees (18) | 1.08 | 2.70 | 10.41 | 2.20 (4.7x) |
-| fasta (2,500,000) | 0.21 | 0.47 | 2.49 | 1.98 (1.3x) |
-| mandelbrot (2,500) | 0.17 | 0.31 | 8.33 | 0.40 (21.0x) |
-| k-nucleotide (2,500,000) | 0.18 | 0.26 | 1.56 | 0.59 (2.7x) |
-| reverse-complement (5,000,000) | 0.09 | 1.22 | 0.25 | 3.22 (0.1x) |
-| recursive (9) | 0.16 | 0.13 | 2.67 | 0.16 (16.7x) |
-| nsieve (11) | 0.08 | 0.38 | 2.65 | 0.42 (6.3x) |
-| matrix (10,000) | 0.07 | 0.32 | 6.00 | 0.67 (8.9x) |
-| methcall (50,000,000) | 0.17 | 0.30 | 4.13 | 0.57 (7.2x) |
-| except (1,000,000) | 0.53 | 0.06 | 0.30 | 3.87 (0.1x) |
-| heapsort (2,000,000) | 0.18 | 0.41 | 3.22 | 0.47 (6.9x) |
-| hash2 (5,000) | 0.51 | 0.20 | 4.04 | 1.07 (3.8x) |
-| sumcol (10,000,000) | 0.29 | 0.85 | 0.61 | 1.86 (0.3x) |
-| raytracer (200) | 0.05 | 0.28 | 7.51 | 0.38 (19.8x) |
+Native benchmark results have not been recorded yet.
 <!-- benchmarks:end -->
 
 ## Editor support

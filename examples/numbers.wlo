@@ -16,7 +16,7 @@ def main():
     print(1e300 * 1e300)
 
     try:
-        print(9007199254740991 + 1)
+        print(9223372036854775807 + 1)
     except OverflowError as overflow:
         print(overflow.message)
     try:
