@@ -1,0 +1,17 @@
+enum Key:
+    FIRST
+
+class Counter:
+    value: int
+
+    def get(self) -> int:
+        return self.value
+
+    def pop(self) -> int:
+        self.value = self.value - 1
+        return self.value
+
+def main():
+    counters = {Key.FIRST: Counter(3)}
+    print(counters[Key.FIRST].pop())
+    print(counters[Key.FIRST].get())
