@@ -159,6 +159,22 @@ willow1_programs="
 programs/sum_to.wlo
 programs/argument_type.wlo
 programs/missing_return.wlo
+programs/return_none.wlo
+programs/alias_call.wlo
+programs/alias_cycle.wlo
+programs/enum_member.wlo
+programs/import_name_clash.wlo
+programs/isinstance_none.wlo
+programs/keyword_after_condition.wlo
+programs/maybe_unassigned.wlo
+programs/missing_comma.wlo
+programs/module_and_namespace.wlo
+programs/operator_types.wlo
+programs/private_name.wlo
+programs/type_intrinsic_outside_core.wlo
+programs/union_duplicate_member.wlo
+programs/unknown_escape.wlo
+programs/unreachable.wlo
 "
 
 # Writes the module core_source to DIR/core_source.wlo: core's text as one

@@ -255,13 +255,49 @@ class Checker:
         if isinstance(target, ast.FunctionDecl):
             return self.check_function_call(expr, node, target, state)
         if isinstance(target, stdlib.Builtin):
-            name = target.name
-            if name.startswith("__"):
-                return self.check_intrinsic(expr, node, target, state)
-            if name == "print":
-                return self.check_print(expr, node, state)
-            return self.unsupported(expr.line, expr.col, f"'{node.name}'")
+            return self.check_builtin(expr, node, target, state)
         return self.unsupported(expr.line, expr.col, "constructors")
+
+    # A call of a built-in function, a host module's function, or an
+    # intrinsic, by the name it is written with.
+    def check_builtin(self, expr: ast.Expr, node: ast.Call, target: stdlib.Builtin, state: dict[int, types.Type]) -> types.Type:
+        name = node.name
+        line = expr.line
+        col = expr.col
+        if name.startswith("__"):
+            return self.check_intrinsic(expr, node, target, state)
+        elif name == "print":
+            return self.check_print(expr, node, state)
+        elif name == "len":
+            return self.unsupported(line, col, "'len'")
+        elif name == "str":
+            return self.unsupported(line, col, "'str'")
+        elif name == "int":
+            return self.unsupported(line, col, "'int'")
+        elif name == "float":
+            return self.unsupported(line, col, "'float'")
+        elif name == "range":
+            return self.unsupported(line, col, "'range'")
+        elif name == "ord":
+            return self.unsupported(line, col, "'ord'")
+        elif name == "chr":
+            return self.unsupported(line, col, "'chr'")
+        elif name == "sys.args":
+            return self.unsupported(line, col, "'sys.args'")
+        elif name == "sys.exit":
+            return self.unsupported(line, col, "'sys.exit'")
+        elif name == "sys.eprint":
+            return self.unsupported(line, col, "'sys.eprint'")
+        elif name == "fs.read_file":
+            return self.unsupported(line, col, "'fs.read_file'")
+        elif name == "fs.write_file":
+            return self.unsupported(line, col, "'fs.write_file'")
+        elif name == "fs.exists":
+            return self.unsupported(line, col, "'fs.exists'")
+        elif name == "fs.realpath":
+            return self.unsupported(line, col, "'fs.realpath'")
+        # Not in L0.
+        return self.unsupported(line, col, f"'{name}'")
 
     # A call of a program's or core's function, or of an extern function,
     # whose variadic arguments are ints, floats, or ptrs.

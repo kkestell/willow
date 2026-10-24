@@ -27,6 +27,8 @@ class Emitter:
     temps: int
     labels: int
     ended: bool
+    # Whether the current function returns a value.
+    returns: bool
 
     def write(self, text: str):
         self.lines.append(text)
@@ -91,6 +93,7 @@ class Emitter:
         for param in function.params:
             params.append(f"l %p.{param.name}")
         returns = not is_none(record.result)
+        self.returns = returns
         result = ""
         if returns:
             result = "l "
@@ -157,15 +160,39 @@ class Emitter:
         elif isinstance(node, ast.While):
             self.emit_while(node)
         elif isinstance(node, ast.Return):
-            returned = node.value
-            if returned is None:
-                self.jump("ret")
-            else:
-                self.jump("ret " + self.expr(returned))
+            self.emit_return(node)
+        elif isinstance(node, ast.IndexAssign):
+            self.unchecked("index assignment")
+        elif isinstance(node, ast.FieldAssign):
+            self.unchecked("field assignment")
+        elif isinstance(node, ast.For):
+            self.unchecked("for loop")
+        elif isinstance(node, ast.Assert):
+            self.unchecked("assert")
         elif isinstance(node, ast.SimpleStatement):
-            assert node == ast.SimpleStatement.PASS, "unchecked statement"
+            if node == ast.SimpleStatement.BREAK:
+                self.unchecked("break")
+            elif node == ast.SimpleStatement.CONTINUE:
+                self.unchecked("continue")
         else:
-            assert False, "unchecked statement"
+            self.unchecked("statement")
+
+    # A function without a result returns nothing to QBE, even from
+    # `return None` or the return of a call without a result.
+    def emit_return(self, node: ast.Return):
+        returned = node.value
+        if returned is None:
+            self.jump("ret")
+        elif self.returns:
+            self.jump("ret " + self.expr(returned))
+        else:
+            self.expr(returned)
+            self.jump("ret")
+
+    # Fails on a construct the checker does not accept yet.
+    def unchecked(self, what: str) -> str:
+        assert False, f"unchecked {what}"
+        return "0"
 
     # An `__os` test emits only the arm it selects, so core can call
     # functions that exist on only one platform.
@@ -247,8 +274,31 @@ class Emitter:
             target = node.target
             assert isinstance(target, ast.TypeName), "unchecked __type"
             return f"$W.{target.name}.type"
-        assert False, "unchecked expression"
-        return "0"
+        elif isinstance(node, ast.Float):
+            return self.unchecked("float")
+        elif isinstance(node, ast.FString):
+            return self.unchecked("f-string")
+        elif isinstance(node, ast.EnumMember):
+            return self.unchecked("enum member")
+        elif isinstance(node, ast.MethodCall):
+            return self.unchecked("method call")
+        elif isinstance(node, ast.Field):
+            return self.unchecked("field")
+        elif isinstance(node, ast.Index):
+            return self.unchecked("index")
+        elif isinstance(node, ast.Slice):
+            return self.unchecked("slice")
+        elif isinstance(node, ast.Unary):
+            return self.unchecked(f"operator '{node.op}'")
+        elif isinstance(node, ast.Is):
+            return self.unchecked("'is'")
+        elif isinstance(node, ast.IsInstance):
+            return self.unchecked("isinstance")
+        elif isinstance(node, ast.ListDisplay):
+            return self.unchecked("list display")
+        elif isinstance(node, ast.DictDisplay):
+            return self.unchecked("dict display")
+        return self.unchecked("expression")
 
     def binary(self, node: ast.Binary) -> str:
         op = node.op
@@ -323,13 +373,47 @@ class Emitter:
             record = target.record
             assert record is not None, f"function {target.name} has no signature"
             return self.call_text(self.symbol(target), typed(args), not is_none(record.result))
-        assert isinstance(target, stdlib.Builtin), "unchecked call"
-        if target.name.startswith("__"):
+        if isinstance(target, stdlib.Builtin):
+            return self.builtin(node, target)
+        return self.unchecked("constructor")
+
+    # A call of a built-in function, a host module's function, or an
+    # intrinsic, by the name it is written with.
+    def builtin(self, node: ast.Call, target: stdlib.Builtin) -> str:
+        name = node.name
+        if name.startswith("__"):
             return self.intrinsic(node, target)
-        if target.name == "print":
+        elif name == "print":
             return self.emit_print(node)
-        assert False, f"unchecked built-in {target.name}"
-        return "0"
+        elif name == "len":
+            return self.unchecked("'len'")
+        elif name == "str":
+            return self.unchecked("'str'")
+        elif name == "int":
+            return self.unchecked("'int'")
+        elif name == "float":
+            return self.unchecked("'float'")
+        elif name == "range":
+            return self.unchecked("'range'")
+        elif name == "ord":
+            return self.unchecked("'ord'")
+        elif name == "chr":
+            return self.unchecked("'chr'")
+        elif name == "sys.args":
+            return self.unchecked("'sys.args'")
+        elif name == "sys.exit":
+            return self.unchecked("'sys.exit'")
+        elif name == "sys.eprint":
+            return self.unchecked("'sys.eprint'")
+        elif name == "fs.read_file":
+            return self.unchecked("'fs.read_file'")
+        elif name == "fs.write_file":
+            return self.unchecked("'fs.write_file'")
+        elif name == "fs.exists":
+            return self.unchecked("'fs.exists'")
+        elif name == "fs.realpath":
+            return self.unchecked("'fs.realpath'")
+        return self.unchecked(f"'{name}'")
 
     # A C function's `cint` travels as QBE `w` and a float as `d`; a C int
     # result is sign-extended to fill its slot, and a float result becomes its
@@ -438,7 +522,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
             if isinstance(decl, ast.FunctionDecl):
                 module_names[decl.id] = module.name
     assert core is not None, "the program has no core module"
-    result = Emitter(target_os, core, module_names, [], {}, [], {}, 0, 0, False)
+    result = Emitter(target_os, core, module_names, [], {}, [], {}, 0, 0, False, False)
     for name in builtin_types():
         result.string(name)
     result.require("init")
