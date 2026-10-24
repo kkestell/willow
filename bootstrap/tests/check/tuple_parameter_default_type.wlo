@@ -1,0 +1,5 @@
+def choose(value: tuple[int, tuple[bool]] = (1, ("wrong",))):
+    pass
+
+def main():
+    pass

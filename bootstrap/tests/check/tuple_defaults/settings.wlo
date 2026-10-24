@@ -1,0 +1,17 @@
+enum Mode:
+    OFF
+    ON
+
+type Value = tuple[Mode | None, tuple[int | float, str | None], tuple[()], bool]
+
+class Options:
+    value: Value = (Mode.ON, (-2.5, None), (), True)
+
+    def choose(self, *, value: Value = (Mode.OFF, (+3, "method"), (), False)) -> Value:
+        return value
+
+def choose(Mode: int = 0, *, value: Value = (Mode.ON, (-0.0, "function"), (), True)) -> Value:
+    return value
+
+def singleton(value: tuple[Mode] = (Mode.ON,)) -> tuple[Mode]:
+    return value

@@ -86,7 +86,6 @@ task_groups
 terminal_styles
 text_collections
 text_conversions
-tuples
 type_errors
 uncaught_exception
 unions
