@@ -121,6 +121,7 @@ def str_methods() -> dict[str, Builtin]:
     flag = prim("bool")
     add(table, "find", [arg("sub", text)], prim("int"))
     add(table, "split", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
+    add(table, "encode", [], prim("bytes"))
     add(table, "join", [arg("items", list_of("str"))], text)
     add(table, "startswith", [arg("prefix", text)], flag)
     add(table, "endswith", [arg("suffix", text)], flag)
@@ -134,6 +135,17 @@ def str_methods() -> dict[str, Builtin]:
     add(table, "isspace", [], flag)
     add(table, "ljust", [arg("width", prim("int"))], text)
     add(table, "rjust", [arg("width", prim("int"))], text)
+    return table
+
+def bytes_methods() -> dict[str, Builtin]:
+    table: dict[str, Builtin] = {}
+    data = prim("bytes")
+    add(table, "decode", [], prim("str"))
+    add(table, "find", [arg("sub", data)], prim("int"))
+    add(table, "startswith", [arg("prefix", data)], prim("bool"))
+    add(table, "endswith", [arg("suffix", data)], prim("bool"))
+    add(table, "split", [arg("sep", data), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("bytes"))
+    add(table, "hex", [], prim("str"))
     return table
 
 # The intrinsics that core calls (agents/bootstrap.md §5). `__type` has its

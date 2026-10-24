@@ -1,0 +1,3 @@
+def main():
+    data = bytes([0])
+    data[0] = 1

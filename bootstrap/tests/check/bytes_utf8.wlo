@@ -1,0 +1,44 @@
+def invalid(data: bytes):
+    try:
+        data.decode()
+    except ValueError as error:
+        assert error.message == "invalid UTF-8"
+        return
+    assert False
+
+def is_bytes(value: bytes | str) -> bool:
+    return isinstance(value, bytes)
+
+def main():
+    for octets in [[128], [192, 128], [237, 160, 128], [244, 144, 128, 128], [226, 130], [226, 65, 172]]:
+        invalid(bytes(octets))
+    text = "\x00\x7f\u0080\u07ff\u0800\ud7ff\ue000\uffff\U00010000\U0010ffff"
+    assert text.encode().decode() == text
+    assert not is_bytes(text)
+    assert len(text) == 10
+    data = bytes([0, 128, 255, 0, 128])
+    assert data.find(bytes([255])) == 2
+    assert data.startswith(bytes([0, 128]))
+    assert data.endswith(bytes([128]))
+    assert 255 in data and -1 not in data and 256 not in data
+    assert data[-100:100] == data
+    assert is_bytes(data[4:2])
+    assert data[4:2] == bytes([])
+    assert is_bytes(bytes([]) + bytes([]))
+    assert is_bytes(bytes.fromhex(" \t\n\x0b\x0c\r"))
+    parts = data.split(bytes([128]))
+    assert parts[0] == bytes([0])
+    assert parts[1] == bytes([255, 0])
+    assert parts[2] == bytes([])
+    for part in parts:
+        assert is_bytes(part)
+    try:
+        bytes([-1])
+        assert False
+    except ValueError as error:
+        assert error.message == "bytes must be in range(0, 256)"
+    try:
+        value = data[-6]
+        assert False
+    except IndexError as bounds:
+        assert bounds.message == "index out of range"
