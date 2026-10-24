@@ -22,7 +22,7 @@ def main():
         root = loader.directory_of(path)
         test = path[len(root):].startswith("test_")
         error: diagnostic.Diagnostic | None = None
-        result = loader.load(path)
+        result = loader.load(path, False)
         if isinstance(result, diagnostic.Diagnostic):
             error = result
         else:

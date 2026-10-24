@@ -1,0 +1,1 @@
+math_constant_call.wlo:4:10: error: constant 'math.pi' cannot be called

@@ -1,0 +1,5 @@
+import math
+
+def main():
+    print(math.floor(1.5))
+    math.floor(math.sqrt(-1.0))

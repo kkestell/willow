@@ -16,7 +16,7 @@ def main():
         args = args[1:]
     failed = False
     for path in args:
-        result = loader.load(path)
+        result = loader.load(path, False)
         if isinstance(result, diagnostic.Diagnostic):
             # Paths in messages, such as a missing module's, start with the
             # directory too.

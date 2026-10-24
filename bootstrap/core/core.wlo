@@ -31,6 +31,19 @@ extern def __error() -> ptr
 extern def strtod(s: ptr, end: ptr) -> float
 extern def fmod(x: float, y: float) -> float
 extern def floor(x: float) -> float
+extern def ceil(x: float) -> float
+extern def sqrt(x: float) -> float
+extern def pow(x: float, y: float) -> float
+extern def exp(x: float) -> float
+extern def log(x: float) -> float
+extern def log10(x: float) -> float
+extern def sin(x: float) -> float
+extern def cos(x: float) -> float
+extern def tan(x: float) -> float
+extern def asin(x: float) -> float
+extern def acos(x: float) -> float
+extern def atan(x: float) -> float
+extern def atan2(y: float, x: float) -> float
 extern def copysign(x: float, y: float) -> float
 
 extern def GC_gcollect()

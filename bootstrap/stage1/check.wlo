@@ -1050,7 +1050,7 @@ class Checker:
     def check_name(self, expr: ast.Expr, node: ast.Name, state: dict[int, types.Type]) -> types.Type:
         symbol = node.symbol
         if symbol is None:
-            # `__os` in core, the only name the binder leaves without one.
+            # `__os` in a privileged module, the only name the binder leaves without one.
             return types.prim("str")
         ty = state.get(symbol.id)
         if ty is None:
@@ -1084,7 +1084,7 @@ class Checker:
         if op == "==" or op == "!=":
             if types.comparable(left) and types.comparable(right) and (types.assignable(left, right) or types.assignable(right, left)):
                 ty = types.prim("bool")
-            elif pair == "ptr ptr" and self.module.name == "core":
+            elif pair == "ptr ptr" and self.module.privileged:
                 ty = types.prim("bool")
             supported = pair in ["int int", "float float", "bool bool", "str str", "bytes bytes", "ptr ptr", "enum enum"]
         elif op in ["<", "<=", ">", ">="]:
@@ -1859,7 +1859,7 @@ class Checker:
             self.fail(arg.line, arg.col, f"cannot convert a value of type {types.display(ty)} to {name}")
         return types.prim(name)
 
-    # The intrinsics only core calls (agents/bootstrap.md §5). `__word`
+    # The intrinsics only privileged modules call (agents/bootstrap.md §5). `__word`
     # takes a slot of any kind but word, which reinterprets as itself.
     def check_intrinsic(self, expr: ast.Expr, node: ast.Call, target: stdlib.Builtin, state: dict[int, types.Type]) -> types.Type:
         self.check_arity(expr, target.name, len(target.params), len(node.args))

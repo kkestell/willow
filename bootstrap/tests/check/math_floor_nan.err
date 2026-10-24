@@ -1,0 +1,2 @@
+math_floor_nan.wlo:5:10: error: ValueError: cannot convert float to int
+  in main at math_floor_nan.wlo:5:10

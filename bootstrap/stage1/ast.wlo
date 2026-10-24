@@ -18,9 +18,15 @@ class Module:
     path: str
     # Set by the loader.
     name: str
+    # Whether the module is core or comes from the standard library's lib/,
+    # which may use the intrinsic layer (agents/bootstrap.md §5) and declare
+    # constants. Set by the loader, by where the module came from.
+    privileged: bool
     imports: list[Import]
     # In source order.
     declarations: list[Decl]
+    # A privileged module's float constants, such as math.pi.
+    constants: dict[str, float]
     # The binder's: declarations by name, imported program and library
     # modules by full name, the names imports bind, and for a test entry its
     # test functions by name.

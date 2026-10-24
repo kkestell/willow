@@ -30,7 +30,7 @@ def main():
             for token in lexed:
                 print(f"{path}:{token.line}:{token.col}: {token.kind} {token.text}")
         else:
-            parsed = parser.parse(path, lexed)
+            parsed = parser.parse(path, lexed, False)
             if isinstance(parsed, diagnostic.Diagnostic):
                 sys.eprint(parsed.format())
                 failed = True

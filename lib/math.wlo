@@ -1,0 +1,61 @@
+# The math module (spec §14). The C math library does the work through core,
+# whose extern declarations take these functions' names.
+
+import core
+
+pi: float = 3.141592653589793
+e: float = 2.718281828459045
+tau: float = 6.283185307179586
+
+def sqrt(x: float) -> float:
+    return core.sqrt(x)
+
+# int raises the ValueError the spec gives for NaN, infinities, and results
+# outside the range of int.
+def floor(x: float) -> int:
+    return int(core.floor(x))
+
+def ceil(x: float) -> int:
+    return int(core.ceil(x))
+
+def isfinite(x: float) -> bool:
+    return x - x == 0.0
+
+def isnan(x: float) -> bool:
+    return x != x
+
+def isinf(x: float) -> bool:
+    return not isfinite(x) and not isnan(x)
+
+def pow(x: float, y: float) -> float:
+    return core.pow(x, y)
+
+def exp(x: float) -> float:
+    return core.exp(x)
+
+def log(x: float) -> float:
+    return core.log(x)
+
+def log10(x: float) -> float:
+    return core.log10(x)
+
+def sin(x: float) -> float:
+    return core.sin(x)
+
+def cos(x: float) -> float:
+    return core.cos(x)
+
+def tan(x: float) -> float:
+    return core.tan(x)
+
+def asin(x: float) -> float:
+    return core.asin(x)
+
+def acos(x: float) -> float:
+    return core.acos(x)
+
+def atan(x: float) -> float:
+    return core.atan(x)
+
+def atan2(y: float, x: float) -> float:
+    return core.atan2(y, x)

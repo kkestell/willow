@@ -3,22 +3,18 @@
 # Usage: willow1 build FILE.wlo -o OUTPUT
 #        willow1 compile FILE.wlo -o OUTPUT.ssa
 #
-# Core is compiled into every program. Its text comes from the module
-# core_source, which the build generates from bootstrap/core/core.wlo (see
-# core_source in bootstrap/tests/stage1.sh).
+# Core is compiled into every program. Its text and the standard library's
+# are compiled into willow1 (see loader.wlo).
 
 import ast
 import bind
 import check
 import core
-import core_source
 import coroutine
 import diagnostic
 import emit
 import fs
-import lexer
 import loader
-import parser
 import sys
 
 def usage():
@@ -49,12 +45,10 @@ def compile(path: str) -> str:
     name = loader.entry_name(path)
     if not is_module_name(name) or name == "core":
         fail(f"willow1: {path}: '{name}' cannot be a module name")
-    loaded = loader.load(path)
-    if isinstance(loaded, diagnostic.Diagnostic):
-        report(loaded)
+    sources = loader.load(path, True)
+    if isinstance(sources, diagnostic.Diagnostic):
+        report(sources)
         return ""
-    sources = loaded
-    sources.append(loader.Source("core", parse_core()))
     error = bind.bind(sources, False)
     if error is not None:
         report(error)
@@ -69,18 +63,6 @@ def compile(path: str) -> str:
         for function in bind.functions(module):
             emitter.function(function)
     return emitter.finish(modules[0])
-
-def parse_core() -> ast.Module:
-    path = "bootstrap/core/core.wlo"
-    lexed = lexer.lex(path, core_source.text())
-    if isinstance(lexed, diagnostic.Diagnostic):
-        report(lexed)
-        return ast.Module(path, "core", [], [], {}, {}, {}, {}, [])
-    tree = parser.parse(path, lexed)
-    if isinstance(tree, diagnostic.Diagnostic):
-        report(tree)
-        return ast.Module(path, "core", [], [], {}, {}, {}, {}, [])
-    return tree
 
 def is_module_name(name: str) -> bool:
     if name == "" or not (name[0].isalpha() or name[0] == "_"):
