@@ -447,7 +447,10 @@ class Parser:
                     fstring.specs.append("")
             else:
                 fstring.parts.append(self.parse_expression())
-                fstring.specs.append(self.peek().text)
+                end = self.peek()
+                fstring.specs.append(end.text)
+                if end.format_spec and fstring.format_spec is None:
+                    fstring.format_spec = ast.Ident(end.line, end.col, end.text)
                 self.expect(tokens.Kind.FIELD_END, "'}'")
         self.advance()
         return ast.Expr(start.line, start.col, fstring)

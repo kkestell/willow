@@ -12,9 +12,11 @@ import types
 class Emitter:
     # `__os`, which an `if` that compares it with a literal folds.
     target_os: str
+    entry: str
     core: ast.Module
     # The module name of each declared function, by its id.
     module_names: dict[int, str]
+    descriptors: dict[str, list[str]]
     lines: list[str]
     # String literals, numbered in order of first use.
     strings: dict[str, int]
@@ -113,7 +115,16 @@ class Emitter:
         self.write("}")
 
     def symbol(self, function: ast.FunctionDecl) -> str:
-        return "$W." + self.module_names[function.id] + "." + function.name
+        name = function.name
+        owner = function.owner
+        if isinstance(owner, ast.ClassDecl):
+            name = owner.name + "." + name
+        return "$W." + self.module_names[function.id] + "." + name
+
+    def descriptor(self, type_name: str) -> str:
+        if type_name in builtin_types() or "." in type_name:
+            return "$W." + type_name + ".type"
+        return "$W." + self.entry + "." + type_name + ".type"
 
     # The program entry, descriptors, and string literals, after every
     # function. The entry saves argc and argv for sys.args (core/API.md).
@@ -132,6 +143,11 @@ class Emitter:
         self.write("data $W.argv = { l 0 }")
         for name in builtin_types():
             self.write(f"data $W.{name}.type = " + "{ l " + self.string(name) + " }")
+        for symbol in self.descriptors:
+            values: list[str] = []
+            for text in self.descriptors[symbol]:
+                values.append("l " + self.string(text))
+            self.write("data " + symbol + " = { " + ", ".join(values) + " }")
         for text in self.strings:
             data = f"l $W.str.type, l {len(utf8(text))}, " + data_bytes(text) + "b 0"
             self.write(f"data $W.str.{self.strings[text]} = " + "{ " + data + " }")
@@ -164,7 +180,7 @@ class Emitter:
         elif isinstance(node, ast.IndexAssign):
             self.unchecked("index assignment")
         elif isinstance(node, ast.FieldAssign):
-            self.unchecked("field assignment")
+            self.field_assign(node)
         elif isinstance(node, ast.For):
             self.unchecked("for loop")
         elif isinstance(node, ast.Assert):
@@ -277,13 +293,22 @@ class Emitter:
         elif isinstance(node, ast.Float):
             return self.float_bits("d_" + str(node.value))
         elif isinstance(node, ast.FString):
-            return self.unchecked("f-string")
+            return self.fstring(node)
         elif isinstance(node, ast.EnumMember):
+            record = node.decl.record
+            assert record is not None, "unchecked enum"
+            for i in range(len(record.members)):
+                if record.members[i] == node.name:
+                    return str(i)
             return self.unchecked("enum member")
         elif isinstance(node, ast.MethodCall):
-            return self.unchecked("method call")
+            return self.method(node)
         elif isinstance(node, ast.Field):
-            return self.unchecked("field")
+            object = self.expr(node.object)
+            address = self.field_address(node.object, node.name, object)
+            value = self.temp()
+            self.line(f"{value} =l loadl {address}")
+            return value
         elif isinstance(node, ast.Index):
             return self.unchecked("index")
         elif isinstance(node, ast.Slice):
@@ -608,7 +633,70 @@ class Emitter:
             return self.call_text(self.symbol(target), typed(args), not is_none(record.result))
         if isinstance(target, stdlib.Builtin):
             return self.builtin(node, target)
-        return self.unchecked("constructor")
+        assert isinstance(target, types.Class), "unchecked constructor"
+        return self.construct(node, target)
+
+    def construct(self, node: ast.Call, target: types.Class) -> str:
+        values: list[str] = []
+        for i in range(len(target.fields)):
+            if i < len(node.args):
+                values.append(self.expr(node.args[i]))
+            else:
+                default = target.fields[i].default
+                assert default is not None, "missing field default"
+                values.append(self.expr(default))
+        object = self.core_call("object_new", [self.descriptor(target.type_name), str(len(values))], True)
+        for i in range(len(values)):
+            address = self.temp()
+            self.line(f"{address} =l add {object}, {8 + i * 8}")
+            self.line(f"storel {values[i]}, {address}")
+        return object
+
+    def field_address(self, expr: ast.Expr, name: str, object: str) -> str:
+        ty = expr.ty
+        assert ty is not None, "unchecked field receiver"
+        ty = types.expand(ty)
+        assert isinstance(ty, types.ClassType), "unchecked field receiver"
+        for i in range(len(ty.decl.fields)):
+            if ty.decl.fields[i].name == name:
+                address = self.temp()
+                self.line(f"{address} =l add {object}, {8 + i * 8}")
+                return address
+        return self.unchecked("field")
+
+    def field_assign(self, node: ast.FieldAssign):
+        value = self.expr(node.value)
+        object = self.expr(node.object)
+        address = self.field_address(node.object, node.name, object)
+        self.line(f"storel {value}, {address}")
+
+    def method(self, node: ast.MethodCall) -> str:
+        ty = node.object.ty
+        assert ty is not None, "unchecked method receiver"
+        ty = types.expand(ty)
+        if isinstance(ty, types.ClassType):
+            return self.class_method(node, ty)
+        return self.unchecked("method call")
+
+    def class_method(self, node: ast.MethodCall, ty: types.ClassType) -> str:
+        args = [self.expr(node.object)]
+        for arg in node.args:
+            args.append(self.expr(arg))
+        for method in ty.decl.methods:
+            if method.name == node.name:
+                symbol = self.descriptor(ty.decl.type_name).removesuffix(".type") + "." + method.name
+                return self.call_text(symbol, typed(args), not is_none(method.result))
+        return self.unchecked("class method")
+
+    def fstring(self, node: ast.FString) -> str:
+        text = self.string("")
+        for i in range(len(node.parts)):
+            value = self.to_str(node.parts[i])
+            if i == 0:
+                text = value
+            else:
+                text = self.core_call("str_concat", [text, value], True)
+        return text
 
     # A call of a built-in function, a host module's function, or an
     # intrinsic, by the name it is written with.
@@ -726,6 +814,8 @@ class Emitter:
             return self.core_call("bool_to_str", [value], True)
         elif kind == "None":
             return self.string("None")
+        elif isinstance(ty, types.EnumType):
+            return self.core_call("enum_to_str", [self.descriptor(ty.decl.type_name), value], True)
         assert kind == "str", "unchecked scalar conversion"
         return value
 
@@ -779,10 +869,22 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
         for decl in module.declarations:
             if isinstance(decl, ast.FunctionDecl):
                 module_names[decl.id] = module.name
+            elif isinstance(decl, ast.ClassDecl):
+                for method in decl.methods:
+                    module_names[method.id] = module.name
     assert core is not None, "the program has no core module"
-    result = Emitter(target_os, core, module_names, [], {}, [], {}, 0, 0, False, False)
+    result = Emitter(target_os, modules[0].name, core, module_names, {}, [], {}, [], {}, 0, 0, False, False)
     for name in builtin_types():
         result.string(name)
+    for module in modules:
+        for decl in module.declarations:
+            if isinstance(decl, ast.ClassDecl):
+                result.descriptors[result.descriptor(decl.type_name)] = [decl.name]
+            elif isinstance(decl, ast.EnumDecl):
+                texts = [decl.name]
+                for member in decl.members:
+                    texts.append(decl.name + "." + member.name)
+                result.descriptors[result.descriptor(decl.type_name)] = texts
     result.require("init")
     return result
 

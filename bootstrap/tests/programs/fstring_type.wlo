@@ -1,0 +1,5 @@
+class Value:
+    count: int = 0
+
+def main():
+    print(f"{Value()}")
