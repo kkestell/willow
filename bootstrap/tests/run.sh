@@ -34,7 +34,7 @@ for file in "$@"; do
     name=$(basename "$file" .wlo)
     base=$dir/$name
     input=/dev/null
-    [ -f "$base.in" ] && input=$base.in
+    [ -f "$base.in" ] && input=$(cd "$dir" && pwd)/$name.in
     ok=1
     if (cd "$dir" && "$willow0" build "$name.wlo" -o "$work/$name") >"$work/out" 2>"$work/err"; then
         (cd "$dir" && "$willow0" compile "$name.wlo" -o "$work/a.ssa" &&

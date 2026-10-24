@@ -519,8 +519,8 @@ class Emitter:
             assert ty is not None, "unchecked for source"
             if types.kind(ty) == "dict":
                 self.for_dict(node, node.iterable, "keys")
-            elif types.kind(types.expand(ty)) == "str":
-                self.for_str(node)
+            elif types.kind(types.expand(ty)) in ["str", "bytes"]:
+                self.for_sequence(node)
             elif isinstance(types.expand(ty), types.TupleType):
                 self.for_tuple(node)
             else:
@@ -590,7 +590,7 @@ class Emitter:
 
     # Each step takes the code point at a byte offset, which advances by its
     # size before the body.
-    def for_str(self, node: ast.For):
+    def for_sequence(self, node: ast.For):
         source = self.expr(node.iterable)
         at = self.temp()
         self.line(f"{at} =l copy 0")
@@ -603,8 +603,15 @@ class Emitter:
         self.line(f"{more} =l csltl {at}, {size}")
         self.jump(f"jnz {more}, {body}, {end}")
         self.label(body)
-        item = self.core_call("str_char_at", [source, at], True)
-        width = self.core_call("str_size", [item], True)
+        ty = node.iterable.ty
+        assert ty is not None, "unchecked sequence loop"
+        width = "1"
+        item = ""
+        if types.kind(ty) == "bytes":
+            item = self.core_call("str_byte", [source, at], True)
+        else:
+            item = self.core_call("str_char_at", [source, at], True)
+            width = self.core_call("str_size", [item], True)
         self.line(f"{at} =l add {at}, {width}")
         self.for_body(node, item, test, end)
         self.jump(f"jmp {test}")
@@ -784,14 +791,11 @@ class Emitter:
             return self.list_method(node)
         if isinstance(ty, types.DictType):
             return self.dict_method(expr, node)
-        if isinstance(ty, types.Prim) and ty.name == "str":
-            return self.str_method(node)
+        if isinstance(ty, types.Prim) and ty.name in ["str", "bytes"]:
+            args = [self.expr(node.object)]
+            args.extend(self.arg_values(node.args, node.order))
+            return self.core_call(ty.name + "_" + node.name, args, True)
         return self.unchecked("method call")
-
-    def str_method(self, node: ast.MethodCall) -> str:
-        args = [self.expr(node.object)]
-        args.extend(self.arg_values(node.args, node.order))
-        return self.core_call("str_" + node.name, args, True)
 
     def dict_method(self, expr: ast.Expr, node: ast.MethodCall) -> str:
         object = self.expr(node.object)
@@ -834,6 +838,8 @@ class Emitter:
         name = "list_get"
         if types.kind(ty) == "str":
             name = "str_index"
+        elif types.kind(ty) == "bytes":
+            name = "bytes_index"
         elif types.kind(ty) == "dict":
             name = "dict_get"
         return self.core_call(name, [object, index], True)
@@ -857,6 +863,8 @@ class Emitter:
         value = self.expr(arg)
         ty = arg.ty
         assert ty is not None, "unchecked len argument"
+        if types.kind(ty) == "bytes":
+            return self.core_call("str_size", [value], True)
         return self.core_call(types.kind(ty) + "_len", [value], True)
 
     def contains(self, node: ast.Binary) -> str:
@@ -869,7 +877,7 @@ class Emitter:
         if isinstance(ty, types.DictType):
             result = self.core_call("dict_contains", [container, item], True)
         elif isinstance(ty, types.Prim):
-            result = self.core_call("str_contains", [container, item], True)
+            result = self.core_call(ty.name + "_contains", [container, item], True)
         else:
             assert isinstance(ty, types.ListType), "unchecked membership"
             element = types.expand(ty.element)
@@ -1063,9 +1071,9 @@ class Emitter:
         right = self.expr(node.right)
         if isinstance(left_type, types.TupleType):
             return self.tuple_order(op, left, right, left_type)
-        if kind == "str":
+        if kind in ["str", "bytes"]:
             if op == "+":
-                return self.core_call("str_concat", [left, right], True)
+                return self.core_call(kind + "_concat", [left, right], True)
             if op in ["<", "<=", ">", ">="]:
                 # Strings order by the sign of core's three-way comparison.
                 order = self.core_call("str_compare", [left, right], True)
@@ -1510,6 +1518,12 @@ class Emitter:
             return self.conversion(node)
         elif name == "float":
             return self.conversion(node)
+        elif name == "bytes":
+            return self.core_call("bytes_new", self.arg_values(node.args, node.order), True)
+        elif name == "bytes.fromhex":
+            return self.core_call("bytes_fromhex", self.arg_values(node.args, node.order), True)
+        elif name == "input":
+            return self.core_call("input_line", [], True)
         elif name == "range":
             return self.unchecked("'range'")
         elif name == "ord":
@@ -1731,13 +1745,13 @@ def field_base(decl: types.Class) -> int:
 
 # The built-in types with descriptors, which every program emits.
 def builtin_types() -> list[str]:
-    return ["int", "float", "bool", "str", "list", "dict", "tuple"]
+    return ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple"]
 
 def equality_kind(t: types.Type) -> str:
     kind = types.kind(types.expand(t))
     if kind == "float":
         return "1"
-    if kind == "str":
+    if kind in ["str", "bytes"]:
         return "2"
     if kind == "union":
         return "3"

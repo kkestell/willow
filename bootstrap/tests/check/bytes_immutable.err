@@ -1,0 +1,1 @@
+bytes_immutable.wlo:3:9: error: cannot assign to an index of a value of type bytes

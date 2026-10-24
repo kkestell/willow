@@ -495,6 +495,115 @@ def str_chr(n: int) -> str:
         i = i - 1
     return __str(__word(s))
 
+# Bytes share strings' length, data, and trailing zero layout. Only newly
+# allocated strings may be retagged; strings held by callers stay strings.
+def bytes_tag(s: str) -> ptr:
+    data = __ptr(__word(s))
+    __store8(data, 0, __word(__type(bytes)))
+    return data
+
+def bytes_new(values: ptr) -> ptr:
+    size = list_len(values)
+    data = str_alloc(size)
+    i = 0
+    while i < size:
+        value = __int(list_get(values, i))
+        if value < 0 or value > 255:
+            fail("ValueError", "bytes must be in range(0, 256)")
+        __store1(data, 16 + i, value)
+        i = i + 1
+    return bytes_tag(__str(__word(data)))
+
+def str_encode(s: str) -> ptr:
+    return bytes_tag(str_sub(s, 0, str_size(s)))
+
+def bytes_decode(data: ptr) -> str:
+    return str_from_bytes(__offset(data, 16), str_size(__str(__word(data))))
+
+def bytes_concat(a: ptr, b: ptr) -> ptr:
+    return bytes_tag(str_concat(__str(__word(a)), __str(__word(b))))
+
+def bytes_index(data: ptr, i: int) -> int:
+    size = str_size(__str(__word(data)))
+    if i < 0:
+        i = i + size
+    if i < 0 or i >= size:
+        fail("IndexError", "index out of range")
+    return __load1(data, 16 + i)
+
+def bytes_slice(data: ptr, start: int, stop: int) -> ptr:
+    s = __str(__word(data))
+    start = clamp(start, str_size(s))
+    stop = clamp(stop, str_size(s))
+    if stop < start:
+        stop = start
+    return bytes_tag(str_sub(s, start, stop))
+
+def bytes_find(data: ptr, sub: ptr) -> int:
+    return find_bytes(__str(__word(data)), __str(__word(sub)), 0)
+
+def bytes_startswith(data: ptr, prefix: ptr) -> bool:
+    return str_startswith(__str(__word(data)), __str(__word(prefix)))
+
+def bytes_endswith(data: ptr, suffix: ptr) -> bool:
+    return str_endswith(__str(__word(data)), __str(__word(suffix)))
+
+def bytes_contains(data: ptr, value: int) -> bool:
+    s = __str(__word(data))
+    i = 0
+    while i < str_size(s):
+        if str_byte(s, i) == value:
+            return True
+        i = i + 1
+    return False
+
+def bytes_split(data: ptr, sep: ptr, maxsplit: int) -> ptr:
+    parts = str_split(__str(__word(data)), __str(__word(sep)), maxsplit)
+    i = 0
+    while i < list_len(parts):
+        bytes_tag(__str(list_get(parts, i)))
+        i = i + 1
+    return parts
+
+def bytes_hex(data: ptr) -> str:
+    s = __str(__word(data))
+    digits = "0123456789abcdef"
+    text = str_alloc(str_size(s) * 2)
+    i = 0
+    while i < str_size(s):
+        b = str_byte(s, i)
+        __store1(text, 16 + i * 2, str_byte(digits, b // 16))
+        __store1(text, 17 + i * 2, str_byte(digits, b % 16))
+        i = i + 1
+    return __str(__word(text))
+
+def hex_digit(b: int) -> int:
+    if b >= 48 and b <= 57:
+        return b - 48
+    if b >= 65 and b <= 70:
+        return b - 65 + 10
+    if b >= 97 and b <= 102:
+        return b - 97 + 10
+    return -1
+
+def bytes_fromhex(text: str) -> ptr:
+    data = str_alloc(str_size(text) // 2)
+    size = 0
+    i = skip_spaces(text, 0)
+    while i < str_size(text):
+        if i + 1 == str_size(text):
+            fail("ValueError", "invalid hex string")
+        high = hex_digit(str_byte(text, i))
+        low = hex_digit(str_byte(text, i + 1))
+        if high < 0 or low < 0:
+            fail("ValueError", "invalid hex string")
+        __store1(data, 16 + size, high * 16 + low)
+        size = size + 1
+        i = skip_spaces(text, i + 2)
+    __store8(data, 8, __word(size))
+    __store1(data, 16 + size, 0)
+    return bytes_tag(__str(__word(data)))
+
 # A list is a header word pointing at the list descriptor, the length, the
 # capacity, and a pointer to an array of `capacity` slots. Slots may hold
 # pointers, so the array is scanned memory.
@@ -664,6 +773,29 @@ def str_from_bytes(p: ptr, size: int) -> str:
     s = str_alloc(size)
     memcpy(__offset(s, 16), p, size)
     return __str(__word(s))
+
+def input_line() -> str | None:
+    capacity = 128
+    size = 0
+    buf = __alloc_atomic(capacity)
+    count = read(0, buf, 1)
+    while count != 0:
+        if count < 0:
+            fail("OSError", "cannot read input: " + os_reason())
+        if __load1(buf, size) == 10:
+            if size > 0 and __load1(buf, size - 1) == 13:
+                size = size - 1
+            return str_from_bytes(buf, size)
+        size = size + 1
+        if size == capacity:
+            larger = __alloc_atomic(capacity * 2)
+            memcpy(larger, buf, size)
+            buf = larger
+            capacity = capacity * 2
+        count = read(0, __offset(buf, size), 1)
+    if size == 0:
+        return None
+    return str_from_bytes(buf, size)
 
 def sys_args(argc: int, argv: ptr) -> ptr:
     args = list_new(argc)
@@ -1289,7 +1421,7 @@ def union_eq(a: ptr, b: ptr) -> bool:
         return __addr_is_null(a) and __addr_is_null(b)
     if header(a) != header(b):
         return False
-    if header(a) == __type(str):
+    if header(a) == __type(str) or header(a) == __type(bytes):
         return str_eq(__str(__word(a)), __str(__word(b)))
     if header(a) == __type(float):
         return __float(unbox(a)) == __float(unbox(b))
