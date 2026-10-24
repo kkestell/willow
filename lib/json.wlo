@@ -1,0 +1,246 @@
+type Json = None | bool | int | float | str | list[Json] | dict[str, Json]
+
+class JsonError(Exception):
+    pass
+
+class _Parser:
+    text: str
+    pos: int = 0
+
+    def peek(self) -> str:
+        return self.text[self.pos:self.pos + 1]
+
+    def space(self):
+        while self.peek() in [" ", "\t", "\n", "\r"]:
+            self.pos = self.pos + 1
+
+    def error(self, problem: str, pos: int) -> JsonError:
+        if pos >= len(self.text):
+            problem = "unexpected end of input"
+        line = 1
+        column = 1
+        for c in self.text[:pos]:
+            if c == "\n":
+                line = line + 1
+                column = 1
+            else:
+                column = column + 1
+        return JsonError(f"{problem} at line {line}, column {column}")
+
+    def word(self, word: str, value: Json) -> Json:
+        for c in word:
+            if self.peek() != c:
+                raise self.error("expected '" + word + "'", self.pos)
+            self.pos = self.pos + 1
+        return value
+
+    def hex4(self, start: int) -> int:
+        code = 0
+        for i in range(4):
+            c = self.peek()
+            if c == "":
+                raise self.error("", self.pos)
+            digit = "0123456789abcdef".find(c.lower())
+            if digit == -1:
+                raise self.error("invalid escape", start)
+            code = code * 16 + digit
+            self.pos = self.pos + 1
+        return code
+
+    def string(self) -> str:
+        self.pos = self.pos + 1
+        parts: list[str] = []
+        escapes = {"\"": "\"", "\\": "\\", "/": "/", "b": chr(8), "f": chr(12), "n": "\n", "r": "\r", "t": "\t"}
+        while self.peek() != '"':
+            c = self.peek()
+            if c == "":
+                raise self.error("", self.pos)
+            if ord(c) < 32:
+                raise self.error("control character in string", self.pos)
+            start = self.pos
+            self.pos = self.pos + 1
+            if c != "\\":
+                parts.append(c)
+                continue
+            escape = self.peek()
+            self.pos = self.pos + 1
+            if escape == "u":
+                code = self.hex4(start)
+                if code >= 55296 and code <= 57343:
+                    if code > 56319 or self.text[self.pos:self.pos + 2] != "\\u":
+                        raise self.error("unpaired surrogate", start)
+                    self.pos = self.pos + 2
+                    low = self.hex4(self.pos - 2)
+                    if low < 56320 or low > 57343:
+                        raise self.error("unpaired surrogate", start)
+                    code = 65536 + (code - 55296) * 1024 + low - 56320
+                parts.append(chr(code))
+            elif escape in escapes:
+                parts.append(escapes[escape])
+            elif escape == "":
+                raise self.error("", self.pos - 1)
+            else:
+                raise self.error("invalid escape", start)
+
+        self.pos = self.pos + 1
+        return "".join(parts)
+
+    def number(self) -> Json:
+        start = self.pos
+        if self.peek() == "-":
+            self.pos = self.pos + 1
+        c = self.peek()
+        if c == "0":
+            self.pos = self.pos + 1
+        elif c in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+            while self.peek() in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                self.pos = self.pos + 1
+        else:
+            raise self.error("invalid number", start)
+        int_end = self.pos
+        if self.peek() == ".":
+            self.pos = self.pos + 1
+            digits = self.pos
+            while self.peek() in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                self.pos = self.pos + 1
+            if self.pos == digits:
+                raise self.error("invalid number", start)
+        if self.peek() in ["e", "E"]:
+            self.pos = self.pos + 1
+            if self.peek() in ["+", "-"]:
+                self.pos = self.pos + 1
+            digits = self.pos
+            while self.peek() in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+                self.pos = self.pos + 1
+            if self.pos == digits:
+                raise self.error("invalid number", start)
+        token = self.text[start:self.pos]
+        if self.pos == int_end:
+            try:
+                return int(token)
+            except ValueError:
+                raise self.error("integer out of range", start)
+        return float(token)
+
+    def value(self) -> Json:
+        self.space()
+        c = self.peek()
+        if c == "{":
+            result: dict[str, Json] = {}
+            self.pos = self.pos + 1
+            self.space()
+            if self.peek() == "}":
+                self.pos = self.pos + 1
+                return result
+            while True:
+                self.space()
+                if self.peek() != '"':
+                    raise self.error("expected string", self.pos)
+                key = self.string()
+                self.space()
+                if self.peek() != ":":
+                    raise self.error("expected ':'", self.pos)
+                self.pos = self.pos + 1
+                result[key] = self.value()
+                self.space()
+                c = self.peek()
+                if c == "}":
+                    self.pos = self.pos + 1
+                    break
+                if c != ",":
+                    raise self.error("expected ',' or '}'", self.pos)
+                self.pos = self.pos + 1
+            return result
+        elif c == "[":
+            items: list[Json] = []
+            self.pos = self.pos + 1
+            self.space()
+            if self.peek() == "]":
+                self.pos = self.pos + 1
+                return items
+            while True:
+                items.append(self.value())
+                self.space()
+                c = self.peek()
+                if c == "]":
+                    self.pos = self.pos + 1
+                    break
+                if c != ",":
+                    raise self.error("expected ',' or ']'", self.pos)
+                self.pos = self.pos + 1
+            return items
+        elif c == '"':
+            return self.string()
+        elif c == "t":
+            return self.word("true", True)
+        elif c == "f":
+            return self.word("false", False)
+        elif c == "n":
+            return self.word("null", None)
+        elif c in ["-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+            return self.number()
+        raise self.error("expected value", self.pos)
+
+def parse(text: str) -> Json:
+    parser = _Parser(text)
+    value = parser.value()
+    parser.space()
+    if parser.pos < len(text):
+        raise parser.error("unexpected text after value", parser.pos)
+    return value
+
+def _quote(text: str) -> str:
+    parts = ['"']
+    escapes = {"\"": "\\\"", "\\": "\\\\", chr(8): "\\b", chr(12): "\\f", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+    hex = "0123456789abcdef"
+    for c in text:
+        if c in escapes:
+            parts.append(escapes[c])
+        elif ord(c) < 32:
+            parts.append("\\u00" + hex[ord(c) // 16] + hex[ord(c) % 16])
+        else:
+            parts.append(c)
+    parts.append('"')
+    return "".join(parts)
+
+def _write(value: Json, out: list[str]):
+    if value is None:
+        out.append("null")
+    elif isinstance(value, bool):
+        if value:
+            out.append("true")
+        else:
+            out.append("false")
+    elif isinstance(value, int):
+        out.append(str(value))
+    elif isinstance(value, float):
+        if value - value != 0.0:
+            raise JsonError("cannot encode " + str(value))
+        out.append(str(value))
+    elif isinstance(value, str):
+        out.append(_quote(value))
+    elif isinstance(value, list):
+        out.append("[")
+        first = True
+        for item in value:
+            if not first:
+                out.append(",")
+            first = False
+            _write(item, out)
+        out.append("]")
+    else:
+        out.append("{")
+        first = True
+        for key in value:
+            if not first:
+                out.append(",")
+            first = False
+            out.append(_quote(key))
+            out.append(":")
+            _write(value[key], out)
+        out.append("}")
+
+def dump(value: Json) -> str:
+    out: list[str] = []
+    _write(value, out)
+    return "".join(out)
