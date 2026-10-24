@@ -50,7 +50,7 @@ def handle(connection: net.Connection, port: int):
     elif path == "/bytes":
         respond(connection, "200", ["Content-Type: application/octet-stream"], bytes(list(range(256))))
     elif path == "/latin1-header":
-        connection.sendall("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\nX-Name: caf".encode() + bytes([233]) + "\r\nX-Twice: one\r\nX-Twice: two\r\n\r\nok".encode())
+        connection.sendall("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\nX-Name: caf".encode() + bytes([233]) + "\r\nX-Twice: one\r\nX-Twice: two\r\nX-Space: ".encode() + bytes([160]) + "ok".encode() + bytes([160]) + "\r\n\r\nok".encode())
     elif path.startswith("/redirect/"):
         count = int(path.removeprefix("/redirect/"))
         if count == 0:

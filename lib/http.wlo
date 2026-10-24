@@ -252,6 +252,15 @@ def _headers(headers: list[Header] | None) -> list[str]:
                 lines.append(item.name + ": " + item.value)
     return lines
 
+def _header_value(text: str) -> str:
+    start = 0
+    end = len(text)
+    while start < end and text[start] in " \t":
+        start = start + 1
+    while end > start and text[end - 1] in " \t":
+        end = end - 1
+    return text[start:end]
+
 def _response_headers(data: str) -> list[Header]:
     headers: list[Header] = []
     for line in data.split("\n"):
@@ -259,11 +268,11 @@ def _response_headers(data: str) -> list[Header]:
         if line.startswith("HTTP/"):
             headers = []
         elif (line.startswith(" ") or line.startswith("\t")) and len(headers) > 0:
-            headers[len(headers) - 1].value = headers[len(headers) - 1].value + " " + line.strip()
+            headers[len(headers) - 1].value = headers[len(headers) - 1].value + " " + _header_value(line)
         else:
             colon = line.find(":")
             if colon >= 0:
-                headers.append(Header(line[:colon], line[colon + 1:].strip()))
+                headers.append(Header(line[:colon], _header_value(line[colon + 1:])))
     return headers
 
 class _Stream:

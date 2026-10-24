@@ -18,6 +18,8 @@ def main():
     echoed = http.request("get", base + "/echo/tea é?x=%2f%#gone").body.decode()
     assert '"method": "get"' in echoed
     assert '"path": "/echo/tea%20%C3%A9?x=%2f%25"' in echoed
+    latin1 = http.request("GET", base + "/latin1-header")
+    assert http.header(latin1.headers, "x-space") == chr(160) + "ok" + chr(160)
     empty = http.request("GET", base + "/echo", headers=[http.Header("X-Test", "")])
     assert '"x_test": ""' in empty.body.decode()
     started = time.monotonic()
