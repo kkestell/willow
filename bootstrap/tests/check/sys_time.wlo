@@ -1,0 +1,38 @@
+import sys
+import time
+
+def main():
+    for name in ["", "a=b", "a\x00b"]:
+        try:
+            sys.getenv(name)
+        except ValueError as error:
+            print(error.message)
+    env = sys.environ()
+    names = list(env)
+    ordered = sorted(names)
+    for i in range(len(names)):
+        assert names[i] == ordered[i]
+    assert len(sys.getcwd()) > 0
+    for name in names:
+        assert sys.getenv(name) == env[name]
+    if len(names) > 0:
+        original = env.pop(names[0])
+        assert sys.getenv(names[0]) == original
+    assert sys.getenv("WILLOW_MISSING_SYS_TIME_VARIABLE") is None
+    for seconds in [-1.0, float("nan"), float("inf")]:
+        try:
+            time.sleep(seconds)
+        except ValueError as error:
+            print(error.message)
+    for timestamp in [0.0, -0.5, 951782400.5, -62135596800.0, 253402300799.5]:
+        print(time.utc(timestamp))
+    for timestamp in [-62135596800.5, 253402300800.0, float("nan"), float("inf")]:
+        try:
+            time.utc(timestamp)
+        except ValueError as error:
+            print(error.message)
+    assert time.time() > 0.0
+    start = time.monotonic()
+    time.sleep(0.01)
+    assert time.monotonic() - start >= 0.01
+    time.sleep(0.0)

@@ -16,6 +16,8 @@ extern def close(fd: cint) -> cint
 extern def strerror(code: cint) -> ptr
 extern def access(path: ptr, mode: cint) -> cint
 extern def realpath(path: ptr, resolved: ptr) -> ptr
+extern def getenv(name: ptr) -> ptr
+extern def getcwd(buf: ptr, size: int) -> ptr
 extern def posix_spawnp(pid: ptr, file: ptr, actions: ptr, attributes: ptr, argv: ptr, envp: ptr) -> cint
 extern def posix_spawnattr_init(attributes: ptr) -> cint
 extern def posix_spawnattr_destroy(attributes: ptr) -> cint
@@ -2544,6 +2546,11 @@ def input_line() -> str | None:
     if size == 0:
         return None
     return str_from_bytes(buf, size)
+
+# Stage 1 replaces this body to read the arguments saved by program entry.
+def sys_arguments() -> list[str]:
+    fail("RuntimeError", "program arguments require stage 1")
+    return []
 
 def sys_args(argc: int, argv: ptr) -> ptr:
     args = list_new(argc)

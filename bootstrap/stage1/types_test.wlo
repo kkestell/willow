@@ -206,9 +206,6 @@ def standard_library(r: Results):
     assert sleep is not None
     r.shows("aio.sleep", sleep, "Coroutine[None]")
     r.check("coroutine", stdlib.has_coroutine(sleep), True)
-    getenv = modules["sys"].functions["getenv"].result
-    assert getenv is not None
-    r.shows("sys.getenv", getenv, "str | None")
     task_group = types.ClassType(modules["aio"].classes["TaskGroup"], [])
     start = types.method(task_group, "start")
     assert start is not None

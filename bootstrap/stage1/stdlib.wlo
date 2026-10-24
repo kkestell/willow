@@ -315,17 +315,6 @@ def io_module() -> Module:
     add(module.functions, "stderr", [], class_type(file))
     return module
 
-def sys_module() -> Module:
-    module = new_module("sys")
-    functions = module.functions
-    add(functions, "args", [], list_of("str"))
-    add(functions, "eprint", [any_arg("value")], prim("None"))
-    add(functions, "exit", [arg("status", prim("int"))], prim("None"))
-    add(functions, "getenv", [arg("name", prim("str"))], optional("str"))
-    add(functions, "environ", [], types.DictType(prim("str"), prim("str")))
-    add(functions, "getcwd", [], prim("str"))
-    return module
-
 def fs_module() -> Module:
     module = new_module("fs")
     stat = provided_class("fs", "Stat", ["kind", "size", "modified"], [prim("str"), prim("int"), prim("float")])
@@ -429,14 +418,6 @@ def random_module() -> Module:
     module.classes["Random"] = generator
     add_helper(module.functions, "generator", [arg("seed", prim("int"))], class_type(generator), "random_generator")
     add_helper(module.functions, "secure_bytes", [arg("size", prim("int"))], prim("bytes"), "random_secure_bytes")
-    return module
-
-def time_module() -> Module:
-    module = new_module("time")
-    add(module.functions, "time", [], prim("float"))
-    add(module.functions, "monotonic", [], prim("float"))
-    add(module.functions, "sleep", [arg("seconds", prim("float"))], prim("None"))
-    add(module.functions, "utc", [arg("timestamp", prim("float"))], prim("str"))
     return module
 
 def terminal_module() -> Module:
@@ -625,9 +606,7 @@ def modules() -> dict[str, Module]:
         "net": net_module(),
         "random": random_module(),
         "subprocess": subprocess_module(),
-        "sys": sys_module(),
         "terminal": terminal_module(),
-        "time": time_module(),
     }
 
 # Run-time types of built-in values that protocol dispatch finds converters

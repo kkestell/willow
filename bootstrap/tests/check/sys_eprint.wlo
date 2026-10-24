@@ -1,0 +1,10 @@
+import sys
+
+enum Mode:
+    AUTO
+
+def main():
+    sys.eprint(Mode.AUTO)
+    output: (Mode) -> None = sys.eprint
+    output(Mode.AUTO)
+    sys.getenv("")
