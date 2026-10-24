@@ -39,7 +39,6 @@ sockets
 sort_keys
 sorting
 square_root
-standard_protocols
 stdlib_aio_semaphore
 stdlib_aio_semaphore_deadlock
 stdlib_builtins
