@@ -1,4 +1,4 @@
-# A library module that stage 1's tests import and shadow. stage1.sh embeds
+# A library module that the tests import and shadow. stage2.sh embeds
 # bootstrap/tests/lib/ with lib/ in the compilers it builds.
 
 class Item:
