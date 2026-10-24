@@ -299,6 +299,8 @@ class Emitter:
             assert ty is not None, "unchecked for source"
             if types.kind(ty) == "dict":
                 self.for_dict(node, node.iterable, "keys")
+            elif types.kind(types.expand(ty)) == "str":
+                self.for_str(node)
             else:
                 self.for_list(node)
 
@@ -367,6 +369,28 @@ class Emitter:
         self.label(body)
         item = self.core_call("list_get", [source, index], True)
         self.line(f"{index} =l add {index}, 1")
+        self.for_body(node, item, test, end)
+        self.jump(f"jmp {test}")
+        self.label(end)
+
+    # Each step takes the code point at a byte offset, which advances by its
+    # size before the body.
+    def for_str(self, node: ast.For):
+        source = self.expr(node.iterable)
+        at = self.temp()
+        self.line(f"{at} =l copy 0")
+        test = self.new_label()
+        body = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        size = self.core_call("str_size", [source], True)
+        more = self.temp()
+        self.line(f"{more} =l csltl {at}, {size}")
+        self.jump(f"jnz {more}, {body}, {end}")
+        self.label(body)
+        item = self.core_call("str_char_at", [source, at], True)
+        width = self.core_call("str_size", [item], True)
+        self.line(f"{at} =l add {at}, {width}")
         self.for_body(node, item, test, end)
         self.jump(f"jmp {test}")
         self.label(end)
@@ -471,7 +495,21 @@ class Emitter:
             return self.list_method(node)
         if isinstance(ty, types.DictType):
             return self.dict_method(expr, node)
+        if isinstance(ty, types.Prim) and ty.name == "str":
+            return self.str_method(node)
         return self.unchecked("method call")
+
+    # Omitted arguments take their parameters' literal defaults.
+    def str_method(self, node: ast.MethodCall) -> str:
+        args = [self.expr(node.object)]
+        for arg in node.args:
+            args.append(self.expr(arg))
+        params = stdlib.str_methods()[node.name].params
+        for i in range(len(node.args), len(params)):
+            default = params[i].default
+            assert default is not None, f"str.{node.name} is missing an argument"
+            args.append(self.node_value(default))
+        return self.core_call("str_" + node.name, args, True)
 
     def dict_method(self, expr: ast.Expr, node: ast.MethodCall) -> str:
         object = self.expr(node.object)
@@ -547,6 +585,8 @@ class Emitter:
         result = "0"
         if isinstance(ty, types.DictType):
             result = self.core_call("dict_contains", [container, item], True)
+        elif isinstance(ty, types.Prim):
+            result = self.core_call("str_contains", [container, item], True)
         else:
             assert isinstance(ty, types.ListType), "unchecked membership"
             kind = "0"
@@ -684,6 +724,12 @@ class Emitter:
         if kind == "str":
             if op == "+":
                 return self.core_call("str_concat", [left, right], True)
+            if op in ["<", "<=", ">", ">="]:
+                # Strings order by the sign of core's three-way comparison.
+                order = self.core_call("str_compare", [left, right], True)
+                t = self.temp()
+                self.line(f"{t} =l {comparison_instruction(op)} {order}, 0")
+                return t
             equal = self.core_call("str_eq", [left, right], True)
             if op == "==":
                 return equal
@@ -1094,9 +1140,9 @@ class Emitter:
         elif name == "range":
             return self.unchecked("'range'")
         elif name == "ord":
-            return self.unchecked("'ord'")
+            return self.core_call("str_ord", [self.expr(node.args[0])], True)
         elif name == "chr":
-            return self.unchecked("'chr'")
+            return self.core_call("str_chr", [self.expr(node.args[0])], True)
         elif name == "sys.args":
             return self.host(node, target)
         elif name == "sys.exit":

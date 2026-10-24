@@ -215,6 +215,8 @@ class Checker:
             source = types.expand(self.check_expr(iterable, state))
             if isinstance(source, types.ListType):
                 item = types.expand(source.element)
+            elif types.kind(source) == "str":
+                item = source
             elif isinstance(source, types.DictType):
                 self.check_for_dict(statement, node, source, "keys", state)
                 return
@@ -377,6 +379,39 @@ class Checker:
         elif name == "pop":
             return types.expand(object.element)
         return none()
+
+    def check_str_method(self, expr: ast.Expr, node: ast.MethodCall, state: dict[int, types.Type], object: types.Type) -> types.Type:
+        if len(node.keywords) > 0:
+            return self.unsupported(expr.line, expr.col, "keyword arguments")
+        name = node.name
+        methods = stdlib.str_methods()
+        if name not in methods:
+            if name in ["rsplit", "splitlines", "lstrip", "rstrip", "isascii", "encode", "lower", "upper"]:
+                return self.unsupported(expr.line, expr.col, f"'str.{name}'")
+            self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{name}'")
+            return none()
+        method = methods[name]
+        params = method.params
+        # Defaults are trailing, so the last parameter without one ends the
+        # required ones.
+        required = 0
+        for i in range(len(params)):
+            if params[i].default is None:
+                required = i + 1
+        count = len(node.args)
+        if required == len(params):
+            self.check_arity(expr, name, required, count)
+        elif count < required or count > len(params):
+            self.fail(expr.line, expr.col, f"'{name}' expects {required} to {len(params)} arguments, received {count}")
+        if self.failed():
+            return none()
+        for i in range(count):
+            param = params[i].ty
+            assert param is not None, f"str.{name} has an untyped parameter"
+            self.check_against(node.args[i], state, param)
+        result = method.result
+        assert result is not None, f"str.{name} has no result"
+        return result
 
     def check_dict(self, expr: ast.Expr, node: ast.DictDisplay, state: dict[int, types.Type]) -> types.Type:
         expected = expr.expected
@@ -554,7 +589,7 @@ class Checker:
         elif op in ["<", "<=", ">", ">="]:
             if types.ordered(left, right):
                 ty = types.prim("bool")
-            supported = pair in ["int int", "float float"]
+            supported = pair in ["int int", "float float", "str str"]
         elif op in ["+", "-", "*", "/", "//", "%"]:
             ty = arithmetic_type(op, pair)
             supported = pair in ["int int", "float float"] or op == "+" and pair == "str str"
@@ -573,6 +608,9 @@ class Checker:
                     if not types.assignable(element, left):
                         return self.unsupported(expr.line, expr.col, "unions")
                     self.expect(node.left, element, left)
+            elif types.kind(container) == "str" and types.kind(types.expand(left)) == "str":
+                ty = types.prim("bool")
+                supported = True
         if ty is None:
             self.fail(expr.line, expr.col, f"operator '{op}' cannot be applied to {types.display(left)} and {types.display(right)}")
             return none()
@@ -737,6 +775,8 @@ class Checker:
             return self.check_class_method(expr, node, object, state)
         if isinstance(object, types.ListType):
             return self.check_list_method(expr, node, state, object)
+        if types.kind(object) == "str":
+            return self.check_str_method(expr, node, state, object)
         if isinstance(object, types.DictType):
             return self.check_dict_method(expr, node, object, state)
         return self.unsupported(expr.line, expr.col, "method calls")
@@ -791,9 +831,9 @@ class Checker:
             self.fail(line, col, "'range' can only be the source of a for loop")
             return none()
         elif name == "ord":
-            return self.unsupported(line, col, "'ord'")
+            return self.check_host(expr, node, target, state)
         elif name == "chr":
-            return self.unsupported(line, col, "'chr'")
+            return self.check_host(expr, node, target, state)
         elif name == "sys.args":
             return self.check_host(expr, node, target, state)
         elif name == "sys.exit":
@@ -831,7 +871,8 @@ class Checker:
                     self.fail(arg.line, arg.col, "variadic arguments must be int, float, or ptr")
         return record.result
 
-    # A function of sys or fs with the signature the spec gives it.
+    # `ord`, `chr`, or a function of sys or fs, with the signature the spec
+    # gives it.
     def check_host(self, expr: ast.Expr, node: ast.Call, target: stdlib.Builtin, state: dict[int, types.Type]) -> types.Type:
         self.check_arity(expr, node.name, len(target.params), len(node.args))
         if self.failed():

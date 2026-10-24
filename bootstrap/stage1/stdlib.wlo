@@ -113,6 +113,29 @@ def builtins() -> dict[str, Builtin]:
     add(table, "zip", [any_arg("a"), any_arg("b")], None)
     return table
 
+# The string methods of L0 (agents/bootstrap.md §3), with the spec's
+# parameter names and defaults. Each lowers to core's `str_<name>`.
+def str_methods() -> dict[str, Builtin]:
+    table: dict[str, Builtin] = {}
+    text = prim("str")
+    flag = prim("bool")
+    add(table, "find", [arg("sub", text)], prim("int"))
+    add(table, "split", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
+    add(table, "join", [arg("items", list_of("str"))], text)
+    add(table, "startswith", [arg("prefix", text)], flag)
+    add(table, "endswith", [arg("suffix", text)], flag)
+    add(table, "strip", [], text)
+    add(table, "replace", [arg("old", text), arg("new", text)], text)
+    add(table, "removeprefix", [arg("prefix", text)], text)
+    add(table, "removesuffix", [arg("suffix", text)], text)
+    add(table, "isdigit", [], flag)
+    add(table, "isalpha", [], flag)
+    add(table, "isalnum", [], flag)
+    add(table, "isspace", [], flag)
+    add(table, "ljust", [arg("width", prim("int"))], text)
+    add(table, "rjust", [arg("width", prim("int"))], text)
+    return table
+
 # The intrinsics that core calls (agents/bootstrap.md §5). `__type` has its
 # own syntax, and `__os` is a name.
 def intrinsics() -> dict[str, Builtin]:
