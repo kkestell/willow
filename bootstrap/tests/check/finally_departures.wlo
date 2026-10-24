@@ -1,0 +1,42 @@
+class Stop(Exception):
+    pass
+
+# Each finally clause below is emitted once per way of leaving its try, and
+# each copy holds its own try statement.
+def nested(limit: int) -> int:
+    i = 0
+    while i < limit:
+        try:
+            try:
+                i = i + 1
+                if i == 2:
+                    return i * 10
+            finally:
+                print(f"inner {i}")
+                try:
+                    if i == 2:
+                        raise Stop("raised in finally")
+                except Stop as stop:
+                    print(stop.message)
+        finally:
+            print(f"outer {i}")
+    return -1
+
+def departures():
+    for word in ["a", "b", "c"]:
+        try:
+            try:
+                if word == "b":
+                    continue
+                if word == "c":
+                    break
+                print(word)
+            finally:
+                print(f"inner {word}")
+        finally:
+            print(f"outer {word}")
+    print("done")
+
+def main():
+    print(nested(5))
+    departures()

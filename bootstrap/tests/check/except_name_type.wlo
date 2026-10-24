@@ -1,0 +1,7 @@
+def main():
+    try:
+        pass
+    except KeyError as e:
+        pass
+    except IndexError as e:
+        pass

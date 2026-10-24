@@ -6,10 +6,12 @@
 # Each program is built with willow0 and run from its own directory, so
 # diagnostics name the bare file. Optional NAME.out and NAME.err hold the
 # expected stdout and stderr; a missing file means no output. The expected exit
-# status is 1 when NAME.err exists and 0 otherwise. A program that fails to
-# compile has the compiler's stderr as its stderr and exit status 1. Stdin is
-# NAME.in when it exists and empty otherwise. A program that compiles must
-# compile to the same IL twice.
+# status is 1 when NAME.err exists and 0 otherwise. With STAGE1=1, stderr is
+# compared with NAME.stage1.err instead when it exists, for the failures that
+# stage 0 reports without a location. A program that fails to compile has the
+# compiler's stderr as its stderr and exit status 1. Stdin is NAME.in when it
+# exists and empty otherwise. A program that compiles must compile to the same
+# IL twice.
 #
 # WILLOW0 names the compiler; it defaults to the release build of stage 0.
 
@@ -55,6 +57,7 @@ for file in "$@"; do
     for stream in out err; do
         expected=/dev/null
         [ -f "$base.$stream" ] && expected=$base.$stream
+        [ "$stream" = err ] && [ "${STAGE1:-0}" = 1 ] && [ -f "$base.stage1.err" ] && expected=$base.stage1.err
         if ! cmp -s "$expected" "$work/$stream"; then
             echo "FAIL $file: std$stream differs"
             diff "$expected" "$work/$stream" | sed 's/^/    /'

@@ -182,6 +182,24 @@ literal `"None"`.
 | `os() -> str` | `__os`, the target's operating system |
 | `run(args: list[str]) -> int` | Runs `args[0]`, searched for in `PATH`, with the remaining arguments and no shell, through `posix_spawnp`; the child inherits stdin, stdout, stderr, and the environment, with SIGPIPE's default action. Waits and returns the exit status, or 128 plus the signal number if a signal ended the child |
 
+## Exceptions under stage 1
+
+Programs that stage 1 compiles raise exceptions instead of ending
+(agents/bootstrap.md §6). The word `$W.pending` holds the pending exception,
+or 0. Stage 1 compiles its own body for `fail`, which creates the exception
+with `failure` and stores it in `$W.pending`. An exception object is a header,
+its location and frames, both `str` and 0 until it is raised, and its fields,
+`message` first. The frames are the report's lines after the first, each
+starting with a newline. Core never reads `$W.pending`; stage 1 clears it while
+these functions run.
+
+| Signature | Meaning |
+| --- | --- |
+| `failure(descriptors: ptr, class_name: str, message: str) -> ptr` | A new exception of the built-in class named `class_name`, whose descriptor is in the array `descriptors`, `$W.exceptions` |
+| `raised(e: ptr, function: str, path: str, line: int, col: int)` | Starts the frames of `e`, raised by a `raise` statement in `function` at the location |
+| `trace(e: ptr, function: str, path: str, line: int, col: int)` | Adds the frame `in function at path:line:col` to `e`, or `called from` after the first, which also sets the location |
+| `report(e: ptr)` | Writes the spec §13 report of an exception that left `main` to stderr |
+
 ## Inline in stage 0
 
 Integer and float arithmetic and comparisons with their overflow and division

@@ -1,0 +1,2 @@
+assert_message.wlo:6:5: error: AssertionError: count is not 3
+  in main at assert_message.wlo:6:5

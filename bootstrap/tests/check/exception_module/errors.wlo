@@ -1,0 +1,6 @@
+class ParseError(Exception):
+    line: int
+    column: int = 1
+
+def fail(line: int):
+    raise ParseError(line=line, message="worse")

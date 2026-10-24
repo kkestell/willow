@@ -1,0 +1,2 @@
+float_to_int_overflow.wlo:3:11: error: ValueError: cannot convert float to int
+  in main at float_to_int_overflow.wlo:3:11

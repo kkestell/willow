@@ -1,0 +1,2 @@
+key_not_found.wlo:4:15: error: KeyError: key not found
+  in main at key_not_found.wlo:4:15

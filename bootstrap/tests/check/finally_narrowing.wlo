@@ -1,0 +1,12 @@
+def f(x: int | None):
+    if x is None:
+        return
+    try:
+        pass
+    except Exception:
+        x = None
+    finally:
+        print(x + 1)
+
+def main():
+    f(1)

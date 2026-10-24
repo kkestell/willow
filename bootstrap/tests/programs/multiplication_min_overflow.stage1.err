@@ -1,0 +1,2 @@
+multiplication_min_overflow.wlo:3:32: error: OverflowError: integer overflow
+  in main at multiplication_min_overflow.wlo:3:32
