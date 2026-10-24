@@ -29,7 +29,6 @@ stdlib_http_async
 stdlib_math
 stdlib_net_reader
 stdlib_random
-stdlib_str
 stdlib_subprocess
 streams
 streams_invalid_utf8
@@ -40,6 +39,5 @@ task_group_patterns
 task_group_sockets
 task_groups
 terminal_styles
-text_collections
 text_conversions
 type_errors
