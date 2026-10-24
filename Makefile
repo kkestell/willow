@@ -35,6 +35,14 @@ bootstrap: $(BUILD_DIR)/willow2b
 $(WILLOW0): $(wildcard bootstrap/stage0/src/*.rs) bootstrap/stage0/Cargo.toml
 	cargo build --release --manifest-path bootstrap/stage0/Cargo.toml
 
+# The C stage 0 port is built separately until bootstrap integration.
+$(BUILD_DIR)/stage0/core.inc: bootstrap/core/core.wlo
+	mkdir -p $(BUILD_DIR)/stage0
+	sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/?/\\?/g' -e 's/^/"/' -e 's/$$/\\n"/' $< > $@
+
+$(BUILD_DIR)/stage0/willow0: $(wildcard bootstrap/stage0/*.c) bootstrap/stage0/willow0.h $(BUILD_DIR)/stage0/core.inc
+	$(CC) -std=c11 -Wall -Wextra -O2 $(wildcard bootstrap/stage0/*.c) -o $@
+
 $(BUILD_DIR)/willow1: $(WILLOW0) bootstrap/prepare.sh $(STAGE1_SOURCES)
 	mkdir -p $(BUILD_DIR)
 	rm -rf $(BUILD_DIR)/stage1

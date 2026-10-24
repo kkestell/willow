@@ -33,20 +33,9 @@ void *array_grow(void *data, size_t *cap, size_t needed, size_t element_size) {
     if (needed <= *cap) {
         return data;
     }
-    size_t limit = SIZE_MAX / element_size;
-    if (needed > limit) {
-        fatal(STR("willow0: out of memory"));
-    }
     size_t grown = *cap ? *cap : 8;
     while (grown < needed) {
-        if (grown > limit / 2) {
-            grown = needed;
-            break;
-        }
         grown *= 2;
-    }
-    if (grown > limit) {
-        grown = needed;
     }
     data = xrealloc(data, grown * element_size);
     *cap = grown;
@@ -57,9 +46,6 @@ void *array_copy(const void *data, size_t len, size_t element_size) {
     if (!len) {
         return NULL;
     }
-    if (len > SIZE_MAX / element_size) {
-        fatal(STR("willow0: out of memory"));
-    }
     return box_copy(data, len * element_size);
 }
 
@@ -68,9 +54,6 @@ String str_from_cstr(const char *text) {
 }
 
 String str_copy(const char *data, size_t len) {
-    if (len == SIZE_MAX) {
-        fatal(STR("willow0: out of memory"));
-    }
     char *copy = xmalloc(len + 1);
     if (len) {
         memcpy(copy, data, len);
@@ -94,9 +77,6 @@ int str_compare(String left, String right) {
 }
 
 static void sb_reserve(StringBuilder *out, size_t extra) {
-    if (extra > SIZE_MAX - out->len - 1) {
-        fatal(STR("willow0: out of memory"));
-    }
     out->data = array_grow(out->data, &out->cap, out->len + extra + 1, 1);
 }
 
@@ -245,9 +225,6 @@ bool map_contains(const Map *map, String key) {
 }
 
 static void map_grow(Map *map) {
-    if (map->cap > SIZE_MAX / sizeof(MapEntry) / 2) {
-        fatal(STR("willow0: out of memory"));
-    }
     size_t cap = map->cap ? map->cap * 2 : 16;
     Map grown = {xmalloc(cap * sizeof(MapEntry)), map->len, cap};
     memset(grown.entries, 0, cap * sizeof(MapEntry));
