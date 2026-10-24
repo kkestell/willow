@@ -392,8 +392,10 @@ class Checker:
         return result
 
     def check_async_with(self, node: ast.AsyncWith, state: dict[int, types.Type]) -> bool:
-        group_type = types.ClassType(stdlib.aio_module().classes["TaskGroup"], [])
-        self.check_against(node.manager, state, group_type)
+        group_type = self.check_expr(node.manager, state)
+        if not isinstance(group_type, types.ClassType) or not group_type.decl.library or group_type.decl.type_name != "aio.TaskGroup":
+            self.fail(node.manager.line, node.manager.col, f"expected aio.TaskGroup, received {types.display(group_type)}")
+            return False
         pattern = node.target
         if pattern is not None:
             self.check_pattern(pattern, group_type, state)
@@ -1024,7 +1026,7 @@ class Checker:
             if expected is not None:
                 node.operand.expected = stdlib.coroutine_of(expected)
             operand = self.check_expr(node.operand, state)
-            if isinstance(operand, types.ClassType) and operand.decl.type_name in ["Coroutine", "aio.Task"]:
+            if isinstance(operand, types.ClassType) and (operand.decl.type_name == "Coroutine" or operand.decl.library and operand.decl.type_name == "aio.Task"):
                 return operand.args[0]
             self.fail(line, col, f"cannot await a value of type {types.display(operand)}")
             return none()
@@ -1712,8 +1714,6 @@ class Checker:
         elif name == "fs.exists":
             return self.check_host(expr, node, target, state)
         elif name == "fs.realpath":
-            return self.check_host(expr, node, target, state)
-        elif name in ["aio.sleep", "aio.task_group", "aio.semaphore"]:
             return self.check_host(expr, node, target, state)
         # Not in L0.
         return self.unsupported(line, col, f"'{name}'")

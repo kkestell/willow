@@ -951,11 +951,12 @@ class Emitter:
         self.label(ok)
 
     def emit_async_with(self, node: ast.AsyncWith):
-        group = self.expr(node.manager)
+        manager = self.expr(node.manager)
+        group = self.load_field(manager, 8)
         self.core_call("aio_group_enter", [group], False)
         pattern = node.target
         if pattern is not None:
-            self.store_pattern(pattern, group, self.concrete_type(node.manager.ty))
+            self.store_pattern(pattern, manager, self.concrete_type(node.manager.ty))
         outside = self.target
         raising = self.new_label()
         end = self.new_label()
@@ -1725,12 +1726,6 @@ class Emitter:
     # The descriptor symbol of the built-in type, class, or enum `type_name`,
     # which `library` marks as core's or the standard library's.
     def descriptor(self, type_name: str, library: bool) -> str:
-        if type_name == "aio.Task":
-            type_name = "core.AioTask"
-        elif type_name == "aio.TaskGroup":
-            type_name = "core.AioGroup"
-        elif type_name == "aio.Semaphore":
-            type_name = "core.AioSemaphore"
         if library or type_name in builtin_types() or type_name in self.exceptions:
             return f"$W.{type_name}.type"
         if "." in type_name:
@@ -1808,7 +1803,11 @@ class Emitter:
             if len(node.type_args) > 0:
                 return self.specialized_value(expr, node)
             code = self.symbol(node.target) + ".value"
-            self.wrap(code, ValueWrapper(code, node.target))
+            if self.module_of(node.target) == "W.aio" and node.target.name == "sleep":
+                code = code + f".{len(self.later)}"
+                self.wrap(code, ValueWrapper(code, node.target, self.path, self.at_line, self.at_col))
+            else:
+                self.wrap(code, ValueWrapper(code, node.target))
             return code + ".closure"
         elif isinstance(node, ast.BuiltinValue):
             call = node.call
@@ -1825,9 +1824,11 @@ class Emitter:
         elif isinstance(node, ast.Await):
             name = "async_await"
             operand = self.concrete_type(node.operand.ty)
-            if isinstance(operand, types.ClassType) and operand.decl.type_name == "aio.Task":
+            value = self.expr(node.operand)
+            if isinstance(operand, types.ClassType) and operand.decl.library and operand.decl.type_name == "aio.Task":
                 name = "aio_await_task"
-            return self.core_call(name, [self.expr(node.operand)], True)
+                value = self.load_field(value, 8)
+            return self.core_call(name, [value], True)
         elif isinstance(node, ast.Typed):
             return f"%p.{node.index}"
         return self.unchecked("expression")
@@ -2223,6 +2224,9 @@ class Emitter:
             if target.external:
                 return self.extern_call(node, target)
             args = self.arg_values(node.args, node.order)
+            if self.module_of(target) == "W.aio" and target.name == "sleep":
+                args.extend([self.string(self.path), str(self.at_line), str(self.at_col)])
+                return self.core_call("aio_sleep_coroutine", args, True)
             record = target.record
             assert record is not None, f"function {target.name} has no signature"
             symbol = self.specialization(record, [], node.type_args)
@@ -2283,9 +2287,15 @@ class Emitter:
                 result = types.substitute(method.result, types.record_map(ty))
                 result = types.substitute(result, types.bind_vars(method.typevars, types.substitute_all(own, self.bindings)))
                 if ty.decl.prefix != "":
-                    if ty.decl.type_name == "aio.TaskGroup" and name == "start":
-                        passed.extend([self.string(self.path), str(self.at_line), str(self.at_col)])
                     return self.core_call(ty.decl.prefix + "_" + name, passed, not is_none(result))
+                if ty.decl.library and ty.decl.type_name == "aio.TaskGroup" and name == "start":
+                    starter: types.Function | None = None
+                    for helper in ty.decl.methods:
+                        if helper.name == "_start":
+                            starter = helper
+                    assert starter is not None, "aio.TaskGroup has no start helper"
+                    method = starter
+                    passed.extend([self.string(self.path), str(self.at_line), str(self.at_col)])
                 symbol = self.specialization(method, ty.args, own)
                 return self.willow_call(symbol, typed(passed), not is_none(self.concrete_type(result)))
         return self.unchecked("class method")
@@ -2378,14 +2388,6 @@ class Emitter:
             return self.host(node, target)
         elif name == "fs.realpath":
             return self.host(node, target)
-        elif name == "aio.sleep":
-            args = self.arg_values(node.args, node.order)
-            args.extend([self.string(self.path), str(self.at_line), str(self.at_col)])
-            return self.core_call("aio_sleep_coroutine", args, True)
-        elif name == "aio.task_group":
-            return self.core_call("aio_task_group", [], True)
-        elif name == "aio.semaphore":
-            return self.core_call("aio_semaphore", self.arg_values(node.args, node.order), True)
         return self.unchecked(f"'{name}'")
 
     def saved_method(self, expr: ast.Expr, object: str, supplied: list[str]) -> str:
@@ -3030,7 +3032,10 @@ class Emitter:
         assert record is not None, "function value without a signature"
         args = wrapper_args(len(record.params))
         self.begin(wrapper.symbol, with_env(args), not is_none(record.result))
-        self.end(self.call_text(self.symbol(wrapper.function), args, self.returns))
+        if self.module_of(wrapper.function) == "W.aio" and wrapper.function.name == "sleep":
+            self.end(self.core_call("aio_sleep_coroutine", ["%p.0", self.string(wrapper.path), str(wrapper.line), str(wrapper.col)], True))
+        else:
+            self.end(self.call_text(self.symbol(wrapper.function), args, self.returns))
 
     def emit_bound_wrapper(self, wrapper: BoundWrapper):
         signature = types.method(wrapper.receiver, wrapper.method.name)
@@ -3115,6 +3120,9 @@ class Lifted:
 class ValueWrapper:
     symbol: str
     function: ast.FunctionDecl
+    path: str = ""
+    line: int = 0
+    col: int = 0
 
 # The code of a bound method's closure, which holds the receiver.
 class BoundWrapper:

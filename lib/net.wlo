@@ -1,14 +1,6 @@
 import core
 import time
 
-def _deadline(timeout: float | None) -> float | None:
-    if timeout is None:
-        return None
-    return time.monotonic() + timeout
-
-def _timed_out(what: str, timeout: float | None):
-    raise TimeoutError(f"{what} timed out after {timeout} seconds")
-
 def _wait(fd: int, events: int, deadline: float | None) -> bool:
     descriptor = core.net_pollfd(fd, events)
     ready = 0
@@ -39,39 +31,27 @@ class Connection:
         if size < 1:
             raise ValueError("size must be positive")
         core.net_check_timeout(timeout)
-        deadline = _deadline(timeout)
-        layout = core.net_layout()
+        deadline = core.net_deadline(timeout)
         buffer = core.str_alloc(size)
-        count = -1
+        count = core.net_try_recv(self._fd, buffer, size)
         while count < 0:
-            count = core.recv(self._fd, __offset(buffer, 16), size, 0)
-            if count < 0:
-                code = core.errno()
-                if code != layout.again and code != 4:
-                    raise OSError("cannot receive: " + core.net_reason(code))
-                if code == layout.again and not _wait(self._fd, 1, deadline):
-                    _timed_out("recv", timeout)
-        __store8(buffer, 8, __word(count))
-        __store1(buffer, 16 + count, 0)
-        return __bytes(__word(core.bytes_tag(__str(__word(buffer)))))
+            if not _wait(self._fd, 1, deadline):
+                core.net_timed_out("recv", timeout)
+            count = core.net_try_recv(self._fd, buffer, size)
+        return __bytes(core.net_received(buffer))
 
     def sendall(self, data: bytes, timeout: float | None = None):
         self._usable()
         core.net_check_timeout(timeout)
-        deadline = _deadline(timeout)
-        layout = core.net_layout()
+        deadline = core.net_deadline(timeout)
         sent = 0
         try:
             while sent < len(data):
-                count = core.send(self._fd, __offset(__ptr(__word(data)), 16 + sent), len(data) - sent, layout.no_signal)
+                count = core.net_try_send(self._fd, __ptr(__word(data)), sent, len(data))
                 if count >= 0:
                     sent = sent + count
-                else:
-                    code = core.errno()
-                    if code != layout.again and code != 4:
-                        raise OSError("cannot send: " + core.net_reason(code))
-                    if code == layout.again and not _wait(self._fd, 4, deadline):
-                        _timed_out("send", timeout)
+                elif not _wait(self._fd, 4, deadline):
+                    core.net_timed_out("send", timeout)
         except Exception:
             self._broken = True
             raise
@@ -98,21 +78,12 @@ class Listener:
     def accept(self, timeout: float | None = None) -> Connection:
         self._usable()
         core.net_check_timeout(timeout)
-        deadline = _deadline(timeout)
-        layout = core.net_layout()
-        fd = -1
+        deadline = core.net_deadline(timeout)
+        fd = core.net_try_accept(self._fd)
         while fd < 0:
-            fd = core.accept(self._fd, __ptr(__word(0)), __ptr(__word(0)))
-            if fd < 0:
-                code = core.errno()
-                if code != layout.again and code != 4:
-                    raise OSError("cannot accept: " + core.net_reason(code))
-                if code == layout.again and not _wait(self._fd, 1, deadline):
-                    _timed_out("accept", timeout)
-        code = core.net_configure(fd)
-        if code != 0:
-            core.close(fd)
-            raise OSError("cannot accept: " + core.net_reason(code))
+            if not _wait(self._fd, 1, deadline):
+                core.net_timed_out("accept", timeout)
+            fd = core.net_try_accept(self._fd)
         return Connection(fd, False)
 
     def local_port(self) -> int:
@@ -135,57 +106,21 @@ def connect(host: str, port: int, timeout: float | None = 30.0) -> Connection:
     core.net_check_host(host, port, 1)
     core.net_check_timeout(timeout)
     addresses = core.net_resolve(host, port)
-    deadline = _deadline(timeout)
-    layout = core.net_layout()
-    reason = "no addresses"
-    for address in addresses:
-        fd = core.net_socket(address.family)
-        if fd < 0:
-            reason = core.os_reason()
-            continue
-        connected = False
-        try:
-            status = core.connect(fd, address.data, address.size)
-            code = 0
-            if status != 0:
-                code = core.errno()
-            if code == layout.in_progress:
-                if not _wait(fd, 4, deadline):
-                    _timed_out("connect", timeout)
-                code = core.net_socket_error(fd)
-            if code == 0:
-                connected = True
-                return Connection(fd, False)
-            reason = core.net_reason(code)
-        finally:
-            if not connected:
-                core.close(fd)
-    raise OSError(f"cannot connect to {host}:{port}: {reason}")
+    deadline = core.net_deadline(timeout)
+    state = core.NetConnect(host, port, addresses, 0, -1, "no addresses")
+    connected = False
+    try:
+        while not core.net_connect_step(state):
+            if not _wait(state.fd, 4, deadline):
+                core.net_timed_out("connect", timeout)
+        connected = True
+        return Connection(state.fd, False)
+    finally:
+        if not connected and state.fd >= 0:
+            core.close(state.fd)
 
 def listen(host: str, port: int, backlog: int = 16) -> Listener:
-    core.net_check_host(host, port, 0)
-    if backlog < 1:
-        raise ValueError("backlog must be positive")
-    addresses = core.net_resolve(host, port)
-    layout = core.net_layout()
-    enabled = __alloc_atomic(4)
-    __store4(enabled, 0, 1)
-    reason = "no addresses"
-    for address in addresses:
-        fd = core.net_socket(address.family)
-        if fd < 0:
-            reason = core.os_reason()
-            continue
-        listening = False
-        try:
-            if core.setsockopt(fd, layout.socket_level, layout.reuse_address, enabled, 4) == 0 and core.bind(fd, address.data, address.size) == 0 and core.listen(fd, backlog) == 0:
-                listening = True
-                return Listener(fd)
-            reason = core.os_reason()
-        finally:
-            if not listening:
-                core.close(fd)
-    raise OSError(f"cannot listen on {host}:{port}: {reason}")
+    return Listener(core.net_listen(host, port, backlog))
 
 class Reader:
     _connection: Connection
@@ -201,11 +136,11 @@ class Reader:
         if deadline is not None:
             remaining = deadline - time.monotonic()
             if remaining <= 0.0:
-                _timed_out(what, timeout)
+                core.net_timed_out(what, timeout)
         try:
             chunk = self._connection.recv(65536, remaining)
         except TimeoutError:
-            _timed_out(what, timeout)
+            core.net_timed_out(what, timeout)
             return False
         self._buffer = self._buffer + chunk
         return len(chunk) > 0
@@ -220,7 +155,7 @@ class Reader:
         if size < 0:
             raise ValueError("size must not be negative")
         core.net_check_timeout(timeout)
-        deadline = _deadline(timeout)
+        deadline = core.net_deadline(timeout)
         while len(self._buffer) < size:
             if not self._fill("read_exactly", timeout, deadline):
                 raise OSError(f"unexpected end of stream: expected {size} bytes, received {len(self._buffer)}")
@@ -233,7 +168,7 @@ class Reader:
         if max_bytes < 1:
             raise ValueError("max_bytes must be positive")
         core.net_check_timeout(timeout)
-        deadline = _deadline(timeout)
+        deadline = core.net_deadline(timeout)
         at = self._buffer.find(separator)
         while at < 0 or at + len(separator) > max_bytes:
             if at >= 0 or len(self._buffer) >= max_bytes:

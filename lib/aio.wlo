@@ -1,0 +1,180 @@
+import core
+
+class Task[T]:
+    _task: core.AioTask
+
+    def result(self) -> T:
+        # A typed list load restores T from core's unboxed result slot.
+        values: list[T] = []
+        core.list_append(__ptr(__word(values)), core.aio_task_result(self._task))
+        return values[0]
+
+class TaskGroup:
+    _group: core.AioGroup
+
+    def start[T](self, coro: Coroutine[T]) -> Task[T]:
+        return self._start(coro, "", 0, 0)
+
+    def _start[T](self, coro: Coroutine[T], path: str, line: int, col: int) -> Task[T]:
+        return Task[T](core.aio_group_start(self._group, __ptr(__word(coro)), path, line, col))
+
+    def cancel(self):
+        core.aio_group_cancel(self._group)
+
+def task_group() -> TaskGroup:
+    return TaskGroup(core.aio_task_group())
+
+async def sleep(seconds: float):
+    core.aio_sleep_wait(seconds)
+
+class Semaphore:
+    _semaphore: core.AioSemaphore
+
+    async def acquire(self):
+        core.aio_semaphore_wait(self._semaphore)
+
+    def release(self):
+        core.aio_semaphore_release(self._semaphore)
+
+def semaphore(value: int = 1) -> Semaphore:
+    return Semaphore(core.aio_semaphore(value))
+
+class Connection:
+    _fd: int
+    _broken: bool
+    _receiving: bool = False
+    _sending: bool = False
+
+    def _usable(self):
+        if self._fd < 0:
+            raise ValueError("I/O operation on closed connection")
+        if self._broken:
+            raise ValueError("connection is unusable after a failed send")
+
+    async def recv(self, size: int, timeout: float | None = None) -> bytes:
+        core.aio_checkpoint()
+        if self._receiving:
+            raise RuntimeError("recv is already in progress")
+        self._usable()
+        if size < 1:
+            raise ValueError("size must be positive")
+        core.net_check_timeout(timeout)
+        deadline = core.net_deadline(timeout)
+        buffer = core.str_alloc(size)
+        self._receiving = True
+        try:
+            count = core.net_try_recv(self._fd, buffer, size)
+            while count < 0:
+                ready = core.aio_wait_fd(self._fd, 1, deadline)
+                self._usable()
+                if not ready:
+                    core.net_timed_out("recv", timeout)
+                count = core.net_try_recv(self._fd, buffer, size)
+            return __bytes(core.net_received(buffer))
+        finally:
+            self._receiving = False
+
+    async def sendall(self, data: bytes, timeout: float | None = None):
+        core.aio_checkpoint()
+        if self._sending:
+            raise RuntimeError("sendall is already in progress")
+        self._usable()
+        core.net_check_timeout(timeout)
+        deadline = core.net_deadline(timeout)
+        self._sending = True
+        complete = False
+        sent = 0
+        try:
+            while sent < len(data):
+                count = core.net_try_send(self._fd, __ptr(__word(data)), sent, len(data))
+                if count >= 0:
+                    sent = sent + count
+                else:
+                    ready = core.aio_wait_fd(self._fd, 4, deadline)
+                    self._usable()
+                    if not ready:
+                        core.net_timed_out("send", timeout)
+            complete = True
+        finally:
+            self._sending = False
+            if not complete:
+                self._broken = True
+
+    def close(self):
+        if self._fd >= 0:
+            fd = self._fd
+            self._fd = -1
+            core.aio_close_fd(fd, core.aio_loop())
+
+    def enter(self) -> Connection:
+        self._usable()
+        return self
+
+    def exit(self, error: Exception | None):
+        self.close()
+
+class Listener:
+    _fd: int
+    _accepting: bool = False
+
+    def _usable(self):
+        if self._fd < 0:
+            raise ValueError("I/O operation on closed listener")
+
+    async def accept(self, timeout: float | None = None) -> Connection:
+        core.aio_checkpoint()
+        if self._accepting:
+            raise RuntimeError("accept is already in progress")
+        self._usable()
+        core.net_check_timeout(timeout)
+        deadline = core.net_deadline(timeout)
+        self._accepting = True
+        try:
+            fd = core.net_try_accept(self._fd)
+            while fd < 0:
+                ready = core.aio_wait_fd(self._fd, 1, deadline)
+                self._usable()
+                if not ready:
+                    core.net_timed_out("accept", timeout)
+                fd = core.net_try_accept(self._fd)
+            return Connection(fd, False)
+        finally:
+            self._accepting = False
+
+    def local_port(self) -> int:
+        self._usable()
+        return core.net_local_port(self._fd)
+
+    def close(self):
+        if self._fd >= 0:
+            fd = self._fd
+            self._fd = -1
+            core.aio_close_fd(fd, core.aio_loop())
+
+    def enter(self) -> Listener:
+        self._usable()
+        return self
+
+    def exit(self, error: Exception | None):
+        self.close()
+
+async def connect(host: str, port: int, timeout: float | None = 30.0) -> Connection:
+    core.aio_checkpoint()
+    core.net_check_host(host, port, 1)
+    core.net_check_timeout(timeout)
+    addresses = core.net_resolve(host, port)
+    deadline = core.net_deadline(timeout)
+    state = core.NetConnect(host, port, addresses, 0, -1, "no addresses")
+    connected = False
+    try:
+        while not core.net_connect_step(state):
+            if not core.aio_wait_fd(state.fd, 4, deadline):
+                core.net_timed_out("connect", timeout)
+        connected = True
+        return Connection(state.fd, False)
+    finally:
+        if not connected and state.fd >= 0:
+            core.aio_close_fd(state.fd, core.aio_loop())
+
+def listen(host: str, port: int, backlog: int = 16) -> Listener:
+    return Listener(core.net_listen(host, port, backlog))
