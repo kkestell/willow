@@ -1,0 +1,43 @@
+# Bound methods and built-in functions as values.
+import fs
+
+class Counter:
+    n: int
+
+    def add(self, by: int = 1, *, times: int = 1) -> int:
+        self.n = self.n + by * times
+        return self.n
+
+def make() -> Counter:
+    print("make")
+    return Counter(0)
+
+def apply(f: (int) -> int, x: int) -> int:
+    return f(x)
+
+def main():
+    # The receiver is evaluated once, when the method is read.
+    add = make().add
+    print(add())
+    print(add(5))
+    print(add(times=2, by=3))
+    # A bound method sees its receiver's current fields.
+    c = Counter(100)
+    g = c.add
+    c.n = 200
+    print(g())
+    print(apply(c.add, 10))
+    size: (str) -> int = len
+    print(size("hello"))
+    text: (float) -> str = str
+    print(text(2.5))
+    say: (str) -> None = print
+    say("hi")
+    exists: (str) -> bool = fs.exists
+    print(exists("/no/such/path"))
+    parse: (str) -> int = int
+    print(parse("42"))
+    try:
+        parse("x")
+    except ValueError as e:
+        print(e.message)

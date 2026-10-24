@@ -224,6 +224,8 @@ class Printer:
             return "[" + self.exprs(node.elements) + "]"
         if isinstance(node, ast.TypeOf):
             return "__type(" + self.annotation(node.target) + ")"
+        if isinstance(node, ast.Typed):
+            return f"typed({node.index})"
         entries: list[str] = []
         i = 0
         while i < len(node.keys):

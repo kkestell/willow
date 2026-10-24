@@ -1,0 +1,11 @@
+def run(x: int | None):
+    def reset():
+        nonlocal x
+        x = None
+
+    if x is not None:
+        reset()
+        print(x + 1)
+
+def main():
+    run(1)

@@ -5,19 +5,14 @@ aio_sleep_invalid
 aio_sockets
 bound_methods
 builtin_iteration
-callables
 cancel_after_raising_finally
 cli_parsing
-closure_traceback
-closures
 coroutine_traceback
 coroutines
 file_lines
-function_values
 generator_cleanup
 generator_traceback
 generators
-generic_classes
 generic_function_values
 generics
 host
@@ -26,7 +21,6 @@ iteration
 iteration_traceback
 json_example
 json_library
-lambdas
 named_arguments
 overflow_add
 overflow_sub
