@@ -31,6 +31,8 @@ class Emitter:
     ended: bool
     # Whether the current function returns a value.
     returns: bool
+    loop_next: list[str]
+    loop_end: list[str]
 
     def write(self, text: str):
         self.lines.append(text)
@@ -164,18 +166,18 @@ class Emitter:
         elif isinstance(node, ast.Return):
             self.emit_return(node)
         elif isinstance(node, ast.IndexAssign):
-            self.unchecked("index assignment")
+            self.emit_index_assign(node)
         elif isinstance(node, ast.FieldAssign):
             self.unchecked("field assignment")
         elif isinstance(node, ast.For):
-            self.unchecked("for loop")
+            self.emit_for(node)
         elif isinstance(node, ast.Assert):
             self.emit_assert(node)
         elif isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
-                self.unchecked("break")
+                self.jump("jmp " + self.loop_end[-1])
             elif node == ast.SimpleStatement.CONTINUE:
-                self.unchecked("continue")
+                self.jump("jmp " + self.loop_next[-1])
         else:
             self.unchecked("statement")
 
@@ -260,9 +262,173 @@ class Emitter:
         condition = self.expr(node.condition)
         self.jump(f"jnz {condition}, {body}, {end}")
         self.label(body)
+        self.loop_next.append(test)
+        self.loop_end.append(end)
         self.block(node.body)
+        self.loop_next.pop()
+        self.loop_end.pop()
         self.jump(f"jmp {test}")
         self.label(end)
+
+    def emit_index_assign(self, node: ast.IndexAssign):
+        value = self.expr(node.value)
+        object = self.expr(node.object)
+        index = self.expr(node.index)
+        self.core_call("list_set", [object, index, value], False)
+
+    def emit_for(self, node: ast.For):
+        call = node.iterable.node
+        if isinstance(call, ast.Call) and call.name == "range" and isinstance(call.target, stdlib.Builtin):
+            self.for_range(node, call)
+        else:
+            self.for_list(node)
+
+    def for_list(self, node: ast.For):
+        source = self.expr(node.iterable)
+        index = self.temp()
+        self.line(f"{index} =l copy 0")
+        test = self.new_label()
+        body = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        length = self.core_call("list_len", [source], True)
+        more = self.temp()
+        self.line(f"{more} =l csltl {index}, {length}")
+        self.jump(f"jnz {more}, {body}, {end}")
+        self.label(body)
+        item = self.core_call("list_get", [source, index], True)
+        self.line(f"{index} =l add {index}, 1")
+        self.for_body(node, item, test, end)
+        self.jump(f"jmp {test}")
+        self.label(end)
+
+    def for_range(self, node: ast.For, call: ast.Call):
+        args: list[str] = []
+        for arg in call.args:
+            args.append(self.expr(arg))
+        first = "0"
+        last = args[0]
+        step = "1"
+        if len(args) > 1:
+            first = args[0]
+            last = args[1]
+        if len(args) > 2:
+            step = args[2]
+        zero = self.temp()
+        self.line(f"{zero} =l ceql {step}, 0")
+        self.guard(zero, "ValueError", "range step must not be zero")
+        current = self.temp()
+        self.line(f"{current} =l copy {first}")
+        test = self.new_label()
+        body = self.new_label()
+        next = self.new_label()
+        advance = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        up = self.temp()
+        below = self.temp()
+        above = self.temp()
+        down = self.temp()
+        more = self.temp()
+        self.line(f"{up} =l csgtl {step}, 0")
+        self.line(f"{below} =l csltl {current}, {last}")
+        self.line(f"{above} =l csgtl {current}, {last}")
+        self.line(f"{below} =l and {up}, {below}")
+        self.line(f"{down} =l ceql {up}, 0")
+        self.line(f"{above} =l and {down}, {above}")
+        self.line(f"{more} =l or {below}, {above}")
+        self.jump(f"jnz {more}, {body}, {end}")
+        self.label(body)
+        self.for_body(node, current, next, end)
+        self.label(next)
+        stepped = self.temp()
+        a = self.temp()
+        b = self.temp()
+        self.line(f"{stepped} =l add {current}, {step}")
+        self.line(f"{a} =l xor {current}, {stepped}")
+        self.line(f"{b} =l xor {step}, {stepped}")
+        self.line(f"{a} =l and {a}, {b}")
+        self.line(f"{a} =l csltl {a}, 0")
+        self.jump(f"jnz {a}, {end}, {advance}")
+        self.label(advance)
+        self.line(f"{current} =l copy {stepped}")
+        self.jump(f"jmp {test}")
+        self.label(end)
+
+    def for_body(self, node: ast.For, item: str, next: str, end: str):
+        self.line(f"storel {item}, %v.{node.target.name}")
+        self.loop_next.append(next)
+        self.loop_end.append(end)
+        self.block(node.body)
+        self.loop_next.pop()
+        self.loop_end.pop()
+        self.jump(f"jmp {next}")
+
+    def list_display(self, node: ast.ListDisplay) -> str:
+        result = self.core_call("list_new", [str(len(node.elements))], True)
+        for element in node.elements:
+            value = self.expr(element)
+            self.core_call("list_append", [result, value], False)
+        return result
+
+    def list_method(self, node: ast.MethodCall) -> str:
+        args = [self.expr(node.object)]
+        for arg in node.args:
+            args.append(self.expr(arg))
+        return self.core_call("list_" + node.name, args, node.name == "pop")
+
+    def index(self, node: ast.Index) -> str:
+        object = self.expr(node.object)
+        index = self.expr(node.index)
+        ty = node.object.ty
+        assert ty is not None, "unchecked index object"
+        name = "list_get"
+        if types.kind(ty) == "str":
+            name = "str_index"
+        return self.core_call(name, [object, index], True)
+
+    def slice(self, node: ast.Slice) -> str:
+        object = self.expr(node.object)
+        start = node.start
+        stop = node.stop
+        first = "0"
+        last = "9223372036854775807"
+        if start is not None:
+            first = self.expr(start)
+        if stop is not None:
+            last = self.expr(stop)
+        ty = node.object.ty
+        assert ty is not None, "unchecked slice object"
+        return self.core_call(types.kind(ty) + "_slice", [object, first, last], True)
+
+    def emit_len(self, node: ast.Call) -> str:
+        arg = node.args[0]
+        value = self.expr(arg)
+        ty = arg.ty
+        assert ty is not None, "unchecked len argument"
+        return self.core_call(types.kind(ty) + "_len", [value], True)
+
+    def contains(self, node: ast.Binary) -> str:
+        item = self.expr(node.left)
+        container = self.expr(node.right)
+        ty = node.right.ty
+        assert ty is not None, "unchecked membership container"
+        ty = types.expand(ty)
+        assert isinstance(ty, types.ListType), "unchecked membership"
+        kind = "0"
+        element = types.kind(types.expand(ty.element))
+        if element == "float":
+            kind = "1"
+        elif element == "str":
+            kind = "2"
+        elif element == "union":
+            kind = "3"
+        result = self.core_call("list_contains", [container, item, kind], True)
+        if node.op == "not in":
+            negated = self.temp()
+            self.line(f"{negated} =l ceql {result}, 0")
+            return negated
+        return result
 
     # Expressions
 
@@ -339,13 +505,13 @@ class Emitter:
         elif isinstance(node, ast.EnumMember):
             return self.unchecked("enum member")
         elif isinstance(node, ast.MethodCall):
-            return self.unchecked("method call")
+            return self.list_method(node)
         elif isinstance(node, ast.Field):
             return self.unchecked("field")
         elif isinstance(node, ast.Index):
-            return self.unchecked("index")
+            return self.index(node)
         elif isinstance(node, ast.Slice):
-            return self.unchecked("slice")
+            return self.slice(node)
         elif isinstance(node, ast.Unary):
             return self.unary(node)
         elif isinstance(node, ast.Is):
@@ -353,7 +519,7 @@ class Emitter:
         elif isinstance(node, ast.IsInstance):
             return self.emit_isinstance(node)
         elif isinstance(node, ast.ListDisplay):
-            return self.unchecked("list display")
+            return self.list_display(node)
         elif isinstance(node, ast.DictDisplay):
             return self.unchecked("dict display")
         return self.unchecked("expression")
@@ -362,6 +528,8 @@ class Emitter:
         op = node.op
         if op == "and" or op == "or":
             return self.logic(node)
+        if op == "in" or op == "not in":
+            return self.contains(node)
         left_type = node.left.ty
         right_type = node.right.ty
         assert left_type is not None and right_type is not None, "unchecked operand"
@@ -718,7 +886,7 @@ class Emitter:
         elif name == "print":
             return self.emit_print(node)
         elif name == "len":
-            return self.unchecked("'len'")
+            return self.emit_len(node)
         elif name == "str":
             return self.conversion(node)
         elif name == "int":
@@ -881,7 +1049,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
             if isinstance(decl, ast.FunctionDecl):
                 module_names[decl.id] = module.name
     assert core is not None, "the program has no core module"
-    result = Emitter(target_os, core, modules[0].name, module_names, [], {}, [], {}, 0, 0, False, False)
+    result = Emitter(target_os, core, modules[0].name, module_names, [], {}, [], {}, 0, 0, False, False, [], [])
     for name in builtin_types():
         result.string(name)
     result.require("init")
