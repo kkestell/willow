@@ -200,11 +200,16 @@ class String:
     value: str
 
 # Text parts are Strings at the f-string's start. `specs[i]` is the format
-# specification of `parts[i]`, empty for text and for fields without one.
+# specification of `parts[i]`, with defaults for text and fields without one.
 class FString:
     parts: list[Expr]
-    specs: list[str]
-    format_spec: Ident | None = None
+    specs: list[FormatSpec]
+
+class FormatSpec:
+    align: str = ""
+    width: int = 0
+    precision: int = 6
+    kind: str = ""
 
 enum Constant:
     TRUE
