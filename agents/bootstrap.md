@@ -286,13 +286,11 @@ through the escape hatch in §2.
 
 - `bootstrap/tests/programs/` holds L0 programs with expected stdout, exit
   status, and stderr, in the same `.wlo`/`.out`/`.err` layout as
-  `tests/programs/`. They exercise L0 and `core` under stage 0 before anything
-  is built on them. `sum_to.wlo` is there now and is milestone 1's done
-  condition.
-- `core` has its own tests in L0, using `assert`, run under stage 0. Because a
-  failure in core could be in core or in the compiler that compiled it, and
-  the Lua implementation has no intrinsics to adjudicate, core stays boring:
-  no cleverness that makes it hard to read a failing test.
+  `tests/programs/`. They exercise L0 and `core` under stages 0 and 1.
+- `core` has its own tests in L0, using `assert`, run under stages 0 and 1.
+  Because a failure in core could be in core or in the compiler that compiled
+  it, and the Lua implementation has no intrinsics to adjudicate, core stays
+  boring: no cleverness that makes it hard to read a failing test.
 - `tests/programs/` is the conformance suite for stage 1 and stage 2. The
   Lua implementation stays in the repository as the oracle until the native
   compiler passes all of them.
@@ -307,9 +305,11 @@ through the escape hatch in §2.
   `willow0` and runs them natively, the drivers over every `.wlo` file in
   `tests/` and `examples/`; `--lua` runs them under the Lua implementation
   instead. It also builds the `willow1` driver and runs `run.sh` with it over
-  the programs stage 1 compiles so far, which it lists. `make bootstrap`
-  builds stage 0 and `make bootstrap-test` runs both without LuaJIT. The
-  runners move to a Willow program once stage 2 exists.
+  every top-level program in `bootstrap/tests/programs/` and
+  `bootstrap/tests/core/`, plus every case in `bootstrap/tests/check/`, using
+  `*.wlo` globs so new programs run automatically. `make bootstrap` builds
+  stage 0 and `make bootstrap-test` runs both without LuaJIT. The runners move
+  to a Willow program once stage 2 exists.
 
 ## 9. Specification changes
 

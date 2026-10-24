@@ -12,7 +12,6 @@ import types
 class Emitter:
     # `__os`, which an `if` that compares it with a literal folds.
     target_os: str
-    core: ast.Module
     # The entry module's name, which its types' names leave out.
     entry: str
     # The module name of each declared function, by its id.
@@ -21,10 +20,6 @@ class Emitter:
     lines: list[str]
     # String literals, numbered in order of first use.
     strings: dict[str, int]
-    # The core functions the emitted code calls, in order of first call, for
-    # the driver to check and emit, and their names.
-    needed: list[ast.FunctionDecl]
-    requested: dict[str, bool]
     # Per function: the temporaries and labels used so far, and whether the
     # current block has ended with a jump or return.
     temps: int
@@ -65,16 +60,7 @@ class Emitter:
             self.strings[text] = len(self.strings)
         return f"$W.str.{self.strings[text]}"
 
-    # Records that core function `name` is called.
-    def require(self, name: str):
-        if name not in self.requested:
-            self.requested[name] = True
-            decl = self.core.names[name]
-            assert isinstance(decl, ast.FunctionDecl), f"core.{name} is not a function"
-            self.needed.append(decl)
-
     def core_call(self, name: str, args: list[str], returns: bool) -> str:
-        self.require(name)
         return self.call_text(f"$W.core.{name}", typed(args), returns)
 
     # Writes call `text` and returns its result, or 0 when there is none.
@@ -1057,8 +1043,6 @@ class Emitter:
             args: list[str] = []
             for arg in node.args:
                 args.append(self.expr(arg))
-            if self.module_names[target.id] == "core":
-                self.require(target.name)
             record = target.record
             assert record is not None, f"function {target.name} has no signature"
             return self.call_text(self.symbol(target), typed(args), not is_none(record.result))
@@ -1303,18 +1287,14 @@ class Emitter:
 # strings, as in stage 0.
 def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
     module_names: dict[int, str] = {}
-    core: ast.Module | None = None
     for module in modules:
-        if module.name == "core":
-            core = module
         for decl in module.declarations:
             if isinstance(decl, ast.FunctionDecl):
                 module_names[decl.id] = module.name
             elif isinstance(decl, ast.ClassDecl):
                 for method in decl.methods:
                     module_names[method.id] = module.name
-    assert core is not None, "the program has no core module"
-    result = Emitter(target_os, core, modules[0].name, module_names, {}, [], {}, [], {}, 0, 0, False, False, [], [])
+    result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [])
     for name in builtin_types():
         result.string(name)
     for module in modules:
@@ -1326,7 +1306,6 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
                 for member in decl.members:
                     texts.append(decl.name + "." + member.name)
                 result.descriptors[result.descriptor(decl.type_name)] = texts
-    result.require("init")
     return result
 
 # The built-in types with descriptors, which every program emits.
