@@ -1,7 +1,5 @@
 aio_listener_outside_loop
-aio_sleep
 aio_sockets
-bound_methods
 host
 http_values
 json_library

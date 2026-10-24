@@ -159,6 +159,15 @@ class Emitter:
         if module == "core" and function.name in ["fail", "fail_at"]:
             self.emit_fail(function.name)
             return
+        if module == "core" and function.name == "sys_arguments":
+            self.begin(self.symbol(function), [], True)
+            args: list[str] = []
+            for word in ["$W.argc", "$W.argv"]:
+                t = self.temp()
+                self.line(f"{t} =l loadl {word}")
+                args.append(t)
+            self.end(self.core_call("sys_args", args, True))
+            return
         self.emit_function(function, self.symbol(function), [], {})
         while self.emitted < len(self.later):
             self.emitted = self.emitted + 1
@@ -2286,9 +2295,9 @@ class Emitter:
         elif name == "sys.args":
             return self.host(node, target)
         elif name == "sys.exit":
-            return self.host(node, target)
+            return self.willow_call("$W.sys.exit", typed(self.arg_values(node.args, node.order)), False)
         elif name == "sys.eprint":
-            return self.core_call("eprint_str", [self.to_str(node.args[0])], False)
+            return self.willow_call("$W.sys.eprint", typed([self.to_str(node.args[0])]), False)
         elif name == "fs.read_file":
             return self.host(node, target)
         elif name == "fs.write_file":
