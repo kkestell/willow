@@ -152,6 +152,10 @@ class Emitter:
             if body != "":
                 self.write(body)
                 return
+        if module == "core" and function.name == "stdin_buffer":
+            self.begin("$W.core.stdin_buffer", [], True)
+            self.end("$W.stdin.buffer")
+            return
         if module == "core" and function.name in ["fail", "fail_at"]:
             self.emit_fail(function.name)
             return
@@ -550,6 +554,7 @@ class Emitter:
         self.write("data $W.argc = { l 0 }")
         self.write("data $W.argv = { l 0 }")
         self.write("data $W.pending = { l 0 }")
+        self.write("data $W.stdin.buffer = { z 4112 }")
         self.write(coroutine.data())
         for name in builtin_types():
             self.write(f"data $W.{name}.type = " + "{ l " + self.string(name) + " }")

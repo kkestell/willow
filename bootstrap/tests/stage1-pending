@@ -3,8 +3,6 @@ aio_sleep
 aio_sockets
 bound_methods
 cli_parsing
-file_lines
-generics
 host
 http_values
 json_example
@@ -14,7 +12,6 @@ overflow_add
 overflow_sub
 processes
 processes_stdin
-protocol_native_failure
 protocols
 scoped_resources
 sockets
@@ -26,7 +23,6 @@ stdlib_net_reader
 stdlib_random
 stdlib_subprocess
 streams
-streams_invalid_utf8
 task_group_sockets
 terminal_styles
 text_conversions
