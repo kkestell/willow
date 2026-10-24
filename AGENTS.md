@@ -5,9 +5,11 @@ Keep this document accurate and short.
 Willow is a small, statically typed language with Python-like syntax. Source
 files use `.wlo`. `docs/spec.md` specifies the language.
 
-The implementation in `compiler/` and `runtime/` compiles to Lua for LuaJIT. It
-is being replaced by a self-hosting native compiler under `bootstrap/`, designed
-in `agents/bootstrap.md`. Read that document before working under `bootstrap/`.
+The implementation in `compiler/*.lua` and `runtime/` compiles to Lua for
+LuaJIT. It is being replaced by a self-hosting native compiler: stages 0 and 1
+under `bootstrap/`, and stage 2 in `compiler/*.wlo`, designed in
+`agents/bootstrap.md`. Read that document before working under `bootstrap/` or
+on `compiler/*.wlo`.
 
 - Build the small language we need now. This is an early implementation, not a
   production-hardening exercise.
@@ -17,9 +19,10 @@ in `agents/bootstrap.md`. Read that document before working under `bootstrap/`.
 
 - Do less. Keep correct code simple, ordinary, and cheap to change. Follow KISS
   and YAGNI.
-- Write idiomatic code for each part: Lua in `compiler/` and `runtime/`, Rust
-  in `bootstrap/stage0/`, and the L0 subset of Willow in `bootstrap/core/` and
-  `bootstrap/stage1/`. Prefer plain data, direct functions, and explicit control
+- Write idiomatic code for each part: Lua in `compiler/*.lua` and `runtime/`,
+  Rust in `bootstrap/stage0/`, the L0 subset of Willow in `bootstrap/core/` and
+  `bootstrap/stage1/`, and Willow that stage 1 compiles in `compiler/*.wlo`.
+  Prefer plain data, direct functions, and explicit control
   flow. Keep responsibilities clear without turning every step into an abstraction.
 - Solve the actual problem. Do not build frameworks, extension points,
   configuration systems, or fallback paths for hypothetical future needs.
@@ -43,7 +46,8 @@ in `agents/bootstrap.md`. Read that document before working under `bootstrap/`.
   exhaustive coverage of hypothetical edge cases.
 - Match verification to the change. Use focused tests while working; run
   `make test` for Lua compiler, runtime, or build behavior changes and
-  `make bootstrap-test` for changes under `bootstrap/` before delivery. Bootstrap
+  `make bootstrap-test` for changes under `bootstrap/`, to `compiler/*.wlo`, or
+  to `lib/` before delivery. Bootstrap
   changes must build and pass on both Linux and macOS. Broaden checks only when a
   concrete risk or failure warrants it.
 - For documentation, comments, and filename-only changes, inspect the relevant
