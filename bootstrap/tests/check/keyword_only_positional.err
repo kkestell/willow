@@ -1,0 +1,1 @@
+keyword_only_positional.wlo:5:10: error: 'f' received a positional argument for keyword-only parameter 'b'

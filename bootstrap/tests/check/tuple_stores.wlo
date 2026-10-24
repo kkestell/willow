@@ -1,0 +1,43 @@
+enum Side:
+    LEFT
+    RIGHT
+
+class Box:
+    value: tuple[float | None, bool | str, Side | None, tuple[int | None]]
+
+def main():
+    raw = (2.5, True, Side.RIGHT, (4,))
+    box = Box(raw)
+    assert box.value[0] == 2.5
+    assert box.value[1] == True
+    assert box.value[2] == Side.RIGHT
+    assert box.value[3][0] == 4
+    box.value = (None, "x", None, (None,))
+    assert box.value[0] is None
+    box.value = raw
+    xs: list[tuple[float | None, bool | str, Side | None, tuple[int | None]]] = [raw]
+    xs.append(raw)
+    xs[0] = raw
+    assert xs.pop() == box.value
+    d: dict[str, tuple[float | None, bool | str, Side | None, tuple[int | None]] | None] = {"x": raw}
+    d["y"] = raw
+    found = d.get("x")
+    assert found is not None
+    assert found == box.value
+    for found in [raw]:
+        assert found == box.value
+    original = ([1], 2.5)
+    widened: tuple[list[int], float | None] = original
+    original[0].append(3)
+    assert widened[0][1] == 3
+    flag: bool | None = None
+    side: Side | None = None
+    number: float | None = None
+    number, flag, side, nested = raw
+    assert number + 1.0 == 3.5
+    assert flag
+    assert side == Side.RIGHT
+    assert nested[0] == 4
+    optional: tuple[int | None] = (None,)
+    for item in ((4,), optional):
+        assert item[0] == 4 or item[0] is None

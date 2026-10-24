@@ -14,7 +14,6 @@ closures
 coroutine_traceback
 coroutines
 enums
-eprint_values
 file_lines
 function_values
 generator_cleanup
@@ -33,7 +32,6 @@ iteration_traceback
 json_example
 json_library
 lambdas
-methods
 named_arguments
 overflow_add
 overflow_sub
@@ -41,7 +39,6 @@ processes
 processes_stdin
 protocol_native_failure
 protocols
-record_tags
 scoped_resources
 sockets
 sort_keys
@@ -73,8 +70,6 @@ task_groups
 terminal_styles
 text_collections
 text_conversions
-tuples
 type_errors
 unions
-unpacking
 with_statements

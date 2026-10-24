@@ -1,0 +1,14 @@
+enum Mode:
+    OFF
+    ON
+
+class Options:
+    mode: Mode | None = Mode.ON
+    number: int | float = +2.5
+    zero: float = -0.0
+
+    def choose(self, *, mode: Mode = Mode.OFF) -> Mode:
+        return mode
+
+def choose(Mode: int = 0, *, mode: Mode | None = Mode.ON) -> Mode | None:
+    return mode

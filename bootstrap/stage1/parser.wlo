@@ -470,10 +470,10 @@ class Parser:
         self.expect(tokens.Kind.RPAREN, "')'")
         return ast.Expr(token.line, token.col, ast.IsInstance(operand, ref))
 
-    # `__type(T)` after its `(`. T may be `list` or `dict` without arguments.
+    # `__type(T)` after its `(`. Collection types need no arguments here.
     def parse_type_of(self, token: tokens.Token) -> ast.Expr:
         target = self.peek()
-        if target.kind == tokens.Kind.LIST or target.kind == tokens.Kind.DICT:
+        if target.kind in [tokens.Kind.LIST, tokens.Kind.DICT, tokens.Kind.TUPLE]:
             self.advance()
             node = ast.TypeName(target.line, target.col, target.text, "", [], False)
             self.expect(tokens.Kind.RPAREN, "')'")

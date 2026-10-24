@@ -1,0 +1,1 @@
+tuple_not_printable.wlo:2:11: error: cannot print a value of type tuple[int]

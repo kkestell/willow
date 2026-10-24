@@ -1,0 +1,5 @@
+def f(a: int = "wrong"):
+    pass
+
+def main():
+    pass

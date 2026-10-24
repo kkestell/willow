@@ -247,6 +247,8 @@ class Call:
     keywords: list[Keyword]
     type_args: list[types.Type]
     target: FunctionDecl | stdlib.Builtin | types.Class | None = None
+    # Parameter indexes in evaluation order: written arguments, then defaults.
+    order: list[int] | None = None
 
 # A call of any other callee, at its `(`.
 class CallValue:
@@ -261,6 +263,7 @@ class MethodCall:
     name: str
     args: list[Expr]
     keywords: list[Keyword]
+    order: list[int] | None = None
 
 class Keyword:
     line: int
@@ -277,6 +280,7 @@ class Field:
 class Index:
     object: Expr
     index: Expr
+    position: int = 0
 
 class Slice:
     object: Expr
@@ -398,6 +402,7 @@ class For:
     iterable: Expr
     body: list[Stmt]
     calls: bool = False
+    item: types.Type | None = None
 
 class With:
     items: list[WithItem]

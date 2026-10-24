@@ -1,0 +1,1 @@
+keyword_only_missing.wlo:5:5: error: 'f' is missing argument 'c'
