@@ -4,11 +4,13 @@ class JsonError(Exception):
     pass
 
 class _Parser:
-    text: str
+    text: list[str]
     pos: int = 0
 
     def peek(self) -> str:
-        return self.text[self.pos:self.pos + 1]
+        if self.pos >= len(self.text):
+            return ""
+        return self.text[self.pos]
 
     def space(self):
         while self.peek() in [" ", "\t", "\n", "\r"]:
@@ -67,7 +69,7 @@ class _Parser:
             if escape == "u":
                 code = self.hex4(start)
                 if code >= 55296 and code <= 57343:
-                    if code > 56319 or self.text[self.pos:self.pos + 2] != "\\u":
+                    if code > 56319 or ''.join(self.text[self.pos:self.pos + 2]) != "\\u":
                         raise self.error("unpaired surrogate", start)
                     self.pos = self.pos + 2
                     low = self.hex4(self.pos - 2)
@@ -114,7 +116,7 @@ class _Parser:
                 self.pos = self.pos + 1
             if self.pos == digits:
                 raise self.error("invalid number", start)
-        token = self.text[start:self.pos]
+        token = "".join(self.text[start:self.pos])
         if self.pos == int_end:
             try:
                 return int(token)
@@ -182,10 +184,10 @@ class _Parser:
         raise self.error("expected value", self.pos)
 
 def parse(text: str) -> Json:
-    parser = _Parser(text)
+    parser = _Parser(list(text))
     value = parser.value()
     parser.space()
-    if parser.pos < len(text):
+    if parser.pos < len(parser.text):
         raise parser.error("unexpected text after value", parser.pos)
     return value
 
