@@ -1,0 +1,2 @@
+def main():
+    x = all([1])

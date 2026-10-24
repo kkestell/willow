@@ -1,0 +1,16 @@
+import core
+import io
+
+def main():
+    pipe = core.process_pipe()
+    path = "/dev/fd/" + str(pipe[1])
+    with io.open(path, "w") as output:
+        core.close(pipe[0])
+        core.close(pipe[1])
+        caught = False
+        try:
+            output.write_text("hello")
+        except OSError as error:
+            assert error.message == "cannot write " + path + ": Broken pipe"
+            caught = True
+        assert caught

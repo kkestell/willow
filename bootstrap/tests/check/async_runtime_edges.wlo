@@ -1,0 +1,32 @@
+import aio
+
+async def worker(name: str, log: list[str]):
+    log.append(name + "1")
+    await aio.sleep(0.0)
+    log.append(name + "2")
+
+async def accept_closed(listener: aio.Listener, log: list[str]):
+    try:
+        with await listener.accept():
+            assert False
+    except ValueError as error:
+        assert error.message == "I/O operation on closed listener"
+        log.append("closed")
+
+async def main():
+    log: list[str] = []
+    async with aio.task_group() as group:
+        group.start(worker("a", log))
+        group.start(worker("b", log))
+        group.start(worker("c", log))
+        await aio.sleep(0.0)
+        log.append("body")
+    assert " ".join(log) == "a1 b1 c1 body a2 b2 c2"
+
+    log = []
+    with aio.listen("127.0.0.1", 0) as listener:
+        async with aio.task_group() as group:
+            group.start(accept_closed(listener, log))
+            await aio.sleep(0.0)
+            listener.close()
+    assert " ".join(log) == "closed"

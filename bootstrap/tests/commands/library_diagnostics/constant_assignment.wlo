@@ -1,0 +1,3 @@
+import math
+def main():
+    math.pi = 3.0

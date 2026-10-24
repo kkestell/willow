@@ -1,0 +1,7 @@
+def main():
+    try:
+        pass
+    except Exception:
+        pass
+    else:
+        pass

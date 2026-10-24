@@ -1,0 +1,3 @@
+type Grow[T] = list[Grow[list[T]]]
+def main():
+    pass
