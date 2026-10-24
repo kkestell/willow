@@ -1,0 +1,9 @@
+import fs
+import sys
+import willow1
+
+def main():
+    args = sys.args()
+    il = willow1.compile(args[0])
+    il = il.replace("call $W.callbacks.main()", "call $coroutine_test()")
+    willow1.build(il + fs.read_file(args[1]), args[2])

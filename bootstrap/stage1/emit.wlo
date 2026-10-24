@@ -6,6 +6,7 @@
 # functions are emitted in.
 
 import ast
+import coroutine
 import stdlib
 import types
 
@@ -107,6 +108,11 @@ class Emitter:
         record = function.record
         assert record is not None, f"function {function.name} has no signature"
         module = self.module_names[function.id]
+        if module == "core":
+            body = coroutine.function(function.name)
+            if body != "":
+                self.write(body)
+                return
         if module == "core" and function.name == "fail":
             self.emit_fail()
             return
@@ -184,6 +190,7 @@ class Emitter:
         self.write("data $W.argc = { l 0 }")
         self.write("data $W.argv = { l 0 }")
         self.write("data $W.pending = { l 0 }")
+        self.write(coroutine.data())
         for name in builtin_types():
             self.write(f"data $W.{name}.type = " + "{ l " + self.string(name) + " }")
         exceptions: list[str] = []

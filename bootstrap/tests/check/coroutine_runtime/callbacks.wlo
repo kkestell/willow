@@ -1,0 +1,15 @@
+import core
+
+def fail(argument: int):
+    raise ValueError("coroutine failed")
+
+def main():
+    pass
+
+def catch_error(context: core.CoroutineContext):
+    try:
+        core.coroutine_resume(context)
+        assert False
+    except ValueError as error:
+        assert error.message == "coroutine failed"
+    assert core.coroutine_finished(context)

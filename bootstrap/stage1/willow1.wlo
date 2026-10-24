@@ -12,6 +12,7 @@ import bind
 import check
 import core
 import core_source
+import coroutine
 import diagnostic
 import emit
 import fs
@@ -101,6 +102,7 @@ def build(il: str, output: str):
     ok = core.run(["qbe", "-t", target, "-o", asm, ssa]) == 0
     message = "willow1: qbe failed"
     if ok:
+        fs.write_file(asm, fs.read_file(asm) + coroutine.assembly(target))
         command = ["cc", "-o", output, asm]
         command.extend(gc_flags(scratch))
         command.append("-lm")
