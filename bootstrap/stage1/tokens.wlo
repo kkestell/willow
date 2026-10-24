@@ -106,6 +106,7 @@ class Token:
     text: str
     line: int
     col: int
+    format_spec: bool = False
 
 # The reserved words of spec §2, including the reserved type names.
 def keywords() -> dict[str, Kind]:
