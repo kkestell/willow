@@ -190,8 +190,8 @@ or 0. Stage 1 compiles its own body for `fail`, which creates the exception
 with `failure` and stores it in `$W.pending`. An exception object is a header,
 its location and frames, both `str` and 0 until it is raised, and its fields,
 `message` first. The frames are the report's lines after the first, each
-starting with a newline. Core never reads `$W.pending`; stage 1 clears it while
-these functions run.
+starting with a newline. The exception reporting functions run with
+`$W.pending` cleared.
 
 | Signature | Meaning |
 | --- | --- |
@@ -199,6 +199,25 @@ these functions run.
 | `raised(e: ptr, function: str, path: str, line: int, col: int)` | Starts the frames of `e`, raised by a `raise` statement in `function` at the location |
 | `trace(e: ptr, function: str, path: str, line: int, col: int)` | Adds the frame `in function at path:line:col` to `e`, or `called from` after the first, which also sets the location |
 | `report(e: ptr)` | Writes the spec §13 report of an exception that left `main` to stderr |
+
+## Coroutines under stage 1
+
+`CoroutineContext` is an internal core class; its field order is shared with
+stage 1's low-level helpers and switch assembly. An entry is a raw function
+address taking one `word` argument and returning no value. Generator and async
+lowering supply the addresses and slot conversions. No syntax uses this API yet.
+
+| Signature | Meaning |
+| --- | --- |
+| `coroutine_create(entry: ptr, argument: word) -> CoroutineContext` | Creates an unstarted coroutine; unsupported in stage 0 and on amd64 |
+| `coroutine_resume(coroutine: CoroutineContext) -> word` | Runs until yield or completion, returning the yielded slot or 0 on completion; transfers a callback failure to the caller's pending exception |
+| `coroutine_yield(value: word)` | Suspends the running coroutine and returns to its resumer |
+| `coroutine_finished(coroutine: CoroutineContext) -> bool` | Whether the entry has returned, normally or with an exception |
+
+Resuming a finished coroutine returns 0 again. Resuming a running coroutine
+or yielding outside one raises `RuntimeError`. Each inactive context holds its
+own pending exception; a callback failure is transferred once. Finished
+contexts release their stack references after switching to the caller.
 
 ## Inline in stage 0
 
