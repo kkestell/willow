@@ -1,0 +1,16 @@
+import core
+import subprocess
+
+def main_result(result: subprocess.Result):
+    assert result.returncode == 0
+    assert result.stdout == "done".encode()
+
+async def main():
+    start = core.aio_now()
+    main_result(subprocess.run(["sh", "-c", "sleep 5 & printf done"], capture_output=True))
+    assert core.aio_now() - start < 2.0
+    start = core.aio_now()
+    main_result(await subprocess.run_async(["sh", "-c", "sleep 5 & printf done"], capture_output=True))
+    assert core.aio_now() - start < 2.0
+    process = subprocess.spawn(["true"])
+    assert await process.wait_async() == 0

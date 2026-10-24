@@ -1,0 +1,285 @@
+import aio
+import core
+import io
+import time
+
+class Result:
+    returncode: int
+    stdout: bytes | None
+    stderr: bytes | None
+
+def _check_timeout(timeout: float | None):
+    if timeout is not None:
+        if not (timeout > 0.0 and timeout - timeout == 0.0):
+            raise ValueError("timeout must be finite and positive")
+
+def _deadline(timeout: float | None) -> float | None:
+    if timeout is None:
+        return None
+    return core.aio_now() + timeout
+
+def _delay(deadline: float | None) -> float:
+    if deadline is None:
+        return 0.01
+    return max(0.0, min(0.01, deadline - core.aio_now()))
+
+class Process:
+    _child: core.Child
+
+    def poll(self) -> int | None:
+        return core.process_poll(self._child, False)
+
+    def wait(self, timeout: float | None = None) -> int:
+        _check_timeout(timeout)
+        if timeout is None:
+            code = core.process_poll(self._child, True)
+            assert code is not None
+            return code
+        deadline = _deadline(timeout)
+        code = self.poll()
+        while code is None:
+            if _delay(deadline) == 0.0:
+                raise TimeoutError(f"process did not exit within {timeout} seconds")
+            time.sleep(_delay(deadline))
+            code = self.poll()
+        assert code is not None
+        return code
+
+    async def wait_async(self, timeout: float | None = None) -> int:
+        await aio.sleep(0.0)
+        _check_timeout(timeout)
+        deadline = _deadline(timeout)
+        code = self.poll()
+        while code is None:
+            if _delay(deadline) == 0.0:
+                raise TimeoutError(f"process did not exit within {timeout} seconds")
+            await aio.sleep(_delay(deadline))
+            code = self.poll()
+        assert code is not None
+        return code
+
+    def terminate(self):
+        core.process_signal(self._child, 15)
+
+    def kill(self):
+        core.process_signal(self._child, 9)
+
+def spawn(args: list[str], cwd: str | None = None, env: dict[str, str] | None = None, stdin: io.File | None = None, stdout: io.File | None = None, stderr: io.File | None = None) -> Process:
+    redirects = [-1, -1, -1]
+    if stdin is not None:
+        redirects[0] = stdin._child_fd("stdin", True)
+    if stdout is not None:
+        redirects[1] = stdout._child_fd("stdout", False)
+    if stderr is not None:
+        redirects[2] = stderr._child_fd("stderr", False)
+    return Process(core.process_start(args, cwd, env, redirects))
+
+def _octets(buffer: ptr, count: int) -> bytes:
+    data = core.str_alloc(count)
+    core.memcpy(__offset(data, 16), buffer, count)
+    return __bytes(__word(core.bytes_tag(__str(__word(data)))))
+
+def _join(parts: list[bytes]) -> bytes:
+    return __bytes(__word(core.bytes_tag(core.str_join("", __ptr(__word(parts))))))
+
+class _Run:
+    _child: core.Child
+    _input_fd: int
+    _output_fd: int
+    _error_fd: int
+    _input: bytes | None
+    _capture: bool
+    _output: list[bytes]
+    _error: list[bytes]
+    _buffer: ptr
+    _offset: int = 0
+
+    def _write(self) -> bool:
+        fd = self._input_fd
+        data = self._input
+        if fd < 0 or data is None:
+            return False
+        progress = False
+        if self._offset < len(data):
+            count = min(65536, len(data) - self._offset)
+            written = core.write(fd, __offset(__ptr(__word(data)), 16 + self._offset), count)
+            if written > 0:
+                self._offset = self._offset + written
+                progress = True
+            elif written < 0:
+                code = core.errno()
+                if code == 32:
+                    self._offset = len(data)
+                elif code != 4 and not core.would_block(code):
+                    raise OSError("cannot write input: " + core.os_reason())
+        if self._offset == len(data):
+            core.close(fd)
+            self._input_fd = -1
+            progress = True
+        return progress
+
+    def _read(self, fd: int, parts: list[bytes], size: int) -> int:
+        count = core.read(fd, self._buffer, size)
+        if count > 0:
+            parts.append(_octets(self._buffer, count))
+        elif count < 0:
+            code = core.errno()
+            if code != 4 and not core.would_block(code):
+                raise OSError("cannot read output: " + core.os_reason())
+        return count
+
+    def step(self) -> bool:
+        progress = self._write()
+        for which in range(2):
+            fd = self._output_fd
+            parts = self._output
+            if which == 1:
+                fd = self._error_fd
+                parts = self._error
+            if fd >= 0:
+                count = self._read(fd, parts, 65536)
+                if count >= 0:
+                    progress = True
+                if count == 0:
+                    core.close(fd)
+                    if which == 0:
+                        self._output_fd = -1
+                    else:
+                        self._error_fd = -1
+        return progress
+
+    def wait(self, seconds: float):
+        fds = __alloc_atomic(24)
+        count = 0
+        for fd in [self._input_fd, self._output_fd, self._error_fd]:
+            if fd >= 0:
+                events = 1
+                if fd == self._input_fd:
+                    events = 4
+                __store4(fds, count * 8, fd)
+                __store4(fds, count * 8 + 4, events)
+                count = count + 1
+        if core.poll(fds, count, int(core.ceil(seconds * 1000.0))) < 0:
+            if core.errno() != 4:
+                raise OSError("cannot poll: " + core.os_reason())
+
+    def finish(self, code: int) -> Result:
+        for which in range(2):
+            fd = self._output_fd
+            parts = self._output
+            if which == 1:
+                fd = self._error_fd
+                parts = self._error
+            if fd >= 0:
+                remaining = core.process_available(fd)
+                while remaining > 0:
+                    count = self._read(fd, parts, min(65536, remaining))
+                    if count <= 0:
+                        break
+                    remaining = remaining - count
+        output: bytes | None = None
+        error: bytes | None = None
+        if self._capture:
+            output = _join(self._output)
+            error = _join(self._error)
+        return Result(code, output, error)
+
+    def close(self):
+        for fd in [self._input_fd, self._output_fd, self._error_fd]:
+            if fd >= 0:
+                core.close(fd)
+        self._input_fd = -1
+        self._output_fd = -1
+        self._error_fd = -1
+
+def _start(args: list[str], input: bytes | None, capture_output: bool, cwd: str | None, env: dict[str, str] | None) -> _Run:
+    redirects = [-1, -1, -1]
+    all_fds: list[int] = []
+    parent: list[int] = []
+    input_fd = -1
+    output_fd = -1
+    error_fd = -1
+    started = False
+    try:
+        if input is not None:
+            pipe = core.process_pipe()
+            all_fds.extend(pipe)
+            redirects[0] = pipe[0]
+            input_fd = pipe[1]
+            parent.append(input_fd)
+        if capture_output:
+            pipe = core.process_pipe()
+            all_fds.extend(pipe)
+            output_fd = pipe[0]
+            redirects[1] = pipe[1]
+            parent.append(output_fd)
+            pipe = core.process_pipe()
+            all_fds.extend(pipe)
+            error_fd = pipe[0]
+            redirects[2] = pipe[1]
+            parent.append(error_fd)
+        for fd in parent:
+            core.process_nonblocking(fd)
+        child = core.process_start(args, cwd, env, redirects)
+        result = _Run(child, input_fd, output_fd, error_fd, input, capture_output, [], [], __alloc_atomic(65536))
+        started = True
+        return result
+    finally:
+        for fd in all_fds:
+            if not started or fd not in parent:
+                core.close(fd)
+
+def run(args: list[str], input: bytes | None = None, capture_output: bool = False, cwd: str | None = None, env: dict[str, str] | None = None, timeout: float | None = None) -> Result:
+    _check_timeout(timeout)
+    state = _start(args, input, capture_output, cwd, env)
+    deadline = _deadline(timeout)
+    code: int | None = None
+    try:
+        while code is None:
+            progress = state.step()
+            code = core.process_poll(state._child, False)
+            if code is None:
+                delay = _delay(deadline)
+                if delay == 0.0:
+                    raise TimeoutError(f"command timed out after {timeout} seconds")
+                if not progress:
+                    state.wait(delay)
+        assert code is not None
+        return state.finish(code)
+    finally:
+        try:
+            if state._child.code is None:
+                core.process_signal(state._child, 9)
+                core.process_poll(state._child, True)
+        finally:
+            state.close()
+
+async def run_async(args: list[str], input: bytes | None = None, capture_output: bool = False, cwd: str | None = None, env: dict[str, str] | None = None, timeout: float | None = None) -> Result:
+    await aio.sleep(0.0)
+    _check_timeout(timeout)
+    state = _start(args, input, capture_output, cwd, env)
+    deadline = _deadline(timeout)
+    code: int | None = None
+    try:
+        while code is None:
+            progress = state.step()
+            code = core.process_poll(state._child, False)
+            if code is None:
+                delay = _delay(deadline)
+                if delay == 0.0:
+                    raise TimeoutError(f"command timed out after {timeout} seconds")
+                if progress:
+                    delay = 0.0
+                await aio.sleep(delay)
+        assert code is not None
+        return state.finish(code)
+    finally:
+        try:
+            if state._child.code is None:
+                core.process_signal(state._child, 9)
+                code = core.process_poll(state._child, False)
+                while code is None:
+                    await aio.sleep(0.001)
+                    code = core.process_poll(state._child, False)
+        finally:
+            state.close()

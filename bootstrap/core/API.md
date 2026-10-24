@@ -180,7 +180,7 @@ literal `"None"`.
 | Signature | Meaning |
 | --- | --- |
 | `os() -> str` | `__os`, the target's operating system |
-| `run(args: list[str]) -> int` | Runs `args[0]`, searched for in `PATH`, with the remaining arguments and no shell, through `posix_spawnp`; the child inherits stdin, stdout, stderr, and the environment, with SIGPIPE's default action. Waits and returns the exit status, or 128 plus the signal number if a signal ended the child |
+| `run(args: list[str]) -> int` | Runs `args[0]`, searched for in `PATH`, with the remaining arguments and no shell, through the shared `process_start` helper using `posix_spawn`; the child inherits stdin, stdout, stderr, and the environment, with SIGPIPE's default action. Waits and returns the exit status, or 128 plus the signal number if a signal ended the child |
 
 ## Exceptions under stage 1
 
