@@ -145,6 +145,7 @@ class Checker:
         elif isinstance(node, ast.MethodCall):
             node.args = result
             node.order = order
+            node.written = count
         else:
             node.args = result
             node.order = order

@@ -57,13 +57,13 @@ bootstrap:
 	$(BUILD_DIR)/willow2b compile $(BUILD_DIR)/stage2/willow.wlo -o $(BUILD_DIR)/stage2b.ssa
 	cmp $(BUILD_DIR)/stage2a.ssa $(BUILD_DIR)/stage2b.ssa
 
-$(BUILD_DIR)/willow1: $(WILLOW0) $(STAGE1_SOURCES)
+$(BUILD_DIR)/willow1: $(WILLOW0) bootstrap/prepare.sh $(STAGE1_SOURCES)
 	mkdir -p $(BUILD_DIR)
 	rm -rf $(BUILD_DIR)/stage1
 	bootstrap/prepare.sh bootstrap/stage1 $(BUILD_DIR)/stage1
 	$(WILLOW0) build $(BUILD_DIR)/stage1/willow1.wlo -o $@
 
-$(BUILD_DIR)/willow2a: $(BUILD_DIR)/willow1 $(STAGE2_SOURCES)
+$(BUILD_DIR)/willow2a: $(BUILD_DIR)/willow1 bootstrap/prepare.sh $(STAGE2_SOURCES)
 	rm -rf $(BUILD_DIR)/stage2
 	bootstrap/prepare.sh compiler $(BUILD_DIR)/stage2
 	$(BUILD_DIR)/willow1 build $(BUILD_DIR)/stage2/willow.wlo -o $@
