@@ -422,8 +422,11 @@ class Emitter:
         self.witnesses.append(witness)
         return witness
 
-    # All indirect protocol calls pass through here, including forwarding adapters.
-    def protocol_call(self, object: str, receiver_type: types.ProtocolType, name: str, args: list[str]) -> str:
+    # All indirect protocol calls pass through here, including forwarding
+    # adapters. `written` has bit i set when the caller wrote argument i
+    # rather than taking the protocol's default, which the implementation
+    # replaces with its own.
+    def protocol_call(self, object: str, receiver_type: types.ProtocolType, name: str, args: list[str], written: str) -> str:
         descriptor = self.temp()
         receiver_address = self.temp()
         receiver = self.temp()
@@ -439,7 +442,7 @@ class Emitter:
                 self.line(f"{callee} =l loadl {address}")
                 signature = types.method(receiver_type, name)
                 assert signature is not None, "missing protocol method"
-                passed = [receiver]
+                passed = [receiver, written]
                 passed.extend(args)
                 return self.willow_call(callee, typed(passed), not is_none(signature.result))
         return self.unchecked("protocol method")
@@ -462,7 +465,7 @@ class Emitter:
             self.target = "@unwind"
             self.unwinds = False
             self.returns = not is_none(want.result)
-            params = ["l %p.self"]
+            params = ["l %p.self", "l %p.written"]
             for j in range(len(want.params)):
                 params.append(f"l %p.{j}")
             result = ""
@@ -470,19 +473,54 @@ class Emitter:
                 result = "l "
             self.write("function " + result + symbol + "(" + ", ".join(params) + ") {")
             self.label("@start")
+            forwarding = isinstance(witness.source, types.ProtocolType)
+            # Where an argument that has a default goes, in the start block.
+            slots: list[str] = []
+            for j in range(len(want.params)):
+                slots.append("")
+                if want.params[j].default is not None and not forwarding:
+                    slots[j] = self.temp()
+                    self.line(f"{slots[j]} =l alloc8 8")
             args: list[str] = []
+            # Bit j of `written` for an implementation that is a protocol too.
+            written = "0"
             for j in range(len(have.params)):
                 index = -1
                 for k in range(len(indexes)):
                     if indexes[k] == j:
                         index = k
-                if index >= 0:
-                    args.append(self.convert(f"%p.{index}", want.params[index].ty, have.params[j].ty))
-                else:
-                    default = have.params[j].default
-                    assert default is not None, "missing implementation default"
-                    args.append(self.convert(self.expr(default), self.concrete_type(default.ty), have.params[j].ty))
-            value = self.dispatch_method("%p.self", witness.source, method.name, args, [])
+                if index < 0:
+                    args.append(self.implementation_default(have.params[j]))
+                    continue
+                given = self.convert(f"%p.{index}", want.params[index].ty, have.params[j].ty)
+                if want.params[index].default is None:
+                    args.append(given)
+                    written = self.add_bit(written, "1", j)
+                    continue
+                flag = self.temp()
+                self.line(f"{flag} =l and %p.written, {bit(index)}")
+                if forwarding:
+                    args.append(given)
+                    present = self.temp()
+                    self.line(f"{present} =l cnel {flag}, 0")
+                    written = self.add_bit(written, present, j)
+                    continue
+                # The implementation's own default replaces the protocol's.
+                take = self.new_label()
+                omit = self.new_label()
+                join = self.new_label()
+                self.jump(f"jnz {flag}, {take}, {omit}")
+                self.label(take)
+                self.line(f"storel {given}, {slots[index]}")
+                self.jump(f"jmp {join}")
+                self.label(omit)
+                self.line(f"storel {self.implementation_default(have.params[j])}, {slots[index]}")
+                self.jump(f"jmp {join}")
+                self.label(join)
+                value = self.temp()
+                self.line(f"{value} =l loadl {slots[index]}")
+                args.append(value)
+            value = self.dispatch_method("%p.self", witness.source, method.name, args, [], written)
             value = self.convert(value, have.result, want.result)
             if self.returns:
                 self.jump("ret " + value)
@@ -496,6 +534,23 @@ class Emitter:
                     self.jump("ret")
             self.write("}")
         self.write("data " + witness.symbol + ".type = { " + ", ".join(entries) + " }")
+
+    # The value of `param`'s default, of an implementation of a protocol
+    # method, as the parameter's type.
+    def implementation_default(self, param: types.Param) -> str:
+        default = param.default
+        assert default is not None, "missing implementation default"
+        return self.convert(self.expr(default), self.concrete_type(default.ty), param.ty)
+
+    # `mask` with bit `j` set when `present`, 0 or 1, is 1.
+    def add_bit(self, mask: str, present: str, j: int) -> str:
+        if present == "1" and mask == "0":
+            return str(bit(j))
+        shifted = self.temp()
+        self.line(f"{shifted} =l mul {present}, {bit(j)}")
+        result = self.temp()
+        self.line(f"{result} =l add {mask}, {shifted}")
+        return result
 
     def emit_instantiations(self):
         function_index = 0
@@ -1363,7 +1418,7 @@ class Emitter:
                 if isinstance(receiver_type, types.ProtocolType):
                     object = self.convert(self.expr(node.object), ty, receiver_type)
                     args = self.arg_values(node.args, node.order)
-                    return self.protocol_call(object, receiver_type, node.name, args)
+                    return self.protocol_call(object, receiver_type, node.name, args, written_mask(node))
         if node.name == "iter" and types.iteration_item(ty) is not None:
             return self.native_iter(self.expr(node.object), ty, "")
         if isinstance(ty, types.ClassType):
@@ -2191,11 +2246,12 @@ class Emitter:
         own = node.type_args
         if own is None:
             own = []
-        return self.dispatch_method(object, ty, node.name, args, own)
+        return self.dispatch_method(object, ty, node.name, args, own, written_mask(node))
 
-    def dispatch_method(self, object: str, ty: types.Type, name: str, args: list[str], own: list[types.Type]) -> str:
+    # `written` is as protocol_call takes it.
+    def dispatch_method(self, object: str, ty: types.Type, name: str, args: list[str], own: list[types.Type], written: str) -> str:
         if isinstance(ty, types.ProtocolType):
-            return self.protocol_call(object, ty, name, args)
+            return self.protocol_call(object, ty, name, args, written)
         if name == "iter" and types.iteration_item(ty) is not None:
             return self.native_iter(object, ty, "")
         assert isinstance(ty, types.ClassType), "unchecked method receiver"
@@ -2341,7 +2397,7 @@ class Emitter:
         own = node.type_args
         if own is None:
             own = []
-        value = self.dispatch_method(object, ty, node.name, args, own)
+        value = self.dispatch_method(object, ty, node.name, args, own, written_mask(node))
         self.at_line = line
         self.at_col = col
         return value
@@ -3124,6 +3180,22 @@ class Protect:
     group: bool = False
 
 # The name of `function` in frames, and in its symbol.
+# The parameters `node` was written with, as a mask with bit i for
+# parameter i.
+def written_mask(node: ast.MethodCall) -> str:
+    order = node.order
+    assert order is not None, "unbound call arguments"
+    mask = 0
+    for i in order[:node.written]:
+        mask = mask + bit(i)
+    return str(mask)
+
+def bit(i: int) -> int:
+    result = 1
+    for j in range(i):
+        result = result * 2
+    return result
+
 def frame_name(function: ast.FunctionDecl) -> str:
     parent = function.parent
     if parent is not None:
