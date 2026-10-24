@@ -1,0 +1,16 @@
+def optional[T](value: T) -> () -> T | None:
+    return lambda: value
+
+def apply[T, U](value: T, callback: (T) -> U) -> U:
+    return callback(value)
+
+def text(value: int) -> str:
+    return str(value)
+
+def main():
+    integer = optional(7)
+    decimal = optional(2.5)
+    print(integer())
+    print(decimal())
+    print(apply(3, lambda value: value + 1))
+    print(apply(5, text))

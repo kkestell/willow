@@ -1,0 +1,37 @@
+protocol Reader:
+    def read(self) -> int
+
+protocol TaggedReader:
+    def read(self) -> int
+    def tag(self) -> str
+
+class Source:
+    n: int
+
+    def read(self) -> int:
+        return self.n
+
+    def tag(self) -> str:
+        return "source"
+
+class Box:
+    n: int
+
+def widen(value: TaggedReader | Box | None) -> Reader | Box | None:
+    return value
+
+def describe(value: Reader | Box | None) -> str:
+    if isinstance(value, Box):
+        return "box " + str(value.n)
+    if value is None:
+        return "none"
+    return "reader " + str(value.read())
+
+def main():
+    values: list[Reader | Box | None] = [Source(1), Box(2), None]
+    for value in values:
+        print(isinstance(value, Box))
+        print(describe(value))
+    print(describe(widen(Source(3))))
+    print(describe(widen(Box(4))))
+    print(describe(widen(None)))

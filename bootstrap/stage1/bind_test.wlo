@@ -256,6 +256,8 @@ def main():
             print(f"  actual:   {actual}")
             ok = False
     signature_cases = [
+        ["main: def f(box: C, index: int) -> None\nmain: def main() -> None\nmain: field C.items: list[int]", "class C:\n    items: list[int]\ndef f(box: C, index: int):\n    box.items[index]()\ndef main():\n    pass\n"],
+        ["main: def f(box: C) -> None\nmain: def main() -> None\nmain: field C.items: dict[E, int]", "enum E:\n    A\nclass C:\n    items: dict[E, int]\ndef f(box: C):\n    box.items[E.A]()\ndef main():\n    pass\n"],
         ["main: def f(t: Tree, j: J) -> list[Tree]\nmain: def main() -> None", "type Tree = int | list[Tree]\ntype J = None | dict[str, J]\ndef f(t: Tree, j: J) -> list[Tree]:\n    return [t]\ndef main():\n    pass\n"],
         ["main: def f(p: tuple[int, str], o: Opt[int], q: Opt[list[int]]) -> Opt[str]\nmain: def main() -> None", "type Pair[K, V] = tuple[K, V]\ntype Opt[T] = T | None\ndef f(p: Pair[int, str], o: Opt[int], q: Opt[list[int]]) -> Opt[str]:\n    return None\ndef main():\n    pass\n"],
         ["main: def f(x: None, y: Opt[int | None]) -> None\nmain: def main() -> None", "type Opt[T] = T | None\ndef f(x: Opt[None], y: Opt[int | None]):\n    pass\ndef main():\n    pass\n"],

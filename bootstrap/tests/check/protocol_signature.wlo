@@ -1,0 +1,9 @@
+protocol Reader:
+    def read(self, size: int) -> str
+
+class Source:
+    def read(self, count: int) -> str:
+        return "text"
+
+def main():
+    reader: Reader = Source()

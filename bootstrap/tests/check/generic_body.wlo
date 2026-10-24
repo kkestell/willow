@@ -1,0 +1,5 @@
+def add[T](left: T, right: T) -> T:
+    return left + right
+
+def main():
+    print(add(1, 2))

@@ -1,0 +1,33 @@
+protocol Reader:
+    def read(self) -> int
+
+class Src:
+    def read(self) -> int:
+        return 1
+
+class Trouble(Exception):
+    pass
+
+def widen(value: Src | Exception | None) -> Reader | Exception | None:
+    return value
+
+def describe(value: Reader | Exception | None) -> str:
+    if isinstance(value, Exception):
+        return value.message
+    if value is None:
+        return "none"
+    return str(value.read())
+
+def is_error(value: Exception | str | None) -> bool:
+    return isinstance(value, Exception)
+
+def main():
+    print(describe(widen(ValueError("bad"))))
+    print(describe(widen(Trouble("custom"))))
+    print(describe(widen(Src())))
+    print(describe(widen(None)))
+    print(is_error(Exception("base")))
+    print(is_error(ValueError("builtin")))
+    print(is_error(Trouble("custom")))
+    print(is_error("text"))
+    print(is_error(None))

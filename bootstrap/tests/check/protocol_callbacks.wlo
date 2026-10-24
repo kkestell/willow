@@ -1,0 +1,33 @@
+protocol Reader:
+    def get(self) -> int | None
+
+class Source:
+    value: int
+
+    def get(self) -> int:
+        return self.value
+
+def read(value: Reader) -> int | None:
+    return value.get()
+
+def source(value: int) -> Source:
+    return Source(value)
+
+def number(value: int) -> int:
+    return value
+
+type Narrow = Source | ((int) -> int) | None
+type Wide = Reader | ((int) -> int | None) | None
+
+def widen(value: Narrow) -> Wide:
+    return value
+
+def main():
+    callback: (Source) -> int | None = read
+    print(callback(Source(7)))
+    factory: (int) -> Reader = source
+    print(factory(8).get())
+    widen(number)
+    widen(Source(9))
+    widen(None)
+    print("converted")
