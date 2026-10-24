@@ -1,0 +1,22 @@
+class Pair:
+    a: int
+    b: int
+    c: int | float = 3.5
+
+    def show(self, a: int = 1, *, c: int = 3, b: int) -> str:
+        return f"{self.a} {a} {b} {c}"
+
+def value(label: str, n: int) -> int:
+    print(label)
+    return n
+
+def receiver(pair: Pair) -> Pair:
+    print("receiver")
+    return pair
+
+def main():
+    pair = Pair(b=value("b", 2), a=value("a", 1))
+    print(f"{pair.a} {pair.b} {pair.c}")
+    print(receiver(pair).show(c=value("c", 3), b=value("b", 2)))
+    counts = {"x": 1}
+    print(counts.get(default=value("default", 4), k="x"))

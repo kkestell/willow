@@ -1,0 +1,5 @@
+def f(a: int, b: int):
+    pass
+
+def main():
+    f(b="first", a="second")

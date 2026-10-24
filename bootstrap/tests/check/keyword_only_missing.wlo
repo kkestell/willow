@@ -1,0 +1,5 @@
+def f(*, b: int = 2, c: int):
+    pass
+
+def main():
+    f()

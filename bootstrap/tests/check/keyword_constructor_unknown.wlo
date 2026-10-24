@@ -1,0 +1,6 @@
+class P:
+    x: int
+    y: int = 2
+
+def main():
+    p = P(other=1)
