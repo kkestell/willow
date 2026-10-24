@@ -8,10 +8,11 @@
 # expected stdout and stderr; a missing file means no output. The expected exit
 # status is 1 when NAME.err exists and 0 otherwise. With STAGE1=1, stderr is
 # compared with NAME.stage1.err instead when it exists, for the failures that
-# stage 0 reports without a location. A program that fails to compile has the
-# compiler's stderr as its stderr and exit status 1. Stdin is NAME.in when it
-# exists and empty otherwise. A program that compiles must compile to the same
-# IL twice.
+# stage 0 reports without a location; an empty NAME.stage1.err means stage 1
+# accepts a program that stage 0 rejects. A program that fails to compile has
+# the compiler's stderr as its stderr and exit status 1. Stdin is NAME.in when
+# it exists and empty otherwise. A program that compiles must compile to the
+# same IL twice.
 #
 # WILLOW0 names the compiler; it defaults to the release build of stage 0.
 
@@ -50,6 +51,7 @@ for file in "$@"; do
     fi
     expected_status=0
     [ -f "$base.err" ] && expected_status=1
+    [ "${STAGE1:-0}" = 1 ] && [ -f "$base.stage1.err" ] && [ ! -s "$base.stage1.err" ] && expected_status=0
     if [ "$status" -ne "$expected_status" ]; then
         echo "FAIL $file: exit status $status, expected $expected_status"
         ok=0

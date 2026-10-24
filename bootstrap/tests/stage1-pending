@@ -12,7 +12,6 @@ file_lines
 generator_cleanup
 generator_traceback
 generators
-generic_function_values
 generics
 host
 http_values
@@ -54,5 +53,4 @@ terminal_styles
 text_collections
 text_conversions
 type_errors
-unions
 with_statements

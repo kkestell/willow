@@ -1,0 +1,42 @@
+# Generic function values and nested functions in generic functions,
+# compiled per specialization.
+class Box[T]:
+    value: T
+
+    def get(self) -> T:
+        return self.value
+
+def identity[T](x: T) -> T:
+    return x
+
+def twice[T](f: (T) -> T, x: T) -> T:
+    return f(f(x))
+
+# Values specialized by the enclosing function's type argument; a float
+# and an int differ in representation inside a union.
+def wrap[T](x: T) -> list[T | None]:
+    f = identity[T]
+    g = lambda: f(x)
+    get = Box(x).get
+
+    def nested(y: T) -> T | None:
+        return y
+
+    def pair[U](u: U) -> tuple[T, U]:
+        return (x, u)
+
+    p = pair[str]
+    assert p("s")[1] == "s"
+    assert pair(1)[1] == 1
+    return [g(), get(), nested(x), None]
+
+def main():
+    for item in wrap(1.5):
+        print(item)
+    for count in wrap(2):
+        print(count)
+    for text in wrap("s"):
+        print(text)
+    print(twice(identity[int], 3))
+    halve: (float) -> float = identity
+    print(halve(0.5))

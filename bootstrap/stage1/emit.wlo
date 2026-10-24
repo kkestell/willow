@@ -236,6 +236,11 @@ class Emitter:
         return "$W." + self.module_names[function.id] + "." + frame_name(function)
 
     def specialization(self, fn: types.Function, receiver: list[types.Type], args: list[types.Type]) -> str:
+        if len(receiver) == 0 and len(args) == 0:
+            return self.symbol(self.functions[fn.id])
+        return self.instantiation(fn, receiver, args).symbol
+
+    def instantiation(self, fn: types.Function, receiver: list[types.Type], args: list[types.Type]) -> Instantiation:
         function = self.functions[fn.id]
         bindings: dict[str, types.Type] = {}
         concrete = types.substitute_all(receiver, self.bindings)
@@ -249,18 +254,40 @@ class Emitter:
         for key in own_bindings:
             bindings[key] = own_bindings[key]
         concrete.extend(own)
-        if len(concrete) == 0:
-            return self.symbol(function)
-        if fn.id not in self.instances:
-            self.instances[fn.id] = []
-        for instance in self.instances[fn.id]:
-            if types.all_same(instance.args, concrete, []):
-                return instance.symbol
-        symbol = self.symbol(function) + f".inst.{len(self.instantiations)}"
-        instance = Instantiation(function, concrete, bindings, symbol)
-        self.instances[fn.id].append(instance)
+        return self.instance(function, concrete, bindings, self.symbol(function))
+
+    # The specialization of nested generic function `function` by `args`
+    # within the current specialization of the functions that enclose it,
+    # whose type arguments are part of its key. Its code takes the closure
+    # that holds its cells first.
+    def nested_specialization(self, function: ast.FunctionDecl, args: list[types.Type]) -> Instantiation:
+        record = function.record
+        assert record is not None, f"function {function.name} has no signature"
+        bindings: dict[str, types.Type] = {}
+        key: list[types.Type] = []
+        for v in enclosing_vars(function):
+            bound = self.bindings[types.var_key(v)]
+            bindings[types.var_key(v)] = bound
+            key.append(bound)
+        own = types.substitute_all(args, self.bindings)
+        own_bindings = types.bind_vars(record.typevars, own)
+        for name in own_bindings:
+            bindings[name] = own_bindings[name]
+        key.extend(own)
+        return self.instance(function, key, bindings, "$W." + self.module_of(function) + "." + frame_name(function) + "." + str(function.id))
+
+    # The instantiation of `function` whose type arguments are `key`, queued
+    # in order of first use and named after `base` and its place.
+    def instance(self, function: ast.FunctionDecl, key: list[types.Type], bindings: dict[str, types.Type], base: str) -> Instantiation:
+        if function.id not in self.instances:
+            self.instances[function.id] = []
+        for instance in self.instances[function.id]:
+            if types.all_same(instance.args, key, []):
+                return instance
+        instance = Instantiation(function, key, bindings, base + f".inst.{len(self.instantiations)}")
+        self.instances[function.id].append(instance)
         self.instantiations.append(instance)
-        return symbol
+        return instance
 
     def protocol_marker(self, target: types.ProtocolType) -> str:
         for i in range(len(self.protocols)):
@@ -359,7 +386,10 @@ class Emitter:
             if function_index < len(self.instantiations):
                 instance = self.instantiations[function_index]
                 function_index = function_index + 1
-                self.emit_function(instance.function, instance.symbol, [], instance.bindings)
+                first: list[str] = []
+                if instance.function.parent is not None:
+                    first.append("l %env")
+                self.emit_function(instance.function, instance.symbol, first, instance.bindings)
                 while self.emitted < len(self.later):
                     self.emitted = self.emitted + 1
                     self.emit_later(self.later[self.emitted - 1])
@@ -425,6 +455,8 @@ class Emitter:
             if isinstance(later, ValueWrapper):
                 code = later.symbol
             elif isinstance(later, BuiltinWrapper):
+                code = later.symbol
+            elif isinstance(later, SpecializedValue) and later.instance.function.parent is None:
                 code = later.symbol
             if code != "":
                 self.write(f"data {code}.closure = " + "{ l $W.function.type, l " + code + " }")
@@ -493,7 +525,13 @@ class Emitter:
         elif isinstance(node, ast.With):
             self.emit_with(node, 0)
         elif isinstance(node, ast.FunctionDef):
-            closure = self.closure(node.function)
+            closure = ""
+            if len(node.function.type_params) > 0:
+                # Only the cells: each specialization's code is compiled
+                # where it is used.
+                closure = self.new_closure("0", self.cells(node.function))
+            else:
+                closure = self.closure(node.function)
             self.line(f"storel {closure}, {self.local_address(node.symbol, node.function.name)}")
         elif isinstance(node, ast.Nonlocal):
             pass
@@ -1210,7 +1248,7 @@ class Emitter:
             assert isinstance(ty, types.ListType), "unchecked membership"
             element = types.expand(ty.element)
             left = self.concrete_type(node.left.ty)
-            if types.tuple_member(left) is not None or types.tuple_member(element) is not None:
+            if types.tuple_member(left) is not None or types.tuple_member(element) is not None or not types.assignable(element, left):
                 result = self.tuple_contains(node, item, container, element)
             else:
                 result = self.core_call("list_contains", [container, item, equality_kind(element)], True)
@@ -1474,6 +1512,8 @@ class Emitter:
         elif isinstance(node, ast.CallValue):
             return self.call_value(node)
         elif isinstance(node, ast.FunctionValue):
+            if len(node.type_args) > 0:
+                return self.specialized_value(expr, node)
             code = self.symbol(node.target) + ".value"
             self.wrap(code, ValueWrapper(code, node.target))
             return code + ".closure"
@@ -2502,22 +2542,45 @@ class Emitter:
         if len(self.bindings) > 0:
             symbol = symbol + f".inst.{len(self.later)}"
         self.later.append(Lifted(symbol, function, self.bindings))
+        return self.new_closure(symbol, self.cells(function))
+
+    # The cells of the variables nested function `function` captures.
+    def cells(self, function: ast.FunctionDecl) -> list[str]:
         cells: list[str] = []
         for capture in function.captures:
             cell = self.temp()
             self.line(f"{cell} =l loadl %v.{capture.symbol.name}")
             cells.append(cell)
-        return self.new_closure(symbol, cells)
+        return cells
+
+    # A generic function's specialization as a value of its callable type,
+    # whose code supplies the defaults of the parameters the callable leaves
+    # out. A nested one's closure holds the closure with its cells.
+    def specialized_value(self, expr: ast.Expr, node: ast.FunctionValue) -> str:
+        ty = self.concrete_type(expr.ty)
+        assert isinstance(ty, types.CallableType), "unchecked generic function value"
+        symbol = node.symbol
+        if symbol is None:
+            record = node.target.record
+            assert record is not None, "function value without a signature"
+            instance = self.instantiation(record, [], node.type_args)
+            code = instance.symbol + f".value.{len(ty.params)}"
+            self.wrap(code, SpecializedValue(code, instance, len(ty.params)))
+            return code + ".closure"
+        instance = self.nested_specialization(node.target, node.type_args)
+        code = instance.symbol + f".value.{len(ty.params)}"
+        self.wrap(code, SpecializedValue(code, instance, len(ty.params)))
+        cells = self.temp()
+        self.line(f"{cells} =l loadl {self.local_address(symbol, symbol.name)}")
+        return self.new_closure(code, [cells])
 
     # A closure of `method` that keeps the receiver `object`, of the type of
     # `receiver`.
     def bound_method(self, receiver: ast.Expr, method: types.Function, object: str) -> str:
-        ty = receiver.ty
-        assert ty is not None, "unchecked receiver"
-        ty = types.expand(ty)
+        ty = self.concrete_type(receiver.ty)
         assert isinstance(ty, types.ClassType), "unchecked receiver"
-        symbol = self.descriptor(ty.decl.type_name).removesuffix(".type") + "." + method.name
-        self.wrap(symbol + ".bound", BoundWrapper(symbol + ".bound", symbol, method))
+        symbol = self.specialization(method, ty.args, [])
+        self.wrap(symbol + ".bound", BoundWrapper(symbol + ".bound", symbol, method, ty))
         return self.new_closure(symbol + ".bound", [object])
 
     # Emits `wrapper`, whose symbol is `symbol`, unless it already is.
@@ -2533,6 +2596,17 @@ class Emitter:
         args = [callee]
         args.extend(self.arg_values(node.args, node.order))
         ty = self.concrete_type(node.callee.ty)
+        if len(node.type_args) > 0:
+            # A nested generic function, called directly.
+            name = node.callee.node
+            assert isinstance(name, ast.Name) and isinstance(ty, types.FunctionType), "unchecked generic call"
+            symbol = name.symbol
+            assert symbol is not None, "unbound generic call"
+            function = symbol.function
+            assert function is not None, "unbound generic call"
+            instance = self.nested_specialization(function, node.type_args)
+            result = types.substitute(ty.fn.result, instance.bindings)
+            return self.willow_call(instance.symbol, typed(args), not is_none(self.concrete_type(result)))
         code = self.load_field(callee, 8)
         return self.willow_call(code, typed(args), not is_none(value_result(types.expand(ty))))
 
@@ -2569,6 +2643,10 @@ class Emitter:
             self.emit_bound_wrapper(later)
         elif isinstance(later, BuiltinWrapper):
             self.emit_builtin_wrapper(later)
+        elif isinstance(later, SpecializedValue):
+            bindings = self.bindings
+            self.emit_specialized_value(later)
+            self.bindings = bindings
         elif isinstance(later, Adapter):
             self.emit_adapter(later)
         elif isinstance(later, NativeIterator):
@@ -2589,11 +2667,30 @@ class Emitter:
         self.end(self.call_text(self.symbol(wrapper.function), args, self.returns))
 
     def emit_bound_wrapper(self, wrapper: BoundWrapper):
-        args = wrapper_args(len(wrapper.method.params) - 1)
-        self.begin(wrapper.symbol, with_env(args), not is_none(wrapper.method.result))
+        signature = types.method(wrapper.receiver, wrapper.method.name)
+        assert signature is not None, "bound method without a signature"
+        args = wrapper_args(len(signature.params))
+        self.begin(wrapper.symbol, with_env(args), not is_none(signature.result))
         receiver = ["l " + self.load_field("%env", 16)]
         receiver.extend(args)
         self.end(self.call_text(wrapper.method_symbol, receiver, self.returns))
+
+    def emit_specialized_value(self, value: SpecializedValue):
+        instance = value.instance
+        record = instance.function.record
+        assert record is not None, "function value without a signature"
+        self.bindings = instance.bindings
+        args = wrapper_args(value.count)
+        self.begin(value.symbol, with_env(args), not is_none(self.concrete_type(record.result)))
+        passed: list[str] = []
+        if instance.function.parent is not None:
+            passed.append("l " + self.load_field("%env", 16))
+        passed.extend(args)
+        for param in record.params[value.count:]:
+            default = param.default
+            assert default is not None, "unchecked omitted default"
+            passed.append("l " + self.expr(default))
+        self.end(self.call_text(instance.symbol, passed, self.returns))
 
     def emit_builtin_wrapper(self, wrapper: BuiltinWrapper):
         expected = wrapper.call.expected
@@ -2622,7 +2719,7 @@ class Emitter:
 
 # A function emitted after the top-level function that uses it: a nested
 # function or lambda, or the code of a closure that runs a function.
-type Later = Lifted | ValueWrapper | BoundWrapper | BuiltinWrapper | Adapter | NativeIterator | LazyIterator
+type Later = Lifted | ValueWrapper | BoundWrapper | BuiltinWrapper | SpecializedValue | Adapter | NativeIterator | LazyIterator
 
 class NativeIterator:
     symbol: str
@@ -2653,6 +2750,14 @@ class BoundWrapper:
     symbol: str
     method_symbol: str
     method: types.Function
+    receiver: types.ClassType
+
+# The code of a generic function's specialization as a value that takes
+# `count` arguments.
+class SpecializedValue:
+    symbol: str
+    instance: Instantiation
+    count: int
 
 # The code of a built-in function value's closure, which runs its call.
 class BuiltinWrapper:
@@ -2729,6 +2834,24 @@ def frame_name(function: ast.FunctionDecl) -> str:
     if isinstance(owner, ast.ClassDecl):
         return owner.name + "." + function.name
     return function.name
+
+# The type parameters of the functions and class that enclose nested
+# function `function`.
+def enclosing_vars(function: ast.FunctionDecl) -> list[types.TypeVar]:
+    result: list[types.TypeVar] = []
+    parent = function.parent
+    while parent is not None:
+        record = parent.record
+        assert record is not None, f"function {parent.name} has no signature"
+        result.extend(record.typevars)
+        function = parent
+        parent = function.parent
+    owner = function.owner
+    if isinstance(owner, ast.ClassDecl):
+        decl = owner.record
+        assert decl is not None, "class without a record"
+        result.extend(decl.typevars)
+    return result
 
 # The offset of a class's first field. An exception's location and frames
 # come before its fields (core/API.md).
