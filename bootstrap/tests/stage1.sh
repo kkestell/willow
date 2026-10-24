@@ -183,6 +183,7 @@ programs/empty_list_display.wlo
 programs/enum_member.wlo
 programs/exit_unreachable.wlo
 programs/exponent_without_digits.wlo
+programs/extend_element_type.wlo
 programs/field_defaults.wlo
 programs/field_type.wlo
 programs/float_division_by_zero.wlo
