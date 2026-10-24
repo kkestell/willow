@@ -63,6 +63,15 @@ def pair() -> types.Class:
 def function(id: int, name: str, params: list[types.Param], result: types.Type) -> types.Function:
     return types.Function(id, name, name, [], params, result)
 
+# `type Json = None | bool | int | float | str | list[Json] | dict[str, Json]`,
+# built as the binder builds a recursive alias.
+def json_type() -> types.Type:
+    element = types.Lazy("json.Json", None)
+    parts = [prim("None"), prim("bool"), prim("int"), prim("float"), prim("str"), types.ListType(element), types.DictType(prim("str"), element)]
+    value = types.named_union(parts, "json.Json")
+    element.target = value
+    return value
+
 def display(r: Results):
     int_or_none = types.optional(prim("int"))
     r.shows("nested collections", types.ListType(types.DictType(prim("str"), int_or_none)), "list[dict[str, int | None]]")
@@ -124,8 +133,8 @@ def equality(r: Results):
     bindings: dict[str, types.Type] = {types.var_key(first_t): prim("int")}
     r.shows("other function's type parameter", types.substitute(second_t, bindings), "T")
     # Recursive aliases terminate.
-    r.check("recursive alias", types.same(stdlib.json_type(), stdlib.json_type()), True)
-    r.check("recursive alias and int", types.same(stdlib.json_type(), prim("int")), False)
+    r.check("recursive alias", types.same(json_type(), json_type()), True)
+    r.check("recursive alias and int", types.same(json_type(), prim("int")), False)
 
 def substitution(r: Results):
     # `def first[T](items: list[T]) -> T | None` called with list[int | None].
@@ -196,9 +205,6 @@ def assignability(r: Results):
 
 def standard_library(r: Results):
     modules = stdlib.modules()
-    parse = modules["json"].functions["parse"].result
-    assert parse is not None
-    r.shows("json.parse", parse, "json.Json")
     walk = modules["fs"].functions["walk"].result
     assert walk is not None
     r.shows("fs.walk", walk, "Iterator[tuple[str, list[str], list[str]]]")
