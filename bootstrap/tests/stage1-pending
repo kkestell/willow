@@ -7,7 +7,6 @@ overflow_add
 overflow_sub
 processes
 processes_stdin
-protocols
 scoped_resources
 sockets
 stdlib_builtins_errors
