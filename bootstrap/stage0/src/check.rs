@@ -2698,7 +2698,16 @@ impl<'a> Checker<'a> {
             // extend takes only a list of the same type in L0, since core
             // copies its slots as they are.
             let value = if function == "list_extend" {
-                self.expect(arg.pos, param, &ty)?;
+                if &ty != param {
+                    return self.fail(
+                        arg.pos,
+                        format!(
+                            "expected Iterable[{}], received {}",
+                            param.list_element().unwrap().name(),
+                            ty.name()
+                        ),
+                    );
+                }
                 value
             } else {
                 self.coerce(arg.pos, value, &ty, param)?
