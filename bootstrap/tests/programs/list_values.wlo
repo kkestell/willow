@@ -1,0 +1,44 @@
+def empty() -> list[int]:
+    return []
+
+def count(values: list[int]) -> int:
+    return len(values)
+
+def main():
+    values = empty()
+    values = []
+    values.append(1)
+    values.extend([2, 3])
+    values.extend(values)
+    values.reverse()
+    print(values.pop())
+    print(len(values))
+    print(values[0])
+    print(2 in values)
+    print(9 not in values)
+    print(count([]))
+    nested: list[list[int]] = [[]]
+    nested.append([])
+    nested[0] = []
+    nested[0].append(4)
+    print(nested[0][0])
+    print(len(nested[1]))
+    grow = [1, 2]
+    for n in grow:
+        if n < 4:
+            grow.append(n + 2)
+    print(len(grow))
+    print(grow[-1])
+    names = ["café", "hello"]
+    print("café" in names)
+    print("other" not in names)
+    floats = [1.25, 2.5]
+    floats.append(3.75)
+    floats[1] = 4.5
+    print(floats.pop() == 3.75)
+    print(floats[1] == 4.5)
+    print(1.25 in floats)
+    for value in floats[:1]:
+        print(value == 1.25)
+    for flag in [True, False]:
+        print(flag)
