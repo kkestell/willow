@@ -1,0 +1,1 @@
+native_print.wlo:5:11: error: cannot print a value of type fixture_store.Handle

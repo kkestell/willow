@@ -1239,9 +1239,18 @@ class Checker:
         assert isinstance(target, types.Class), "call without a target"
         return self.check_constructor(expr, node, target, state)
 
+    # Whether `decl` is a native type whose fields and constructor the module
+    # being checked cannot use: any but one a library module declares, in
+    # that module.
+    def opaque(self, decl: types.Class) -> bool:
+        if not decl.native:
+            return False
+        return not self.module.privileged or decl.type_name != self.module.name + "." + decl.name
+
     def check_constructor(self, expr: ast.Expr, node: ast.Call, target: types.Class, state: dict[int, types.Type]) -> types.Type:
-        if target.native:
-            return self.unsupported(expr.line, expr.col, "this constructor")
+        if self.opaque(target):
+            self.fail(expr.line, expr.col, f"cannot construct native type {target.type_name}")
+            return none()
         params: list[types.Param] = []
         for field in target.fields:
             params.append(types.Param(field.name, field.ty, field.default, False))
@@ -1250,7 +1259,7 @@ class Checker:
 
     def field_type(self, line: int, col: int, name: str, object: types.Type) -> types.Type:
         object = bound_type(types.expand(object))
-        if not isinstance(object, types.ClassType) or object.decl.native:
+        if not isinstance(object, types.ClassType) or self.opaque(object.decl):
             self.fail(line, col, f"type {types.display(object)} has no field '{name}'")
             return none()
         for field in object.decl.fields:
@@ -1265,7 +1274,7 @@ class Checker:
         if self.failed():
             return none()
         expanded = types.expand(object)
-        if isinstance(expanded, types.ClassType) and not expanded.decl.native:
+        if isinstance(expanded, types.ClassType) and not self.opaque(expanded.decl):
             for method in expanded.decl.methods:
                 if method.name == node.name:
                     if len(method.typevars) > 0:
@@ -1465,7 +1474,7 @@ class Checker:
         for method in object.decl.methods:
             if method.name == node.name:
                 if node.type_args is not None and len(method.typevars) == 0:
-                    if object.decl.native:
+                    if self.opaque(object.decl):
                         return self.field_type(expr.line, expr.col, node.name, object)
                     index = node.index
                     if index is None:
@@ -2075,10 +2084,10 @@ def isinstance_member(t: types.Type, named: ast.TypeName) -> types.Type | None:
     found: types.Type | None = None
     for m in types.members(t):
         if isinstance(record, types.Class):
-            if isinstance(m, types.ClassType) and m.decl.type_name == record.type_name:
+            if isinstance(m, types.ClassType) and types.same_class(m.decl, record):
                 found = m
         elif isinstance(record, types.Enum):
-            if isinstance(m, types.EnumType) and m.decl.type_name == record.type_name:
+            if isinstance(m, types.EnumType) and types.same_enum(m.decl, record):
                 found = m
         elif types.kind(m) == named.name:
             found = m
@@ -2155,11 +2164,11 @@ def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types
             for i in range(len(param.elements)):
                 collect(param.elements[i], arg.elements[i], candidates, matching)
     elif isinstance(param, types.ClassType) and isinstance(arg, types.ClassType):
-        if param.decl.type_name == arg.decl.type_name:
+        if types.same_class(param.decl, arg.decl):
             for i in range(len(param.args)):
                 collect(param.args[i], arg.args[i], candidates, matching)
     elif isinstance(param, types.ProtocolType):
-        if isinstance(arg, types.ProtocolType) and param.decl.type_name == arg.decl.type_name:
+        if isinstance(arg, types.ProtocolType) and types.same_protocol(param.decl, arg.decl):
             for i in range(len(param.args)):
                 collect(param.args[i], arg.args[i], candidates, matching)
             return
