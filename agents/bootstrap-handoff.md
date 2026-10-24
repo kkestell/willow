@@ -63,19 +63,6 @@ the test runner in Willow, and the Lua implementation deleted
 (`agents/bootstrap.md` §11). The 30 standard-library programs in
 `stage1-pending` are its first conformance targets.
 
-Before deleting the Lua unit suite, resolve these native differences from
-its CLI cases:
-
-- Invalid UTF-8 in source raises `ValueError: invalid UTF-8` at the driver's
-  `fs.read_file` call rather than reporting the source file's byte position.
-- `willow run` decodes arguments in the driver, so an invalid UTF-8 argument
-  fails there before the program starts. A built program correctly raises
-  a catchable `ValueError` at its own `sys.args()` call; the command case in
-  `bootstrap/tests/commands/library_runtime_edges/` covers that behavior.
-- `print` with closed stdout or a broken pipe exits with status 1 and empty
-  stderr. It needs the output failure diagnostic and traceback; catchable
-  `io` write failures already report the error.
-
 ## Resuming elsewhere
 
 Create a fresh swarm from the swarm notes; the code, the pull request
