@@ -14,10 +14,10 @@
 # The bind driver takes the entry programs that are programs: those with a
 # main function, and test files. Its rule is the program drivers', so a
 # program whose first error in the Lua implementation comes from its checker
-# or at run time, as for every NAME.err in tests/ and examples/ except a
-# lexical and a loading error, must bind without error. Besides, each case in
-# bootstrap/tests/loader/ and bootstrap/tests/bind/ must report the error its
-# main.err expects, so that a missed binder error fails too.
+# or at run time must bind without error. Besides, the programs in
+# bind_errors, whose first error comes from loading or binding, and each case
+# in bootstrap/tests/loader/ and bootstrap/tests/bind/ must report the error
+# its NAME.err expects, so that a missed binder error fails too.
 #
 # WILLOW0 names the compiler; it defaults to the release build of stage 0.
 
@@ -138,10 +138,14 @@ check_program_driver() {
     drive "$1" entries program
 }
 
+# The programs in tests/ and examples/ whose first error comes from loading
+# or binding.
+bind_errors="tests/programs/unknown_escape.wlo tests/modules/missing_module/main.wlo"
+
 check_bind_driver() {
     drive "$1" programs program
-    for err in bootstrap/tests/loader/*/main.err bootstrap/tests/bind/*/main.err; do
-        entry=${err%.err}.wlo
+    for entry in $bind_errors bootstrap/tests/loader/*/main.wlo bootstrap/tests/bind/*/main.wlo; do
+        err=${entry%.wlo}.err
         if ! grep -qxF "$entry: $(head -n 1 "$err")" "$work/errors"; then
             echo "FAIL $1 $entry: no error, expected $(head -n 1 "$err")"
             failed=1

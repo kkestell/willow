@@ -220,6 +220,11 @@ def main():
         ["main.wlo:5:14: error: type argument int does not satisfy the bound Named of 'T'", "protocol Named:\n    def name(self) -> str\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[int]):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:7:14: error: union members P and C overlap", "protocol P:\n    def m(self) -> int\nclass C:\n    x: int\n    def m(self) -> int:\n        return 1\ndef f(x: P | C):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:26: error: union members Iterable[int] and list[str] overlap", "def f(x: Iterable[int] | list[str]):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:2:24: error: union members Iterable[int] and list[str] overlap", "def main():\n    x: Iterable[int] | list[str] = []\n"],
+        # Bounds are checked once the lazy types in the argument are
+        # resolved; the Lua binder rejects these programs.
+        ["main.wlo:3:14: error: type argument list[float] does not satisfy the bound Iterable[int | float] of 'T'", "class Box[T: Iterable[int | float]]:\n    item: T\ndef f(b: Box[list[float]]):\n    pass\ndef main():\n    pass\n"],
+        ["main [b] [] { b: Box[list[int]] = Box([1]) }", "class Box[T: Iterable[int]]:\n    item: T\ndef main():\n    b: Box[list[int]] = Box([1])\n"],
         ["main.wlo:1:16: error: expected int, received str", "def f(x: int = 'a'):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:3:16: error: enum 'E' has no member 'C'", "enum E:\n    A\ndef f(x: E = E.C):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:3:16: error: unknown enum 'K'", "class K:\n    x: int\ndef f(x: int = K.x):\n    pass\ndef main():\n    pass\n"],
@@ -262,6 +267,8 @@ def main():
         ["main: def f(x: T) -> T\nmain: def g(b: Box[P]) -> None\nmain: def main() -> None\nmain: def P.name(self: P) -> str\nmain: field P.n: str\nmain: field Box.v: T", "protocol Named:\n    def name(self) -> str\nclass P:\n    n: str\n    def name(self) -> str:\n        return self.n\ndef f[T: Named](x: T) -> T:\n    return x\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[P]):\n    pass\ndef main():\n    pass\n"],
         ["main: def f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind\nmain: def main() -> None\nshapes: field shapes.Circle.r: float\nshapes: field shapes.Square.s: float", "import shapes\ndef f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind:\n    return shapes.Kind.A\ndef main():\n    pass\n", "shapes", "type Shape = Circle | Square\nclass Circle:\n    r: float\nclass Square:\n    s: float\nenum Kind:\n    A\n"],
         ["main: def main() -> Coroutine[None]", "async def main():\n    pass\n"],
+        ["main: def f(b: Box[list[int]], s: list[list[int]], u: Box[list[int | float]]) -> Box[list[int]]\nmain: def main() -> None\nmain: field Box.item: T", "class Box[T: Iterable[int | float]]:\n    item: T\ntype SBox[T: Iterable[int]] = list[T]\ndef f(b: Box[list[int]], s: SBox[list[int]], u: Box[list[int | float]]) -> Box[list[int]]:\n    return b\ndef main():\n    pass\n"],
+        ["main: def f(b: Box[L]) -> None\nmain: def main() -> None\nmain: def L.items(self: L) -> list[int]\nmain: field Box.item: T", "protocol HasList:\n    def items(self) -> list[int]\nclass L:\n    def items(self) -> list[int]:\n        return [1]\nclass Box[T: HasList]:\n    item: T\ndef f(b: Box[L]):\n    pass\ndef main():\n    pass\n"],
         ["main: def f(a: tuple[int, str], b: tuple[()], c: tuple[int]) -> None\nmain: def main() -> None", "def f(a: tuple[int, str], b: tuple[()], c: tuple[int]):\n    pass\ndef main():\n    pass\n"],
     ]
     for program in signature_cases:

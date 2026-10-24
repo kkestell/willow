@@ -335,11 +335,11 @@ def key(t: Type) -> str:
 def same(a: Type, b: Type) -> bool:
     return same_in(a, b, [])
 
-# `assumed` holds the pairs of aliases already being compared, so recursive
-# aliases terminate.
+# `assumed` holds the pairs of lazy types already being compared, by id, so
+# recursive aliases terminate.
 def same_in(a: Type, b: Type, assumed: list[str]) -> bool:
     if isinstance(a, Lazy) and isinstance(b, Lazy):
-        pair = a.name + " = " + b.name
+        pair = f"{a.id} = {b.id}"
         if pair in assumed:
             return True
         assumed.append(pair)
@@ -814,13 +814,14 @@ def mentions_any(t: Type, vars: list[TypeVar]) -> bool:
         keys.append(var_key(v))
     return has_typevar(t, [], keys, True)
 
-# `seen` holds the aliases already entered, which stops at recursive ones;
-# when `only` is true, just the type parameters in `keys` count.
-def has_typevar(t: Type, seen: list[str], keys: list[str], only: bool) -> bool:
+# `seen` holds the ids of the lazy types already entered, which stops at
+# recursive ones; when `only` is true, just the type parameters in `keys`
+# count.
+def has_typevar(t: Type, seen: list[int], keys: list[str], only: bool) -> bool:
     if isinstance(t, Lazy):
-        if t.name in seen:
+        if t.id in seen:
             return False
-        seen.append(t.name)
+        seen.append(t.id)
     t = expand(t)
     if isinstance(t, TypeVar):
         return not only or var_key(t) in keys
