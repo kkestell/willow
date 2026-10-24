@@ -1,0 +1,5 @@
+import net
+
+def main():
+    listener = net.listen("127.0.0.1", 0)
+    print(listener._fd)

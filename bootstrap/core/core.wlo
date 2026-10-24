@@ -24,11 +24,20 @@ extern def rmdir(path: ptr) -> cint
 extern def rename(source: ptr, destination: ptr) -> cint
 extern def getenv(name: ptr) -> ptr
 extern def getcwd(buf: ptr, size: int) -> ptr
-extern def posix_spawnp(pid: ptr, file: ptr, actions: ptr, attributes: ptr, argv: ptr, envp: ptr) -> cint
+extern def posix_spawn(pid: ptr, file: ptr, actions: ptr, attributes: ptr, argv: ptr, envp: ptr) -> cint
 extern def posix_spawnattr_init(attributes: ptr) -> cint
 extern def posix_spawnattr_destroy(attributes: ptr) -> cint
 extern def posix_spawnattr_setflags(attributes: ptr, flags: cint) -> cint
 extern def posix_spawnattr_setsigdefault(attributes: ptr, signals: ptr) -> cint
+extern def posix_spawn_file_actions_init(actions: ptr) -> cint
+extern def posix_spawn_file_actions_destroy(actions: ptr) -> cint
+extern def posix_spawn_file_actions_adddup2(actions: ptr, fd: cint, target: cint) -> cint
+extern def posix_spawn_file_actions_addchdir_np(actions: ptr, path: ptr) -> cint
+extern def pipe(fds: ptr) -> cint
+extern def fcntl(fd: cint, command: cint, ...) -> cint
+extern def ioctl(fd: cint, request: int, ...) -> cint
+extern def lseek(fd: cint, offset: int, whence: cint) -> int
+extern def kill(pid: cint, sig: cint) -> cint
 extern def sigemptyset(signals: ptr) -> cint
 extern def sigaddset(signals: ptr, sig: cint) -> cint
 extern def waitpid(pid: cint, status: ptr, options: cint) -> cint
@@ -53,6 +62,20 @@ extern def acos(x: float) -> float
 extern def atan(x: float) -> float
 extern def atan2(y: float, x: float) -> float
 extern def copysign(x: float, y: float) -> float
+
+extern def getaddrinfo(host: ptr, service: ptr, hints: ptr, result: ptr) -> cint
+extern def freeaddrinfo(addresses: ptr)
+extern def gai_strerror(code: cint) -> ptr
+extern def socket(family: cint, kind: cint, transport: cint) -> cint
+extern def connect(fd: cint, address: ptr, size: cint) -> cint
+extern def bind(fd: cint, address: ptr, size: cint) -> cint
+extern def listen(fd: cint, backlog: cint) -> cint
+extern def accept(fd: cint, address: ptr, size: ptr) -> cint
+extern def getsockopt(fd: cint, level: cint, name: cint, value: ptr, size: ptr) -> cint
+extern def setsockopt(fd: cint, level: cint, name: cint, value: ptr, size: cint) -> cint
+extern def getsockname(fd: cint, address: ptr, size: ptr) -> cint
+extern def recv(fd: cint, buf: ptr, size: int, flags: cint) -> int
+extern def send(fd: cint, buf: ptr, size: int, flags: cint) -> int
 
 extern def GC_gcollect()
 extern def GC_get_my_stackbottom(base: ptr) -> ptr
@@ -2538,19 +2561,22 @@ def str_from_bytes(p: ptr, size: int) -> str:
     return __str(__word(s))
 
 # Read buffers hold the next unread offset and the end offset, followed by
-# 4096 octets. Both emitters provide the same zeroed storage for stdin.
+# a read marker and 4096 octets. Both emitters provide the same zeroed
+# storage for stdin.
 def stdin_buffer() -> ptr:
     fail("RuntimeError", "stdin buffer was not emitted")
     return __ptr(__word(0))
 
 def file_buffer() -> ptr:
-    buffer = __alloc_atomic(4112)
+    buffer = __alloc_atomic(4120)
     __store8(buffer, 0, __word(0))
     __store8(buffer, 8, __word(0))
+    __store8(buffer, 16, __word(0))
     return buffer
 
 def fill_buffer(fd: int, buffer: ptr, path: str, fatal: bool) -> int:
-    count = read(fd, __offset(buffer, 16), 4096)
+    __store8(buffer, 16, __word(1))
+    count = read(fd, __offset(buffer, 24), 4096)
     if count < 0:
         if fatal:
             eprint_str("error: cannot read input: " + os_reason())
@@ -2570,7 +2596,7 @@ def file_read(fd: int, buffer: ptr, size: int, path: str) -> ptr:
     if count > size:
         count = size
     data = str_alloc(count)
-    memcpy(__offset(data, 16), __offset(buffer, 16 + start), count)
+    memcpy(__offset(data, 16), __offset(buffer, 24 + start), count)
     __store8(buffer, 0, __word(start + count))
     return bytes_tag(__str(__word(data)))
 
@@ -2586,7 +2612,7 @@ def file_readline(fd: int, buffer: ptr, path: str, fatal: bool) -> str | None:
             start = 0
             if stop == 0:
                 break
-        byte = __load1(buffer, 16 + start)
+        byte = __load1(buffer, 24 + start)
         __store8(buffer, 0, __word(start + 1))
         if byte == 10:
             if size > 0 and __load1(line, size - 1) == 13:
@@ -2735,6 +2761,123 @@ def fs_realpath(path: str) -> str:
         fail_os("resolve", path)
     return str_from_bytes(buf, strlen(buf))
 
+class NetLayout:
+    address_offset: int
+    socket_level: int
+    reuse_address: int
+    socket_error: int
+    nonblocking: int
+    again: int
+    in_progress: int
+    no_signal: int
+    no_sigpipe: int
+
+def net_layout() -> NetLayout:
+    if __os == "darwin":
+        return NetLayout(32, 65535, 4, 4103, 4, 35, 36, 0, 4130)
+    return NetLayout(24, 1, 2, 4, 2048, 11, 115, 16384, 0)
+
+class NetAddress:
+    family: int
+    data: ptr
+    size: int
+
+def net_check_host(host: str, port: int, lowest: int):
+    if host == "":
+        fail("ValueError", "invalid host '" + host + "'")
+    for char in host:
+        if ord(char) < 33 or ord(char) > 126:
+            fail("ValueError", "invalid host '" + host + "'")
+    if port < lowest or port > 65535:
+        fail("ValueError", "invalid port " + str(port))
+
+def net_check_timeout(timeout: float | None):
+    if timeout is not None:
+        if not (timeout > 0.0 and timeout - timeout == 0.0):
+            fail("ValueError", "timeout must be finite and positive")
+
+def net_reason(code: int) -> str:
+    text = strerror(code)
+    return str_from_bytes(text, strlen(text))
+
+def net_resolve(host: str, port: int) -> list[NetAddress]:
+    layout = net_layout()
+    # addrinfo is 48 bytes on both systems; only ai_addr's offset differs.
+    hints = __alloc_atomic(48)
+    for offset in range(0, 48, 8):
+        __store8(hints, offset, __word(0))
+    __store4(hints, 8, 1)
+    result = __alloc(8)
+    code = getaddrinfo(str_bytes(host), str_bytes(str(port)), hints, result)
+    if code != 0:
+        text = gai_strerror(code)
+        fail("OSError", "cannot resolve " + host + ": " + str_from_bytes(text, strlen(text)))
+    addresses: list[NetAddress] = []
+    first = __ptr(__load8(result, 0))
+    entry = first
+    while not __addr_is_null(entry):
+        size = __load4(entry, 16)
+        data = __alloc_atomic(size)
+        memcpy(data, __ptr(__load8(entry, layout.address_offset)), size)
+        addresses.append(NetAddress(__load4(entry, 4), data, size))
+        entry = __ptr(__load8(entry, 40))
+    freeaddrinfo(first)
+    return addresses
+
+# Accepted sockets need the same flags and SIGPIPE protection as new ones.
+# Return an errno value before cleanup can overwrite it.
+def net_configure(fd: int) -> int:
+    layout = net_layout()
+    if fcntl(fd, 2, 1) < 0:
+        return errno()
+    flags = fcntl(fd, 3)
+    if flags < 0:
+        return errno()
+    if flags // layout.nonblocking % 2 == 0:
+        flags = flags + layout.nonblocking
+    if fcntl(fd, 4, flags) < 0:
+        return errno()
+    if layout.no_sigpipe != 0:
+        enabled = __alloc_atomic(4)
+        __store4(enabled, 0, 1)
+        if setsockopt(fd, layout.socket_level, layout.no_sigpipe, enabled, 4) < 0:
+            return errno()
+    return 0
+
+def net_socket(family: int) -> int:
+    fd = socket(family, 1, 0)
+    if fd >= 0:
+        code = net_configure(fd)
+        if code != 0:
+            close(fd)
+            fail("OSError", "cannot configure socket: " + net_reason(code))
+    return fd
+
+def net_socket_error(fd: int) -> int:
+    layout = net_layout()
+    value = __alloc_atomic(4)
+    size = __alloc_atomic(4)
+    __store4(size, 0, 4)
+    if getsockopt(fd, layout.socket_level, layout.socket_error, value, size) < 0:
+        return errno()
+    return __load4(value, 0)
+
+def net_pollfd(fd: int, events: int) -> ptr:
+    # pollfd is an int and two shorts on both systems.
+    value = __alloc_atomic(8)
+    __store4(value, 0, fd)
+    __store4(value, 4, events)
+    return value
+
+def net_local_port(fd: int) -> int:
+    address = __alloc_atomic(128)
+    size = __alloc_atomic(4)
+    __store4(size, 0, 128)
+    if getsockname(fd, address, size) < 0:
+        fail("OSError", "cannot get local port: " + os_reason())
+    # sockaddr_in and sockaddr_in6 both put the network-order port at byte 2.
+    return __load1(address, 2) * 256 + __load1(address, 3)
+
 class FsLayout:
     buffer_size: int
     mode_offset: int
@@ -2790,10 +2933,73 @@ def environment() -> ptr:
 def os() -> str:
     return __os
 
-# Runs args[0], found in PATH, with the remaining arguments, without a shell,
-# and returns its exit status, or 128 plus the signal number if a signal ended
-# it. The child inherits stdin, stdout, stderr, and the environment.
-def run(args: list[str]) -> int:
+class Child:
+    pid: int
+    code: int | None = None
+
+def process_error(program: str, code: int):
+    text = strerror(code)
+    reason = str_from_bytes(text, strlen(text))
+    fail("OSError", "cannot run " + program + ": " + reason)
+
+def duplicate_command() -> int:
+    # F_DUPFD_CLOEXEC
+    if __os == "linux":
+        return 1030
+    return 67
+
+def nonblocking_flag() -> int:
+    if __os == "linux":
+        return 2048
+    return 4
+
+def would_block(code: int) -> bool:
+    if __os == "linux":
+        return code == 11
+    return code == 35
+
+def process_nonblocking(fd: int):
+    flags = fcntl(fd, 3)
+    if flags < 0:
+        fail_os("configure", "pipe")
+    flag = nonblocking_flag()
+    if flags % (flag * 2) < flag:
+        flags = flags + flag
+    if fcntl(fd, 4, flags) < 0:
+        fail_os("configure", "pipe")
+
+def close_on_exec(fd: int) -> bool:
+    return fcntl(fd, 2, 1) == 0
+
+def process_pipe() -> list[int]:
+    fds = __alloc_atomic(8)
+    if pipe(fds) < 0:
+        fail_os("create", "pipe")
+    result = [__load4(fds, 0), __load4(fds, 4)]
+    code = 0
+    for fd in result:
+        if not close_on_exec(fd):
+            code = errno()
+            break
+    if code != 0:
+        for fd in result:
+            close(fd)
+        text = strerror(code)
+        fail("OSError", "cannot configure pipe: " + str_from_bytes(text, strlen(text)))
+    return result
+
+# Snapshot the bytes present after the direct child exits. Descendants may
+# keep writing, so draining until EOF or EAGAIN could wait indefinitely.
+def process_available(fd: int) -> int:
+    request = 21531
+    if __os == "darwin":
+        request = 1074030207
+    count = __alloc_atomic(4)
+    if ioctl(fd, request, count) < 0:
+        fail_os("read", "pipe")
+    return __load4(count, 0)
+
+def process_start(args: list[str], cwd: str | None, env: dict[str, str] | None, redirects: list[int]) -> Child:
     if len(args) == 0 or args[0] == "":
         fail("ValueError", "args must contain a nonempty executable name")
     argv = __alloc((len(args) + 1) * 8)
@@ -2804,35 +3010,127 @@ def run(args: list[str]) -> int:
         __store8(argv, i * 8, __word(str_bytes(arg)))
         i = i + 1
     __store8(argv, i * 8, __word(0))
-    # posix_spawnattr_t is 336 bytes in glibc and a pointer on Darwin, and
-    # sigset_t 128 bytes and 4. init ignores SIGPIPE, which a child would
-    # inherit, so the child gets SIGPIPE's default action back through
-    # POSIX_SPAWN_SETSIGDEF, 4. SIGPIPE is 13 on both systems.
+    if cwd is not None:
+        path_bytes(cwd)
+    search = "/usr/bin:/bin"
+    strings: list[str] = []
+    if env is None:
+        envp = environment()
+        pointer = getenv(str_bytes("PATH"))
+        if not __addr_is_null(pointer):
+            search = str_from_bytes(pointer, strlen(pointer))
+    else:
+        for name in env:
+            if name == "" or str_contains(name, "=") or str_contains(name, "\x00"):
+                fail("ValueError", "invalid environment variable name")
+            value = env[name]
+            if str_contains(value, "\x00"):
+                fail("ValueError", "environment value contains a NUL character")
+            strings.append(name + "=" + value)
+            if name == "PATH":
+                search = value
+        envp = __alloc((len(strings) + 1) * 8)
+        i = 0
+        for text in strings:
+            __store8(envp, i * 8, __word(str_bytes(text)))
+            i = i + 1
+        __store8(envp, i * 8, __word(0))
+    candidates: list[str] = []
+    if str_contains(args[0], "/"):
+        candidates.append(args[0])
+    else:
+        for directory in search.split(":"):
+            if directory == "":
+                directory = "."
+            candidates.append(directory + "/" + args[0])
+    # The opaque spawn structures fit in 512 bytes on Linux and Darwin;
+    # sigset_t needs 128. No Willow code runs in the spawned child.
+    actions = __alloc_atomic(512)
     attributes = __alloc_atomic(512)
     signals = __alloc_atomic(128)
-    posix_spawnattr_init(attributes)
-    sigemptyset(signals)
-    sigaddset(signals, 13)
-    posix_spawnattr_setsigdefault(attributes, signals)
-    posix_spawnattr_setflags(attributes, 4)
-    pid = __alloc_atomic(8)
-    code = posix_spawnp(pid, str_bytes(args[0]), __ptr(__word(0)), attributes, argv, environment())
+    code = posix_spawn_file_actions_init(actions)
+    if code != 0:
+        process_error(args[0], code)
+    code = posix_spawnattr_init(attributes)
+    if code != 0:
+        posix_spawn_file_actions_destroy(actions)
+        process_error(args[0], code)
+    copies: list[int] = []
+    for target in range(3):
+        source = redirects[target]
+        if source >= 0:
+            if source < 3 and source != target:
+                source = fcntl(source, duplicate_command(), 3)
+                if source < 0:
+                    code = errno()
+                    break
+                copies.append(source)
+            code = posix_spawn_file_actions_adddup2(actions, source, target)
+            if code != 0:
+                break
+    if code == 0 and cwd is not None:
+        code = posix_spawn_file_actions_addchdir_np(actions, str_bytes(cwd))
+    if code == 0:
+        sigemptyset(signals)
+        sigaddset(signals, 13)
+        code = posix_spawnattr_setsigdefault(attributes, signals)
+    if code == 0:
+        code = posix_spawnattr_setflags(attributes, 4)
+    pid = __alloc_atomic(4)
+    if code == 0:
+        denied = False
+        for candidate in candidates:
+            code = posix_spawn(pid, str_bytes(candidate), actions, attributes, argv, envp)
+            if code == 0:
+                break
+            if code == 13:
+                denied = True
+            elif code != 2 and code != 20:
+                break
+        if (code == 2 or code == 20) and denied:
+            code = 13
+    for fd in copies:
+        close(fd)
+    posix_spawn_file_actions_destroy(actions)
     posix_spawnattr_destroy(attributes)
     if code != 0:
-        reason = strerror(code)
-        fail("OSError", "cannot run " + args[0] + ": " + str_from_bytes(reason, strlen(reason)))
-    status = __alloc_atomic(8)
-    # EINTR is 4 on both systems.
-    while waitpid(__load4(pid, 0), status, 0) < 0:
+        process_error(args[0], code)
+    return Child(__load4(pid, 0), None)
+
+def process_poll(child: Child, block: bool) -> int | None:
+    if child.code is not None:
+        return child.code
+    options = 1
+    if block:
+        options = 0
+    status = __alloc_atomic(4)
+    result = waitpid(child.pid, status, options)
+    while result < 0:
         if errno() != 4:
-            fail_os("wait for", args[0])
-    # The low 7 bits of a wait status are 0 for a normal exit, whose code is
-    # the next 8 bits, and otherwise the signal number; without WUNTRACED no
-    # child is reported as stopped.
+            fail_os("wait for", int_to_str(child.pid))
+        result = waitpid(child.pid, status, options)
+    if result == 0:
+        return None
     value = __load4(status, 0)
     if value % 128 == 0:
-        return value // 256 % 256
-    return 128 + value % 128
+        child.code = value // 256 % 256
+    else:
+        child.code = -(value % 128)
+    return child.code
+
+def process_signal(child: Child, sig: int):
+    if child.code is None:
+        if kill(child.pid, sig) < 0:
+            fail_os("signal", int_to_str(child.pid))
+
+# The compiler's driver keeps its original 128 + signal convention.
+def run(args: list[str]) -> int:
+    child = process_start(args, None, None, [-1, -1, -1])
+    code = process_poll(child, True)
+    assert code is not None, "blocking wait did not reap the child"
+    if code < 0:
+        return 128 - code
+    return code
 
 # An optional sign and one or more decimal digits (spec §6). The magnitude is
 # checked before each step so it never leaves the int range, which is

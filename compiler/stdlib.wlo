@@ -386,46 +386,6 @@ def terminal_module() -> Module:
     add(module.functions, "finish_progress", [message], prim("None"))
     return module
 
-# The parameters of subprocess.run and run_async.
-def run_params() -> list[BuiltinParam]:
-    environment = types.optional(types.DictType(prim("str"), prim("str")))
-    return [
-        arg("args", list_of("str")),
-        defaulted("input", optional("bytes"), none_default()),
-        defaulted("capture_output", prim("bool"), bool_default(False)),
-        defaulted("cwd", optional("str"), none_default()),
-        defaulted("env", environment, none_default()),
-        defaulted("timeout", optional("float"), none_default()),
-    ]
-
-def subprocess_module() -> Module:
-    module = new_module("subprocess")
-    result = provided_class("subprocess", "Result", ["returncode", "stdout", "stderr"], [prim("int"), optional("bytes"), optional("bytes")])
-    process = native_class("subprocess", "Process", "process")
-    native_method(process, "poll", [], optional("int"))
-    timeout = none_param("timeout", optional("float"))
-    native_method(process, "wait", [timeout], prim("int"))
-    native_method(process, "wait_async", [timeout], coroutine_of(prim("int")))
-    native_method(process, "terminate", [], prim("None"))
-    native_method(process, "kill", [], prim("None"))
-    module.classes["Result"] = result
-    module.classes["Process"] = process
-    functions = module.functions
-    add_helper(functions, "run", run_params(), class_type(result), "process_run")
-    add_helper(functions, "run_async", run_params(), coroutine_of(class_type(result)), "process_run_async")
-    environment = types.optional(types.DictType(prim("str"), prim("str")))
-    file = types.optional(class_type(io_file()))
-    spawn = [
-        arg("args", list_of("str")),
-        defaulted("cwd", optional("str"), none_default()),
-        defaulted("env", environment, none_default()),
-        defaulted("stdin", file, none_default()),
-        defaulted("stdout", file, none_default()),
-        defaulted("stderr", file, none_default()),
-    ]
-    add_helper(functions, "spawn", spawn, class_type(process), "process_spawn")
-    return module
-
 def http_module() -> Module:
     module = new_module("http")
     header = provided_class("http", "Header", ["name", "value"], [prim("str"), prim("str")])
@@ -459,45 +419,12 @@ def http_module() -> Module:
     add_helper(functions, "urlencode", [values], prim("str"), "http_urlencode")
     return module
 
-def net_module() -> Module:
-    module = new_module("net")
-    timeout = none_param("timeout", optional("float"))
-    connection = native_class("net", "Connection", "net_connection")
-    native_method(connection, "recv", [param("size", prim("int")), timeout], prim("bytes"))
-    native_method(connection, "sendall", [param("data", prim("bytes")), timeout], prim("None"))
-    native_method(connection, "close", [], prim("None"))
-    listener = native_class("net", "Listener", "net_listener")
-    native_method(listener, "accept", [timeout], class_type(connection))
-    native_method(listener, "local_port", [], prim("int"))
-    native_method(listener, "close", [], prim("None"))
-    reader = native_class("net", "Reader", "net_reader")
-    native_method(reader, "read_exactly", [param("size", prim("int")), timeout], prim("bytes"))
-    max_bytes = default_param("max_bytes", prim("int"), int_default("1048576"))
-    native_method(reader, "read_until", [param("separator", prim("bytes")), max_bytes, timeout], prim("bytes"))
-    native_method(reader, "close", [], prim("None"))
-    scoped(connection)
-    scoped(listener)
-    scoped(reader)
-    module.classes["Connection"] = connection
-    module.classes["Listener"] = listener
-    module.classes["Reader"] = reader
-    host = arg("host", prim("str"))
-    port = arg("port", prim("int"))
-    connect_timeout = defaulted("timeout", optional("float"), float_default(30.0))
-    add_helper(module.functions, "connect", [host, port, connect_timeout], class_type(connection), "net_connect")
-    backlog = defaulted("backlog", prim("int"), int_default("16"))
-    add_helper(module.functions, "listen", [host, port, backlog], class_type(listener), "net_listen")
-    add_helper(module.functions, "reader", [arg("connection", class_type(connection))], class_type(reader), "net_reader")
-    return module
-
 # The compiler-provided modules, by name.
 def modules() -> dict[str, Module]:
     return {
         "aio": aio_module(),
         "http": http_module(),
-        "net": net_module(),
         "random": random_module(),
-        "subprocess": subprocess_module(),
         "terminal": terminal_module(),
     }
 
