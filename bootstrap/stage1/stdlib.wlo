@@ -305,44 +305,6 @@ def io_file() -> types.Class:
     scoped(file)
     return file
 
-def fs_module() -> Module:
-    module = new_module("fs")
-    stat = provided_class("fs", "Stat", ["kind", "size", "modified"], [prim("str"), prim("int"), prim("float")])
-    module.classes["Stat"] = stat
-    functions = module.functions
-    path = arg("path", prim("str"))
-    add(functions, "read_file", [path], prim("str"))
-    add(functions, "write_file", [path, arg("text", prim("str"))], prim("None"))
-    add(functions, "join", [arg("a", prim("str")), arg("b", prim("str"))], prim("str"))
-    add(functions, "basename", [path], prim("str"))
-    add(functions, "dirname", [path], prim("str"))
-    add(functions, "listdir", [path], list_of("str"))
-    follow = defaulted("follow_symlinks", prim("bool"), bool_default(True))
-    add(functions, "stat", [path, follow], class_type(stat))
-    add(functions, "exists", [path], prim("bool"))
-    parents = defaulted("parents", prim("bool"), bool_default(False))
-    exist_ok = defaulted("exist_ok", prim("bool"), bool_default(False))
-    add(functions, "mkdir", [path, parents, exist_ok], prim("None"))
-    add(functions, "remove", [path], prim("None"))
-    add(functions, "rmdir", [path], prim("None"))
-    source = arg("source", prim("str"))
-    destination = arg("destination", prim("str"))
-    add(functions, "rename", [source, destination], prim("None"))
-    add(functions, "read_bytes", [path], prim("bytes"))
-    add(functions, "write_bytes", [path, arg("data", prim("bytes"))], prim("None"))
-    add(functions, "copy_file", [source, destination], prim("None"))
-    add(functions, "normpath", [path], prim("str"))
-    add(functions, "abspath", [path], prim("str"))
-    add(functions, "realpath", [path], prim("str"))
-    add(functions, "glob", [arg("pattern", prim("str"))], list_of("str"))
-    walked = types.TupleType([prim("str"), list_of("str"), list_of("str")])
-    add(functions, "walk", [path], types.iterator(walked))
-    prefix = defaulted("prefix", prim("str"), str_default("willow-"))
-    directory = defaulted("directory", optional("str"), none_default())
-    add(functions, "temp_file", [prefix, directory], prim("str"))
-    add(functions, "temp_dir", [prefix, directory], prim("str"))
-    return module
-
 def none_param(name: str, ty: types.Type) -> types.Param:
     return default_param(name, ty, none_default())
 
@@ -492,7 +454,6 @@ def net_module() -> Module:
 def modules() -> dict[str, Module]:
     return {
         "aio": aio_module(),
-        "fs": fs_module(),
         "http": http_module(),
         "net": net_module(),
         "random": random_module(),

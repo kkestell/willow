@@ -205,9 +205,6 @@ def assignability(r: Results):
 
 def standard_library(r: Results):
     modules = stdlib.modules()
-    walk = modules["fs"].functions["walk"].result
-    assert walk is not None
-    r.shows("fs.walk", walk, "Iterator[tuple[str, list[str], list[str]]]")
     sleep = modules["aio"].functions["sleep"].result
     assert sleep is not None
     r.shows("aio.sleep", sleep, "Coroutine[None]")
