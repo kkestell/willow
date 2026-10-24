@@ -13,7 +13,6 @@ file_lines
 generator_cleanup
 generator_traceback
 generators
-generic_classes
 generic_function_values
 generics
 host
@@ -34,7 +33,6 @@ sockets
 sort_keys
 sorting
 square_root
-standard_protocols
 stdlib_aio_semaphore
 stdlib_aio_semaphore_deadlock
 stdlib_builtins

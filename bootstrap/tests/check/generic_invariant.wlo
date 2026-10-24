@@ -1,0 +1,5 @@
+class Box[T]:
+    value: T
+
+def main():
+    value: Box[int | None] = Box[int](1)

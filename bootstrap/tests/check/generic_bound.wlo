@@ -1,0 +1,8 @@
+protocol Named:
+    def name(self) -> str
+
+def label[T: Named](value: T) -> str:
+    return value.name()
+
+def main():
+    print(label(1))

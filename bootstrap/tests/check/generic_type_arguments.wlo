@@ -1,0 +1,8 @@
+class Box[T]:
+    value: T
+
+    def choose[U](self, value: U) -> U:
+        return value
+
+def main():
+    Box(1).choose[int, str](2)

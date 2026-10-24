@@ -1,0 +1,87 @@
+protocol Source[T]:
+    def get(self) -> T
+
+protocol Tagged[T]:
+    def get(self) -> T
+    def tag(self) -> str
+
+protocol Setter:
+    def set(self, value: float = 1.5, *, flag: bool = False) -> float
+
+protocol Pair:
+    def get(self) -> tuple[Source[int]]
+
+protocol Chain:
+    def next(self) -> Chain | None
+
+class Box[T]:
+    value: T
+
+    def get(self) -> T:
+        return self.value
+
+    def tag(self) -> str:
+        return "box"
+
+class Adjuster:
+    def set(self, value: int | float = 3, *, extra: bool = True, flag: bool = True) -> float:
+        if isinstance(value, float):
+            if extra and not flag:
+                return value * 2.0
+            return value
+        return -1.0
+
+class PairBox:
+    def get(self) -> tuple[Box[int]]:
+        return (Box(8),)
+
+class FailedPair:
+    def get(self) -> tuple[Box[int]]:
+        raise ValueError("failed")
+
+class Link:
+    tail: Link | None
+
+    def next(self) -> Link | None:
+        return self.tail
+
+def take[T](source: Source[T]) -> T:
+    return source.get()
+
+def bounded[T: Source[int]](value: T) -> int:
+    return value.get()
+
+def nullable[T: Source[int | None]](value: T) -> int | None:
+    return value.get()
+
+def bounded_set[T: Setter](value: T) -> float:
+    return value.set(2.5)
+
+def read_pair[T: Pair](pair: T) -> tuple[Source[int]]:
+    return pair.get()
+
+def main():
+    tagged: Tagged[int] = Box(3)
+    source: Source[int] = tagged
+    print(take(source))
+    optional: Source[int | None] = source
+    print(optional.get())
+    print(take(Box(2.5)))
+    print(bounded(Box(4)))
+    print(bounded(source))
+    print(nullable(Box(5)))
+    print(bounded_set(Adjuster()))
+    setter: Setter = Adjuster()
+    print(setter.set())
+    print(setter.set(flag=True, value=2.5))
+    pair: Pair = PairBox()
+    print(pair.get()[0].get())
+    chain: Chain = Link(Link(None))
+    next = chain.next()
+    if next is not None:
+        print(next.next() is None)
+    failed: Pair = FailedPair()
+    try:
+        read_pair(failed)
+    except ValueError as error:
+        print(error.message)

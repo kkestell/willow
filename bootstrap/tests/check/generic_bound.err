@@ -1,0 +1,1 @@
+generic_bound.wlo:8:11: error: type argument int does not satisfy the bound Named of 'T'

@@ -696,6 +696,7 @@ class Binder:
                 element_type = self.default_type(module, element)
                 if element_type is None:
                     return None
+                element.ty = element_type
                 elements.append(element_type)
             return types.TupleType(elements)
         if isinstance(node, ast.Int):
@@ -714,6 +715,7 @@ class Binder:
         if self.error is not None:
             return
         given = self.default_type(module, default)
+        default.ty = given
         if given is not None and not types.assignable(ty, given):
             self.fail(module, default.line, default.col, f"expected {types.display(ty)}, received {types.display(given)}")
 
@@ -1102,6 +1104,18 @@ class Resolver:
                 found = self.lookup(path, callee.name, node.callee.line, node.callee.col)
                 if found is None:
                     return
+        if isinstance(callee, ast.Field) and found is None and self.imported_path(callee.object) == "":
+            indexed = node.index
+            value_index = False
+            if indexed is not None:
+                index_node = indexed.node
+                assert isinstance(index_node, ast.Index), "specialized call without an index"
+                value_index = self.value_index(index_node.index)
+            if not value_index:
+                type_args = self.resolve_types(node.type_args)
+                expr.node = ast.MethodCall(callee.object, callee.name, node.args, node.keywords, None, type_args, node.index, node.index_error)
+                self.resolve_expr(expr, False)
+                return
         generic = is_generic_member(found)
         if symbol is not None:
             function = symbol.function
@@ -1113,9 +1127,9 @@ class Resolver:
             if symbol is not None:
                 expr.node = ast.CallValue(node.callee, node.args, node.keywords, type_args)
             elif isinstance(found, ast.FunctionDecl):
-                expr.node = ast.Call(name, node.args, node.keywords, type_args, found)
+                expr.node = ast.Call(name, node.args, node.keywords, type_args, found, None, True)
             elif isinstance(found, ast.ClassDecl):
-                expr.node = ast.Call(name, node.args, node.keywords, type_args, found.record)
+                expr.node = ast.Call(name, node.args, node.keywords, type_args, found.record, None, True)
         else:
             # An index followed by a call, as in `handlers[i](x)`.
             if found is not None:
@@ -1127,6 +1141,21 @@ class Resolver:
                 return
             expr.node = ast.CallValue(index, node.args, node.keywords, [])
         self.resolve_expr(expr, False)
+
+    def value_index(self, expr: ast.Expr) -> bool:
+        node = expr.node
+        if isinstance(node, ast.Name):
+            return self.type_scope.find(node.name) is None and self.scope.find(node.name) is not None
+        if isinstance(node, ast.Field):
+            path = qualified_name(node.object)
+            if path != "" and self.scope.find(path.split(".")[0]) is not None:
+                return True
+            return self.binder.enum_named(self.module, node.object, self.scope) is not None
+        if isinstance(node, ast.TupleDisplay):
+            for element in node.elements:
+                if self.value_index(element):
+                    return True
+        return False
 
     # A generic function specialized as a value, or else an index.
     def resolve_specialized(self, expr: ast.Expr, node: ast.Specialized):

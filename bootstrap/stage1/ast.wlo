@@ -258,6 +258,7 @@ class Call:
     target: FunctionDecl | stdlib.Builtin | types.Class | None = None
     # Parameter indexes in evaluation order: written arguments, then defaults.
     order: list[int] | None = None
+    has_type_args: bool = False
 
 # A call of any other callee, at its `(`.
 class CallValue:
@@ -274,6 +275,9 @@ class MethodCall:
     args: list[Expr]
     keywords: list[Keyword]
     order: list[int] | None = None
+    type_args: list[types.Type] | None = None
+    index: Expr | None = None
+    index_error: diagnostic.Diagnostic | None = None
 
 class Keyword:
     line: int
@@ -346,6 +350,7 @@ class Lambda:
     body: Expr
     # The binder's: a function whose body returns `body`.
     function: FunctionDecl | None = None
+    infer_result: bool = False
 
 # The `__type(T)` intrinsic, which only core may use: the descriptor of the
 # built-in type T.
