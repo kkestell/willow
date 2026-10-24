@@ -1,6 +1,6 @@
-# Resolves names and types in a program's modules: each module's
-# declarations, their signatures, fields,
-# aliases, type parameters, and defaults as types.wlo types, the symbols of
+# Resolves names and types in a program's modules: each module's declarations,
+# their signatures, fields, aliases, type parameters, and defaults as types.wlo
+# types, the symbols of
 # parameters and locals, nested functions and `nonlocal`, captures, and the
 # names that expressions use, recorded in the tree as ast.wlo describes.
 # Binding stops at the first error.

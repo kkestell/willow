@@ -338,9 +338,8 @@ class Lexer:
         return chr(code)
 
     # Reads the f-string field whose `{` is at `pos`, in an f-string delimited
-    # by `quote`. The field's text is checked
-    # and its end found before its tokens are read, which decides which error
-    # comes first.
+    # by `quote`. The field's text is checked and its end found before its
+    # tokens are read, which decides which error comes first.
     def read_field(self, quote: str, triple: bool):
         brace = self.pos
         p = brace + 1

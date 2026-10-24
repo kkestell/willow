@@ -9,6 +9,10 @@
 # WILLOW0 names the compiler; it defaults to the release build of stage 0.
 
 set -u
+if [ "$#" -ne 0 ]; then
+    echo "usage: stage1.sh" >&2
+    exit 1
+fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root" || exit 1
 willow0=${WILLOW0:-$root/bootstrap/stage0/target/release/willow0}
