@@ -53,7 +53,6 @@ processes_stdin
 protocol_native_failure
 protocols
 range_zero_step
-record_tags
 scoped_resources
 sockets
 sort_keys
@@ -91,5 +90,4 @@ tuples
 type_errors
 uncaught_exception
 unions
-unpacking
 with_statements

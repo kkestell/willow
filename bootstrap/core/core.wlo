@@ -557,6 +557,8 @@ def slots_equal(a: word, b: word, kind: int) -> bool:
         return str_eq(__str(a), __str(b))
     if kind == 3:
         return union_eq(__ptr(a), __ptr(b))
+    if kind == 4:
+        return tuple_eq(__ptr(a), __ptr(b))
     return __int(a) == __int(b)
 
 def list_contains(xs: ptr, value: word, kind: int) -> bool:
@@ -834,6 +836,45 @@ def object_new(descriptor: ptr, fields: int) -> ptr:
     object = __alloc(8 + fields * 8)
     __store8(object, 0, __word(descriptor))
     return object
+
+# Positions keep their static representation. The equality kinds describe
+# those slots so union equality can compare tuples without static types.
+def tuple_new(length: int, kinds: ptr) -> ptr:
+    value = __alloc(24 + length * 8)
+    __store8(value, 0, __word(__type(tuple)))
+    __store8(value, 8, __word(length))
+    __store8(value, 16, __word(kinds))
+    return value
+
+def tuple_len(value: ptr) -> int:
+    return __int(__load8(value, 8))
+
+def tuple_get(value: ptr, position: int) -> word:
+    return __load8(value, 24 + position * 8)
+
+def tuple_set(value: ptr, position: int, item: word):
+    __store8(value, 24 + position * 8, item)
+
+def tuple_eq(a: ptr, b: ptr) -> bool:
+    if tuple_len(a) != tuple_len(b):
+        return False
+    a_kinds = __ptr(__load8(a, 16))
+    b_kinds = __ptr(__load8(b, 16))
+    i = 0
+    while i < tuple_len(a):
+        left = tuple_get(a, i)
+        right = tuple_get(b, i)
+        a_kind = __int(__load8(a_kinds, i * 8))
+        b_kind = __int(__load8(b_kinds, i * 8))
+        if a_kind == b_kind:
+            equal = slots_equal(left, right, a_kind)
+        else:
+            # Only references and None widen without changing their slots.
+            equal = union_eq(__ptr(left), __ptr(right))
+        if not equal:
+            return False
+        i = i + 1
+    return True
 
 # A dict keeps its entries in insertion order in an array of three slots per
 # entry: the key, the value, and 1 while the entry is live. Removing a key
@@ -1201,8 +1242,8 @@ def str_to_float(s: str) -> float:
     return str_to_float_unchecked(s)
 
 # A union value is 0 for None, a str as itself, and any other printable scalar
-# as a box, so its header tells which member it holds. Any header other than
-# the int, float, bool, and str descriptors is an enum's.
+# as a box, so its header tells which member it holds. Comparable tuples
+# retain their own header and position representations.
 
 def header(value: ptr) -> ptr:
     return __ptr(__load8(value, 0))
@@ -1216,6 +1257,8 @@ def union_eq(a: ptr, b: ptr) -> bool:
         return str_eq(__str(__word(a)), __str(__word(b)))
     if header(a) == __type(float):
         return __float(unbox(a)) == __float(unbox(b))
+    if header(a) == __type(tuple):
+        return tuple_eq(a, b)
     return __int(unbox(a)) == __int(unbox(b))
 
 def union_to_str(value: ptr) -> str:

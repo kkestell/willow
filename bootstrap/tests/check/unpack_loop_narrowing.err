@@ -1,0 +1,1 @@
+unpack_loop_narrowing.wlo:5:17: error: operator '+' cannot be applied to int | None and int

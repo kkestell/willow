@@ -256,7 +256,7 @@ fn target_os() -> &'static str {
 }
 
 /// The built-in types with descriptors, which every program emits.
-const BUILTIN_TYPES: &[&str] = &["int", "float", "bool", "str", "list", "dict"];
+const BUILTIN_TYPES: &[&str] = &["int", "float", "bool", "str", "list", "dict", "tuple"];
 
 fn is_intrinsic(name: &str) -> bool {
     name == "__word" || name == "__type" || name == "__os" || INTRINSICS.iter().any(|i| i.0 == name)
@@ -1944,7 +1944,7 @@ impl<'a> Checker<'a> {
                 if !BUILTIN_TYPES.contains(&ty.name.as_str()) {
                     return self.fail(
                         ty.pos,
-                        "'__type' takes int, float, bool, str, list, or dict",
+                        "'__type' takes int, float, bool, str, list, dict, or tuple",
                     );
                 }
                 Ok((Value::Global(format!("W.{}.type", ty.name)), Type::Ptr))

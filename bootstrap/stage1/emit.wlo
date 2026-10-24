@@ -29,6 +29,7 @@ class Emitter:
     returns: bool
     loop_next: list[str]
     loop_end: list[str]
+    tuple_kinds: dict[str, int]
 
     def write(self, text: str):
         self.lines.append(text)
@@ -132,6 +133,14 @@ class Emitter:
             for text in self.descriptors[symbol]:
                 values.append("l " + self.string(text))
             self.write("data " + symbol + " = { " + ", ".join(values) + " }")
+        for kinds in self.tuple_kinds:
+            values = []
+            if kinds == "":
+                values.append("l 0")
+            else:
+                for kind in kinds.split(","):
+                    values.append("l " + kind)
+            self.write(f"data $W.tuple.kinds.{self.tuple_kinds[kinds]} = " + "{ " + ", ".join(values) + " }")
         for text in self.strings:
             data = f"l $W.str.type, l {len(utf8(text))}, " + data_bytes(text) + "b 0"
             self.write(f"data $W.str.{self.strings[text]} = " + "{ " + data + " }")
@@ -153,6 +162,11 @@ class Emitter:
         if isinstance(node, ast.Assign):
             value = self.expr(node.value)
             self.line(f"storel {value}, %v.{node.name}")
+        elif isinstance(node, ast.Unpack):
+            value = self.expr(node.value)
+            ty = node.value.ty
+            assert ty is not None, "unchecked unpacking"
+            self.store_pattern(node.target, value, ty)
         elif isinstance(node, ast.CallStmt):
             self.expr(node.call)
         elif isinstance(node, ast.If):
@@ -287,6 +301,8 @@ class Emitter:
                 self.for_dict(node, node.iterable, "keys")
             elif types.kind(types.expand(ty)) == "str":
                 self.for_str(node)
+            elif isinstance(types.expand(ty), types.TupleType):
+                self.for_tuple(node)
             else:
                 self.for_list(node)
 
@@ -307,25 +323,18 @@ class Emitter:
         self.line(f"{more} =l csgel {entry}, 0")
         self.jump(f"jnz {more}, {body}, {end}")
         self.label(body)
-        targets = [node.target]
-        items = [ty.key]
-        functions = ["dict_key_at"]
+        item_type = node.item
+        assert item_type is not None, "unchecked dict item"
         if part == "values":
-            items = [types.expand(ty.value)]
-            functions = ["dict_value_at"]
+            item = self.core_call("dict_value_at", [object, entry], True)
         elif part == "items":
-            targets = node.target.elements
-            items = [ty.key, types.expand(ty.value)]
-            functions = ["dict_key_at", "dict_value_at"]
-        for i in range(len(targets)):
-            target = targets[i]
-            item = self.core_call(functions[i], [object, entry], True)
-            symbol = target.symbol
-            assert symbol is not None, "loop target without a symbol"
-            declared = symbol.ty
-            assert declared is not None, "unchecked loop target"
-            item = self.convert(item, items[i], declared)
-            self.line(f"storel {item}, %v.{target.name}")
+            key = self.core_call("dict_key_at", [object, entry], True)
+            value = self.core_call("dict_value_at", [object, entry], True)
+            assert isinstance(item_type, types.TupleType), "unchecked dict items"
+            item = self.tuple_value(item_type, [key, value])
+        else:
+            item = self.core_call("dict_key_at", [object, entry], True)
+        self.store_pattern(node.target, item, item_type)
         self.loop_next.append(next)
         self.loop_end.append(end)
         self.block(node.body)
@@ -435,13 +444,86 @@ class Emitter:
         self.label(end)
 
     def for_body(self, node: ast.For, item: str, next: str, end: str):
-        self.line(f"storel {item}, %v.{node.target.name}")
+        ty = node.item
+        assert ty is not None, "unchecked loop item"
+        self.store_pattern(node.target, item, ty)
         self.loop_next.append(next)
         self.loop_end.append(end)
         self.block(node.body)
         self.loop_next.pop()
         self.loop_end.pop()
         self.jump(f"jmp {next}")
+
+    def store_pattern(self, target: ast.Target, value: str, ty: types.Type):
+        if target.name != "":
+            symbol = target.symbol
+            assert symbol is not None, "target without a symbol"
+            declared = symbol.ty
+            assert declared is not None, "unchecked target"
+            value = self.convert(value, ty, declared)
+            self.line(f"storel {value}, %v.{target.name}")
+            return
+        assert isinstance(ty, types.TupleType), "unchecked tuple target"
+        for i in range(len(target.elements)):
+            item = self.core_call("tuple_get", [value, str(i)], True)
+            self.store_pattern(target.elements[i], item, ty.elements[i])
+
+    def for_tuple(self, node: ast.For):
+        source = self.expr(node.iterable)
+        ty = node.iterable.ty
+        item_type = node.item
+        assert isinstance(ty, types.TupleType) and item_type is not None, "unchecked tuple loop"
+        index = self.temp()
+        self.line(f"{index} =l copy 0")
+        test = self.new_label()
+        body = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        more = self.temp()
+        self.line(f"{more} =l csltl {index}, {len(ty.elements)}")
+        self.jump(f"jnz {more}, {body}, {end}")
+        self.label(body)
+        raw = self.core_call("tuple_get", [source, index], True)
+        item = self.temp()
+        self.line(f"{item} =l copy 0")
+        ready = self.new_label()
+        for i in range(len(ty.elements)):
+            take = self.new_label()
+            skip = self.new_label()
+            at = self.temp()
+            self.line(f"{at} =l ceql {index}, {i}")
+            self.jump(f"jnz {at}, {take}, {skip}")
+            self.label(take)
+            converted = self.convert(raw, ty.elements[i], item_type)
+            self.line(f"{item} =l copy {converted}")
+            self.jump(f"jmp {ready}")
+            self.label(skip)
+        self.jump("hlt")
+        self.label(ready)
+        self.line(f"{index} =l add {index}, 1")
+        self.for_body(node, item, test, end)
+        self.label(end)
+
+    def tuple_value(self, ty: types.TupleType, values: list[str]) -> str:
+        kinds: list[str] = []
+        for element in ty.elements:
+            kinds.append(equality_kind(element))
+        key = ",".join(kinds)
+        if key not in self.tuple_kinds:
+            self.tuple_kinds[key] = len(self.tuple_kinds)
+        metadata = f"$W.tuple.kinds.{self.tuple_kinds[key]}"
+        result = self.core_call("tuple_new", [str(len(values)), metadata], True)
+        for i in range(len(values)):
+            self.core_call("tuple_set", [result, str(i), values[i]], False)
+        return result
+
+    def tuple_display(self, expr: ast.Expr, node: ast.TupleDisplay) -> str:
+        ty = expr.ty
+        assert isinstance(ty, types.TupleType), "unchecked tuple display"
+        values: list[str] = []
+        for element in node.elements:
+            values.append(self.expr(element))
+        return self.tuple_value(ty, values)
 
     def list_display(self, node: ast.ListDisplay) -> str:
         result = self.core_call("list_new", [str(len(node.elements))], True)
@@ -522,9 +604,11 @@ class Emitter:
 
     def index(self, node: ast.Index) -> str:
         object = self.expr(node.object)
-        index = self.expr(node.index)
         ty = node.object.ty
         assert ty is not None, "unchecked index object"
+        if isinstance(ty, types.TupleType):
+            return self.core_call("tuple_get", [object, str(node.position)], True)
+        index = self.expr(node.index)
         name = "list_get"
         if types.kind(ty) == "str":
             name = "str_index"
@@ -566,19 +650,45 @@ class Emitter:
             result = self.core_call("str_contains", [container, item], True)
         else:
             assert isinstance(ty, types.ListType), "unchecked membership"
-            kind = "0"
-            element = types.kind(types.expand(ty.element))
-            if element == "float":
-                kind = "1"
-            elif element == "str":
-                kind = "2"
-            elif element == "union":
-                kind = "3"
-            result = self.core_call("list_contains", [container, item, kind], True)
+            element = types.expand(ty.element)
+            left = node.left.ty
+            assert left is not None, "unchecked membership item"
+            if types.tuple_member(left) is not None or types.tuple_member(element) is not None:
+                result = self.tuple_contains(node, item, container, element)
+            else:
+                result = self.core_call("list_contains", [container, item, equality_kind(element)], True)
         if node.op == "not in":
             negated = self.temp()
             self.line(f"{negated} =l ceql {result}, 0")
             return negated
+        return result
+
+    def tuple_contains(self, node: ast.Binary, item: str, container: str, element: types.Type) -> str:
+        left = node.left.ty
+        assert left is not None, "unchecked membership item"
+        target = element
+        if types.assignable(left, element):
+            target = left
+        index = self.temp()
+        result = self.temp()
+        self.line(f"{index} =l copy 0")
+        self.line(f"{result} =l copy 0")
+        test = self.new_label()
+        body = self.new_label()
+        end = self.new_label()
+        self.label(test)
+        length = self.core_call("list_len", [container], True)
+        more = self.temp()
+        self.line(f"{more} =l csltl {index}, {length}")
+        self.jump(f"jnz {more}, {body}, {end}")
+        self.label(body)
+        value = self.core_call("list_get", [container, index], True)
+        value = self.convert(value, element, target)
+        equal = self.core_call("union_eq", [item, value], True)
+        self.line(f"{result} =l copy {equal}")
+        self.line(f"{index} =l add {index}, 1")
+        self.jump(f"jnz {equal}, {end}, {test}")
+        self.label(end)
         return result
 
     # Expressions
@@ -593,10 +703,26 @@ class Emitter:
             return value
         return self.convert(value, ty, expected)
 
-    # A value of type `source` as a value of type `target`: a scalar is boxed
-    # when it enters a union and unboxed when narrowing takes it out of one.
-    # Every other value is the same slot in both (agents/bootstrap.md §4).
+    # A tuple is copied only when its positions change representation.
     def convert(self, value: str, source: types.Type, target: types.Type) -> str:
+        source = types.expand(source)
+        target = types.expand(target)
+        from_tuple = types.tuple_member(source)
+        to_tuple = types.tuple_member(target)
+        if from_tuple is not None and to_tuple is not None and representation_changes(from_tuple, to_tuple):
+            if is_union(source):
+                take = self.new_label()
+                done = self.new_label()
+                result = self.temp()
+                self.line(f"{result} =l copy {value}")
+                held = self.core_call("is_instance", [value, self.descriptor("tuple")], True)
+                self.jump(f"jnz {held}, {take}, {done}")
+                self.label(take)
+                converted = self.convert_tuple(value, from_tuple, to_tuple)
+                self.line(f"{result} =l copy {converted}")
+                self.label(done)
+                return result
+            return self.convert_tuple(value, from_tuple, to_tuple)
         if is_union(target) and not is_union(source):
             descriptor = self.box_descriptor(source)
             if descriptor != "":
@@ -605,6 +731,13 @@ class Emitter:
             if self.box_descriptor(target) != "":
                 return self.core_call("unbox", [value], True)
         return value
+
+    def convert_tuple(self, value: str, source: types.TupleType, target: types.TupleType) -> str:
+        values: list[str] = []
+        for i in range(len(source.elements)):
+            element = self.core_call("tuple_get", [value, str(i)], True)
+            values.append(self.convert(element, source.elements[i], target.elements[i]))
+        return self.tuple_value(target, values)
 
     # The descriptor of a scalar type that is boxed in a union, or "".
     def box_descriptor(self, t: types.Type) -> str:
@@ -680,6 +813,8 @@ class Emitter:
             return self.emit_isinstance(node)
         elif isinstance(node, ast.ListDisplay):
             return self.list_display(node)
+        elif isinstance(node, ast.TupleDisplay):
+            return self.tuple_display(expr, node)
         elif isinstance(node, ast.DictDisplay):
             return self.dict_display(expr, node)
         return self.unchecked("expression")
@@ -693,11 +828,13 @@ class Emitter:
         left_type = node.left.ty
         right_type = node.right.ty
         assert left_type is not None and right_type is not None, "unchecked operand"
-        if (op == "==" or op == "!=") and (may_be_none(left_type) or may_be_none(right_type)):
+        if (op == "==" or op == "!=") and (may_be_none(left_type) or may_be_none(right_type) or isinstance(left_type, types.TupleType)):
             return self.union_equality(node)
         kind = types.kind(left_type)
         left = self.expr(node.left)
         right = self.expr(node.right)
+        if isinstance(left_type, types.TupleType):
+            return self.tuple_order(op, left, right, left_type)
         if kind == "str":
             if op == "+":
                 return self.core_call("str_concat", [left, right], True)
@@ -726,8 +863,7 @@ class Emitter:
         self.line(f"{t} =l {comparison_instruction(op)} {left}, {right}")
         return t
 
-    # Both operands are converted to one union type, or to None, by the
-    # checker's `expected`.
+    # The checker gives both operands a common type before comparing slots.
     def union_equality(self, node: ast.Binary) -> str:
         left = self.expr(node.left)
         right = self.expr(node.right)
@@ -737,6 +873,38 @@ class Emitter:
         t = self.temp()
         self.line(f"{t} =l ceql {equal}, 0")
         return t
+
+    def tuple_order(self, op: str, left: str, right: str, ty: types.TupleType) -> str:
+        result = self.temp()
+        equal_result = "0"
+        if op == "<=" or op == ">=":
+            equal_result = "1"
+        self.line(f"{result} =l copy {equal_result}")
+        done = self.new_label()
+        for i in range(len(ty.elements)):
+            a = self.core_call("tuple_get", [left, str(i)], True)
+            b = self.core_call("tuple_get", [right, str(i)], True)
+            element = ty.elements[i]
+            equal = self.core_call("slots_equal", [a, b, equality_kind(element)], True)
+            same = self.new_label()
+            different = self.new_label()
+            self.jump(f"jnz {equal}, {same}, {different}")
+            self.label(different)
+            if isinstance(element, types.TupleType):
+                ordered = self.tuple_order(op, a, b, element)
+            elif types.kind(element) == "float":
+                ordered = self.float_binary(op, a, b)
+            else:
+                if types.kind(element) == "str":
+                    a = self.core_call("str_compare", [a, b], True)
+                    b = "0"
+                ordered = self.temp()
+                self.line(f"{ordered} =l {comparison_instruction(op)} {a}, {b}")
+            self.line(f"{result} =l copy {ordered}")
+            self.jump(f"jmp {done}")
+            self.label(same)
+        self.label(done)
+        return result
 
     def emit_is(self, node: ast.Is) -> str:
         operand = self.expr(node.operand)
@@ -1285,7 +1453,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
             elif isinstance(decl, ast.ClassDecl):
                 for method in decl.methods:
                     module_names[method.id] = module.name
-    result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [])
+    result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [], {})
     for name in builtin_types():
         result.string(name)
     for module in modules:
@@ -1301,7 +1469,36 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
 
 # The built-in types with descriptors, which every program emits.
 def builtin_types() -> list[str]:
-    return ["int", "float", "bool", "str", "list", "dict"]
+    return ["int", "float", "bool", "str", "list", "dict", "tuple"]
+
+def equality_kind(t: types.Type) -> str:
+    kind = types.kind(types.expand(t))
+    if kind == "float":
+        return "1"
+    if kind == "str":
+        return "2"
+    if kind == "union":
+        return "3"
+    if kind == "tuple":
+        return "4"
+    return "0"
+
+def representation_changes(source: types.Type, target: types.Type) -> bool:
+    source = types.expand(source)
+    target = types.expand(target)
+    if is_union(source) != is_union(target):
+        scalar = source
+        if is_union(source):
+            scalar = target
+        if types.kind(scalar) in ["int", "float", "bool", "enum"]:
+            return True
+    a = types.tuple_member(source)
+    b = types.tuple_member(target)
+    if a is not None and b is not None:
+        for i in range(len(a.elements)):
+            if representation_changes(a.elements[i], b.elements[i]):
+                return True
+    return False
 
 def is_union(t: types.Type) -> bool:
     return isinstance(types.expand(t), types.UnionType)
