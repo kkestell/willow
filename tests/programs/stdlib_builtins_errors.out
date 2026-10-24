@@ -3,5 +3,6 @@ cannot compare NaN
 cannot compare NaN
 cannot round float to int
 cannot round float to int
-9007199254740991
-9007199254740992
+integer overflow
+9223372036854775807
+integer overflow

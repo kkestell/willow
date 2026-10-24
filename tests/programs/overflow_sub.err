@@ -1,0 +1,2 @@
+overflow_sub.wlo:3:18: error: OverflowError: integer overflow
+  in main at overflow_sub.wlo:3:18

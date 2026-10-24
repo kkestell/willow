@@ -26,11 +26,11 @@ def main():
     except ValueError as error:
         print(error.message)
     try:
-        sum([9007199254740991, 1])
+        sum([9223372036854775807, 1])
     except OverflowError as overflow:
         print(overflow.message)
     try:
-        for index, item in enumerate("ab", 9007199254740991):
+        for index, item in enumerate("ab", 9223372036854775807):
             print(index)
     except OverflowError as counter:
         print(counter.message)
