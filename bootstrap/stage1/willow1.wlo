@@ -65,19 +65,8 @@ def compile(path: str) -> str:
         report(error)
     emitter = emit.emitter(modules, core.os())
     for module in modules:
-        if module.name != "core":
-            for function in bind.functions(module):
-                emitter.function(function)
-    # Core's functions are checked and emitted as the program reaches them.
-    core_module = modules[len(modules) - 1]
-    done = 0
-    while done < len(emitter.needed):
-        function = emitter.needed[done]
-        error = check.check_function(core_module, function)
-        if error is not None:
-            report(error)
-        emitter.function(function)
-        done = done + 1
+        for function in bind.functions(module):
+            emitter.function(function)
     return emitter.finish(modules[0])
 
 def parse_core() -> ast.Module:

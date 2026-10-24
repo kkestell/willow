@@ -957,9 +957,7 @@ def check_function(module: ast.Module, function: ast.FunctionDecl) -> diagnostic
         checker.fail(function.line, function.col, f"{name}' must return a value on every path")
     return checker.error
 
-# Checks every function of the modules other than core, in order, and
-# returns the first error. Core's functions are checked as the emitter
-# reaches them.
+# Checks every function of every module, in order, and returns the first error.
 def check_program(modules: list[ast.Module]) -> diagnostic.Diagnostic | None:
     for module in modules:
         for decl in module.declarations:
@@ -968,11 +966,10 @@ def check_program(modules: list[ast.Module]) -> diagnostic.Diagnostic | None:
                 if error is not None:
                     return error
     for module in modules:
-        if module.name != "core":
-            for function in bind.functions(module):
-                error = check_function(module, function)
-                if error is not None:
-                    return error
+        for function in bind.functions(module):
+            error = check_function(module, function)
+            if error is not None:
+                return error
     return None
 
 def check_alias(module: ast.Module, node: ast.TypeExpr, expanding: list[str]) -> diagnostic.Diagnostic | None:
