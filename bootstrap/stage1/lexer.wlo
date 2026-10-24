@@ -206,7 +206,7 @@ class Lexer:
                 p = q
                 is_float = True
         end = p
-        while is_name_char(self.at(end)) or self.at(end) == ".":
+        while is_name_char(self.at(end)) or self.at(end) == "." or (self.at(end) == "+" or self.at(end) == "-") and (self.at(end - 1) == "e" or self.at(end - 1) == "E"):
             end = end + 1
         if end > p:
             self.fail(start, f"invalid number literal '{self.text(start, end)}'")

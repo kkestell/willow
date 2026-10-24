@@ -69,6 +69,7 @@ def main():
         ["x = 1.\n", "1:5: invalid number literal '1.'"],
         ["x = 1.e5\n", "1:5: invalid number literal '1.e5'"],
         ["x = 1e\n", "1:5: invalid number literal '1e'"],
+        ["x = 1e+\n", "1:5: invalid number literal '1e+'"],
         ["x = 1.5.2\n", "1:5: invalid number literal '1.5.2'"],
         ["x = 01.5\n", "1:5: float literal has leading zeros"],
         ["x = 1e400\n", "1:5: float literal out of range"],
