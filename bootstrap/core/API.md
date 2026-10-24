@@ -195,6 +195,7 @@ starting with a newline. The exception reporting functions run with
 
 | Signature | Meaning |
 | --- | --- |
+| `fail_at(class_name: str, message: str, path: str, line: int, col: int)` | Like `fail`, with a location independent of the first recorded frame |
 | `failure(descriptors: ptr, class_name: str, message: str) -> ptr` | A new exception of the built-in class named `class_name`, whose descriptor is in the array `descriptors`, `$W.exceptions` |
 | `raised(e: ptr, function: str, path: str, line: int, col: int)` | Starts the frames of `e`, raised by a `raise` statement in `function` at the location |
 | `trace(e: ptr, function: str, path: str, line: int, col: int)` | Adds the frame `in function at path:line:col` to `e`, or `called from` after the first, which also sets the location |
@@ -205,7 +206,8 @@ starting with a newline. The exception reporting functions run with
 `CoroutineContext` is an internal core class; its field order is shared with
 stage 1's low-level helpers and switch assembly. An entry is a raw function
 address taking one `word` argument and returning no value. Generator and async
-lowering supply the addresses and slot conversions. No syntax uses this API yet.
+lowering supply the addresses and slot conversions. Async tasks use one context
+per scheduled task; direct coroutine awaits run on that task's stack.
 
 | Signature | Meaning |
 | --- | --- |
@@ -218,6 +220,33 @@ Resuming a finished coroutine returns 0 again. Resuming a running coroutine
 or yielding outside one raises `RuntimeError`. Each inactive context holds its
 own pending exception; a callback failure is transferred once. Finished
 contexts release their stack references after switching to the caller.
+
+## Async under stage 1
+
+A `Coroutine[T]` is a header pointing at `$W.Coroutine.type`, a body closure
+pointer, and a consumed flag. The body closure has its code address at byte 8
+and bound arguments and environment from byte 16, as emitted function closures
+do. The code takes that closure and returns a `word`, including 0 for `None`.
+Creating the object does not allocate a stack or execute its body. Consuming it
+sets the flag and clears its body reference; aliases share the flag.
+
+| Signature | Meaning |
+| --- | --- |
+| `async_coroutine(body: ptr) -> ptr` | Wrap a deferred body closure in an unconsumed coroutine |
+| `async_await(coroutine: ptr) -> word` | Consume and invoke the body on the current task's stack |
+| `aio_run(body: ptr) -> word` | Run a coroutine as the root task; return its outcome or transfer its exception to the caller |
+| `aio_sleep_coroutine(seconds: float, path: str, line: int, col: int) -> ptr` | Create a sleep coroutine; validate when it runs, reporting this creation site |
+
+The loop is L0 over `clock_gettime` with `CLOCK_MONOTONIC` (1 on Linux, 6 on
+Darwin) and `poll`. It runs FIFO ready batches, polls between batches, and
+orders timers by deadline then wait ID. An ended wait invalidates its timers.
+The loop holds references to suspended tasks, and finished contexts release
+their stacks through `coroutine_resume`.
+
+`AioTask`'s fields follow its header: context, body, result, error, and wait ID.
+The low-level `aio_resume` helper uses the context at byte 8 and error at byte
+32 to capture a task failure without unwinding the scheduler. `aio_loop` and
+`aio_set_loop` access the running loop, rooted by `$W.aio.loop`.
 
 ## Inline in stage 0
 

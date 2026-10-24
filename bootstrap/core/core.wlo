@@ -206,6 +206,7 @@ def failure(descriptors: ptr, class_name: str, message: str) -> ptr:
 # Starts the frames of `e`, raised by a raise statement.
 def raised(e: ptr, function: str, path: str, line: int, col: int):
     __store8(e, 8, __word(0))
+    __store8(e, 16, __word(0))
     trace(e, function, path, line, col)
 
 # Adds the frame of `function` at `path`, `line`, and `col` to `e`. The first
@@ -214,6 +215,7 @@ def trace(e: ptr, function: str, path: str, line: int, col: int):
     where = path + ":" + int_to_str(line) + ":" + int_to_str(col)
     if __addr_is_null(__ptr(__load8(e, 8))):
         __store8(e, 8, __word(where))
+    if __addr_is_null(__ptr(__load8(e, 16))):
         __store8(e, 16, __word("\n  in " + function + " at " + where))
     else:
         __store8(e, 16, __word(__str(__load8(e, 16)) + "\n  called from " + function + " at " + where))
@@ -1742,3 +1744,196 @@ def float_round(x: float) -> int:
     if lower >= 9223372036854775808.0 or lower <= -9223372036854775808.0:
         fail("ValueError", "cannot round float to int")
     return __dtosi(lower)
+
+# Async calls hold a body closure; only scheduled tasks allocate stacks.
+def async_coroutine(body: ptr) -> ptr:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return __ptr(__word(0))
+
+def async_invoke(body: ptr) -> word:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return __word(0)
+
+def async_await(coroutine: ptr) -> word:
+    if __bool(__load8(coroutine, 16)):
+        fail("RuntimeError", "coroutine was already awaited or started")
+        return __word(0)
+    body = __ptr(__load8(coroutine, 8))
+    __store8(coroutine, 16, __word(True))
+    __store8(coroutine, 8, __word(0))
+    return async_invoke(body)
+
+class AioTask:
+    context: CoroutineContext | None
+    body: ptr
+    result: word
+    error: ptr
+    wait: int
+
+class AioTimer:
+    at: float
+    task: AioTask
+    wait: int
+
+class AioLoop:
+    current: AioTask | None
+    ready: list[AioTask]
+    timers: list[AioTimer]
+    last_wait: int
+
+def aio_loop() -> AioLoop:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return AioLoop(None, [], [], 0)
+
+def aio_set_loop(loop: AioLoop | None):
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+
+def aio_task_address() -> ptr:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return __ptr(__word(0))
+
+def aio_sleep_address() -> ptr:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return __ptr(__word(0))
+
+# Captures a task's failure instead of unwinding the scheduler.
+def aio_resume(task: AioTask):
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+
+def aio_task_run(argument: word):
+    task = aio_loop().current
+    assert task is not None, "no running task"
+    task.result = async_await(task.body)
+
+extern def clock_gettime(clock: cint, stamp: ptr) -> cint
+extern def poll(fds: ptr, count: int, timeout: cint) -> cint
+
+def aio_now() -> float:
+    clock = 1
+    if __os == "darwin":
+        clock = 6
+    stamp = __alloc_atomic(16)
+    if clock_gettime(clock, stamp) != 0:
+        eprint_str("error: cannot read monotonic clock: " + os_reason())
+        exit(1)
+    return float(__int(__load8(stamp, 0))) + float(__int(__load8(stamp, 8))) / 1000000000.0
+
+def aio_before(a: AioTimer, b: AioTimer) -> bool:
+    return a.at < b.at or a.at == b.at and a.wait < b.wait
+
+def aio_push_timer(loop: AioLoop, timer: AioTimer):
+    heap = loop.timers
+    i = len(heap)
+    heap.append(timer)
+    while i > 0:
+        parent = (i - 1) // 2
+        if not aio_before(heap[i], heap[parent]):
+            break
+        other = heap[parent]
+        heap[parent] = heap[i]
+        heap[i] = other
+        i = parent
+
+def aio_pop_timer(loop: AioLoop) -> AioTimer:
+    heap = loop.timers
+    top = heap[0]
+    last = heap.pop()
+    n = len(heap)
+    if n > 0:
+        heap[0] = last
+        i = 0
+        while True:
+            child = i * 2 + 1
+            if child >= n:
+                break
+            if child + 1 < n and aio_before(heap[child + 1], heap[child]):
+                child = child + 1
+            if not aio_before(heap[child], heap[i]):
+                break
+            other = heap[child]
+            heap[child] = heap[i]
+            heap[i] = other
+            i = child
+    return top
+
+def aio_wake(loop: AioLoop, task: AioTask, wait: int):
+    if task.wait == wait:
+        task.wait = 0
+        loop.ready.append(task)
+
+# Polling between ready batches prevents timers from being starved.
+def aio_poll(loop: AioLoop):
+    timers = loop.timers
+    while len(timers) > 0 and timers[0].task.wait != timers[0].wait:
+        aio_pop_timer(loop)
+    if len(loop.ready) == 0 and len(timers) == 0:
+        eprint_str("error: deadlock: all tasks are waiting")
+        exit(1)
+    timeout = 0
+    if len(loop.ready) == 0:
+        milliseconds = (timers[0].at - aio_now()) * 1000.0
+        if milliseconds >= 2147483647.0:
+            timeout = 2147483647
+        elif milliseconds > 0.0:
+            timeout = __dtosi(milliseconds)
+            if float(timeout) < milliseconds:
+                timeout = timeout + 1
+    if poll(__ptr(__word(0)), 0, timeout) < 0 and errno() != 4:
+        eprint_str("error: cannot poll: " + os_reason())
+        exit(1)
+    now = aio_now()
+    while len(timers) > 0 and timers[0].at <= now:
+        timer = aio_pop_timer(loop)
+        aio_wake(loop, timer.task, timer.wait)
+
+def aio_run(body: ptr) -> word:
+    loop = AioLoop(None, [], [], 0)
+    aio_set_loop(loop)
+    root = AioTask(None, body, __word(0), __ptr(__word(0)), 0)
+    context = coroutine_create(aio_task_address(), __word(0))
+    root.context = context
+    loop.ready.append(root)
+    while True:
+        batch = loop.ready
+        loop.ready = []
+        for task in batch:
+            loop.current = task
+            aio_resume(task)
+        loop.current = None
+        if coroutine_finished(context):
+            break
+        aio_poll(loop)
+    aio_set_loop(None)
+    coroutine_set_pending(root.error)
+    return root.result
+
+def aio_sleep_coroutine(seconds: float, path: str, line: int, col: int) -> ptr:
+    body = object_new(__ptr(__word(0)), 5)
+    __store8(body, 8, __word(aio_sleep_address()))
+    __store8(body, 16, __word(seconds))
+    __store8(body, 24, __word(path))
+    __store8(body, 32, __word(line))
+    __store8(body, 40, __word(col))
+    return async_coroutine(body)
+
+def aio_sleep_body(body: ptr) -> word:
+    seconds = __float(__load8(body, 16))
+    if not (seconds >= 0.0 and seconds <= 1.7976931348623157e308):
+        fail_at("ValueError", "sleep length must be finite and nonnegative", __str(__load8(body, 24)), __int(__load8(body, 32)), __int(__load8(body, 40)))
+        return __word(0)
+    loop = aio_loop()
+    task = loop.current
+    assert task is not None, "no running task"
+    loop.last_wait = loop.last_wait + 1
+    task.wait = loop.last_wait
+    aio_push_timer(loop, AioTimer(aio_now() + seconds, task, task.wait))
+    coroutine_yield(__word(0))
+    return __word(0)
+
+# Some deferred library operations report their creation site while the frames
+# describe the task that eventually ran them.
+def fail_at(class_name: str, message: str, path: str, line: int, col: int):
+    fail(class_name, message)
+
+def locate(e: ptr, path: str, line: int, col: int):
+    __store8(e, 8, __word(path + ":" + int_to_str(line) + ":" + int_to_str(col)))

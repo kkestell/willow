@@ -1,0 +1,8 @@
+async def value() -> int:
+    return 1
+
+async def nested() -> Coroutine[int]:
+    return value()
+
+async def main():
+    await nested()
