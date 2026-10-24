@@ -263,7 +263,12 @@ class Checker:
         if name == "append":
             self.check_against(node.args[0], state, types.expand(object.element))
         elif name == "extend":
-            self.check_against(node.args[0], state, object)
+            arg = node.args[0]
+            arg.expected = object
+            actual = self.check_expr(arg, state)
+            if not self.failed() and not types.assignable(object, actual):
+                element = types.display(types.expand(object.element))
+                self.fail(arg.line, arg.col, f"expected Iterable[{element}], received {types.display(actual)}")
         elif name == "pop":
             return types.expand(object.element)
         return none()
@@ -275,25 +280,6 @@ class Checker:
             if types.kind(arg) not in ["list", "str"]:
                 self.fail(expr.line, expr.col, f"'len' cannot be applied to {types.display(arg)}")
         return types.prim("int")
-
-    def check_str(self, expr: ast.Expr, node: ast.Call, state: dict[int, types.Type]) -> types.Type:
-        self.check_arity(expr, "str", 1, len(node.args))
-        if not self.failed():
-            arg = node.args[0]
-            ty = self.check_expr(arg, state)
-            if not types.printable(ty):
-                self.fail(arg.line, arg.col, f"cannot convert a value of type {types.display(ty)} to str")
-            elif types.kind(ty) not in ["int", "bool", "str", "None"]:
-                self.unsupported(arg.line, arg.col, f"converting {types.display(ty)} to str")
-        return types.prim("str")
-
-    def check_unary(self, expr: ast.Expr, node: ast.Unary, state: dict[int, types.Type]) -> types.Type:
-        operand = self.check_expr(node.operand, state)
-        kind = types.kind(operand)
-        if node.op == "not" and kind == "bool" or node.op in ["+", "-"] and kind == "int":
-            return operand
-        self.fail(expr.line, expr.col, f"operator '{node.op}' cannot be applied to {types.display(operand)}")
-        return none()
 
     def check_return(self, statement: ast.Stmt, node: ast.Return, state: dict[int, types.Type]):
         value = node.value
@@ -369,6 +355,16 @@ class Checker:
             return none()
         return ty
 
+    def check_unary(self, expr: ast.Expr, node: ast.Unary, state: dict[int, types.Type]) -> types.Type:
+        operand = self.check_expr(node.operand, state)
+        if self.failed():
+            return none()
+        kind = types.kind(operand)
+        if node.op in ["+", "-"] and kind in ["int", "float"] or node.op == "not" and kind == "bool":
+            return operand
+        self.fail(expr.line, expr.col, f"operator '{node.op}' cannot be applied to {types.display(operand)}")
+        return none()
+
     def check_binary(self, expr: ast.Expr, node: ast.Binary, state: dict[int, types.Type]) -> types.Type:
         op = node.op
         left = self.check_expr(node.left, state)
@@ -387,10 +383,10 @@ class Checker:
         elif op in ["<", "<=", ">", ">="]:
             if types.ordered(left, right):
                 ty = types.prim("bool")
-            supported = pair == "int int"
+            supported = pair in ["int int", "float float"]
         elif op in ["+", "-", "*", "/", "//", "%"]:
             ty = arithmetic_type(op, pair)
-            supported = pair == "int int" and op != "/" or op == "+" and pair == "str str"
+            supported = pair in ["int int", "float float"] or op == "+" and pair == "str str"
         elif op == "and" or op == "or":
             if pair == "bool bool":
                 ty = types.prim("bool")
@@ -436,11 +432,11 @@ class Checker:
         elif name == "len":
             return self.check_len(expr, node, state)
         elif name == "str":
-            return self.check_str(expr, node, state)
+            return self.check_conversion(expr, node, state)
         elif name == "int":
-            return self.unsupported(line, col, "'int'")
+            return self.check_conversion(expr, node, state)
         elif name == "float":
-            return self.unsupported(line, col, "'float'")
+            return self.check_conversion(expr, node, state)
         elif name == "range":
             self.fail(line, col, "'range' can only be the source of a for loop")
             return none()
@@ -495,9 +491,28 @@ class Checker:
             return none()
         if not types.printable(ty):
             self.fail(arg.line, arg.col, f"cannot print a value of type {types.display(ty)}")
-        elif types.kind(ty) not in ["int", "bool", "str"]:
+        elif types.kind(ty) not in ["int", "float", "bool", "str", "None"]:
             self.unsupported(arg.line, arg.col, f"printing {types.display(ty)}")
         return none()
+
+    def check_conversion(self, expr: ast.Expr, node: ast.Call, state: dict[int, types.Type]) -> types.Type:
+        name = node.name
+        self.check_arity(expr, name, 1, len(node.args))
+        if self.failed():
+            return none()
+        arg = node.args[0]
+        ty = self.check_expr(arg, state)
+        if self.failed():
+            return none()
+        kind = types.kind(ty)
+        if name == "str":
+            if not types.printable(ty):
+                self.fail(arg.line, arg.col, f"cannot convert a value of type {types.display(ty)} to str")
+            elif kind not in ["int", "float", "bool", "str", "None"]:
+                self.unsupported(arg.line, arg.col, f"converting {types.display(ty)} to str")
+        elif name == "int" and kind not in ["float", "str"] or name == "float" and kind not in ["int", "str"]:
+            self.fail(arg.line, arg.col, f"cannot convert a value of type {types.display(ty)} to {name}")
+        return types.prim(name)
 
     # The intrinsics only core calls (agents/bootstrap.md §5). `__word`
     # takes a slot of any kind but word, which reinterprets as itself.

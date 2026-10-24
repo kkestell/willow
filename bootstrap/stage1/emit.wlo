@@ -391,18 +391,6 @@ class Emitter:
         assert ty is not None, "unchecked len argument"
         return self.core_call(types.kind(ty) + "_len", [value], True)
 
-    def emit_str(self, node: ast.Call) -> str:
-        arg = node.args[0]
-        value = self.expr(arg)
-        ty = arg.ty
-        assert ty is not None, "unchecked str argument"
-        kind = types.kind(ty)
-        if kind == "str":
-            return value
-        if kind == "None":
-            return self.string("None")
-        return self.core_call(kind + "_to_str", [value], True)
-
     def contains(self, node: ast.Binary) -> str:
         item = self.expr(node.left)
         container = self.expr(node.right)
@@ -423,58 +411,6 @@ class Emitter:
             negated = self.temp()
             self.line(f"{negated} =l ceql {result}, 0")
             return negated
-        return result
-
-    def unary(self, node: ast.Unary) -> str:
-        operand = self.expr(node.operand)
-        if node.op == "+":
-            return operand
-        if node.op == "-":
-            return self.checked("sub", "0", operand)
-        result = self.temp()
-        self.line(f"{result} =l ceql {operand}, 0")
-        return result
-
-    def logic(self, node: ast.Binary) -> str:
-        left = self.expr(node.left)
-        result = self.temp()
-        self.line(f"{result} =l copy {left}")
-        right = self.new_label()
-        end = self.new_label()
-        if node.op == "and":
-            self.jump(f"jnz {left}, {right}, {end}")
-        else:
-            self.jump(f"jnz {left}, {end}, {right}")
-        self.label(right)
-        value = self.expr(node.right)
-        self.line(f"{result} =l copy {value}")
-        self.jump(f"jmp {end}")
-        self.label(end)
-        return result
-
-    def floor_divide(self, op: str, left: str, right: str) -> str:
-        zero = self.temp()
-        self.line(f"{zero} =l ceql {right}, 0")
-        self.guard(zero, "ZeroDivisionError", "division by zero")
-        quotient = self.temp()
-        remainder = self.temp()
-        signs = self.temp()
-        differ = self.temp()
-        nonzero = self.temp()
-        adjust = self.temp()
-        result = self.temp()
-        self.line(f"{quotient} =l div {left}, {right}")
-        self.line(f"{remainder} =l rem {left}, {right}")
-        self.line(f"{signs} =l xor {remainder}, {right}")
-        self.line(f"{differ} =l csltl {signs}, 0")
-        self.line(f"{nonzero} =l cnel {remainder}, 0")
-        self.line(f"{adjust} =l and {differ}, {nonzero}")
-        if op == "%":
-            step = self.temp()
-            self.line(f"{step} =l mul {right}, {adjust}")
-            self.line(f"{result} =l add {remainder}, {step}")
-        else:
-            self.line(f"{result} =l sub {quotient}, {adjust}")
         return result
 
     # Expressions
@@ -505,9 +441,7 @@ class Emitter:
             assert isinstance(target, ast.TypeName), "unchecked __type"
             return f"$W.{target.name}.type"
         elif isinstance(node, ast.Float):
-            value = self.temp()
-            self.line(f"{value} =l cast d_{node.value}")
-            return value
+            return self.float_bits("d_" + str(node.value))
         elif isinstance(node, ast.FString):
             return self.unchecked("f-string")
         elif isinstance(node, ast.EnumMember):
@@ -543,15 +477,6 @@ class Emitter:
         kind = types.kind(left_type)
         left = self.expr(node.left)
         right = self.expr(node.right)
-        if kind == "float":
-            a = self.temp()
-            b = self.temp()
-            result = self.temp()
-            self.line(f"{a} =d cast {left}")
-            self.line(f"{b} =d cast {right}")
-            instruction = comparison_instruction(op)
-            self.line(f"{result} =l {instruction[:-1]}d {a}, {b}")
-            return result
         if kind == "str":
             if op == "+":
                 return self.core_call("str_concat", [left, right], True)
@@ -561,17 +486,114 @@ class Emitter:
             t = self.temp()
             self.line(f"{t} =l ceql {equal}, 0")
             return t
-        if op in ["+", "-", "*"]:
-            return self.checked(arithmetic_instruction(op), left, right)
+        if kind == "float":
+            return self.float_binary(op, left, right)
+        if op == "/":
+            self.check_divisor(right)
+            return self.float_bits(self.int_quotient(left, right))
         if op == "//" or op == "%":
             return self.floor_divide(op, left, right)
+        if op in ["+", "-", "*"]:
+            return self.checked(arithmetic_instruction(op), left, right)
         t = self.temp()
         self.line(f"{t} =l {comparison_instruction(op)} {left}, {right}")
+        return t
+
+    def unary(self, node: ast.Unary) -> str:
+        value = self.expr(node.operand)
+        ty = node.operand.ty
+        assert ty is not None, "unchecked operand"
+        if node.op == "+":
+            return value
+        if node.op == "not":
+            t = self.temp()
+            self.line(f"{t} =l ceql {value}, 0")
+            return t
+        if types.kind(ty) == "float":
+            d = self.as_float(value)
+            t = self.temp()
+            self.line(f"{t} =d neg {d}")
+            return self.float_bits(t)
+        return self.checked("sub", "0", value)
+
+    def logic(self, node: ast.Binary) -> str:
+        left = self.expr(node.left)
+        result = self.temp()
+        self.line(f"{result} =l copy {left}")
+        rhs = self.new_label()
+        end = self.new_label()
+        if node.op == "and":
+            self.jump(f"jnz {left}, {rhs}, {end}")
+        else:
+            self.jump(f"jnz {left}, {end}, {rhs}")
+        self.label(rhs)
+        right = self.expr(node.right)
+        self.line(f"{result} =l copy {right}")
+        self.label(end)
+        return result
+
+    def as_float(self, value: str) -> str:
+        d = self.temp()
+        self.line(f"{d} =d cast {value}")
+        return d
+
+    def float_bits(self, value: str) -> str:
+        t = self.temp()
+        self.line(f"{t} =l cast {value}")
+        return t
+
+    def float_binary(self, op: str, left: str, right: str) -> str:
+        if op == "//":
+            return self.core_call("float_floordiv", [left, right], True)
+        if op == "%":
+            return self.core_call("float_mod", [left, right], True)
+        a = self.as_float(left)
+        b = self.as_float(right)
+        if op in ["+", "-", "*", "/"]:
+            if op == "/":
+                zero = self.temp()
+                self.line(f"{zero} =l ceqd {b}, d_0")
+                self.guard(zero, "ZeroDivisionError", "division by zero")
+            d = self.temp()
+            self.line(f"{d} =d {arithmetic_instruction(op)} {a}, {b}")
+            return self.float_bits(d)
+        t = self.temp()
+        self.line(f"{t} =l {float_comparison_instruction(op)} {a}, {b}")
+        return t
+
+    def check_divisor(self, right: str):
+        zero = self.temp()
+        self.line(f"{zero} =l ceql {right}, 0")
+        self.guard(zero, "ZeroDivisionError", "division by zero")
+
+    def floor_divide(self, op: str, left: str, right: str) -> str:
+        self.check_divisor(right)
+        q = self.temp()
+        m = self.temp()
+        signs = self.temp()
+        differ = self.temp()
+        nonzero = self.temp()
+        adjust = self.temp()
+        self.line(f"{q} =l div {left}, {right}")
+        self.line(f"{m} =l rem {left}, {right}")
+        self.line(f"{signs} =l xor {m}, {right}")
+        self.line(f"{differ} =l csltl {signs}, 0")
+        self.line(f"{nonzero} =l cnel {m}, 0")
+        self.line(f"{adjust} =l and {differ}, {nonzero}")
+        t = self.temp()
+        if op == "%":
+            step = self.temp()
+            self.line(f"{step} =l mul {right}, {adjust}")
+            self.line(f"{t} =l add {m}, {step}")
+        else:
+            self.line(f"{t} =l sub {q}, {adjust}")
         return t
 
     # `left instr right` on ints, failing with an OverflowError when the
     # result leaves the symmetric int range.
     def checked(self, instr: str, left: str, right: str) -> str:
+        if instr == "mul":
+            return self.checked_multiply(left, right)
         t = self.temp()
         self.line(f"{t} =l {instr} {left}, {right}")
         a = self.temp()
@@ -584,31 +606,147 @@ class Emitter:
         if instr == "add":
             self.line(f"{a} =l xor {left}, {t}")
             self.line(f"{b} =l xor {right}, {t}")
-        elif instr == "sub":
+        else:
             self.line(f"{a} =l xor {left}, {right}")
             self.line(f"{b} =l xor {left}, {t}")
-        else:
-            zero = self.temp()
-            skip = self.temp()
-            divisor = self.temp()
-            self.line(f"{zero} =l ceql {left}, 0")
-            self.line(f"{minimum} =l ceql {t}, -9223372036854775808")
-            self.line(f"{skip} =l or {zero}, {minimum}")
-            self.line(f"{a} =l sub 0, {skip}")
-            self.line(f"{b} =l xor {left}, 1")
-            self.line(f"{b} =l and {b}, {a}")
-            self.line(f"{divisor} =l xor {left}, {b}")
-            self.line(f"{a} =l div {t}, {divisor}")
-            self.line(f"{a} =l cnel {a}, {right}")
-            self.line(f"{b} =l ceql {zero}, 0")
-            self.line(f"{wrapped} =l and {a}, {b}")
-        if instr != "mul":
-            self.line(f"{a} =l and {a}, {b}")
-            self.line(f"{wrapped} =l csltl {a}, 0")
+        self.line(f"{a} =l and {a}, {b}")
+        self.line(f"{wrapped} =l csltl {a}, 0")
         self.line(f"{minimum} =l ceql {t}, -9223372036854775808")
         self.line(f"{wrapped} =l or {wrapped}, {minimum}")
         self.guard(wrapped, "OverflowError", "integer overflow")
         return t
+
+    def checked_multiply(self, left: str, right: str) -> str:
+        t = self.temp()
+        zero = self.temp()
+        minimum = self.temp()
+        skip = self.temp()
+        a = self.temp()
+        b = self.temp()
+        divisor = self.temp()
+        wrapped = self.temp()
+        self.line(f"{t} =l mul {left}, {right}")
+        # Use 1 as the divisor when the left operand is zero or the product
+        # is -2^63, so the overflow check cannot divide by zero or trap.
+        self.line(f"{zero} =l ceql {left}, 0")
+        self.line(f"{minimum} =l ceql {t}, -9223372036854775808")
+        self.line(f"{skip} =l or {zero}, {minimum}")
+        self.line(f"{a} =l sub 0, {skip}")
+        self.line(f"{b} =l xor {left}, 1")
+        self.line(f"{b} =l and {b}, {a}")
+        self.line(f"{divisor} =l xor {left}, {b}")
+        self.line(f"{a} =l div {t}, {divisor}")
+        self.line(f"{a} =l cnel {a}, {right}")
+        self.line(f"{b} =l ceql {zero}, 0")
+        self.line(f"{wrapped} =l and {a}, {b}")
+        self.line(f"{wrapped} =l or {wrapped}, {minimum}")
+        self.guard(wrapped, "OverflowError", "integer overflow")
+        return t
+
+    # Above 2^53, converting both operands before division would round
+    # twice. Long division keeps 56 bits with a sticky low bit, then one
+    # conversion rounds the quotient. Scaling by powers of two is exact.
+    def int_quotient(self, left: str, right: str) -> str:
+        fast = self.new_label()
+        slow = self.new_label()
+        shr_test = self.new_label()
+        shr = self.new_label()
+        shl_test = self.new_label()
+        shl = self.new_label()
+        rounding = self.new_label()
+        up_test = self.new_label()
+        up = self.new_label()
+        down_test = self.new_label()
+        down = self.new_label()
+        sign = self.new_label()
+        negate = self.new_label()
+        done = self.new_label()
+        result = self.temp()
+        abs_left = self.temp()
+        abs_right = self.temp()
+        cond = self.temp()
+        q = self.temp()
+        rem = self.temp()
+        e = self.temp()
+        lost = self.temp()
+        bit = self.temp()
+        t = self.temp()
+        d = self.temp()
+        divisor = self.temp()
+        self.line(f"{t} =l sar {left}, 63")
+        self.line(f"{abs_left} =l xor {left}, {t}")
+        self.line(f"{abs_left} =l sub {abs_left}, {t}")
+        self.line(f"{t} =l sar {right}, 63")
+        self.line(f"{abs_right} =l xor {right}, {t}")
+        self.line(f"{abs_right} =l sub {abs_right}, {t}")
+        self.line(f"{cond} =l culel {abs_left}, 9007199254740992")
+        self.line(f"{t} =l culel {abs_right}, 9007199254740992")
+        self.line(f"{cond} =l and {cond}, {t}")
+        self.line(f"{t} =l ceql {left}, 0")
+        self.line(f"{cond} =l or {cond}, {t}")
+        self.jump(f"jnz {cond}, {fast}, {slow}")
+        self.label(fast)
+        self.line(f"{d} =d sltof {left}")
+        self.line(f"{divisor} =d sltof {right}")
+        self.line(f"{result} =d div {d}, {divisor}")
+        self.jump(f"jmp {done}")
+        self.label(slow)
+        self.line(f"{q} =l udiv {abs_left}, {abs_right}")
+        self.line(f"{rem} =l urem {abs_left}, {abs_right}")
+        self.line(f"{e} =l copy 0")
+        self.line(f"{lost} =l copy 0")
+        self.label(shr_test)
+        self.line(f"{cond} =l cugel {q}, 72057594037927936")
+        self.jump(f"jnz {cond}, {shr}, {shl_test}")
+        self.label(shr)
+        self.line(f"{bit} =l and {q}, 1")
+        self.line(f"{lost} =l or {lost}, {bit}")
+        self.line(f"{q} =l shr {q}, 1")
+        self.line(f"{e} =l add {e}, 1")
+        self.jump(f"jmp {shr_test}")
+        self.label(shl_test)
+        self.line(f"{cond} =l cultl {q}, 36028797018963968")
+        self.jump(f"jnz {cond}, {shl}, {rounding}")
+        self.label(shl)
+        # Subtracting the divisor restores a doubled remainder even when
+        # it passes 2^63: these instructions operate modulo 2^64.
+        self.line(f"{t} =l sub {abs_right}, {rem}")
+        self.line(f"{bit} =l cugel {rem}, {t}")
+        self.line(f"{q} =l shl {q}, 1")
+        self.line(f"{q} =l or {q}, {bit}")
+        self.line(f"{rem} =l shl {rem}, 1")
+        self.line(f"{t} =l mul {bit}, {abs_right}")
+        self.line(f"{rem} =l sub {rem}, {t}")
+        self.line(f"{e} =l sub {e}, 1")
+        self.jump(f"jmp {shl_test}")
+        self.label(rounding)
+        self.line(f"{t} =l cnel {rem}, 0")
+        self.line(f"{lost} =l or {lost}, {t}")
+        self.line(f"{q} =l or {q}, {lost}")
+        self.line(f"{d} =d sltof {q}")
+        self.label(up_test)
+        self.line(f"{cond} =l csgtl {e}, 0")
+        self.jump(f"jnz {cond}, {up}, {down_test}")
+        self.label(up)
+        self.line(f"{d} =d mul {d}, d_2")
+        self.line(f"{e} =l sub {e}, 1")
+        self.jump(f"jmp {up_test}")
+        self.label(down_test)
+        self.line(f"{cond} =l csltl {e}, 0")
+        self.jump(f"jnz {cond}, {down}, {sign}")
+        self.label(down)
+        self.line(f"{d} =d mul {d}, d_0.5")
+        self.line(f"{e} =l add {e}, 1")
+        self.jump(f"jmp {down_test}")
+        self.label(sign)
+        self.line(f"{t} =l xor {left}, {right}")
+        self.line(f"{cond} =l csltl {t}, 0")
+        self.line(f"{result} =d copy {d}")
+        self.jump(f"jnz {cond}, {negate}, {done}")
+        self.label(negate)
+        self.line(f"{result} =d neg {d}")
+        self.label(done)
+        return result
 
     # Fails with `class_name` and `message` when `condition` is nonzero. In
     # L0 a failure does not return.
@@ -651,11 +789,11 @@ class Emitter:
         elif name == "len":
             return self.emit_len(node)
         elif name == "str":
-            return self.emit_str(node)
+            return self.conversion(node)
         elif name == "int":
-            return self.unchecked("'int'")
+            return self.conversion(node)
         elif name == "float":
-            return self.unchecked("'float'")
+            return self.conversion(node)
         elif name == "range":
             return self.unchecked("'range'")
         elif name == "ord":
@@ -723,16 +861,41 @@ class Emitter:
         return t
 
     def emit_print(self, node: ast.Call) -> str:
+        return self.core_call("print_str", [self.to_str(node.args[0])], False)
+
+    def conversion(self, node: ast.Call) -> str:
         arg = node.args[0]
+        if node.name == "str":
+            return self.to_str(arg)
+        ty = arg.ty
+        assert ty is not None, "unchecked argument"
+        kind = types.kind(ty)
+        value = self.expr(arg)
+        if node.name == "int":
+            if kind == "float":
+                return self.core_call("float_to_int", [value], True)
+            return self.core_call("str_to_int", [value], True)
+        if kind == "str":
+            return self.core_call("str_to_float", [value], True)
+        d = self.temp()
+        self.line(f"{d} =d sltof {value}")
+        return self.float_bits(d)
+
+    def to_str(self, arg: ast.Expr) -> str:
         value = self.expr(arg)
         ty = arg.ty
         assert ty is not None, "unchecked argument"
         kind = types.kind(ty)
         if kind == "int":
-            value = self.core_call("int_to_str", [value], True)
+            return self.core_call("int_to_str", [value], True)
+        elif kind == "float":
+            return self.core_call("float_to_str", [value], True)
         elif kind == "bool":
-            value = self.core_call("bool_to_str", [value], True)
-        return self.core_call("print_str", [value], False)
+            return self.core_call("bool_to_str", [value], True)
+        elif kind == "None":
+            return self.string("None")
+        assert kind == "str", "unchecked scalar conversion"
+        return value
 
     def intrinsic(self, node: ast.Call, target: stdlib.Builtin) -> str:
         args: list[str] = []
@@ -820,9 +983,24 @@ def c_type(annotation: ast.TypeExpr | None, ty: types.Type) -> str:
 def arithmetic_instruction(op: str) -> str:
     if op == "+":
         return "add"
+    if op == "-":
+        return "sub"
     if op == "*":
         return "mul"
-    return "sub"
+    return "div"
+
+def float_comparison_instruction(op: str) -> str:
+    if op == "==":
+        return "ceqd"
+    if op == "!=":
+        return "cned"
+    if op == "<":
+        return "cltd"
+    if op == "<=":
+        return "cled"
+    if op == ">":
+        return "cgtd"
+    return "cged"
 
 def comparison_instruction(op: str) -> str:
     if op == "==":
