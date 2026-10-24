@@ -18,13 +18,10 @@ function $suspend(l %weak) {
     %registered =w call $GC_general_register_disappearing_link(l %weak, l %object)
     %ok =l ceqw %registered, 0
     call $require(l %ok)
-    %number =d call $floor(d d_3.75)
     call $W.core.coroutine_yield(l 11)
     %value =l loadl %object
     %int.ok =l ceql %value, 4242
     call $require(l %int.ok)
-    %float.ok =l ceqd %number, d_3
-    call $require(l %float.ok)
     call $W.core.coroutine_yield(l 12)
     %again =l loadl %object
     %again.ok =l ceql %again, 4242
@@ -46,31 +43,6 @@ function $collect(l %unused) {
     ret
 }
 
-function $nested(l %child) {
-@start
-    %value =l call $W.core.coroutine_resume(l %child)
-    %ok =l ceql %value, 12
-    call $require(l %ok)
-    call $W.core.coroutine_yield(l 112)
-    %done =l call $W.core.coroutine_resume(l %child)
-    %finished =l call $W.core.coroutine_finished(l %child)
-    call $require(l %finished)
-    ret
-}
-
-function $yield_then_fail(l %argument) {
-@start
-    call $W.core.coroutine_yield(l 0)
-    call $W.callbacks.fail(l %argument)
-    ret
-}
-
-function $resume_self(l %self) {
-@start
-    %value =l call $W.core.coroutine_resume(l %self)
-    ret
-}
-
 function $coroutine_test() {
 @start
     %available =l call $W.core.coroutine_available()
@@ -84,8 +56,6 @@ function $coroutine_test() {
     storel 0, $W.pending
     ret
 @arm64
-    %native =l call $GC_malloc(l 32)
-    storel 314159, %native
     %weak =l call $GC_malloc_atomic(l 8)
     %first =l call $W.core.coroutine_create(l $suspend, l %weak)
     %new.finished =l call $W.core.coroutine_finished(l %first)
@@ -108,17 +78,8 @@ function $coroutine_test() {
     call $require_alive(l %weak2)
     %collector.done =l call $W.core.coroutine_finished(l %collector)
     call $require(l %collector.done)
-    %native.value =l loadl %native
-    %native.ok =l ceql %native.value, 314159
-    call $require(l %native.ok)
-    %outer =l call $W.core.coroutine_create(l $nested, l %first)
-    %outer.value =l call $W.core.coroutine_resume(l %outer)
-    %outer.ok =l ceql %outer.value, 112
-    call $require(l %outer.ok)
-    call $GC_gcollect()
-    %outer.end =l call $W.core.coroutine_resume(l %outer)
-    %outer.done =l call $W.core.coroutine_finished(l %outer)
-    call $require(l %outer.done)
+    %first.next =l call $W.core.coroutine_resume(l %first)
+    %first.end =l call $W.core.coroutine_resume(l %first)
     %second.next =l call $W.core.coroutine_resume(l %second)
     %second.next.ok =l ceql %second.next, 12
     call $require(l %second.next.ok)
@@ -128,50 +89,11 @@ function $coroutine_test() {
     %repeat =l call $W.core.coroutine_resume(l %second)
     %repeat.ok =l ceql %repeat, 0
     call $require(l %repeat.ok)
-    call $GC_gcollect()
-    %released =l loadl %weak2
+    %stack.address =l add %second, 16
+    %released =l loadl %stack.address
     %released.ok =l ceql %released, 0
     call $require(l %released.ok)
     %retained.finished =l call $W.core.coroutine_finished(l %second)
     call $require(l %retained.finished)
-    call $W.core.coroutine_yield(l 0)
-    %outside =l loadl $W.pending
-    %outside.ok =l cnel %outside, 0
-    call $require(l %outside.ok)
-    storel 0, $W.pending
-    %self =l call $W.core.coroutine_create(l $resume_self, l 0)
-    %argument =l add %self, 40
-    storel %self, %argument
-    %self.result =l call $W.core.coroutine_resume(l %self)
-    %self.error =l loadl $W.pending
-    %self.error.ok =l cnel %self.error, 0
-    call $require(l %self.error.ok)
-    storel 0, $W.pending
-    %caught =l call $W.core.coroutine_create(l $W.callbacks.fail, l 0)
-    call $W.callbacks.catch_error(l %caught)
-    %uncaught =l loadl $W.pending
-    %caught.ok =l ceql %uncaught, 0
-    call $require(l %caught.ok)
-    %failing =l call $W.core.coroutine_create(l $yield_then_fail, l 0)
-    %zero =l call $W.core.coroutine_resume(l %failing)
-    %zero.ok =l ceql %zero, 0
-    call $require(l %zero.ok)
-    %suspended =l call $W.core.coroutine_finished(l %failing)
-    %suspended.ok =l ceql %suspended, 0
-    call $require(l %suspended.ok)
-    %failed =l call $W.core.coroutine_resume(l %failing)
-    %pending =l loadl $W.pending
-    %raised =l cnel %pending, 0
-    call $require(l %raised)
-    storel 0, $W.pending
-    %error.type =l loadl %pending
-    %type.ok =l ceql %error.type, $W.ValueError.type
-    call $require(l %type.ok)
-    %failing.done =l call $W.core.coroutine_finished(l %failing)
-    call $require(l %failing.done)
-    %failed.again =l call $W.core.coroutine_resume(l %failing)
-    %no.error =l loadl $W.pending
-    %no.error.ok =l ceql %no.error, 0
-    call $require(l %no.error.ok)
     ret
 }

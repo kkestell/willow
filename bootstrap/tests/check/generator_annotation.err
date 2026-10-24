@@ -1,0 +1,1 @@
+generator_annotation.wlo:1:5: error: a generator function must be annotated Generator[T], Iterator[T], or Iterable[T]

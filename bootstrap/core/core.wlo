@@ -51,7 +51,6 @@ class CoroutineContext:
     argument: word
     value: word
     caller: CoroutineContext | None
-    pending: ptr
     error: ptr
     state: int
 
@@ -61,7 +60,7 @@ def coroutine_context() -> CoroutineContext:
         null = __ptr(__word(0))
         bottom = __alloc(8)
         GC_get_my_stackbottom(bottom)
-        current = CoroutineContext(null, null, bottom, null, __word(0), __word(0), None, null, null, 1)
+        current = CoroutineContext(null, null, bottom, null, __word(0), __word(0), None, null, 1)
         coroutine_set_current(current)
     return current
 
@@ -77,12 +76,20 @@ def coroutine_create(entry: ptr, argument: word) -> CoroutineContext:
     sp = __offset(top, -160)
     __store8(sp, 88, __word(coroutine_start_address()))
     null = __ptr(__word(0))
-    return CoroutineContext(sp, stack, bottom, entry, argument, __word(0), None, null, null, 0)
+    return CoroutineContext(sp, stack, bottom, entry, argument, __word(0), None, null, 0)
 
 def coroutine_finished(coroutine: CoroutineContext) -> bool:
     return coroutine.state == 3
 
 def coroutine_resume(coroutine: CoroutineContext) -> word:
+    value = coroutine_step(coroutine)
+    error = coroutine.error
+    coroutine.error = __ptr(__word(0))
+    coroutine_set_pending(error)
+    return value
+
+# Generators inspect terminal failures before exposing them to their caller.
+def coroutine_step(coroutine: CoroutineContext) -> word:
     if coroutine.state == 1:
         fail("RuntimeError", "cannot resume a running coroutine")
     if coroutine.state == 3:
@@ -94,16 +101,58 @@ def coroutine_resume(coroutine: CoroutineContext) -> word:
     value = coroutine.value
     coroutine.value = __word(0)
     if coroutine.state == 3:
-        null = __ptr(__word(0))
-        coroutine.sp = null
-        coroutine.stack = null
-        coroutine.bottom = null
-        coroutine.entry = null
-        coroutine.argument = __word(0)
+        coroutine_release(coroutine)
+    return value
+
+def coroutine_release(coroutine: CoroutineContext):
+    null = __ptr(__word(0))
+    coroutine.sp = null
+    coroutine.stack = null
+    coroutine.bottom = null
+    coroutine.entry = null
+    coroutine.argument = __word(0)
+
+class GeneratorContext:
+    coroutine: CoroutineContext
+    environment: ptr
+    closing: bool
+
+def generator_new(entry: ptr, environment: ptr) -> GeneratorContext:
+    coroutine = coroutine_create(entry, __word(environment))
+    return GeneratorContext(coroutine, environment, False)
+
+def generator_closing(generator: GeneratorContext) -> bool:
+    return generator.closing
+
+def generator_next(generator: GeneratorContext) -> word:
+    coroutine = generator.coroutine
+    if coroutine.state == 1:
+        fail("RuntimeError", "generator already running")
+    value = coroutine_step(coroutine)
+    if coroutine_finished(coroutine):
+        generator.environment = __ptr(__word(0))
     error = coroutine.error
     coroutine.error = __ptr(__word(0))
-    coroutine_set_pending(error)
+    if not __addr_is_null(error):
+        if str_eq(__str(__load8(header(error), 0)), "StopIteration"):
+            fail("RuntimeError", "generator raised StopIteration")
+        coroutine_set_pending(error)
+        return __word(0)
+    if coroutine_finished(coroutine):
+        fail("StopIteration", "")
     return value
+
+def generator_close(generator: GeneratorContext):
+    coroutine = generator.coroutine
+    if coroutine.state == 1:
+        fail("RuntimeError", "generator already running")
+    generator.environment = __ptr(__word(0))
+    if coroutine.state == 2:
+        generator.closing = True
+        coroutine_resume(coroutine)
+    else:
+        coroutine.state = 3
+        coroutine_release(coroutine)
 
 def coroutine_yield(value: word):
     current = coroutine_context()

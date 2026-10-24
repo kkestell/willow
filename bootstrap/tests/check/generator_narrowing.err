@@ -1,0 +1,1 @@
+generator_narrowing.wlo:9:25: error: operator '+' cannot be applied to int | None and int

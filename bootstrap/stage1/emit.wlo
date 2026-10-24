@@ -162,7 +162,6 @@ class Emitter:
         self.bindings = bindings
         record = function.record
         assert record is not None, f"function {function.name} has no signature"
-        module = self.module_of(function)
         result = self.concrete_type(record.result)
         if function.is_async:
             self.emit_async_constructor(function, symbol, first)
@@ -173,7 +172,14 @@ class Emitter:
         params.extend(first)
         for param in function.params:
             params.append(f"l %p.{param.name}")
+        if function.generator:
+            self.emit_generator_factory(function, symbol, params)
+            return
         self.begin(symbol, params, not is_none(result))
+        self.function_body(function)
+
+    def function_body(self, function: ast.FunctionDecl):
+        module = self.module_of(function)
         self.function_name = frame_name(function)
         self.path = self.module_paths[module]
         self.frames = module != "core"
@@ -198,6 +204,69 @@ class Emitter:
         if self.returns:
             self.jump("hlt")
         self.end("0")
+
+    def emit_generator_factory(self, function: ast.FunctionDecl, symbol: str, params: list[str]):
+        record = function.record
+        assert record is not None, "generator without a signature"
+        result = self.concrete_type(record.result)
+        assert isinstance(result, types.ProtocolType), "unchecked generator annotation"
+        generator_type = types.ProtocolType(stdlib.protocols()["Generator"], result.args)
+        self.later.append(GeneratorBody(symbol, function, self.bindings))
+        self.begin(symbol, params, True)
+        environment = self.core_call("object_new", ["0", str(len(function.params) + 2)], True)
+        captured = "0"
+        if function.parent is not None:
+            captured = "%env"
+        self.store_field(environment, 16, captured)
+        for i in range(len(function.params)):
+            self.store_field(environment, 24 + i * 8, "%p." + function.params[i].name)
+        generator = self.core_call("generator_new", [symbol + ".body", environment], True)
+        self.store_field(environment, 8, generator)
+        value = self.protocol_value(symbol + ".generator.type", generator)
+        self.end(self.convert(value, generator_type, result))
+
+    def emit_generator_body(self, body: GeneratorBody):
+        self.bindings = body.bindings
+        function = body.function
+        record = function.record
+        assert record is not None, "generator without a signature"
+        result = self.concrete_type(record.result)
+        assert isinstance(result, types.ProtocolType), "unchecked generator annotation"
+        symbol = body.symbol
+        iterator = symbol + ".iterator"
+        self.iterator_descriptor(iterator, result.args[0])
+        self.begin(iterator + ".next", ["l %state"], True)
+        self.end(self.core_call("generator_next", ["%state"], True))
+        generator_type = types.ProtocolType(stdlib.protocols()["Generator"], result.args)
+        marker = self.protocol_marker(generator_type)
+        self.write(f"data {symbol}.generator.type = " + "{ l " + marker + f", l {iterator}.iter, l {iterator}.next, l {symbol}.close, l {symbol}.enter, l {symbol}.exit" + " }")
+        self.begin(symbol + ".close", ["l %state"], False)
+        self.core_call("generator_close", ["%state"], False)
+        self.end("0")
+        self.begin(symbol + ".enter", ["l %state"], True)
+        self.end(self.protocol_value(symbol + ".generator.type", "%state"))
+        self.begin(symbol + ".exit", ["l %state", "l %error"], False)
+        self.core_call("generator_close", ["%state"], False)
+        self.end("0")
+        self.begin(symbol + ".body", ["l %environment"], False)
+        self.line(f"%generator =l copy {self.load_field('%environment', 8)}")
+        self.line(f"%env =l copy {self.load_field('%environment', 16)}")
+        for i in range(len(function.params)):
+            value = self.load_field("%environment", 24 + i * 8)
+            self.line(f"%p.{function.params[i].name} =l copy {value}")
+        self.function_body(function)
+
+    def emit_yield(self, node: ast.Yield):
+        value = self.expr(node.value)
+        self.core_call("coroutine_yield", [value], False)
+        closing = self.core_call("generator_closing", ["%generator"], True)
+        close = self.new_label()
+        resume = self.new_label()
+        self.jump(f"jnz {closing}, {close}, {resume}")
+        self.label(close)
+        self.leave(0)
+        self.jump("ret")
+        self.label(resume)
 
     def emit_async_constructor(self, function: ast.FunctionDecl, symbol: str, first: list[str]):
         params: list[str] = []
@@ -552,6 +621,8 @@ class Emitter:
             self.emit_while(node)
         elif isinstance(node, ast.Return):
             self.emit_return(node)
+        elif isinstance(node, ast.Yield):
+            self.emit_yield(node)
         elif isinstance(node, ast.IndexAssign):
             self.emit_index_assign(node)
         elif isinstance(node, ast.FieldAssign):
@@ -2731,7 +2802,7 @@ class Emitter:
         symbol = "$W." + self.module_of(function) + "." + frame_name(function).replace("<lambda>", "lambda") + "." + str(function.id)
         if len(self.bindings) > 0:
             symbol = symbol + f".inst.{len(self.later)}"
-        self.later.append(Lifted(symbol, function, self.bindings))
+        self.wrap(symbol, Lifted(symbol, function, self.bindings))
         return self.new_closure(symbol, self.cells(function))
 
     # The cells of the variables nested function `function` captures.
@@ -2827,6 +2898,10 @@ class Emitter:
             bindings = self.bindings
             self.emit_function(later.function, later.symbol, ["l %env"], later.bindings)
             self.bindings = bindings
+        elif isinstance(later, GeneratorBody):
+            bindings = self.bindings
+            self.emit_generator_body(later)
+            self.bindings = bindings
         elif isinstance(later, ValueWrapper):
             self.emit_value_wrapper(later)
         elif isinstance(later, BoundWrapper):
@@ -2909,7 +2984,12 @@ class Emitter:
 
 # A function emitted after the top-level function that uses it: a nested
 # function or lambda, or the code of a closure that runs a function.
-type Later = Lifted | ValueWrapper | BoundWrapper | BuiltinWrapper | SpecializedValue | Adapter | NativeIterator | LazyIterator
+type Later = Lifted | ValueWrapper | BoundWrapper | BuiltinWrapper | SpecializedValue | Adapter | NativeIterator | LazyIterator | GeneratorBody
+
+class GeneratorBody:
+    symbol: str
+    function: ast.FunctionDecl
+    bindings: dict[str, types.Type]
 
 class NativeIterator:
     symbol: str

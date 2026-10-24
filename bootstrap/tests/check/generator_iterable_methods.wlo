@@ -1,0 +1,5 @@
+def values() -> Iterable[int]:
+    yield 1
+
+def main():
+    values().next()
