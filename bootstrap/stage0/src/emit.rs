@@ -31,6 +31,7 @@ pub fn emit(program: &Program) -> String {
     // The entry saves the arguments for sys.args (core/API.md).
     writeln!(out, "data $W.argc = {{ l 0 }}").unwrap();
     writeln!(out, "data $W.argv = {{ l 0 }}").unwrap();
+    writeln!(out, "data $W.stdin.buffer = {{ z 4112 }}").unwrap();
     // Every heap object's header points at a descriptor holding its type's
     // name, and an enum's descriptor continues with its members' texts.
     for (symbol, texts) in &program.descriptors {
@@ -133,6 +134,11 @@ impl Emitter<'_> {
         )
         .unwrap();
         self.label("@start");
+        if func.symbol == "W.core.stdin_buffer" {
+            self.line("ret $W.stdin.buffer".into());
+            writeln!(self.out, "}}").unwrap();
+            return;
+        }
         // Locals live in stack slots; QBE promotes them to registers.
         for p in &func.params {
             self.line(format!("%v.{p} =l alloc8 8"));
