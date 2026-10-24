@@ -156,6 +156,11 @@ check_bind_driver() {
 # The programs in bootstrap/tests/ that willow1 compiles, one per line. Each
 # runs through run.sh as it does with willow0.
 willow1_programs="
+check/dict_items_target.wlo
+check/dict_items_target_type.wlo
+check/dict_loop_target_type.wlo
+check/dict_values_target_type.wlo
+check/dict_view_expression.wlo
 check/list_extend_element_type.wlo
 check/method_value.wlo
 core/dicts_test.wlo
@@ -176,11 +181,22 @@ programs/break_outside_loop.wlo
 programs/class_symbols.wlo
 programs/classes.wlo
 programs/constructor_arguments.wlo
+programs/control_flow.wlo
 programs/conversions.wlo
 programs/core_test_intrinsic.wlo
+programs/dict_changed_during_iteration.wlo
+programs/dict_class_method.wlo
+programs/dict_evaluation_order.wlo
+programs/dict_get_default_type.wlo
+programs/dict_iteration.wlo
+programs/dict_key_type.wlo
+programs/dict_operations.wlo
+programs/dicts.wlo
 programs/division_by_zero.wlo
+programs/empty_dict_display.wlo
 programs/empty_list_display.wlo
 programs/enum_member.wlo
+programs/enums.wlo
 programs/exit_unreachable.wlo
 programs/exponent_without_digits.wlo
 programs/extend_element_type.wlo
@@ -194,6 +210,7 @@ programs/for_assignment_narrowing.wlo
 programs/for_loops.wlo
 programs/format_specification.wlo
 programs/fstring_type.wlo
+programs/fstrings.wlo
 programs/host_args.wlo
 programs/host_exit.wlo
 programs/host_files.wlo
@@ -208,6 +225,7 @@ programs/invalid_int.wlo
 programs/is_none_not_optional.wlo
 programs/isinstance_none.wlo
 programs/isinstance_not_member.wlo
+programs/key_not_found.wlo
 programs/keyword_after_condition.wlo
 programs/list_evaluation_order.wlo
 programs/list_index_out_of_range.wlo
@@ -228,6 +246,7 @@ programs/operator_types.wlo
 programs/operators.wlo
 programs/optional_field.wlo
 programs/private_name.wlo
+programs/qualified_names.wlo
 programs/range_zero_step.wlo
 programs/read_missing_file.wlo
 programs/recursive_alias.wlo
@@ -239,6 +258,7 @@ programs/string_iteration.wlo
 programs/strings.wlo
 programs/sum_to.wlo
 programs/sys_exit.wlo
+programs/type_aliases.wlo
 programs/type_intrinsic_outside_core.wlo
 programs/union_arithmetic.wlo
 programs/union_boxing.wlo

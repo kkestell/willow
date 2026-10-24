@@ -1,0 +1,5 @@
+def main():
+    value = "s"
+    d = {"one": 1}
+    for key, value in d.items():
+        pass

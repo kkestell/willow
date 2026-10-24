@@ -1,0 +1,5 @@
+def main():
+    k = "s"
+    d = {"one": 1}
+    for k in d.values():
+        pass
