@@ -63,6 +63,20 @@ extern def atan(x: float) -> float
 extern def atan2(y: float, x: float) -> float
 extern def copysign(x: float, y: float) -> float
 
+extern def getaddrinfo(host: ptr, service: ptr, hints: ptr, result: ptr) -> cint
+extern def freeaddrinfo(addresses: ptr)
+extern def gai_strerror(code: cint) -> ptr
+extern def socket(family: cint, kind: cint, transport: cint) -> cint
+extern def connect(fd: cint, address: ptr, size: cint) -> cint
+extern def bind(fd: cint, address: ptr, size: cint) -> cint
+extern def listen(fd: cint, backlog: cint) -> cint
+extern def accept(fd: cint, address: ptr, size: ptr) -> cint
+extern def getsockopt(fd: cint, level: cint, name: cint, value: ptr, size: ptr) -> cint
+extern def setsockopt(fd: cint, level: cint, name: cint, value: ptr, size: cint) -> cint
+extern def getsockname(fd: cint, address: ptr, size: ptr) -> cint
+extern def recv(fd: cint, buf: ptr, size: int, flags: cint) -> int
+extern def send(fd: cint, buf: ptr, size: int, flags: cint) -> int
+
 extern def GC_gcollect()
 extern def GC_get_my_stackbottom(base: ptr) -> ptr
 extern def GC_set_stackbottom(thread: ptr, base: ptr)
@@ -2746,6 +2760,123 @@ def fs_realpath(path: str) -> str:
     if __addr_is_null(realpath(path_bytes(path), buf)):
         fail_os("resolve", path)
     return str_from_bytes(buf, strlen(buf))
+
+class NetLayout:
+    address_offset: int
+    socket_level: int
+    reuse_address: int
+    socket_error: int
+    nonblocking: int
+    again: int
+    in_progress: int
+    no_signal: int
+    no_sigpipe: int
+
+def net_layout() -> NetLayout:
+    if __os == "darwin":
+        return NetLayout(32, 65535, 4, 4103, 4, 35, 36, 0, 4130)
+    return NetLayout(24, 1, 2, 4, 2048, 11, 115, 16384, 0)
+
+class NetAddress:
+    family: int
+    data: ptr
+    size: int
+
+def net_check_host(host: str, port: int, lowest: int):
+    if host == "":
+        fail("ValueError", "invalid host '" + host + "'")
+    for char in host:
+        if ord(char) < 33 or ord(char) > 126:
+            fail("ValueError", "invalid host '" + host + "'")
+    if port < lowest or port > 65535:
+        fail("ValueError", "invalid port " + str(port))
+
+def net_check_timeout(timeout: float | None):
+    if timeout is not None:
+        if not (timeout > 0.0 and timeout - timeout == 0.0):
+            fail("ValueError", "timeout must be finite and positive")
+
+def net_reason(code: int) -> str:
+    text = strerror(code)
+    return str_from_bytes(text, strlen(text))
+
+def net_resolve(host: str, port: int) -> list[NetAddress]:
+    layout = net_layout()
+    # addrinfo is 48 bytes on both systems; only ai_addr's offset differs.
+    hints = __alloc_atomic(48)
+    for offset in range(0, 48, 8):
+        __store8(hints, offset, __word(0))
+    __store4(hints, 8, 1)
+    result = __alloc(8)
+    code = getaddrinfo(str_bytes(host), str_bytes(str(port)), hints, result)
+    if code != 0:
+        text = gai_strerror(code)
+        fail("OSError", "cannot resolve " + host + ": " + str_from_bytes(text, strlen(text)))
+    addresses: list[NetAddress] = []
+    first = __ptr(__load8(result, 0))
+    entry = first
+    while not __addr_is_null(entry):
+        size = __load4(entry, 16)
+        data = __alloc_atomic(size)
+        memcpy(data, __ptr(__load8(entry, layout.address_offset)), size)
+        addresses.append(NetAddress(__load4(entry, 4), data, size))
+        entry = __ptr(__load8(entry, 40))
+    freeaddrinfo(first)
+    return addresses
+
+# Accepted sockets need the same flags and SIGPIPE protection as new ones.
+# Return an errno value before cleanup can overwrite it.
+def net_configure(fd: int) -> int:
+    layout = net_layout()
+    if fcntl(fd, 2, 1) < 0:
+        return errno()
+    flags = fcntl(fd, 3)
+    if flags < 0:
+        return errno()
+    if flags // layout.nonblocking % 2 == 0:
+        flags = flags + layout.nonblocking
+    if fcntl(fd, 4, flags) < 0:
+        return errno()
+    if layout.no_sigpipe != 0:
+        enabled = __alloc_atomic(4)
+        __store4(enabled, 0, 1)
+        if setsockopt(fd, layout.socket_level, layout.no_sigpipe, enabled, 4) < 0:
+            return errno()
+    return 0
+
+def net_socket(family: int) -> int:
+    fd = socket(family, 1, 0)
+    if fd >= 0:
+        code = net_configure(fd)
+        if code != 0:
+            close(fd)
+            fail("OSError", "cannot configure socket: " + net_reason(code))
+    return fd
+
+def net_socket_error(fd: int) -> int:
+    layout = net_layout()
+    value = __alloc_atomic(4)
+    size = __alloc_atomic(4)
+    __store4(size, 0, 4)
+    if getsockopt(fd, layout.socket_level, layout.socket_error, value, size) < 0:
+        return errno()
+    return __load4(value, 0)
+
+def net_pollfd(fd: int, events: int) -> ptr:
+    # pollfd is an int and two shorts on both systems.
+    value = __alloc_atomic(8)
+    __store4(value, 0, fd)
+    __store4(value, 4, events)
+    return value
+
+def net_local_port(fd: int) -> int:
+    address = __alloc_atomic(128)
+    size = __alloc_atomic(4)
+    __store4(size, 0, 128)
+    if getsockname(fd, address, size) < 0:
+        fail("OSError", "cannot get local port: " + os_reason())
+    # sockaddr_in and sockaddr_in6 both put the network-order port at byte 2.
+    return __load1(address, 2) * 256 + __load1(address, 3)
 
 class FsLayout:
     buffer_size: int

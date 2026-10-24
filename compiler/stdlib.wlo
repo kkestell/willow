@@ -419,43 +419,11 @@ def http_module() -> Module:
     add_helper(functions, "urlencode", [values], prim("str"), "http_urlencode")
     return module
 
-def net_module() -> Module:
-    module = new_module("net")
-    timeout = none_param("timeout", optional("float"))
-    connection = native_class("net", "Connection", "net_connection")
-    native_method(connection, "recv", [param("size", prim("int")), timeout], prim("bytes"))
-    native_method(connection, "sendall", [param("data", prim("bytes")), timeout], prim("None"))
-    native_method(connection, "close", [], prim("None"))
-    listener = native_class("net", "Listener", "net_listener")
-    native_method(listener, "accept", [timeout], class_type(connection))
-    native_method(listener, "local_port", [], prim("int"))
-    native_method(listener, "close", [], prim("None"))
-    reader = native_class("net", "Reader", "net_reader")
-    native_method(reader, "read_exactly", [param("size", prim("int")), timeout], prim("bytes"))
-    max_bytes = default_param("max_bytes", prim("int"), int_default("1048576"))
-    native_method(reader, "read_until", [param("separator", prim("bytes")), max_bytes, timeout], prim("bytes"))
-    native_method(reader, "close", [], prim("None"))
-    scoped(connection)
-    scoped(listener)
-    scoped(reader)
-    module.classes["Connection"] = connection
-    module.classes["Listener"] = listener
-    module.classes["Reader"] = reader
-    host = arg("host", prim("str"))
-    port = arg("port", prim("int"))
-    connect_timeout = defaulted("timeout", optional("float"), float_default(30.0))
-    add_helper(module.functions, "connect", [host, port, connect_timeout], class_type(connection), "net_connect")
-    backlog = defaulted("backlog", prim("int"), int_default("16"))
-    add_helper(module.functions, "listen", [host, port, backlog], class_type(listener), "net_listen")
-    add_helper(module.functions, "reader", [arg("connection", class_type(connection))], class_type(reader), "net_reader")
-    return module
-
 # The compiler-provided modules, by name.
 def modules() -> dict[str, Module]:
     return {
         "aio": aio_module(),
         "http": http_module(),
-        "net": net_module(),
         "random": random_module(),
         "terminal": terminal_module(),
     }
