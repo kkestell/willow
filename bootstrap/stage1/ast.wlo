@@ -4,11 +4,15 @@
 # blocks: an `if` without `else` has an empty `else_body`. An empty string
 # stands in for an optional name.
 #
-# The binder fills in the fields marked as its own and replaces some nodes:
-# a name of a function becomes a FunctionValue, a field of an enum an
-# EnumMember, and a call through a local or a module a CallValue or Call.
+# The binder fills in the fields marked as its own, which hold its symbols
+# and the records and types of types.wlo, and replaces some nodes: a name of
+# a function becomes a FunctionValue or BuiltinValue, a field of an enum an
+# EnumMember, a library constant a Float, and a call through a local or a
+# module a CallValue or Call.
 
 import diagnostic
+import stdlib
+import types
 
 class Module:
     path: str
@@ -17,11 +21,14 @@ class Module:
     imports: list[Import]
     # In source order.
     declarations: list[Decl]
-    # The binder's: declarations by name, imported modules by full name, and
-    # the names imports bind.
+    # The binder's: declarations by name, imported program and library
+    # modules by full name, the names imports bind, and for a test entry its
+    # test functions by name.
     names: dict[str, Decl]
     imported: dict[str, Module]
+    provided: dict[str, stdlib.Module]
     roots: dict[str, bool]
+    tests: list[FunctionDecl]
 
 # `import a.b.c` has the name "a.b.c" and the root "a", which it binds.
 class Import:
@@ -62,6 +69,8 @@ class FunctionDecl:
     owner: ClassDecl | ProtocolDecl | None = None
     type_name: str = ""
     generator: bool = False
+    # The binder's signature, which lambdas do not have.
+    record: types.Function | None = None
     # `extern def`, which only core may declare: a C function with no body,
     # variadic when its parameters end with `...`.
     external: bool = False
@@ -86,8 +95,10 @@ class ClassDecl:
     fields: list[FieldDecl]
     methods: list[FunctionDecl]
     exception: bool
-    # The binder's: the name types write, qualified outside the entry module.
+    # The binder's: the name types write, qualified outside the entry module,
+    # and the class's record, with its resolved fields and methods.
     type_name: str = ""
+    record: types.Class | None = None
 
 class FieldDecl:
     line: int
@@ -103,6 +114,7 @@ class ProtocolDecl:
     type_params: list[TypeParam]
     methods: list[FunctionDecl]
     type_name: str = ""
+    record: types.Protocol | None = None
 
 class EnumDecl:
     line: int
@@ -110,6 +122,7 @@ class EnumDecl:
     name: str
     members: list[Ident]
     type_name: str = ""
+    record: types.Enum | None = None
 
 class AliasDecl:
     line: int
@@ -140,7 +153,7 @@ class TypeName:
     args: list[TypeExpr]
     has_args: bool
     # The binder's, for `isinstance` and `except`: the class or enum named.
-    declaration: Decl | None = None
+    record: types.Class | types.Enum | None = None
 
 # At its first member.
 class UnionType:
@@ -168,7 +181,7 @@ class Expr:
     col: int
     node: ExprNode
 
-type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay | TypeOf
+type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | BuiltinValue | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay | TypeOf
 
 # The decimal digits, with "-" before a negative default. The lexer has
 # checked the range.
@@ -203,7 +216,7 @@ class Name:
 class FunctionValue:
     target: FunctionDecl
     qualified: bool
-    type_args: list[TypeExpr]
+    type_args: list[types.Type]
     symbol: Symbol | None = None
 
 # The binder's: `E.MEMBER`.
@@ -211,22 +224,30 @@ class EnumMember:
     decl: EnumDecl
     name: str
 
+# The binder's: a built-in or library function named as a value, as in
+# `f = str` or `f = sys.args`, with the name it was written as.
+class BuiltinValue:
+    builtin: stdlib.Builtin
+    name: str
+
 # A call by bare name, at the name. Keyword arguments follow the positional
 # ones in the source, so the two lists keep the written order. The binder
-# makes `module.f(...)` a Call too, named "module.f", and sets the target.
+# makes `module.f(...)` a Call too, named "module.f", and sets the target: a
+# function, a built-in or library function, or a class, exception class, or
+# library class to construct. Its type arguments are a generic call's.
 class Call:
     name: str
     args: list[Expr]
     keywords: list[Keyword]
-    type_args: list[TypeExpr]
-    target: FunctionDecl | ClassDecl | None = None
+    type_args: list[types.Type]
+    target: FunctionDecl | stdlib.Builtin | types.Class | None = None
 
 # A call of any other callee, at its `(`.
 class CallValue:
     callee: Expr
     args: list[Expr]
     keywords: list[Keyword]
-    type_args: list[TypeExpr]
+    type_args: list[types.Type]
 
 # At the method name.
 class MethodCall:
@@ -328,11 +349,13 @@ class Stmt:
 
 type StmtNode = Assign | Unpack | IndexAssign | FieldAssign | CallStmt | If | While | For | With | AsyncWith | Try | FunctionDef | Nonlocal | Return | Assert | Raise | Yield | SimpleStatement
 
+# The binder's `declared`: the annotation's type.
 class Assign:
     name: str
     annotation: TypeExpr | None
     value: Expr
     symbol: Symbol | None = None
+    declared: types.Type | None = None
 
 class Unpack:
     target: Target
@@ -437,6 +460,9 @@ class Symbol:
     owner: FunctionDecl
     captured: bool = False
     function: FunctionDecl | None = None
+    # A parameter's type, from its function's signature; the checker gives
+    # locals theirs.
+    ty: types.Type | None = None
 
 # A use of an enclosing function's variable, at its first use.
 class Capture:

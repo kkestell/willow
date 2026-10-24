@@ -1,0 +1,10 @@
+import b
+
+def f():
+    pass
+
+def f():
+    pass
+
+def main():
+    f()

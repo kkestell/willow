@@ -1,16 +1,17 @@
-# Resolves names in a program's parsed modules, the counterpart of
-# compiler/bind.lua: each module's declarations, the symbols of parameters and
-# locals, nested functions and `nonlocal`, captures, and the names that
-# expressions use, recorded in the tree as ast.wlo describes. Errors have the
-# Lua binder's wording and positions, and binding stops at the first one.
-#
-# Not yet here: types (signatures, annotations, aliases, defaults, type
-# arguments), which wait for types.wlo, and built-in functions, built-in
-# exception classes, and standard library modules, which wait for stdlib.wlo.
-# Until then a name that the program does not declare is unknown.
+# Resolves names and types in a program's modules, the counterpart of
+# compiler/bind.lua: each module's declarations, their signatures, fields,
+# aliases, type parameters, and defaults as types.wlo types, the symbols of
+# parameters and locals, nested functions and `nonlocal`, captures, and the
+# names that expressions use, recorded in the tree as ast.wlo describes.
+# Errors have the Lua binder's wording and positions, and binding stops at
+# the first one.
 
 import ast
 import diagnostic
+import loader
+import parser
+import stdlib
+import types
 
 # The names of a function body, which fall back to the enclosing function's.
 class Scope:
@@ -25,12 +26,99 @@ class Scope:
             return None
         return outer.find(name)
 
+# The type parameters in scope where types are resolved, by name. In a
+# generic alias's body they are its parameters' type arguments instead, and
+# `depth` counts the alias applications that enclose it.
+class TypeScope:
+    names: dict[str, types.Type]
+    outer: TypeScope | None
+    depth: int
+
+    def find(self, name: str) -> types.Type | None:
+        if name in self.names:
+            return self.names[name]
+        outer = self.outer
+        if outer is None:
+            return None
+        return outer.find(name)
+
+# A library module's alias, such as json.Json.
+class ProvidedAlias:
+    name: str
+    type_name: str
+    ty: types.Type
+
+# A library module's float constant, such as math.pi.
+class ProvidedConstant:
+    name: str
+    value: float
+
+# What a module-qualified name can reach.
+type Member = ast.Decl | stdlib.Builtin | types.Class | ProvidedAlias | ProvidedConstant
+
+# What a name in a type can reach.
+type Named = types.Class | types.Protocol | types.Enum | AliasState | ProvidedAlias
+
+# A program's alias as the binder resolves it. A generic alias has a type
+# for each list of type arguments it is given.
+class AliasState:
+    decl: ast.AliasDecl
+    module: ast.Module
+    typevars: list[types.TypeVar]
+    resolved: types.Type | None
+    resolving: bool
+    applications: list[Application]
+
+class Application:
+    args: list[types.Type]
+    ty: types.Type | None
+
+# A list element or dict value waiting to be resolved, in the type scope
+# where it was written.
+class PendingLazy:
+    lazy: types.Lazy
+    node: ast.TypeExpr
+    module: ast.Module
+    scope: TypeScope
+
+# A union whose members are checked for overlap once method signatures are
+# resolved, because a protocol member needs them.
+class Overlap:
+    module: ast.Module
+    members: list[types.Type]
+    lines: list[int]
+    cols: list[int]
+
+# A type argument whose bound is checked once the lazy types in it are
+# resolved, so that `list[int]` satisfies `Iterable[int]`. The Lua binder
+# checks before they are, and so rejects `Box[list[int]]` for a `Box[T:
+# Iterable[int]]`.
+class Bound:
+    module: ast.Module
+    var: types.TypeVar
+    arg: types.Type
+    line: int
+    col: int
+
+type Check = Overlap | Bound
+
 class Binder:
     modules: list[ast.Module]
     by_name: dict[str, ast.Module]
     entry: ast.Module
     last_id: int
     error: diagnostic.Diagnostic | None
+    builtins: dict[str, stdlib.Builtin]
+    exceptions: dict[str, types.Class]
+    protocols: dict[str, types.Protocol]
+    provided: dict[str, stdlib.Module]
+    coroutine: types.Class
+    # By the alias's type_name.
+    aliases: dict[str, AliasState]
+    pending: list[PendingLazy]
+    # Checks that run once the declarations' method signatures and lazy
+    # types are resolved.
+    waiting: list[Check]
 
     def fail(self, module: ast.Module, line: int, col: int, message: str):
         if self.error is None:
@@ -49,6 +137,8 @@ class Binder:
                 return
             seen[item.name] = True
 
+    # Declarations
+
     # Collects the imports and declarations of `module`, which share one
     # namespace, and reports clashes in source order. An import takes its
     # root name, which several qualified imports may share.
@@ -56,6 +146,8 @@ class Binder:
         taken: dict[str, bool] = {}
         imported: dict[str, bool] = {}
         for imp in module.imports:
+            if not self.check_builtin_name(module, imp.root, imp.line, imp.col):
+                return
             for other in imported:
                 short = other
                 long = imp.name
@@ -73,8 +165,12 @@ class Binder:
             module.roots[imp.root] = True
             if imp.name in self.by_name:
                 module.imported[imp.name] = self.by_name[imp.name]
+            elif imp.name in self.provided:
+                module.provided[imp.name] = self.provided[imp.name]
         for decl in module.declarations:
             ident = decl_ident(decl)
+            if not self.check_builtin_name(module, ident.name, ident.line, ident.col):
+                return
             if ident.name in taken:
                 self.fail(module, ident.line, ident.col, f"duplicate {noun(decl)} '{ident.name}'")
                 return
@@ -84,29 +180,532 @@ class Binder:
             if module.name != self.entry.name:
                 type_name = module.name + "." + ident.name
             set_type_name(decl, type_name)
-            if isinstance(decl, ast.FunctionDecl):
-                decl.id = self.new_id()
+            if not self.declare_record(module, decl, type_name):
+                return
 
-    # The type parameter names in `outer` and those of a declaration, which
-    # cannot hide one another.
-    def enter_type_params(self, module: ast.Module, outer: dict[str, bool], params: list[ast.TypeParam]) -> dict[str, bool]:
-        scope: dict[str, bool] = {}
-        for name in outer:
-            scope[name] = True
+    # Reports a declaration or import that takes a built-in name.
+    def check_builtin_name(self, module: ast.Module, name: str, line: int, col: int) -> bool:
+        if name in self.builtins:
+            self.fail(module, line, col, f"cannot redefine built-in function '{name}'")
+            return False
+        if name in self.exceptions:
+            self.fail(module, line, col, f"cannot redefine built-in class '{name}'")
+            return False
+        return True
+
+    # Makes the types record of `decl`, whose type parameters, if any, get
+    # their type variables now so that other declarations can name them.
+    def declare_record(self, module: ast.Module, decl: ast.Decl, type_name: str) -> bool:
+        if isinstance(decl, ast.FunctionDecl):
+            if decl.external and module.name != "core":
+                self.fail(module, decl.line, decl.col, "extern functions are only allowed in core")
+                return False
+            decl.id = self.new_id()
+            decl.record = types.Function(decl.id, decl.name, type_name, [], [], types.prim("None"))
+        elif isinstance(decl, ast.ClassDecl):
+            if decl.exception and len(decl.type_params) > 0:
+                first = decl.type_params[0]
+                self.fail(module, first.line, first.col, "exception classes cannot be generic")
+                return False
+            decl.record = types.Class(decl.name, type_name, self.new_typevars(decl.type_params), [], [], decl.exception, False, "")
+        elif isinstance(decl, ast.ProtocolDecl):
+            decl.record = types.Protocol(decl.name, type_name, self.new_typevars(decl.type_params), [])
+        elif isinstance(decl, ast.EnumDecl):
+            members: list[str] = []
+            for member in decl.members:
+                members.append(member.name)
+            decl.record = types.Enum(decl.name, type_name, members)
+        else:
+            self.aliases[type_name] = AliasState(decl, module, [], None, False, [])
+        return True
+
+    def new_typevars(self, params: list[ast.TypeParam]) -> list[types.TypeVar]:
+        result: list[types.TypeVar] = []
         for param in params:
-            if param.name in scope:
+            result.append(types.TypeVar(self.new_id(), param.name, None))
+        return result
+
+    # Gives `method`, of `owner`, its id, type name, and record.
+    def declare_method(self, method: ast.FunctionDecl, type_name: str) -> types.Function:
+        method.id = self.new_id()
+        method.type_name = type_name + "." + method.name
+        record = types.Function(method.id, method.name, method.type_name, [], [], types.prim("None"))
+        method.record = record
+        return record
+
+    def has_module(self, module: ast.Module, path: str) -> bool:
+        return path in module.imported or path in module.provided
+
+    # Member `name` of the module that `module` imports as `path`. Names that
+    # begin with `_` are private to their module.
+    def lookup(self, module: ast.Module, path: str, name: str, line: int, col: int) -> Member | None:
+        if path in module.imported:
+            target = module.imported[path]
+            if name not in target.names:
+                self.fail(module, line, col, f"module '{target.name}' has no function, class, enum, or alias '{name}'")
+                return None
+            if name.startswith("_") and target.name != module.name:
+                self.fail(module, line, col, f"'{name}' is private to module '{target.name}'")
+                return None
+            return target.names[name]
+        provided = module.provided[path]
+        if name in provided.functions:
+            return provided.functions[name]
+        if name in provided.classes:
+            return provided.classes[name]
+        if name in provided.aliases:
+            return ProvidedAlias(name, path + "." + name, provided.aliases[name])
+        if name in provided.constants:
+            return ProvidedConstant(name, provided.constants[name])
+        self.fail(module, line, col, f"module '{provided.name}' has no function, class, enum, or alias '{name}'")
+        return None
+
+    # The enum that `object` names as `E` or `module.E` in `module` when no
+    # name in `scope` shadows it, or None.
+    def enum_named(self, module: ast.Module, object: ast.Expr, scope: Scope | None) -> ast.EnumDecl | None:
+        path = qualified_name(object)
+        if path == "":
+            return None
+        parts = path.split(".")
+        root = parts[0]
+        if scope is not None and scope.find(root) is not None:
+            return None
+        found: Member | None = None
+        if len(parts) == 1:
+            if path in module.names:
+                found = module.names[path]
+        elif root in module.roots:
+            prefix = ".".join(parts[:len(parts) - 1])
+            if self.has_module(module, prefix):
+                found = self.lookup(module, prefix, parts[len(parts) - 1], object.line, object.col)
+        if isinstance(found, ast.EnumDecl):
+            return found
+        return None
+
+    # Makes `expr`, a Field on `decl`, an EnumMember.
+    def resolve_member(self, module: ast.Module, expr: ast.Expr, decl: ast.EnumDecl, name: str):
+        for member in decl.members:
+            if member.name == name:
+                expr.node = ast.EnumMember(decl, name)
+                return
+        self.fail(module, expr.line, expr.col, f"enum '{decl.type_name}' has no member '{name}'")
+
+    # Types
+
+    # The class, protocol, enum, or alias that `ref`, a name in a type, an
+    # `except` clause, or `isinstance`, names. These are found through
+    # file-level declarations, imports, built-in exception classes, and
+    # built-in protocols, which locals never shadow.
+    def resolve_named(self, module: ast.Module, ref: ast.TypeName) -> Named | None:
+        found: Member | None = None
+        written = ref.name
+        if ref.module != "":
+            written = ref.module + "." + ref.name
+            if not self.has_module(module, ref.module):
+                self.fail(module, ref.line, ref.col, f"unknown module '{ref.module}'")
+                return None
+            found = self.lookup(module, ref.module, ref.name, ref.line, ref.col)
+            if found is None:
+                return None
+        elif ref.name in module.names:
+            found = module.names[ref.name]
+        elif ref.name in self.exceptions:
+            found = self.exceptions[ref.name]
+        elif ref.name in self.protocols:
+            return self.protocols[ref.name]
+        elif ref.name == "Coroutine":
+            found = self.coroutine
+        named = self.as_named(found)
+        if named is None:
+            self.fail(module, ref.line, ref.col, f"unknown type '{written}'")
+        return named
+
+    def as_named(self, found: Member | None) -> Named | None:
+        if isinstance(found, ast.ClassDecl):
+            return found.record
+        if isinstance(found, ast.ProtocolDecl):
+            return found.record
+        if isinstance(found, ast.EnumDecl):
+            return found.record
+        if isinstance(found, ast.AliasDecl):
+            return self.aliases[found.type_name]
+        if isinstance(found, types.Class):
+            return found
+        if isinstance(found, ProvidedAlias):
+            return found
+        return None
+
+    # The source text of type `node`, with declarations named by their
+    # type_name, which names a lazy type.
+    def type_text(self, node: ast.TypeExpr, module: ast.Module, scope: TypeScope) -> str:
+        if isinstance(node, ast.UnionType):
+            names: list[str] = []
+            for member in node.members:
+                text = self.type_text(member, module, scope)
+                if isinstance(member, ast.CallableType):
+                    text = "(" + text + ")"
+                names.append(text)
+            return " | ".join(names)
+        if isinstance(node, ast.CallableType):
+            return "(" + self.type_texts(node.params, module, scope) + ") -> " + self.type_text(node.result, module, scope)
+        name = node.name
+        if node.module == "":
+            if name == "list":
+                return "list[" + self.type_text(node.args[0], module, scope) + "]"
+            if name == "dict":
+                return "dict[" + self.type_texts(node.args, module, scope) + "]"
+            if name == "tuple":
+                if len(node.args) == 0:
+                    return "tuple[()]"
+                return "tuple[" + self.type_texts(node.args, module, scope) + "]"
+            if is_scalar(name):
+                return name
+            # A generic alias's body names the type arguments it was given.
+            found = scope.find(name)
+            if found is not None:
+                return types.display(found)
+        named = self.resolve_named(module, node)
+        if named is None:
+            return ""
+        type_name = named_type_name(named)
+        if node.has_args and not isinstance(named, types.Enum):
+            return type_name + "[" + self.type_texts(node.args, module, scope) + "]"
+        return type_name
+
+    def type_texts(self, nodes: list[ast.TypeExpr], module: ast.Module, scope: TypeScope) -> str:
+        names: list[str] = []
+        for node in nodes:
+            names.append(self.type_text(node, module, scope))
+        return ", ".join(names)
+
+    # A lazy type keeps the type scope where it was written.
+    def lazy(self, node: ast.TypeExpr, module: ast.Module, scope: TypeScope) -> types.Lazy:
+        lazy = types.Lazy(self.type_text(node, module, scope), None, self.new_id())
+        self.pending.append(PendingLazy(lazy, node, module, scope))
+        return lazy
+
+    # Resolves every lazy type; resolving one may queue more.
+    def force_pending(self):
+        while len(self.pending) > 0 and self.error is None:
+            item = self.pending.pop()
+            item.lazy.target = self.resolve_type(item.node, item.module, item.scope, "")
+
+    def check_overlap(self, overlap: Overlap):
+        for i in range(1, len(overlap.members)):
+            message = types.conflict(overlap.members[:i], overlap.members[i])
+            if message != "":
+                self.fail(overlap.module, overlap.lines[i], overlap.cols[i], message)
+                return
+
+    def check_bound(self, bound: Bound):
+        message = types.unsatisfied(bound.var, bound.arg)
+        if message != "":
+            self.fail(bound.module, bound.line, bound.col, message)
+
+    # Resolves the pending lazy types, then runs the waiting checks.
+    def check_waiting(self):
+        self.force_pending()
+        checks = self.waiting
+        self.waiting = []
+        for check in checks:
+            if self.error is not None:
+                return
+            if isinstance(check, Overlap):
+                self.check_overlap(check)
+            else:
+                self.check_bound(check)
+
+    # Puts `params`, a declaration's type parameters, in scope over `outer`,
+    # making their type variables in `vars` on first use. Bounds resolve with
+    # the parameters in scope.
+    def enter_type_params(self, module: ast.Module, outer: TypeScope, params: list[ast.TypeParam], vars: list[types.TypeVar]) -> TypeScope:
+        if len(params) == 0:
+            return outer
+        scope = TypeScope({}, outer, 0)
+        for i in range(len(params)):
+            param = params[i]
+            if scope.find(param.name) is not None:
                 self.fail(module, param.line, param.col, f"type parameter '{param.name}' hides another type parameter")
-            scope[param.name] = True
+            if i >= len(vars):
+                vars.append(types.TypeVar(self.new_id(), param.name, None))
+            scope.names[param.name] = vars[i]
+        for i in range(len(params)):
+            bound = params[i].bound
+            if bound is not None and vars[i].bound is None and self.error is None:
+                resolved = self.resolve_type(bound, module, scope, "")
+                if not isinstance(resolved, types.ClassType) and not isinstance(resolved, types.ProtocolType):
+                    self.fail(module, parser.type_line(bound), parser.type_col(bound), "a type parameter's bound must be a class, native type, or protocol")
+                vars[i].bound = resolved
         return scope
 
-    # The checks of a function's signature that need no types, with the type
-    # parameters of its class, if any, in `outer`.
-    def check_signature(self, module: ast.Module, function: ast.FunctionDecl, outer: dict[str, bool]):
-        self.enter_type_params(module, outer, function.type_params)
+    # The type generic alias `state` gives `args`. Each argument list is
+    # resolved once, so a recursive use through `list` or `dict` with the
+    # same arguments finds it. A recursive use with growing arguments nests
+    # without end.
+    def apply_alias(self, state: AliasState, args: list[types.Type], module: ast.Module, line: int, col: int, scope: TypeScope) -> types.Type:
+        decl = state.decl
+        for application in state.applications:
+            if same_args(application.args, args):
+                applied = application.ty
+                if applied is None:
+                    self.fail(module, line, col, f"alias '{decl.name}' expands to itself")
+                    return types.prim("None")
+                return applied
+        depth = scope.depth + 1
+        if depth > 100:
+            self.fail(module, line, col, f"alias '{decl.name}' expands without end")
+            return types.prim("None")
+        application = Application(args, None)
+        state.applications.append(application)
+        names: dict[str, types.Type] = {}
+        arg_names: list[str] = []
+        for i in range(len(decl.type_params)):
+            names[decl.type_params[i].name] = args[i]
+            arg_names.append(types.display(args[i]))
+        union_name = ""
+        if isinstance(decl.value, ast.UnionType):
+            union_name = decl.type_name + "[" + ", ".join(arg_names) + "]"
+        result = self.resolve_type(decl.value, state.module, TypeScope(names, None, depth), union_name)
+        application.ty = result
+        return result
+
+    # The type a non-generic alias names. A generic one is checked by
+    # applying it to its own type parameters, and has no type of its own.
+    def resolve_alias(self, state: AliasState) -> types.Type | None:
+        decl = state.decl
+        if len(decl.type_params) > 0:
+            if len(state.typevars) == 0:
+                root = TypeScope({}, None, 0)
+                self.enter_type_params(state.module, root, decl.type_params, state.typevars)
+                if self.error is None:
+                    self.apply_alias(state, types.var_types(state.typevars), state.module, decl.line, decl.col, root)
+            return None
+        if state.resolved is None and not state.resolving:
+            state.resolving = True
+            union_name = ""
+            if isinstance(decl.value, ast.UnionType):
+                union_name = decl.type_name
+            state.resolved = self.resolve_type(decl.value, state.module, TypeScope({}, None, 0), union_name)
+            state.resolving = False
+        return state.resolved
+
+    # The type that `node`, written in `module`, names in `scope`. `name`
+    # names a union.
+    def resolve_type(self, node: ast.TypeExpr, module: ast.Module, scope: TypeScope, name: str) -> types.Type:
+        none = types.prim("None")
+        if self.error is not None:
+            return none
+        if isinstance(node, ast.UnionType):
+            return self.resolve_union(node, module, scope, name)
+        if isinstance(node, ast.CallableType):
+            params: list[types.Type] = []
+            for param in node.params:
+                params.append(self.resolve_type(param, module, scope, ""))
+            return types.CallableType(params, self.resolve_type(node.result, module, scope, ""))
+        written = node.name
+        if node.module == "":
+            if written == "list":
+                return types.ListType(self.lazy(node.args[0], module, scope))
+            if written == "dict":
+                key_node = node.args[0]
+                key = self.resolve_type(key_node, module, scope, "")
+                if self.error is None and not types.is_key(key):
+                    self.fail(module, parser.type_line(key_node), parser.type_col(key_node), "dictionary keys must be int, str, or an enum")
+                    return none
+                return types.DictType(key, self.lazy(node.args[1], module, scope))
+            if written == "tuple":
+                elements: list[types.Type] = []
+                for arg in node.args:
+                    elements.append(self.resolve_type(arg, module, scope, ""))
+                return types.TupleType(elements)
+            if is_scalar(written):
+                return types.prim(written)
+            found = scope.find(written)
+            if found is not None:
+                if node.has_args:
+                    self.fail(module, node.line, node.col, f"type parameter '{written}' does not take type arguments")
+                return found
+        named = self.resolve_named(module, node)
+        if named is None:
+            return none
+        type_name = named_type_name(named)
+        vars = named_typevars(named)
+        count = len(vars)
+        if isinstance(named, AliasState):
+            count = len(named.decl.type_params)
+        if count > 0:
+            # A generic class, protocol, or alias takes all of its type
+            # arguments.
+            if not node.has_args:
+                self.fail(module, node.line, node.col, f"type '{type_name}' needs type arguments")
+                return none
+            if len(node.args) != count:
+                self.fail(module, node.line, node.col, f"'{type_name}' expects {count} {plural(count, 'type argument')}, received {len(node.args)}")
+                return none
+            resolved: list[types.Type] = []
+            for i in range(count):
+                arg = node.args[i]
+                resolved.append(self.resolve_type(arg, module, scope, ""))
+                if self.error is not None:
+                    return none
+                if i < len(vars) and vars[i].bound is not None:
+                    self.waiting.append(Bound(module, vars[i], resolved[i], parser.type_line(arg), parser.type_col(arg)))
+            if isinstance(named, AliasState):
+                return self.apply_alias(named, resolved, module, node.line, node.col, scope)
+            if isinstance(named, types.Protocol):
+                return types.ProtocolType(named, resolved)
+            if isinstance(named, types.Class):
+                return types.ClassType(named, resolved)
+        if node.has_args:
+            self.fail(module, node.line, node.col, f"type '{type_name}' does not take type arguments")
+            return none
+        if isinstance(named, AliasState):
+            if named.resolving:
+                self.fail(module, node.line, node.col, f"alias '{named.decl.name}' expands to itself")
+                return none
+            aliased = self.resolve_alias(named)
+            if aliased is None:
+                return none
+            return aliased
+        if isinstance(named, ProvidedAlias):
+            return named.ty
+        if isinstance(named, types.Class):
+            return types.ClassType(named, [])
+        if isinstance(named, types.Protocol):
+            return types.ProtocolType(named, [])
+        return types.EnumType(named)
+
+    def resolve_union(self, node: ast.UnionType, module: ast.Module, scope: TypeScope, name: str) -> types.Type:
+        # A type argument substituted for a parameter flattens into the union,
+        # dropping members the union already has.
+        substituted = False
+        for member in node.members:
+            if isinstance(member, ast.TypeName) and member.module == "":
+                found = scope.find(member.name)
+                if found is not None and not isinstance(found, types.TypeVar):
+                    substituted = True
+        overlap = Overlap(module, [], [], [])
+        has_protocol = False
+        for member in node.members:
+            resolved = self.resolve_type(member, module, scope, "")
+            if self.error is not None:
+                return types.prim("None")
+            for m in types.members(resolved):
+                held = False
+                if substituted:
+                    for other in overlap.members:
+                        if type_key(other) == type_key(m):
+                            held = True
+                if not held:
+                    overlap.members.append(m)
+                    overlap.lines.append(parser.type_line(member))
+                    overlap.cols.append(parser.type_col(member))
+                    if isinstance(m, types.ProtocolType):
+                        has_protocol = True
+        if has_protocol:
+            self.waiting.append(overlap)
+        else:
+            self.check_overlap(overlap)
+        union = types.named_union(overlap.members, name)
+        for m in overlap.members:
+            if isinstance(m, types.TypeVar) and not (len(overlap.members) == 2 and types.has(union, "None")):
+                self.fail(module, node.line, node.col, "a type parameter can be in a union only with None")
+                return union
+        return union
+
+    # Resolves the parameter and result types of `function` in `outer`. A
+    # method's `self` has the type of its class, which, like the method's
+    # own, puts its type parameters in scope.
+    def resolve_signature(self, module: ast.Module, function: ast.FunctionDecl, outer: TypeScope):
+        record = function.record
+        if record is None or function.external:
+            return
+        scope = outer
+        self_type: types.Type = types.prim("None")
+        owner = function.owner
+        if isinstance(owner, ast.ClassDecl):
+            owner_record = owner.record
+            if owner_record is not None:
+                scope = self.enter_type_params(module, scope, owner.type_params, owner_record.typevars)
+                self_type = types.class_self(owner_record)
+        elif isinstance(owner, ast.ProtocolDecl):
+            protocol_record = owner.record
+            if protocol_record is not None:
+                scope = self.enter_type_params(module, scope, owner.type_params, protocol_record.typevars)
+                self_type = types.protocol_self(protocol_record)
+        scope = self.enter_type_params(module, scope, function.type_params, record.typevars)
         params: list[ast.Ident] = []
         for param in function.params:
             params.append(ast.Ident(param.line, param.col, param.name))
         self.check_unique(module, params, "parameter")
+        for i in range(len(function.params)):
+            param = function.params[i]
+            ty: types.Type = self_type
+            annotation = param.annotation
+            if owner is None or i > 0:
+                if annotation is not None:
+                    ty = self.resolve_type(annotation, module, scope, "")
+            record.params.append(types.Param(param.name, ty, param.default, param.keyword_only))
+        result = self.resolve_type(function.return_type, module, scope, "")
+        if function.is_async:
+            # An async function's call produces a coroutine of its annotated
+            # result.
+            result = stdlib.coroutine_of(result)
+        record.result = result
+
+    # The type of `default`, a default in `module`, whose enum members it
+    # resolves. Parameters and locals cannot shadow an enum named there.
+    def default_type(self, module: ast.Module, default: ast.Expr) -> types.Type | None:
+        node = default.node
+        if isinstance(node, ast.Field):
+            decl = self.enum_named(module, node.object, None)
+            if self.error is not None:
+                return None
+            if decl is None:
+                self.fail(module, node.object.line, node.object.col, f"unknown enum '{qualified_name(node.object)}'")
+                return None
+            self.resolve_member(module, default, decl, node.name)
+            record = decl.record
+            if record is None:
+                return None
+            return types.EnumType(record)
+        if isinstance(node, ast.TupleDisplay):
+            elements: list[types.Type] = []
+            for element in node.elements:
+                element_type = self.default_type(module, element)
+                if element_type is None:
+                    return None
+                elements.append(element_type)
+            return types.TupleType(elements)
+        if isinstance(node, ast.Int):
+            return types.prim("int")
+        if isinstance(node, ast.Float):
+            return types.prim("float")
+        if isinstance(node, ast.String):
+            return types.prim("str")
+        if isinstance(node, ast.Constant) and node == ast.Constant.NONE:
+            return types.prim("None")
+        return types.prim("bool")
+
+    # Checks that `default`, the default of a parameter or field of type
+    # `ty`, fits it.
+    def check_default(self, module: ast.Module, ty: types.Type, default: ast.Expr):
+        if self.error is not None:
+            return
+        given = self.default_type(module, default)
+        if given is not None and not types.assignable(ty, given):
+            self.fail(module, default.line, default.col, f"expected {types.display(ty)}, received {types.display(given)}")
+
+    def check_param_defaults(self, module: ast.Module, function: ast.FunctionDecl):
+        record = function.record
+        if record is None:
+            return
+        for i in range(len(function.params)):
+            default = function.params[i].default
+            if default is not None and i < len(record.params):
+                self.check_default(module, record.params[i].ty, default)
+
+    # Scopes
 
     # Gives `function` one symbol per parameter and per assigned or loop name,
     # recording the others in `function.locals` in order of first assignment.
@@ -116,8 +715,12 @@ class Binder:
     # left in `pending` until the declaration is reached.
     def collect_symbols(self, module: ast.Module, function: ast.FunctionDecl, outer: Scope | None, pending: dict[str, bool]) -> Scope:
         scope = Scope({}, outer)
-        for param in function.params:
+        record = function.record
+        for i in range(len(function.params)):
+            param = function.params[i]
             symbol = ast.Symbol(self.new_id(), param.name, param.line, param.col, True, function)
+            if record is not None and i < len(record.params):
+                symbol.ty = record.params[i].ty
             param.symbol = symbol
             scope.names[param.name] = symbol
         self.collect(module, function, function.body, scope, pending)
@@ -200,11 +803,12 @@ class Binder:
         scope.names[name] = symbol
         function.locals.append(symbol)
 
-    # Resolves the body of `function`, whose enclosing scope is `outer`.
-    def resolve_function(self, module: ast.Module, function: ast.FunctionDecl, outer: Scope | None, type_params: dict[str, bool]):
+    # Resolves the body of `function`, whose enclosing scope is `outer`, with
+    # the type parameters of `type_scope` in scope.
+    def resolve_function(self, module: ast.Module, function: ast.FunctionDecl, outer: Scope | None, type_scope: TypeScope):
         pending: dict[str, bool] = {}
         scope = self.collect_symbols(module, function, outer, pending)
-        resolver = Resolver(self, module, function, scope, pending, type_params, 0)
+        resolver = Resolver(self, module, function, scope, pending, type_scope, 0)
         resolver.resolve_block(function.body, None)
 
 # Resolves the names in one function body.
@@ -214,7 +818,7 @@ class Resolver:
     function: ast.FunctionDecl
     scope: Scope
     pending: dict[str, bool]
-    type_params: dict[str, bool]
+    type_scope: TypeScope
     # Grows with each call resolved in this function, not in nested ones.
     calls: int
 
@@ -224,36 +828,20 @@ class Resolver:
     def fail(self, line: int, col: int, message: str):
         self.binder.fail(self.module, line, col, message)
 
-    # Declaration `name` of `module` as seen from this function's module.
-    # Names that begin with `_` are private to their module.
-    def lookup(self, module: ast.Module, name: str, line: int, col: int) -> ast.Decl | None:
-        if name not in module.names:
-            self.fail(line, col, f"module '{module.name}' has no function, class, enum, or alias '{name}'")
-            return None
-        if name.startswith("_") and module.name != self.module.name:
-            self.fail(line, col, f"'{name}' is private to module '{module.name}'")
-            return None
-        return module.names[name]
+    def lookup(self, path: str, name: str, line: int, col: int) -> Member | None:
+        return self.binder.lookup(self.module, path, name, line, col)
 
-    # The class, protocol, enum, or alias that `ref` names, through the
-    # module's declarations and imports, which locals never shadow.
-    def resolve_named(self, ref: ast.TypeName) -> ast.Decl | None:
-        decl: ast.Decl | None = None
-        written = ref.name
-        if ref.module != "":
-            written = ref.module + "." + ref.name
-            if ref.module not in self.module.imported:
-                self.fail(ref.line, ref.col, f"unknown module '{ref.module}'")
-                return None
-            decl = self.lookup(self.module.imported[ref.module], ref.name, ref.line, ref.col)
-            if decl is None:
-                return None
-        elif ref.name in self.module.names:
-            decl = self.module.names[ref.name]
-        if decl is None or isinstance(decl, ast.FunctionDecl):
-            self.fail(ref.line, ref.col, f"unknown type '{written}'")
-            return None
-        return decl
+    def resolve_type(self, node: ast.TypeExpr) -> types.Type:
+        ty = self.binder.resolve_type(node, self.module, self.type_scope, "")
+        if len(self.binder.waiting) > 0:
+            self.binder.check_waiting()
+        return ty
+
+    def resolve_types(self, nodes: list[ast.TypeExpr]) -> list[types.Type]:
+        result: list[types.Type] = []
+        for node in nodes:
+            result.append(self.resolve_type(node))
+        return result
 
     # The module name that `object` spells when it starts with an import's
     # root that no local shadows, or "".
@@ -266,45 +854,32 @@ class Resolver:
             return path
         return ""
 
-    # The enum that `object` names as `E` or `module.E` when no local shadows
-    # it, or None.
-    def enum_named(self, object: ast.Expr) -> ast.EnumDecl | None:
-        path = qualified_name(object)
-        if path == "":
-            return None
-        parts = path.split(".")
-        root = parts[0]
-        if self.scope.find(root) is not None:
-            return None
-        decl: ast.Decl | None = None
-        if len(parts) == 1:
-            if path in self.module.names:
-                decl = self.module.names[path]
-        elif root in self.module.roots:
-            prefix = ".".join(parts[:len(parts) - 1])
-            if prefix in self.module.imported:
-                decl = self.lookup(self.module.imported[prefix], parts[len(parts) - 1], object.line, object.col)
-        if isinstance(decl, ast.EnumDecl):
-            return decl
-        return None
+    # A module that `object` names and the program imports, or "".
+    def imported_path(self, object: ast.Expr) -> str:
+        path = self.module_path(object)
+        if path != "" and self.binder.has_module(self.module, path):
+            return path
+        return ""
 
-    # Makes `expr`, a Field on `decl`, an EnumMember.
-    def resolve_member(self, expr: ast.Expr, decl: ast.EnumDecl, name: str):
-        for member in decl.members:
-            if member.name == name:
-                expr.node = ast.EnumMember(decl, name)
-                return
-        self.fail(expr.line, expr.col, f"enum '{decl.type_name}' has no member '{name}'")
-
-    # Makes `expr` a function value of `decl`, or reports why a declaration
+    # Makes `expr` a function value of `found`, or reports why something
     # named `name` cannot be a value.
-    def declared_value(self, expr: ast.Expr, decl: ast.Decl, name: str, qualified: bool):
-        if isinstance(decl, ast.FunctionDecl):
-            expr.node = ast.FunctionValue(decl, qualified, [])
-        elif isinstance(decl, ast.ClassDecl):
+    def declared_value(self, expr: ast.Expr, found: Member, name: str, qualified: bool):
+        if isinstance(found, ast.FunctionDecl):
+            expr.node = ast.FunctionValue(found, qualified, [])
+        elif isinstance(found, ast.ClassDecl):
             self.fail(expr.line, expr.col, f"class '{name}' cannot be used as a value")
+        elif isinstance(found, types.Class):
+            self.fail(expr.line, expr.col, f"class '{name}' cannot be used as a value")
+        elif isinstance(found, stdlib.Builtin):
+            # range and isinstance have forms of their own.
+            if found.name == "range" or found.name == "isinstance":
+                self.fail(expr.line, expr.col, f"function '{name}' cannot be used as a value")
+            else:
+                expr.node = ast.BuiltinValue(found, name)
+        elif isinstance(found, ProvidedConstant):
+            expr.node = ast.Float(found.value)
         else:
-            self.fail(expr.line, expr.col, f"{noun(decl)} '{name}' cannot be used as a value")
+            self.fail(expr.line, expr.col, f"{member_noun(found)} '{name}' cannot be used as a value")
 
     # Records that `symbol`, a variable of an enclosing function, is captured
     # by this function and by each function between it and the owner.
@@ -339,24 +914,7 @@ class Resolver:
         if isinstance(node, ast.Name):
             self.resolve_name(expr, node, callee)
         elif isinstance(node, ast.Call):
-            if self.scope.find(node.name) is not None:
-                # A local hides a declaration of the same name, so this calls
-                # its value.
-                name = ast.Expr(expr.line, expr.col, ast.Name(node.name, False))
-                expr.node = ast.CallValue(name, node.args, node.keywords, node.type_args)
-                self.resolve_expr(expr, False)
-                return
-            target = node.target
-            if target is None:
-                if node.name not in self.module.names:
-                    self.fail(expr.line, expr.col, f"unknown function '{node.name}'")
-                    return
-                decl = self.module.names[node.name]
-                if isinstance(decl, ast.AliasDecl) or isinstance(decl, ast.EnumDecl) or isinstance(decl, ast.ProtocolDecl):
-                    self.fail(expr.line, expr.col, f"{noun(decl)} '{node.name}' cannot be called")
-                    return
-                node.target = decl
-            self.resolve_args(node.args, node.keywords)
+            self.resolve_call(expr, node)
         elif isinstance(node, ast.SpecializedCall):
             self.resolve_specialized_call(expr, node)
         elif isinstance(node, ast.Specialized):
@@ -368,7 +926,7 @@ class Resolver:
                 params.append(ast.Ident(param.line, param.col, param.name))
             self.binder.check_unique(self.module, params, "parameter")
             # Its result type comes from where it is used, so its return
-            # type is a placeholder.
+            # type is a placeholder and it has no signature.
             result = ast.TypeName(expr.line, expr.col, "None", "", [], False)
             body = [ast.Stmt(expr.line, expr.col, ast.Return(node.body))]
             function = ast.FunctionDecl(expr.line, expr.col, "<lambda>", [], node.params, result, body, False, [], [])
@@ -376,7 +934,7 @@ class Resolver:
             function.parent = self.function
             function.type_name = self.function.type_name + ".<lambda>"
             node.function = function
-            self.binder.resolve_function(self.module, function, self.scope, self.type_params)
+            self.binder.resolve_function(self.module, function, self.scope, self.type_scope)
         elif isinstance(node, ast.CallValue):
             self.resolve_expr(node.callee, True)
             self.resolve_args(node.args, node.keywords)
@@ -411,16 +969,16 @@ class Resolver:
             self.resolve_expr(node.operand, False)
             self.calls = self.calls + 1
         elif isinstance(node, ast.Field):
-            enum_decl = self.enum_named(node.object)
-            path = self.module_path(node.object)
+            enum_decl = self.binder.enum_named(self.module, node.object, self.scope)
+            path = self.imported_path(node.object)
             if self.failed():
                 return
             if enum_decl is not None:
-                self.resolve_member(expr, enum_decl, node.name)
-            elif path != "" and path in self.module.imported:
-                value_decl = self.lookup(self.module.imported[path], node.name, expr.line, expr.col)
-                if value_decl is not None:
-                    self.declared_value(expr, value_decl, path + "." + node.name, True)
+                self.binder.resolve_member(self.module, expr, enum_decl, node.name)
+            elif path != "":
+                member = self.lookup(path, node.name, expr.line, expr.col)
+                if member is not None:
+                    self.declared_value(expr, member, path + "." + node.name, True)
             else:
                 self.resolve_expr(node.object, False)
         elif isinstance(node, ast.FString):
@@ -430,23 +988,35 @@ class Resolver:
         elif isinstance(node, ast.TupleDisplay):
             self.resolve_exprs(node.elements)
         elif isinstance(node, ast.DictDisplay):
-            i = 0
-            while i < len(node.keys):
+            for i in range(len(node.keys)):
                 self.resolve_expr(node.keys[i], False)
                 self.resolve_expr(node.values[i], False)
-                i = i + 1
+        elif isinstance(node, ast.TypeOf):
+            # As in stage 0, only core may name a built-in type's descriptor.
+            if self.module.name != "core":
+                self.fail(expr.line, expr.col, "intrinsic '__type' is only available in core")
+                return
+            target = node.target
+            if not isinstance(target, ast.TypeName) or target.module != "" or target.name not in ["int", "float", "bool", "str", "list", "dict"]:
+                self.fail(parser.type_line(target), parser.type_col(target), "'__type' takes int, float, bool, str, list, or dict")
 
     def resolve_name(self, expr: ast.Expr, node: ast.Name, callee: bool):
         symbol = self.scope.find(node.name)
-        if symbol is None and node.name in self.module.names:
-            self.declared_value(expr, self.module.names[node.name], node.name, False)
-            return
+        if symbol is None:
+            if node.name in self.module.names:
+                self.declared_value(expr, self.module.names[node.name], node.name, False)
+                return
+            if node.name in self.binder.builtins:
+                self.declared_value(expr, self.binder.builtins[node.name], node.name, False)
+                return
         if node.name in self.pending:
             self.fail(expr.line, expr.col, f"'{node.name}' is used before its nonlocal declaration")
             return
         if symbol is None:
             if node.name in self.module.roots:
                 self.fail(expr.line, expr.col, f"module '{node.name}' cannot be used as a value")
+            elif node.name in self.binder.exceptions:
+                self.fail(expr.line, expr.col, f"class '{node.name}' cannot be used as a value")
             else:
                 self.fail(expr.line, expr.col, f"unknown name '{node.name}'")
             return
@@ -458,37 +1028,68 @@ class Resolver:
         if symbol.owner.id != self.function.id:
             self.capture(symbol, expr.line, expr.col)
 
+    def resolve_call(self, expr: ast.Expr, node: ast.Call):
+        if self.scope.find(node.name) is not None:
+            # A local hides a declaration of the same name, so this calls its
+            # value.
+            name = ast.Expr(expr.line, expr.col, ast.Name(node.name, False))
+            expr.node = ast.CallValue(name, node.args, node.keywords, node.type_args)
+            self.resolve_expr(expr, False)
+            return
+        if node.target is None:
+            found: Member | None = None
+            if node.name in self.module.names:
+                found = self.module.names[node.name]
+            elif node.name in self.binder.builtins:
+                found = self.binder.builtins[node.name]
+            elif node.name in self.binder.exceptions:
+                found = self.binder.exceptions[node.name]
+            if found is None:
+                self.fail(expr.line, expr.col, f"unknown function '{node.name}'")
+                return
+            if cannot_call(found):
+                self.fail(expr.line, expr.col, f"{member_noun(found)} '{node.name}' cannot be called")
+                return
+            node.target = call_target(found)
+        self.resolve_args(node.args, node.keywords)
+
     def resolve_specialized_call(self, expr: ast.Expr, node: ast.SpecializedCall):
         callee = node.callee.node
         name = ""
         symbol: ast.Symbol | None = None
-        decl: ast.Decl | None = None
+        found: Member | None = None
         if isinstance(callee, ast.Name):
             name = callee.name
             symbol = self.scope.find(name)
-            if symbol is None and name in self.module.names:
-                decl = self.module.names[name]
+            if symbol is None:
+                if name in self.module.names:
+                    found = self.module.names[name]
+                elif name in self.binder.builtins:
+                    found = self.binder.builtins[name]
         elif isinstance(callee, ast.Field):
-            path = self.module_path(callee.object)
-            if path != "" and path in self.module.imported:
+            path = self.imported_path(callee.object)
+            if path != "":
                 name = path + "." + callee.name
-                decl = self.lookup(self.module.imported[path], callee.name, node.callee.line, node.callee.col)
-                if decl is None:
+                found = self.lookup(path, callee.name, node.callee.line, node.callee.col)
+                if found is None:
                     return
-        generic = decl is not None and is_generic_decl(decl)
+        generic = is_generic_member(found)
         if symbol is not None:
             function = symbol.function
             generic = function is not None and is_generic(function)
         if generic:
+            type_args = self.resolve_types(node.type_args)
+            if self.failed():
+                return
             if symbol is not None:
-                expr.node = ast.CallValue(node.callee, node.args, node.keywords, node.type_args)
-            elif isinstance(decl, ast.FunctionDecl):
-                expr.node = ast.Call(name, node.args, node.keywords, node.type_args, decl)
-            elif isinstance(decl, ast.ClassDecl):
-                expr.node = ast.Call(name, node.args, node.keywords, node.type_args, decl)
+                expr.node = ast.CallValue(node.callee, node.args, node.keywords, type_args)
+            elif isinstance(found, ast.FunctionDecl):
+                expr.node = ast.Call(name, node.args, node.keywords, type_args, found)
+            elif isinstance(found, ast.ClassDecl):
+                expr.node = ast.Call(name, node.args, node.keywords, type_args, found.record)
         else:
             # An index followed by a call, as in `handlers[i](x)`.
-            if decl is not None:
+            if found is not None:
                 self.fail(node.callee.line, node.callee.col, f"'{name}' is not generic")
                 return
             index = node.index
@@ -502,23 +1103,24 @@ class Resolver:
     def resolve_specialized(self, expr: ast.Expr, node: ast.Specialized):
         callee = node.callee.node
         symbol: ast.Symbol | None = None
-        decl: ast.Decl | None = None
+        found: Member | None = None
         if isinstance(callee, ast.Name):
             symbol = self.scope.find(callee.name)
             if symbol is not None:
-                decl = symbol.function
+                found = symbol.function
             elif callee.name in self.module.names:
-                decl = self.module.names[callee.name]
+                found = self.module.names[callee.name]
         elif isinstance(callee, ast.Field):
-            path = self.module_path(callee.object)
-            if path != "" and path in self.module.imported:
-                decl = self.lookup(self.module.imported[path], callee.name, node.callee.line, node.callee.col)
-                if decl is None:
+            path = self.imported_path(callee.object)
+            if path != "":
+                found = self.lookup(path, callee.name, node.callee.line, node.callee.col)
+                if found is None:
                     return
-        if isinstance(decl, ast.FunctionDecl) and is_generic(decl):
+        if isinstance(found, ast.FunctionDecl) and is_generic(found):
             if symbol is not None:
                 self.resolve_expr(node.callee, False)
-            expr.node = ast.FunctionValue(decl, isinstance(callee, ast.Field), node.type_args, symbol)
+            type_args = self.resolve_types(node.type_args)
+            expr.node = ast.FunctionValue(found, isinstance(callee, ast.Field), type_args, symbol)
             return
         index = node.index
         if index is None:
@@ -535,7 +1137,7 @@ class Resolver:
             self.binder.error = error
 
     def resolve_method_call(self, expr: ast.Expr, node: ast.MethodCall):
-        decl = self.enum_named(node.object)
+        decl = self.binder.enum_named(self.module, node.object, self.scope)
         if self.failed():
             return
         receiver = node.object.node
@@ -547,22 +1149,22 @@ class Resolver:
             if node.name != "fromhex":
                 self.fail(expr.line, expr.col, f"type 'bytes' has no static method '{node.name}'")
                 return
-            expr.node = ast.Call("bytes.fromhex", node.args, node.keywords, [])
+            expr.node = ast.Call("bytes.fromhex", node.args, node.keywords, [], self.binder.builtins["bytes.fromhex"])
             self.resolve_args(node.args, node.keywords)
         elif path != "":
             # `module.name(...)` calls a function or constructs a class of
             # that module.
-            if path not in self.module.imported:
+            if not self.binder.has_module(self.module, path):
                 self.fail(node.object.line, node.object.col, f"unknown module '{path}'")
                 return
-            target = self.lookup(self.module.imported[path], node.name, expr.line, expr.col)
-            if target is None:
+            found = self.lookup(path, node.name, expr.line, expr.col)
+            if found is None:
                 return
             name = path + "." + node.name
-            if isinstance(target, ast.AliasDecl) or isinstance(target, ast.EnumDecl) or isinstance(target, ast.ProtocolDecl):
-                self.fail(expr.line, expr.col, f"{noun(target)} '{name}' cannot be called")
+            if cannot_call(found):
+                self.fail(expr.line, expr.col, f"{member_noun(found)} '{name}' cannot be called")
                 return
-            expr.node = ast.Call(name, node.args, node.keywords, [], target)
+            expr.node = ast.Call(name, node.args, node.keywords, [], call_target(found))
             self.resolve_args(node.args, node.keywords)
         else:
             self.resolve_expr(node.object, False)
@@ -574,17 +1176,23 @@ class Resolver:
             return
         self.resolve_expr(node.operand, False)
         ref = node.type_name
-        if ref.module == "" and ref.name in self.type_params:
+        if ref.module == "" and self.type_scope.find(ref.name) is not None:
             self.fail(ref.line, ref.col, f"type parameter '{ref.name}' cannot be used in isinstance")
             return
         if ref.module == "" and is_builtin_type(ref.name):
             return
-        decl = self.resolve_named(ref)
-        if isinstance(decl, ast.AliasDecl):
+        named = self.binder.resolve_named(self.module, ref)
+        if isinstance(named, AliasState) or isinstance(named, ProvidedAlias):
             self.fail(ref.line, ref.col, f"alias '{ref.name}' cannot be used in isinstance")
-        elif isinstance(decl, ast.ProtocolDecl):
+        elif isinstance(named, types.Protocol):
             self.fail(ref.line, ref.col, f"protocol '{ref.name}' cannot be used in isinstance")
-        ref.declaration = decl
+        elif isinstance(named, types.Class):
+            if named.type_name == "Coroutine":
+                self.fail(ref.line, ref.col, "'Coroutine' cannot be used in isinstance")
+                return
+            ref.record = named
+        elif isinstance(named, types.Enum):
+            ref.record = named
 
     def resolve_target(self, target: ast.Target):
         if target.name != "":
@@ -609,6 +1217,9 @@ class Resolver:
         elif isinstance(node, ast.Assign):
             self.resolve_expr(node.value, False)
             node.symbol = self.scope.find(node.name)
+            annotation = node.annotation
+            if annotation is not None:
+                node.declared = self.resolve_type(annotation)
         elif isinstance(node, ast.Nonlocal):
             for ident in node.names:
                 if ident.name in self.pending:
@@ -617,19 +1228,10 @@ class Resolver:
                 if symbol is not None:
                     self.capture(symbol, ident.line, ident.col)
         elif isinstance(node, ast.FunctionDef):
-            nested = node.function
-            nested.id = self.binder.new_id()
-            nested.parent = self.function
-            nested.type_name = self.function.type_name + "." + nested.name
-            self.binder.check_signature(self.module, nested, self.type_params)
-            if self.failed():
-                return
-            node.symbol = self.scope.find(nested.name)
-            type_params = self.binder.enter_type_params(self.module, self.type_params, nested.type_params)
-            self.binder.resolve_function(self.module, nested, self.scope, type_params)
+            self.resolve_nested(node)
         elif isinstance(node, ast.FieldAssign):
             self.resolve_expr(node.value, False)
-            enum_decl = self.enum_named(node.object)
+            enum_decl = self.binder.enum_named(self.module, node.object, self.scope)
             if enum_decl is not None:
                 self.fail(statement.line, statement.col, f"cannot assign to a member of enum '{enum_decl.type_name}'")
                 return
@@ -703,25 +1305,47 @@ class Resolver:
         elif isinstance(node, ast.Try):
             self.resolve_block(node.body, handling)
             for handler in node.handlers:
-                decl = self.resolve_named(handler.type_name)
-                if decl is None:
+                named = self.binder.resolve_named(self.module, handler.type_name)
+                if named is None:
                     return
-                if not isinstance(decl, ast.ClassDecl) or not decl.exception:
-                    self.fail(handler.type_name.line, handler.type_name.col, f"'{decl_ident(decl).name}' is not an exception class")
+                if not isinstance(named, types.Class) or not named.exception:
+                    self.fail(handler.type_name.line, handler.type_name.col, f"'{named_name(named)}' is not an exception class")
                     return
-                handler.type_name.declaration = decl
+                handler.type_name.record = named
                 if handler.name != "":
                     handler.symbol = self.scope.find(handler.name)
                 self.resolve_block(handler.body, node)
             self.resolve_block(node.finally_body, handling)
 
-# Binds `modules`, the entry module first, and returns the first error, if
-# any.
-def bind(modules: list[ast.Module]) -> diagnostic.Diagnostic | None:
+    # A nested function's signature resolves where it is defined, with the
+    # enclosing type parameters in scope, before its body.
+    def resolve_nested(self, node: ast.FunctionDef):
+        nested = node.function
+        nested.id = self.binder.new_id()
+        nested.parent = self.function
+        nested.type_name = self.function.type_name + "." + nested.name
+        record = types.Function(nested.id, nested.name, nested.type_name, [], [], types.prim("None"))
+        nested.record = record
+        self.binder.resolve_signature(self.module, nested, self.type_scope)
+        self.binder.check_waiting()
+        self.binder.check_param_defaults(self.module, nested)
+        if self.failed():
+            return
+        node.symbol = self.scope.find(nested.name)
+        type_scope = self.binder.enter_type_params(self.module, self.type_scope, nested.type_params, record.typevars)
+        self.binder.resolve_function(self.module, nested, self.scope, type_scope)
+
+# Binds the modules of `sources`, the entry first, and returns the first
+# error, if any. A test entry (`test`) needs no `main`; instead its `tests`
+# lists its `test_*` functions by name.
+def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | None:
+    modules: list[ast.Module] = []
     by_name: dict[str, ast.Module] = {}
-    for module in modules:
-        by_name[module.name] = module
-    binder = Binder(modules, by_name, modules[0], 0, None)
+    for source in sources:
+        source.tree.name = source.name
+        modules.append(source.tree)
+        by_name[source.name] = source.tree
+    binder = Binder(modules, by_name, modules[0], 0, None, stdlib.builtins(), stdlib.exceptions(), stdlib.protocols(), stdlib.modules(), stdlib.coroutine(), {}, [], [])
     for module in modules:
         binder.declare(module)
         if binder.error is not None:
@@ -732,76 +1356,157 @@ def bind(modules: list[ast.Module]) -> diagnostic.Diagnostic | None:
                 binder.check_unique(module, decl.members, "enum member")
     for module in modules:
         for decl in module.declarations:
-            if isinstance(decl, ast.AliasDecl):
-                binder.enter_type_params(module, {}, decl.type_params)
+            if isinstance(decl, ast.AliasDecl) and binder.error is None:
+                binder.resolve_alias(binder.aliases[decl.type_name])
+    for module in modules:
+        if binder.error is None:
+            resolve_declarations(binder, module)
+    binder.check_waiting()
+    for module in modules:
+        if binder.error is None:
+            check_defaults(binder, module)
     if binder.error is not None:
         return binder.error
-    for module in modules:
-        check_declarations(binder, module)
-        if binder.error is not None:
-            return binder.error
-    check_main(binder, modules[0])
+    if test:
+        check_tests(binder, modules[0])
+    else:
+        check_main(binder, modules[0])
+    root = TypeScope({}, None, 0)
     for module in modules:
         for function in functions(module):
             if binder.error is not None:
                 return binder.error
-            outer: dict[str, bool] = {}
+            scope = root
             owner = function.owner
             if isinstance(owner, ast.ClassDecl):
-                outer = binder.enter_type_params(module, {}, owner.type_params)
-            type_params = binder.enter_type_params(module, outer, function.type_params)
-            binder.resolve_function(module, function, None, type_params)
+                owner_record = owner.record
+                if owner_record is not None:
+                    scope = binder.enter_type_params(module, scope, owner.type_params, owner_record.typevars)
+            record = function.record
+            if record is not None:
+                scope = binder.enter_type_params(module, scope, function.type_params, record.typevars)
+            binder.resolve_function(module, function, None, scope)
+    binder.check_waiting()
     return binder.error
 
-# The checks of classes, protocols, and functions that come before function
-# bodies and need no types, in the Lua binder's order.
-def check_declarations(binder: Binder, module: ast.Module):
+# The types the binder gave the functions, methods, and class fields of
+# `module`, one per line, for comparing with the Lua binder's.
+def signatures(module: ast.Module) -> list[str]:
+    lines: list[str] = []
+    for function in functions(module):
+        record = function.record
+        if record is not None:
+            params: list[str] = []
+            for param in record.params:
+                params.append(param.name + ": " + types.display(param.ty))
+            lines.append(f"def {record.type_name}({', '.join(params)}) -> {types.display(record.result)}")
     for decl in module.declarations:
         if isinstance(decl, ast.ClassDecl):
+            class_record = decl.record
+            if class_record is not None:
+                for field in class_record.fields:
+                    lines.append(f"field {class_record.type_name}.{field.name}: {types.display(field.ty)}")
+    return lines
+
+# The fields and signatures of classes and protocols, and functions'
+# signatures, in the Lua binder's order.
+def resolve_declarations(binder: Binder, module: ast.Module):
+    root = TypeScope({}, None, 0)
+    for decl in module.declarations:
+        record = decl_class_record(decl)
+        if isinstance(decl, ast.ClassDecl) and record is not None:
             fields: list[ast.Ident] = []
             for field in decl.fields:
                 fields.append(ast.Ident(field.line, field.col, field.name))
             binder.check_unique(module, fields, "field")
             binder.check_unique(module, idents(decl.methods), "method")
-            outer = binder.enter_type_params(module, {}, decl.type_params)
+            scope = binder.enter_type_params(module, root, decl.type_params, record.typevars)
+            for field in decl.fields:
+                record.fields.append(types.Field(field.name, binder.resolve_type(field.annotation, module, scope, ""), field.default))
             for method in decl.methods:
                 for field in decl.fields:
                     if field.name == method.name:
                         binder.fail(module, method.line, method.col, f"method '{method.name}' has the same name as a field")
                 method.owner = decl
-                method.id = binder.new_id()
-                method.type_name = decl.type_name + "." + method.name
-                binder.check_signature(module, method, outer)
+                record.methods.append(binder.declare_method(method, decl.type_name))
+                binder.resolve_signature(module, method, root)
     for decl in module.declarations:
         if isinstance(decl, ast.ProtocolDecl):
-            binder.check_unique(module, idents(decl.methods), "method")
-            outer = binder.enter_type_params(module, {}, decl.type_params)
-            for method in decl.methods:
-                method.owner = decl
-                method.id = binder.new_id()
-                method.type_name = decl.type_name + "." + method.name
-                binder.check_signature(module, method, outer)
+            protocol_record = decl.record
+            if protocol_record is not None:
+                binder.check_unique(module, idents(decl.methods), "method")
+                binder.enter_type_params(module, root, decl.type_params, protocol_record.typevars)
+                for method in decl.methods:
+                    method.owner = decl
+                    protocol_record.methods.append(binder.declare_method(method, decl.type_name))
+                    binder.resolve_signature(module, method, root)
     for decl in module.declarations:
         if isinstance(decl, ast.FunctionDecl):
-            binder.check_signature(module, decl, {})
+            binder.resolve_signature(module, decl, root)
+
+def decl_class_record(decl: ast.Decl) -> types.Class | None:
+    if isinstance(decl, ast.ClassDecl):
+        return decl.record
+    return None
+
+def check_defaults(binder: Binder, module: ast.Module):
+    for decl in module.declarations:
+        if isinstance(decl, ast.ClassDecl):
+            record = decl.record
+            if record is not None:
+                for i in range(len(decl.fields)):
+                    default = decl.fields[i].default
+                    if default is not None:
+                        binder.check_default(module, record.fields[i].ty, default)
+    for function in functions(module):
+        binder.check_param_defaults(module, function)
+    for decl in module.declarations:
+        if isinstance(decl, ast.ProtocolDecl):
+            for method in decl.methods:
+                binder.check_param_defaults(module, method)
 
 def check_main(binder: Binder, entry: ast.Module):
-    if binder.error is not None:
-        return
     main: ast.Decl | None = None
     if "main" in entry.names:
         main = entry.names["main"]
     if not isinstance(main, ast.FunctionDecl):
         binder.fail(entry, 1, 1, "program has no main function")
         return
-    if len(main.params) > 0:
+    if len(main.params) > 0 or not returns_none(main):
         binder.fail(entry, main.line, main.col, "main must take no parameters and return None")
 
-# The functions of `module` followed by the methods of its classes.
+# A test entry's tests are its functions whose names begin with `test_`, in
+# order of name.
+def check_tests(binder: Binder, entry: ast.Module):
+    for decl in entry.declarations:
+        if isinstance(decl, ast.FunctionDecl) and decl.name.startswith("test_"):
+            if len(decl.params) > 0 or not returns_none(decl):
+                binder.fail(entry, decl.line, decl.col, f"test function '{decl.name}' must take no parameters and return None")
+                return
+            i = len(entry.tests)
+            entry.tests.append(decl)
+            while i > 0 and entry.tests[i - 1].name > decl.name:
+                entry.tests[i] = entry.tests[i - 1]
+                i = i - 1
+            entry.tests[i] = decl
+
+# Whether the result of `function`, or of an async function's coroutine, is
+# None.
+def returns_none(function: ast.FunctionDecl) -> bool:
+    record = function.record
+    if record is None:
+        return False
+    result = record.result
+    if function.is_async and isinstance(result, types.ClassType) and len(result.args) == 1:
+        result = result.args[0]
+    return isinstance(result, types.Prim) and result.name == "None"
+
+# The functions of `module` that have bodies, followed by the methods of its
+# classes.
 def functions(module: ast.Module) -> list[ast.FunctionDecl]:
     result: list[ast.FunctionDecl] = []
     for decl in module.declarations:
-        if isinstance(decl, ast.FunctionDecl):
+        if isinstance(decl, ast.FunctionDecl) and not decl.external:
             result.append(decl)
     for decl in module.declarations:
         if isinstance(decl, ast.ClassDecl):
@@ -849,19 +1554,93 @@ def noun(decl: ast.Decl) -> str:
         return "enum"
     return "alias"
 
+def member_noun(found: Member) -> str:
+    if isinstance(found, ast.FunctionDecl):
+        return noun(found)
+    if isinstance(found, ast.ClassDecl):
+        return noun(found)
+    if isinstance(found, ast.ProtocolDecl):
+        return noun(found)
+    if isinstance(found, ast.EnumDecl):
+        return noun(found)
+    if isinstance(found, ast.AliasDecl):
+        return noun(found)
+    if isinstance(found, stdlib.Builtin):
+        return "function"
+    if isinstance(found, types.Class):
+        return "class"
+    if isinstance(found, ProvidedAlias):
+        return "alias"
+    return "constant"
+
+# The declarations that name no function or class to call.
+def cannot_call(found: Member) -> bool:
+    return isinstance(found, ast.AliasDecl) or isinstance(found, ast.EnumDecl) or isinstance(found, ast.ProtocolDecl) or isinstance(found, ProvidedAlias) or isinstance(found, ProvidedConstant)
+
+# What a call of `found`, which can be called, reaches.
+def call_target(found: Member) -> ast.FunctionDecl | stdlib.Builtin | types.Class | None:
+    if isinstance(found, ast.FunctionDecl):
+        return found
+    if isinstance(found, ast.ClassDecl):
+        return found.record
+    if isinstance(found, stdlib.Builtin):
+        return found
+    if isinstance(found, types.Class):
+        return found
+    return None
+
+def named_type_name(named: Named) -> str:
+    if isinstance(named, types.Class):
+        return named.type_name
+    if isinstance(named, types.Protocol):
+        return named.type_name
+    if isinstance(named, types.Enum):
+        return named.type_name
+    if isinstance(named, AliasState):
+        return named.decl.type_name
+    return named.type_name
+
+def named_name(named: Named) -> str:
+    if isinstance(named, types.Class):
+        return named.name
+    if isinstance(named, types.Protocol):
+        return named.name
+    if isinstance(named, types.Enum):
+        return named.name
+    if isinstance(named, AliasState):
+        return named.decl.name
+    return named.name
+
+def named_typevars(named: Named) -> list[types.TypeVar]:
+    if isinstance(named, types.Class):
+        return named.typevars
+    if isinstance(named, types.Protocol):
+        return named.typevars
+    if isinstance(named, AliasState):
+        return named.typevars
+    return []
+
+def plural(count: int, noun: str) -> str:
+    if count == 1:
+        return noun
+    return noun + "s"
+
 def is_generic(function: ast.FunctionDecl) -> bool:
     return len(function.type_params) > 0
 
-def is_generic_decl(decl: ast.Decl) -> bool:
-    if isinstance(decl, ast.FunctionDecl):
-        return len(decl.type_params) > 0
-    if isinstance(decl, ast.ClassDecl):
-        return len(decl.type_params) > 0
+def is_generic_member(found: Member | None) -> bool:
+    if isinstance(found, ast.FunctionDecl):
+        return len(found.type_params) > 0
+    if isinstance(found, ast.ClassDecl):
+        return len(found.type_params) > 0
     return False
+
+def is_scalar(name: str) -> bool:
+    return name in ["int", "float", "bool", "str", "bytes", "None"]
 
 # The type names that isinstance takes without a declaration.
 def is_builtin_type(name: str) -> bool:
-    return name == "int" or name == "float" or name == "bool" or name == "str" or name == "bytes" or name == "None" or name == "list" or name == "dict" or name == "tuple"
+    return is_scalar(name) or name in ["list", "dict", "tuple"]
 
 # The dotted name that `expr` spells, a Name or Fields on one, or "".
 def qualified_name(expr: ast.Expr) -> str:
@@ -874,3 +1653,44 @@ def qualified_name(expr: ast.Expr) -> str:
             return ""
         return path + "." + node.name
     return ""
+
+# Whether two lists of type arguments are the same, as far as reusing a
+# generic alias's specialization goes: Lua compares the argument objects, so
+# this compares types by structure and lazy types by their ids.
+def same_args(a: list[types.Type], b: list[types.Type]) -> bool:
+    if len(a) != len(b):
+        return False
+    for i in range(len(a)):
+        if type_key(a[i]) != type_key(b[i]):
+            return False
+    return True
+
+# A text that tells types apart as same_args needs.
+def type_key(t: types.Type) -> str:
+    if isinstance(t, types.Lazy):
+        return f"lazy {t.id}"
+    if isinstance(t, types.TypeVar):
+        return f"typevar {t.id}"
+    if isinstance(t, types.ListType):
+        return "list[" + type_key(t.element) + "]"
+    if isinstance(t, types.DictType):
+        return "dict[" + type_key(t.key) + ", " + type_key(t.value) + "]"
+    if isinstance(t, types.TupleType):
+        return "tuple[" + type_keys(t.elements) + "]"
+    if isinstance(t, types.ClassType):
+        return "class " + t.decl.type_name + "[" + type_keys(t.args) + "]"
+    if isinstance(t, types.ProtocolType):
+        return "protocol " + t.decl.type_name + "[" + type_keys(t.args) + "]"
+    if isinstance(t, types.CallableType):
+        return "(" + type_keys(t.params) + ") -> " + type_key(t.result)
+    if isinstance(t, types.UnionType):
+        return "union " + type_keys(t.members)
+    if isinstance(t, types.FunctionType):
+        return f"function {t.fn.id}"
+    return types.display(t)
+
+def type_keys(ts: list[types.Type]) -> str:
+    keys: list[str] = []
+    for t in ts:
+        keys.append(type_key(t))
+    return ", ".join(keys)
