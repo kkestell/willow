@@ -162,7 +162,7 @@ class Emitter:
         if module == "W.core" and function.name in ["fail", "fail_at"]:
             self.emit_fail(function.name)
             return
-        if module == "core" and function.name == "sys_arguments":
+        if module == "W.core" and function.name == "sys_arguments":
             self.begin(self.symbol(function), [], True)
             args: list[str] = []
             for word in ["$W.argc", "$W.argv"]:
