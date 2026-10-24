@@ -11,7 +11,8 @@ def _timed_out(what: str, timeout: float | None):
 
 def _wait(fd: int, events: int, deadline: float | None) -> bool:
     descriptor = core.net_pollfd(fd, events)
-    while True:
+    ready = 0
+    while ready <= 0:
         milliseconds = -1
         if deadline is not None:
             remaining = (deadline - time.monotonic()) * 1000.0
@@ -19,10 +20,9 @@ def _wait(fd: int, events: int, deadline: float | None) -> bool:
                 return False
             milliseconds = int(min(core.ceil(remaining), 2147483647.0))
         ready = core.poll(descriptor, 1, milliseconds)
-        if ready > 0:
-            return True
         if ready < 0 and core.errno() != 4:
             raise OSError("cannot poll socket: " + core.os_reason())
+    return True
 
 class Connection:
     _fd: int
@@ -42,16 +42,18 @@ class Connection:
         deadline = _deadline(timeout)
         layout = core.net_layout()
         buffer = core.str_alloc(size)
-        while True:
+        count = -1
+        while count < 0:
             count = core.recv(self._fd, __offset(buffer, 16), size, 0)
-            if count >= 0:
-                __store8(buffer, 8, __word(count))
-                return __str(__word(buffer)).encode()
-            code = core.errno()
-            if code != layout.again and code != 4:
-                raise OSError("cannot receive: " + core.net_reason(code))
-            if code == layout.again and not _wait(self._fd, 1, deadline):
-                _timed_out("recv", timeout)
+            if count < 0:
+                code = core.errno()
+                if code != layout.again and code != 4:
+                    raise OSError("cannot receive: " + core.net_reason(code))
+                if code == layout.again and not _wait(self._fd, 1, deadline):
+                    _timed_out("recv", timeout)
+        __store8(buffer, 8, __word(count))
+        __store1(buffer, 16 + count, 0)
+        return __bytes(__word(core.bytes_tag(__str(__word(buffer)))))
 
     def sendall(self, data: bytes, timeout: float | None = None):
         self._usable()
@@ -98,19 +100,20 @@ class Listener:
         core.net_check_timeout(timeout)
         deadline = _deadline(timeout)
         layout = core.net_layout()
-        while True:
+        fd = -1
+        while fd < 0:
             fd = core.accept(self._fd, __ptr(__word(0)), __ptr(__word(0)))
-            if fd >= 0:
-                code = core.net_configure(fd)
-                if code != 0:
-                    core.close(fd)
+            if fd < 0:
+                code = core.errno()
+                if code != layout.again and code != 4:
                     raise OSError("cannot accept: " + core.net_reason(code))
-                return Connection(fd, False)
-            code = core.errno()
-            if code != layout.again and code != 4:
-                raise OSError("cannot accept: " + core.net_reason(code))
-            if code == layout.again and not _wait(self._fd, 1, deadline):
-                _timed_out("accept", timeout)
+                if code == layout.again and not _wait(self._fd, 1, deadline):
+                    _timed_out("accept", timeout)
+        code = core.net_configure(fd)
+        if code != 0:
+            core.close(fd)
+            raise OSError("cannot accept: " + core.net_reason(code))
+        return Connection(fd, False)
 
     def local_port(self) -> int:
         self._usable()
@@ -231,14 +234,14 @@ class Reader:
             raise ValueError("max_bytes must be positive")
         core.net_check_timeout(timeout)
         deadline = _deadline(timeout)
-        while True:
-            at = self._buffer.find(separator)
-            if at >= 0 and at + len(separator) <= max_bytes:
-                return self._take(at + len(separator))
+        at = self._buffer.find(separator)
+        while at < 0 or at + len(separator) > max_bytes:
             if at >= 0 or len(self._buffer) >= max_bytes:
                 raise ValueError(f"separator not found within {max_bytes} bytes")
             if not self._fill("read_until", timeout, deadline):
                 return self._take(len(self._buffer))
+            at = self._buffer.find(separator)
+        return self._take(at + len(separator))
 
     def close(self):
         if not self._closed:

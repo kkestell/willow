@@ -51,7 +51,7 @@ extern def copysign(x: float, y: float) -> float
 extern def getaddrinfo(host: ptr, service: ptr, hints: ptr, result: ptr) -> cint
 extern def freeaddrinfo(addresses: ptr)
 extern def gai_strerror(code: cint) -> ptr
-extern def socket(family: cint, kind: cint, protocol: cint) -> cint
+extern def socket(family: cint, kind: cint, transport: cint) -> cint
 extern def connect(fd: cint, address: ptr, size: cint) -> cint
 extern def bind(fd: cint, address: ptr, size: cint) -> cint
 extern def listen(fd: cint, backlog: cint) -> cint
