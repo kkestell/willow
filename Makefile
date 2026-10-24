@@ -16,9 +16,9 @@ else
 STUB_LIBS := -lm -ldl
 endif
 
-.PHONY: all test install clean bootstrap bootstrap-test
+.PHONY: all test lua-test install clean bootstrap bootstrap-test
 
-all: $(LUAJIT) $(STUB)
+all: $(WILLOW)
 
 $(LUAJIT_DIR):
 	git clone $(LUAJIT_REPO) $(LUAJIT_DIR)
@@ -30,32 +30,42 @@ $(LUAJIT): | $(LUAJIT_DIR)
 $(STUB): runtime/stub.c $(LUAJIT)
 	$(LUAJIT_FLAGS) $(CC) -O2 -I$(LUAJIT_DIR)/src -o $@ runtime/stub.c $(LUAJIT_DIR)/src/libluajit.a $(STUB_LIBS)
 
-$(WILLOW): compiler/bundle.lua $(wildcard compiler/*.lua) $(wildcard runtime/*.lua) $(STUB) $(LUAJIT)
-	mkdir -p $(BUILD_DIR)
-	$(LUAJIT) compiler/bundle.lua $(STUB) $@
-	chmod 755 $@
-
 install: $(WILLOW)
 	mkdir -p "$(HOME)/.local/bin"
 	cp $(WILLOW) "$(HOME)/.local/bin/.willow.tmp"
 	mv -f "$(HOME)/.local/bin/.willow.tmp" "$(HOME)/.local/bin/willow"
 
-test: $(LUAJIT) $(STUB)
+# The conformance programs that stage 2 passes, and the willow command's
+# cases, run through build/willow.
+PENDING := $(shell cat bootstrap/tests/pending)
+CONFORMANCE := $(filter-out $(PENDING:%=tests/programs/%.wlo),$(wildcard tests/programs/*.wlo)) \
+	$(filter-out $(PENDING:%=tests/modules/%/main.wlo),$(wildcard tests/modules/*/main.wlo))
+RUNNER := $(BUILD_DIR)/runner
+
+test: $(WILLOW) $(RUNNER)
+	$(RUNNER) $(WILLOW) $(CONFORMANCE) $(wildcard bootstrap/tests/commands/*/)
+
+$(RUNNER): $(WILLOW) tests/runner.wlo
+	$(WILLOW) build tests/runner.wlo -o $@
+
+# The Lua implementation's tests, which stay until it is deleted.
+lua-test: $(LUAJIT) $(STUB)
 	$(LUAJIT) tests/run.lua $(wildcard tests/unit/*_test.lua) $(wildcard tests/programs/*.wlo) $(wildcard tests/modules/*/main.wlo)
 
 # The bootstrap chain: willow0 builds stage 1, stage 1 builds stage 2, and
 # stage 2 builds itself, which must emit the same IL as the stage 2 that
-# stage 1 built.
+# stage 1 built. build/willow is that last stage 2.
 WILLOW0 := bootstrap/stage0/target/release/willow0
 STAGE1_SOURCES := $(wildcard bootstrap/stage1/*.wlo) bootstrap/core/core.wlo $(wildcard lib/*.wlo)
 STAGE2_SOURCES := $(wildcard compiler/*.wlo) bootstrap/core/core.wlo $(wildcard lib/*.wlo)
 
-bootstrap:
-	cargo build --release --manifest-path bootstrap/stage0/Cargo.toml
-	$(MAKE) $(BUILD_DIR)/willow2b
+bootstrap: $(BUILD_DIR)/willow2b
 	$(BUILD_DIR)/willow2a compile $(BUILD_DIR)/stage2/willow.wlo -o $(BUILD_DIR)/stage2a.ssa
 	$(BUILD_DIR)/willow2b compile $(BUILD_DIR)/stage2/willow.wlo -o $(BUILD_DIR)/stage2b.ssa
 	cmp $(BUILD_DIR)/stage2a.ssa $(BUILD_DIR)/stage2b.ssa
+
+$(WILLOW0): $(wildcard bootstrap/stage0/src/*.rs) bootstrap/stage0/Cargo.toml
+	cargo build --release --manifest-path bootstrap/stage0/Cargo.toml
 
 $(BUILD_DIR)/willow1: $(WILLOW0) bootstrap/prepare.sh $(STAGE1_SOURCES)
 	mkdir -p $(BUILD_DIR)
@@ -71,10 +81,16 @@ $(BUILD_DIR)/willow2a: $(BUILD_DIR)/willow1 bootstrap/prepare.sh $(STAGE2_SOURCE
 $(BUILD_DIR)/willow2b: $(BUILD_DIR)/willow2a
 	$(BUILD_DIR)/willow2a build $(BUILD_DIR)/stage2/willow.wlo -o $@
 
-bootstrap-test: bootstrap
-	bootstrap/tests/run.sh
+$(WILLOW): $(BUILD_DIR)/willow2b
+	cp $(BUILD_DIR)/willow2b $@
+
+# Stage 0's L0 programs and core tests, stage 1's and stage 2's own tests,
+# and then make test.
+bootstrap-test: bootstrap $(RUNNER)
+	$(RUNNER) --build $(WILLOW0) $(wildcard bootstrap/tests/programs/*.wlo) $(wildcard bootstrap/tests/core/*.wlo)
 	bootstrap/tests/stage1.sh
 	bootstrap/tests/stage2.sh
+	$(MAKE) test
 
 clean:
 	rm -f $(STUB)

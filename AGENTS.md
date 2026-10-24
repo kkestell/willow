@@ -45,9 +45,9 @@ on `compiler/*.wlo`.
   Do not enumerate every permutation, mirror implementation details, or pursue
   exhaustive coverage of hypothetical edge cases.
 - Match verification to the change. Use focused tests while working; run
-  `make test` for Lua compiler, runtime, or build behavior changes and
-  `make bootstrap-test` for changes under `bootstrap/`, to `compiler/*.wlo`, or
-  to `lib/` before delivery. Bootstrap
+  `make lua-test` for Lua compiler or runtime changes and `make bootstrap-test`,
+  which includes `make test`, for changes under `bootstrap/` or `tests/`, to
+  `compiler/*.wlo`, to `lib/`, or to the build before delivery. Bootstrap
   changes must build and pass on both Linux and macOS. Broaden checks only when a
   concrete risk or failure warrants it.
 - For documentation, comments, and filename-only changes, inspect the relevant
