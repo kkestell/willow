@@ -171,6 +171,7 @@ programs/conversions.wlo
 programs/dict_changed_during_iteration.wlo
 programs/dict_evaluation_order.wlo
 programs/dict_get_default_type.wlo
+programs/dict_iteration.wlo
 programs/dict_key_type.wlo
 programs/dict_operations.wlo
 programs/division_by_zero.wlo

@@ -15,3 +15,8 @@ def main():
     empty = {"n": None}
     print(empty.get("n"))
     print(empty.get("missing", None))
+
+    groups: dict[int, list[int]] = {}
+    group = groups.get(1, [])
+    group.append(7)
+    print(group[0])
