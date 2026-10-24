@@ -1,0 +1,6 @@
+# The entry is registered under its own name, so this imports it.
+import app.main
+import textkit.shout
+
+def greet(name: str) -> str:
+    return textkit.shout.shout("hello, " + name)

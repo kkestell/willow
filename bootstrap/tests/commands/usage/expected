@@ -1,0 +1,110 @@
+willow 
+error: missing command
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow make x.wlo
+error: unknown command 'make'
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow run -x x.wlo
+error: unknown option '-x'
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow check a.wlo b.wlo
+error: unexpected argument 'b.wlo'
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow check a.wlo -o out
+error: unknown option '-o'
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow compile a.wlo -o out b.wlo
+error: unexpected argument 'b.wlo'
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow build a.wlo -o out b.wlo
+error: unexpected argument 'b.wlo'
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow compile a.wlo
+error: compile needs -o <output>
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow build a.wlo
+error: build needs -o <output>
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow compile a.wlo -o
+error: -o needs a path
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+willow compile a.wlo -o x -o y
+error: -o given more than once
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1

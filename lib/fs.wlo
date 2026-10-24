@@ -149,18 +149,6 @@ def rename(source: str, destination: str):
     if core.rename(core.path_bytes(source), core.path_bytes(destination)) != 0:
         core.fail_os("rename " + source + " to", destination)
 
-def _same_file(source: str, destination: str) -> bool:
-    layout = core.fs_layout()
-    first = __alloc_atomic(layout.buffer_size)
-    second = __alloc_atomic(layout.buffer_size)
-    if core.fs_stat(core.str_bytes(source), first, True) != 0 or core.fs_stat(core.str_bytes(destination), second, True) != 0:
-        return False
-    if __int(__load8(first, layout.inode_offset)) != __int(__load8(second, layout.inode_offset)):
-        return False
-    if layout.device_size == 4:
-        return __load4(first, layout.device_offset) == __load4(second, layout.device_offset)
-    return __int(__load8(first, layout.device_offset)) == __int(__load8(second, layout.device_offset))
-
 def copy_file(source: str, destination: str):
     source_bytes = core.path_bytes(source)
     destination_bytes = core.path_bytes(destination)
@@ -174,7 +162,7 @@ def copy_file(source: str, destination: str):
         count = core.read(input, buf, 65536)
         if count < 0:
             core.fail_os("read", source)
-        if _same_file(source, destination):
+        if core.fs_same_file(source, destination):
             raise OSError("cannot copy " + source + " to " + destination + ": they are the same file")
         output = core.open(destination_bytes, core.write_flags(), 438)
         if output < 0:

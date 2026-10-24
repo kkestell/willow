@@ -1,7 +1,5 @@
-# The stage 2 compiler's driver, which for now behaves as willow1's does.
-#
-# Usage: willow build FILE.wlo -o OUTPUT
-#        willow compile FILE.wlo -o OUTPUT.ssa
+# The willow command (spec §12), with compiler/cli.lua's usage and messages.
+# `run`, `test`, and `init` are not available yet.
 #
 # Core is compiled into every program. Its text and the standard library's
 # are compiled into the compiler (see loader.wlo).
@@ -15,84 +13,200 @@ import diagnostic
 import emit
 import fs
 import loader
+import manifest
 import sys
 
-def usage():
-    sys.eprint("usage: willow build FILE.wlo -o OUTPUT\n       willow compile FILE.wlo -o OUTPUT.ssa")
-    sys.exit(2)
+def usage_text() -> str:
+    return (
+        "usage: willow init\n       willow check [file]\n       willow run [file [args...] | -- args...]\n"
+        + "       willow compile [file] -o <output>\n       willow build [file] -o <output>\n"
+        + "       willow test [--check] [path]\n"
+        + "Without a file, the command uses willow.json in the current directory."
+    )
 
 def fail(message: str):
     sys.eprint(message)
     sys.exit(1)
 
-def report(error: diagnostic.Diagnostic):
-    fail(error.format())
+def usage_error(reason: str):
+    fail("error: " + reason + "\n" + usage_text())
+
+# A command line: the command, its source file and output, which are None
+# when not given, and for `run`, the program's arguments.
+class Command:
+    name: str
+    input: str | None
+    output: str | None
+    program_args: list[str]
+
+def parse_args(args: list[str]) -> Command:
+    if len(args) == 0:
+        usage_error("missing command")
+    name = args[0]
+    if name not in ["check", "run", "compile", "build"]:
+        usage_error(f"unknown command '{name}'")
+    writes = name in ["compile", "build"]
+    input: str | None = None
+    output: str | None = None
+    program_args: list[str] = []
+    i = 1
+    while i < len(args):
+        argument = args[i]
+        if input is not None and name == "run":
+            # Everything after the source path belongs to the program.
+            program_args.append(argument)
+            i = i + 1
+        elif argument == "--" and input is None and name == "run":
+            # `run -- args` runs the project entry with `args`.
+            program_args.extend(args[i + 1:])
+            break
+        elif argument == "-o" and writes:
+            if output is not None:
+                usage_error("-o given more than once")
+            if i + 1 == len(args):
+                usage_error("-o needs a path")
+            output = args[i + 1]
+            i = i + 2
+        elif argument.startswith("-"):
+            usage_error(f"unknown option '{argument}'")
+        elif input is not None:
+            usage_error(f"unexpected argument '{argument}'")
+        else:
+            input = argument
+            i = i + 1
+    if writes and output is None:
+        usage_error(f"{name} needs -o <output>")
+    return Command(name, input, output, program_args)
 
 def main():
     args = sys.args()
-    if len(args) != 4 or args[0] not in ["build", "compile"] or args[2] != "-o":
-        usage()
-    il = compile(args[1])
-    if args[0] == "compile":
-        fs.write_file(args[3], il)
+    if len(args) > 0 and args[0] in ["init", "test"]:
+        fail(f"error: willow {args[0]} is not available yet")
+    command = parse_args(args)
+    if command.name == "run":
+        fail("error: willow run is not available yet")
+    path = command.input
+    if path is None:
+        project = read_project()
+        if project is None:
+            fail("error: no source file given and no willow.json in the current directory")
+            return
+        path = project.entry
+        roots = loader.Roots(project.source, project.dependencies, project.entry_name)
     else:
-        build(il, args[3])
+        roots = loader.file_roots(path)
+    try:
+        text = fs.read_file(path)
+    except OSError as error:
+        fail("error: " + loader.read_reason(error))
+        return
+    # A project's entry name was checked with its manifest.
+    if roots.entry == "core" or command.input is not None and not loader.is_identifier(roots.entry):
+        fail(f"error: {path}: '{roots.entry}' cannot be a module name")
+    output = command.output
+    if output is not None and core.fs_same_file(path, output):
+        fail(f"error: output {output} is the input file")
+    modules = translate(path, text, roots)
+    if output is None:
+        return
+    for module in modules[1:]:
+        if not module.privileged and core.fs_same_file(module.path, output):
+            fail(f"error: output {output} is the module file {module.path}")
+    il = emit_il(modules)
+    if command.name == "compile":
+        write_output(output, il)
+    else:
+        build(il, output)
 
-# The IL of the program whose entry file is at `path`.
-def compile(path: str) -> str:
-    if not fs.exists(path):
-        fail(f"willow: {path}: No such file or directory")
-    name = loader.entry_name(path)
-    if not is_module_name(name) or name == "core":
-        fail(f"willow: {path}: '{name}' cannot be a module name")
-    sources = loader.load(path, True)
+# The project in the current directory, or None; a broken manifest fails.
+def read_project() -> manifest.Project | None:
+    try:
+        return manifest.read()
+    except manifest.ManifestError as error:
+        fail("error: " + error.message)
+        return None
+
+# The checked modules of the program whose entry file is at `path` and has
+# the text `text`, entry first and core among them. Fails with the first
+# error.
+def translate(path: str, text: str, roots: loader.Roots) -> list[ast.Module]:
+    sources = loader.load(path, text, roots, True)
     if isinstance(sources, diagnostic.Diagnostic):
-        report(sources)
-        return ""
+        fail(sources.format())
+        return []
     error = bind.bind(sources, False)
     if error is not None:
-        report(error)
+        fail(error.format())
     modules: list[ast.Module] = []
     for source in sources:
         modules.append(source.tree)
     error = check.check_program(modules)
     if error is not None:
-        report(error)
+        fail(error.format())
+    return modules
+
+def emit_il(modules: list[ast.Module]) -> str:
     emitter = emit.emitter(modules, core.os())
     for module in modules:
         for function in bind.functions(module):
             emitter.function(function)
     return emitter.finish(modules[0])
 
-def is_module_name(name: str) -> bool:
-    if name == "" or not (name[0].isalpha() or name[0] == "_"):
-        return False
-    for c in name:
-        if not (c.isalnum() or c == "_") or ord(c) > 127:
-            return False
-    return True
+# Writes `text` to `output` through a sibling file renamed into place, so a
+# failure leaves an existing output unchanged.
+def write_output(output: str, text: str):
+    temp = output + ".tmp"
+    try:
+        fs.write_file(temp, text)
+        fs.rename(temp, output)
+    except OSError as error:
+        if fs.exists(temp):
+            fs.remove(temp)
+        cannot_write(output, error)
+
+# Fails for an OSError from fs while writing `output` through its temporary
+# file, naming that file as cli.lua does.
+def cannot_write(output: str, error: OSError):
+    parts = error.message.split(": ")
+    fail(f"error: cannot write {output}: {output}.tmp: {parts[len(parts) - 1]}")
 
 # Assembles `il` with qbe and links it with libgc into the executable
-# `output`. The intermediate files sit next to `output`, since L0 cannot make
-# a temporary directory.
+# `output`, through a sibling file renamed into place. The intermediate files
+# go in a temporary directory.
 def build(il: str, output: str):
-    ssa = output + ".ssa"
-    asm = output + ".s"
-    scratch = output + ".tmp"
+    directory = fs.temp_dir()
+    ssa = directory + "/program.ssa"
+    asm = directory + "/program.s"
+    scratch = directory + "/scratch"
+    linked = output + ".tmp"
+    # Creating the file first reports an unwritable output before cc does.
+    try:
+        fs.write_file(linked, "")
+    except OSError as error:
+        core.run(["rm", "-rf", directory])
+        cannot_write(output, error)
     fs.write_file(ssa, il)
     target = qbe_target(scratch)
-    ok = core.run(["qbe", "-t", target, "-o", asm, ssa]) == 0
-    message = "willow: qbe failed"
-    if ok:
+    message = ""
+    if core.run(["qbe", "-t", target, "-o", asm, ssa]) != 0:
+        message = "qbe failed"
+    else:
         fs.write_file(asm, fs.read_file(asm) + coroutine.assembly(target))
-        command = ["cc", "-o", output, asm]
+        command = ["cc", "-o", linked, asm]
         command.extend(gc_flags(scratch))
         command.append("-lm")
-        ok = core.run(command) == 0
-        message = "willow: cc failed"
-    remove([ssa, asm, scratch])
-    if not ok:
-        fail(message)
+        if core.run(command) != 0:
+            message = "cc failed"
+    core.run(["rm", "-rf", directory])
+    if message != "":
+        if fs.exists(linked):
+            fs.remove(linked)
+        fail("error: " + message)
+    try:
+        fs.rename(linked, output)
+    except OSError as error:
+        fs.remove(linked)
+        cannot_write(output, error)
 
 # The QBE target for the host, whose architecture `uname -m` names.
 def qbe_target(scratch: str) -> str:
@@ -106,7 +220,7 @@ def qbe_target(scratch: str) -> str:
         if os == "darwin":
             return "amd64_apple"
         return "amd64_sysv"
-    fail(f"willow: unsupported host {os} {arch}")
+    fail(f"error: unsupported host {os} {arch}")
     return ""
 
 # The compiler flags that link libgc.
@@ -122,8 +236,3 @@ def shell_output(command: str, scratch: str) -> str:
     if core.run(["sh", "-c", command + " >\"$1\"", "sh", scratch]) != 0:
         return ""
     return fs.read_file(scratch)
-
-def remove(paths: list[str]):
-    command = ["rm", "-f"]
-    command.extend(paths)
-    core.run(command)
