@@ -1,0 +1,274 @@
+class UsageError(Exception):
+    pass
+
+class HelpRequested(Exception):
+    pass
+
+type _Value = str | int | float | bool | list[str]
+
+class _Entry:
+    name: str
+    kind: str
+    default: str | int | float | bool
+    help: str
+    short: str | None
+    required: bool
+
+class Args:
+    _values: dict[str, _Value]
+    _kinds: dict[str, str]
+
+    def _get(self, name: str, kind: str) -> _Value:
+        actual = self._kinds.get(name)
+        if actual is None:
+            raise ValueError(f"no argument named '{name}'")
+        if actual != kind:
+            article = "a"
+            if kind == "int":
+                article = "an"
+            raise ValueError(f"'{name}' is not {article} {kind} argument")
+        return self._values[name]
+
+    def get_str(self, name: str) -> str:
+        value = self._get(name, "str")
+        assert isinstance(value, str)
+        return value
+
+    def get_int(self, name: str) -> int:
+        value = self._get(name, "int")
+        assert isinstance(value, int)
+        return value
+
+    def get_float(self, name: str) -> float:
+        value = self._get(name, "float")
+        assert isinstance(value, float)
+        return value
+
+    def get_bool(self, name: str) -> bool:
+        value = self._get(name, "bool")
+        assert isinstance(value, bool)
+        return value
+
+    def get_list(self, name: str) -> list[str]:
+        value = self._get(name, "list")
+        assert isinstance(value, list)
+        return value[:]
+
+def _letter(text: str) -> bool:
+    return text in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+def _valid_name(name: str) -> bool:
+    if name == "" or not _letter(name[0]) or name.endswith("-") or "--" in name:
+        return False
+    for char in name:
+        if not _letter(char) and char not in "0123456789-":
+            return False
+    return True
+
+def _rows(lines: list[str], title: str, rows: list[tuple[str, str]]):
+    width = 0
+    for left, help in rows:
+        if len(left) > width:
+            width = len(left)
+    lines.append("")
+    lines.append(title)
+    for left, help in rows:
+        line = "  " + left
+        if help != "":
+            line = "  " + left.ljust(width + 2) + help
+        lines.append(line)
+
+class Parser:
+    _prog: str
+    _description: str
+    _entries: list[_Entry]
+    _by_name: dict[str, _Entry]
+    _by_short: dict[str, _Entry]
+    _has_rest: bool
+
+    def _add(self, entry: _Entry):
+        name = entry.name
+        short = entry.short
+        if not _valid_name(name):
+            raise ValueError(f"invalid name '{name}'")
+        if short is not None:
+            if len(short) != 1 or not _letter(short):
+                raise ValueError(f"invalid short option '{short}'")
+        if name == "help" or short == "h":
+            raise ValueError("'help' and 'h' are reserved")
+        if name in self._by_name:
+            raise ValueError(f"duplicate name '{name}'")
+        if short is not None:
+            if short in self._by_short:
+                raise ValueError(f"duplicate short option '-{short}'")
+        if entry.kind == "positional" or entry.kind == "rest":
+            if self._has_rest:
+                if entry.kind == "rest":
+                    raise ValueError("only one rest argument is allowed")
+                raise ValueError(f"positional '{name}' follows the rest argument")
+            self._has_rest = entry.kind == "rest"
+        self._entries.append(entry)
+        self._by_name[name] = entry
+        if short is not None:
+            self._by_short[short] = entry
+
+    def add_str(self, name: str, default: str, help: str = "", short: str | None = None, required: bool = False):
+        self._add(_Entry(name, "str", default, help, short, required))
+
+    def add_int(self, name: str, default: int, help: str = "", short: str | None = None, required: bool = False):
+        self._add(_Entry(name, "int", default, help, short, required))
+
+    def add_float(self, name: str, default: float, help: str = "", short: str | None = None, required: bool = False):
+        self._add(_Entry(name, "float", default, help, short, required))
+
+    def add_flag(self, name: str, help: str = "", short: str | None = None):
+        self._add(_Entry(name, "flag", False, help, short, False))
+
+    def add_positional(self, name: str, help: str = ""):
+        self._add(_Entry(name, "positional", "", help, None, False))
+
+    def add_rest(self, name: str, help: str = ""):
+        self._add(_Entry(name, "rest", "", help, None, False))
+
+    def _usage(self) -> str:
+        parts = [f"usage: {self._prog} [options]"]
+        for entry in self._entries:
+            if entry.kind == "positional":
+                parts.append(entry.name)
+            elif entry.kind == "rest":
+                parts.append(f"[{entry.name} ...]")
+        return " ".join(parts)
+
+    def help(self) -> str:
+        lines = [self._usage()]
+        if self._description != "":
+            lines.append("")
+            lines.append(self._description)
+        arguments: list[tuple[str, str]] = []
+        options = [("-h, --help", "show this help and exit")]
+        for entry in self._entries:
+            if entry.kind == "positional":
+                arguments.append((entry.name, entry.help))
+            elif entry.kind == "rest":
+                arguments.append((entry.name + " ...", entry.help))
+            else:
+                left = ""
+                short = entry.short
+                if short is not None:
+                    left = f"-{short}, "
+                left = left + "--" + entry.name
+                help = entry.help
+                if entry.kind != "flag":
+                    left = left + " " + entry.name.upper().replace("-", "_")
+                    note = ""
+                    value = entry.default
+                    if isinstance(value, str):
+                        default = value
+                    elif isinstance(value, int):
+                        default = str(value)
+                    elif isinstance(value, float):
+                        default = str(value)
+                    else:
+                        default = str(value)
+                    if entry.required:
+                        note = "(required)"
+                    elif default != "":
+                        note = f"(default: {default})"
+                    if note != "":
+                        if help != "":
+                            help = help + " "
+                        help = help + note
+                options.append((left, help))
+        if len(arguments) > 0:
+            _rows(lines, "arguments:", arguments)
+        _rows(lines, "options:", options)
+        return "\n".join(lines) + "\n"
+
+    def _error(self, problem: str) -> UsageError:
+        return UsageError(self._usage() + "\n" + self._prog + ": error: " + problem)
+
+    def _convert(self, entry: _Entry, text: str) -> _Value:
+        if entry.kind == "str":
+            return text
+        try:
+            if entry.kind == "int":
+                return int(text)
+            return float(text)
+        except ValueError:
+            pass
+        except OverflowError:
+            pass
+        expected = "a number"
+        if entry.kind == "int":
+            expected = "an integer"
+        raise self._error(f"option '--{entry.name}' expects {expected}, received '{text}'")
+
+    def parse(self, args: list[str]) -> Args:
+        values: dict[str, _Value] = {}
+        kinds: dict[str, str] = {}
+        positionals: list[str] = []
+        options_done = False
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            i = i + 1
+            if options_done or arg == "-" or not arg.startswith("-"):
+                positionals.append(arg)
+            elif arg == "--":
+                options_done = True
+            elif arg == "--help" or arg == "-h":
+                raise HelpRequested(self.help())
+            else:
+                entry: _Entry | None = None
+                value: str | None = None
+                if arg.startswith("--"):
+                    name = arg[2:]
+                    equal = name.find("=")
+                    if equal >= 0:
+                        value = name[equal + 1:]
+                        name = name[:equal]
+                    entry = self._by_name.get(name)
+                elif len(arg) == 2:
+                    entry = self._by_short.get(arg[1:])
+                if entry is None:
+                    raise self._error(f"unknown option '{arg}'")
+                if entry.kind == "positional" or entry.kind == "rest":
+                    raise self._error(f"unknown option '{arg}'")
+                if entry.kind == "flag":
+                    if value is not None:
+                        raise self._error(f"option '--{entry.name}' takes no value")
+                    values[entry.name] = True
+                else:
+                    if value is None:
+                        if i == len(args):
+                            raise self._error(f"option '--{entry.name}' needs a value")
+                        value = args[i]
+                        i = i + 1
+                    values[entry.name] = self._convert(entry, value)
+        next_positional = 0
+        for entry in self._entries:
+            kind = entry.kind
+            if kind == "positional":
+                if next_positional == len(positionals):
+                    raise self._error(f"missing argument '{entry.name}'")
+                values[entry.name] = positionals[next_positional]
+                next_positional = next_positional + 1
+                kind = "str"
+            elif kind == "rest":
+                values[entry.name] = positionals[next_positional:]
+                next_positional = len(positionals)
+                kind = "list"
+            else:
+                if entry.name not in values:
+                    if entry.required:
+                        raise self._error(f"option '--{entry.name}' is required")
+                    values[entry.name] = entry.default
+                if kind == "flag":
+                    kind = "bool"
+            kinds[entry.name] = kind
+        if next_positional < len(positionals):
+            raise self._error(f"unexpected argument '{positionals[next_positional]}'")
+        return Args(values, kinds)
+
+def parser(prog: str, description: str = "") -> Parser:
+    return Parser(prog, description, [], {}, {}, False)
