@@ -1,0 +1,93 @@
+import net
+import time
+
+# Keep the old fixture's JSON escaping so client.out remains the oracle.
+def quoted(text: str | None) -> str:
+    if text is None:
+        return "null"
+    parts = ["\""]
+    digits = "0123456789abcdef"
+    for c in text:
+        code = ord(c)
+        if code < 32 or c in "\"\\":
+            parts.append("\\u00" + digits[code // 16] + digits[code % 16])
+        else:
+            parts.append(c)
+    parts.append("\"")
+    return "".join(parts)
+
+def respond(connection: net.Connection, status: str, headers: list[str], body: bytes):
+    lines = ["HTTP/1.1 " + status + " Status", "Content-Length: " + str(len(body)), "Connection: close"]
+    lines.extend(headers)
+    connection.sendall(("\r\n".join(lines) + "\r\n\r\n").encode() + body)
+
+def handle(connection: net.Connection, port: int):
+    reader = net.reader(connection)
+    head = reader.read_until("\r\n\r\n".encode()).decode()
+    if head == "":
+        return
+    lines = head.split("\r\n")
+    request = lines[0].split(" ")
+    method = request[0]
+    path = request[1]
+    headers: dict[str, str] = {}
+    for line in lines[1:]:
+        split = line.find(":")
+        if split >= 0:
+            headers[line[:split].lower()] = line[split + 1:].strip()
+    wanted = int(headers.get("content-length", "0"))
+    body = reader.read_exactly(wanted)
+    if path == "/json":
+        respond(connection, "200", ["Content-Type: application/json"], '{"name": "Willow", "ports": [80, 443]}'.encode())
+    elif path.startswith("/status/"):
+        code = path.removeprefix("/status/")
+        respond(connection, code, ["X-Code: " + code], ("status " + code).encode())
+    elif path.startswith("/echo"):
+        text = '{"method": ' + quoted(method) + ', "path": ' + quoted(path) + ', "x_test": ' + quoted(headers.get("x-test")) + ', "content_type": ' + quoted(headers.get("content-type")) + ', "body": ' + quoted(body.decode()) + '}'
+        respond(connection, "200", ["Content-Type: application/json"], text.encode())
+    elif path == "/binary":
+        respond(connection, "200", [], body)
+    elif path == "/bytes":
+        respond(connection, "200", ["Content-Type: application/octet-stream"], bytes(list(range(256))))
+    elif path == "/latin1-header":
+        connection.sendall("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\nX-Name: caf".encode() + bytes([233]) + "\r\nX-Twice: one\r\nX-Twice: two\r\n\r\nok".encode())
+    elif path.startswith("/redirect/"):
+        count = int(path.removeprefix("/redirect/"))
+        if count == 0:
+            respond(connection, "200", [], "done".encode())
+        else:
+            respond(connection, "302", ["Location: /redirect/" + str(count - 1)], "moved".encode())
+    elif path == "/relative":
+        respond(connection, "301", ["Location: json"], bytes([]))
+    elif path == "/loop":
+        respond(connection, "302", ["Location: /loop"], bytes([]))
+    elif path == "/post-redirect":
+        respond(connection, "303", ["Location: /json"], "see other".encode())
+    elif path == "/to-host":
+        respond(connection, "302", ["Location: http://localhost:" + str(port) + "/echo"], bytes([]))
+    elif path == "/slow":
+        connection.sendall("HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\npartial".encode())
+        time.sleep(1.5)
+    elif path == "/trickle":
+        connection.sendall("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n".encode())
+        for i in range(5):
+            time.sleep(0.08)
+            connection.sendall("x".encode())
+    elif path == "/stall":
+        connection.sendall("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\npartial".encode())
+        while len(connection.recv(1)) > 0:
+            pass
+    elif path == "/drop":
+        return
+    else:
+        respond(connection, "404", [], "not found".encode())
+
+def main():
+    with net.listen("127.0.0.1", 0) as listener:
+        print(listener.local_port())
+        while True:
+            with listener.accept() as connection:
+                try:
+                    handle(connection, listener.local_port())
+                except OSError:
+                    pass

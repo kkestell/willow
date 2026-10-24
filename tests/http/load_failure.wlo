@@ -1,0 +1,10 @@
+import http
+
+def main():
+    assert http.urlencode({"x": "a b"}) == "x=a+b"
+    try:
+        http.request("GET", "http://127.0.0.1:1/")
+        assert False, "missing libcurl loaded"
+    except OSError as error:
+        assert error.message.startswith("cannot load libcurl: ")
+        print("libcurl load failure caught")

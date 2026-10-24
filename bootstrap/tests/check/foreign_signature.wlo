@@ -1,0 +1,4 @@
+import foreign_bad_signature
+
+def main():
+    pass

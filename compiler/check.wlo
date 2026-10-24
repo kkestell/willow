@@ -1872,6 +1872,21 @@ class Checker:
     # The intrinsics only privileged modules call (agents/bootstrap.md §5). `__word`
     # takes a slot of any kind but word, which reinterprets as itself.
     def check_intrinsic(self, expr: ast.Expr, node: ast.Call, target: stdlib.Builtin, state: dict[int, types.Type]) -> types.Type:
+        if target.name == "__ccall":
+            if len(node.args) < 2:
+                self.fail(expr.line, expr.col, "'__ccall' expects an extern function, an address, and its arguments")
+                return none()
+            signature = node.args[0].node
+            if not isinstance(signature, ast.FunctionValue):
+                self.fail(node.args[0].line, node.args[0].col, "'__ccall' requires an extern function as its signature")
+                return none()
+            function = signature.target
+            if not function.external:
+                self.fail(node.args[0].line, node.args[0].col, "'__ccall' requires an extern function as its signature")
+                return none()
+            self.check_against(node.args[1], state, types.prim("ptr"))
+            call = ast.Call(function.name, node.args[2:], [], [], function)
+            return self.check_function_call(expr, call, function, state)
         self.check_arity(expr, target.name, len(target.params), len(node.args))
         for i in range(len(node.args)):
             arg = node.args[i]

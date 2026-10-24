@@ -164,6 +164,7 @@ def bytes_methods() -> dict[str, Builtin]:
 # own syntax, and `__os` is a name.
 def intrinsics() -> dict[str, Builtin]:
     table: dict[str, Builtin] = {}
+    add(table, "__ccall", [], None)
     add(table, "__alloc", [arg("", prim("int"))], prim("ptr"))
     add(table, "__alloc_atomic", [arg("", prim("int"))], prim("ptr"))
     add(table, "__load1", [arg("", prim("ptr")), arg("", prim("int"))], prim("int"))
@@ -358,44 +359,10 @@ def aio_module() -> Module:
     add_helper(functions, "semaphore", [value], class_type(semaphore), "aio_semaphore")
     return module
 
-def http_module() -> Module:
-    module = new_module("http")
-    header = provided_class("http", "Header", ["name", "value"], [prim("str"), prim("str")])
-    headers = types.ListType(class_type(header))
-    response = provided_class("http", "Response", ["status", "headers", "body", "url"], [prim("int"), headers, prim("bytes"), prim("str")])
-    download = provided_class("http", "Download", ["status", "headers", "url", "bytes_written"], [prim("int"), headers, prim("str"), prim("int")])
-    module.classes["Header"] = header
-    module.classes["Response"] = response
-    module.classes["Download"] = download
-    optional_headers = defaulted("headers", types.optional(headers), none_default())
-    timeout = defaulted("timeout", prim("float"), float_default(30.0))
-    follow = defaulted("follow_redirects", prim("bool"), bool_default(True))
-    ca_file = defaulted("ca_file", optional("str"), none_default())
-    request = [
-        arg("method", prim("str")),
-        arg("url", prim("str")),
-        optional_headers,
-        defaulted("body", optional("bytes"), none_default()),
-        timeout,
-        follow,
-        ca_file,
-    ]
-    fetch = [arg("url", prim("str")), arg("path", prim("str")), optional_headers, timeout, follow, ca_file]
-    functions = module.functions
-    add_helper(functions, "request", request, class_type(response), "http_request")
-    add_helper(functions, "request_async", request, coroutine_of(class_type(response)), "http_request_async")
-    add_helper(functions, "download", fetch, class_type(download), "http_download")
-    add_helper(functions, "download_async", fetch, coroutine_of(class_type(download)), "http_download_async")
-    add_helper(functions, "header", [arg("headers", headers), arg("name", prim("str"))], optional("str"), "http_header")
-    values = arg("values", types.DictType(prim("str"), prim("str")))
-    add_helper(functions, "urlencode", [values], prim("str"), "http_urlencode")
-    return module
-
 # The compiler-provided modules, by name.
 def modules() -> dict[str, Module]:
     return {
         "aio": aio_module(),
-        "http": http_module(),
     }
 
 # Run-time types of built-in values that protocol dispatch finds converters

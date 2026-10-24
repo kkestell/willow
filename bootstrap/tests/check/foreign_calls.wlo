@@ -1,0 +1,5 @@
+import foreign_api
+
+def main():
+    foreign_api.check()
+    print("foreign calls passed")

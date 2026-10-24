@@ -1,0 +1,40 @@
+import aio
+import fs
+import http
+import sys
+
+async def tick(count: list[int]):
+    while True:
+        await aio.sleep(0.01)
+        count[0] = count[0] + 1
+
+async def main():
+    base = sys.args()[0]
+    directory = sys.args()[1]
+    target = fs.join(directory, "cancel.bin")
+    fs.write_file(target, "kept")
+    count = [0]
+    async with aio.task_group() as group:
+        group.start(tick(count))
+        response = await http.request_async("GET", base + "/trickle", timeout=0.15)
+        assert response.body == "xxxxx".encode()
+        assert count[0] >= 20
+        group.cancel()
+    try:
+        await http.request_async("BAD METHOD", base)
+        assert False, "invalid request completed"
+    except ValueError as error:
+        assert error.message == "invalid method 'BAD METHOD'"
+    result = await http.download_async(base + "/bytes", target)
+    assert result.bytes_written == 256
+    assert len(fs.read_bytes(target)) == 256
+    fs.write_file(target, "kept")
+    async with aio.task_group() as group:
+        group.start(http.request_async("GET", base + "/stall"))
+        group.start(http.download_async(base + "/stall", target))
+        await aio.sleep(0.1)
+        group.cancel()
+    assert fs.read_file(target) == "kept"
+    assert ", ".join(sorted(fs.listdir(directory))) == "cancel.bin, data.bin"
+    fs.remove(target)
+    print("http async streams passed")
