@@ -1,0 +1,20 @@
+import tuple_defaults.settings
+
+def main():
+    Mode = 42
+    options = tuple_defaults.settings.Options()
+    assert options.value == (tuple_defaults.settings.Mode.ON, (-2.5, None), (), True)
+    assert options.choose() == (tuple_defaults.settings.Mode.OFF, (3, "method"), (), False)
+    chosen = tuple_defaults.settings.choose()
+    assert chosen[0] == tuple_defaults.settings.Mode.ON
+    assert str(chosen[1][0]) == "-0.0"
+    assert chosen[1][1] == "function"
+    assert len(chosen[2]) == 0
+    assert chosen[3]
+    assert tuple_defaults.settings.choose(Mode=Mode) == chosen
+    other = tuple_defaults.settings.Options(value=(None, (+1, "override"), (), False))
+    assert other.value[0] is None
+    assert other.choose(value=other.value) == other.value
+    assert tuple_defaults.settings.choose(value=other.value) == other.value
+    assert tuple_defaults.settings.singleton()[0] == tuple_defaults.settings.Mode.ON
+    assert tuple_defaults.settings.singleton((tuple_defaults.settings.Mode.OFF,))[0] == tuple_defaults.settings.Mode.OFF

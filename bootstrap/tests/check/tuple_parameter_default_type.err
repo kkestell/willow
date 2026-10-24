@@ -1,0 +1,1 @@
+tuple_parameter_default_type.wlo:1:45: error: expected tuple[int, tuple[bool]], received tuple[int, tuple[str]]

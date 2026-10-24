@@ -114,7 +114,7 @@ class Checker:
                 if default is None:
                     self.fail(expr.line, expr.col, f"'{name}' is missing argument '{params[i].name}'")
                     return
-                bound[i] = ast.Expr(expr.line, expr.col, default.node)
+                bound[i] = copy_default(default, expr.line, expr.col)
                 order.append(i)
             result.append(bound[i])
         if isinstance(node, ast.Call):
@@ -1246,6 +1246,15 @@ def type_name_text(named: ast.TypeName) -> str:
         return record.type_name
     return named.name
 
+
+def copy_default(default: ast.Expr, line: int, col: int) -> ast.Expr:
+    node = default.node
+    if isinstance(node, ast.TupleDisplay):
+        elements: list[ast.Expr] = []
+        for element in node.elements:
+            elements.append(copy_default(element, line, col))
+        return ast.Expr(line, col, ast.TupleDisplay(elements))
+    return ast.Expr(line, col, node)
 
 def call_params(params: list[types.Param]) -> list[stdlib.BuiltinParam]:
     result: list[stdlib.BuiltinParam] = []

@@ -1,0 +1,5 @@
+class Options:
+    value: tuple[int] = (1, "wrong")
+
+def main():
+    pass
