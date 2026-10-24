@@ -5,7 +5,6 @@ extern def opendir(path: ptr) -> ptr
 extern def readdir(directory: ptr) -> ptr
 extern def closedir(directory: ptr) -> cint
 extern def unlink(path: ptr) -> cint
-extern def fnmatch(pattern: ptr, name: ptr, flags: cint) -> cint
 extern def mkstemp(template: ptr) -> cint
 extern def mkdtemp(template: ptr) -> ptr
 
@@ -81,8 +80,9 @@ def _listdir(path: str, pattern: str | None) -> list[str]:
                 continue
             if size == 2 and __load1(name, 0) == 46 and __load1(name, 1) == 46:
                 continue
-            if pattern is None or fnmatch(core.str_bytes(pattern), name, layout.fnmatch_flags) == 0:
-                names.append(core.str_from_bytes(name, size))
+            text = core.str_from_bytes(name, size)
+            if pattern is None or _match(pattern, text):
+                names.append(text)
     finally:
         closedir(directory)
     names.sort()
@@ -223,6 +223,63 @@ def abspath(path: str) -> str:
 
 def _has_magic(pattern: str) -> bool:
     return "*" in pattern or "?" in pattern or "[" in pattern
+
+def _match_set(pattern: list[str], start: int, char: str) -> tuple[bool, int]:
+    at = start + 1
+    negate = at < len(pattern) and pattern[at] == "!"
+    if negate:
+        at = at + 1
+    end = at
+    if end < len(pattern) and pattern[end] == "]":
+        end = end + 1
+    while end < len(pattern) and pattern[end] != "]":
+        end = end + 1
+    if end == len(pattern):
+        return (char == "[", start + 1)
+    matched = False
+    while at < end:
+        if at + 2 < end and pattern[at + 1] == "-":
+            matched = matched or (pattern[at] <= char and char <= pattern[at + 2])
+            at = at + 3
+        else:
+            matched = matched or pattern[at] == char
+            at = at + 1
+    return (matched != negate, end + 1)
+
+def _match(pattern: str, name: str) -> bool:
+    if name.startswith(".") and not pattern.startswith("."):
+        return False
+    chars = list(pattern)
+    text = list(name)
+    at = 0
+    pos = 0
+    star = -1
+    retry = 0
+    while pos < len(text):
+        if at < len(chars) and chars[at] == "*":
+            star = at
+            at = at + 1
+            retry = pos
+            continue
+        matched = False
+        after = at + 1
+        if at < len(chars):
+            if chars[at] == "[":
+                matched, after = _match_set(chars, at, text[pos])
+            else:
+                matched = chars[at] == "?" or chars[at] == text[pos]
+        if matched:
+            at = after
+            pos = pos + 1
+        elif star >= 0:
+            retry = retry + 1
+            pos = retry
+            at = star + 1
+        else:
+            return False
+    while at < len(chars) and chars[at] == "*":
+        at = at + 1
+    return at == len(chars)
 
 def _glob(pattern: str) -> list[str]:
     head = dirname(pattern)

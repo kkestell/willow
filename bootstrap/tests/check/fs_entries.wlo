@@ -41,6 +41,13 @@ def main():
 
     fs.write_file(fs.join(root, "a\\z"), "backslash")
     assert len(fs.glob(fs.join(root, "a\\*"))) == 1
+    fs.write_file(fs.join(root, "é"), "accent")
+    fs.write_file(fs.join(root, "😀"), "emoji")
+    assert len(fs.glob(fs.join(root, "?"))) == 2
+    assert len(fs.glob(fs.join(root, "??"))) == 0
+    assert len(fs.glob(fs.join(root, "[é😀]"))) == 2
+    assert len(fs.glob(fs.join(root, "[à-ê]"))) == 1
+    assert len(fs.glob(fs.join(root, "[!é]"))) == 1
     info = fs.Stat("file", 3, 2.0)
     info.kind = "other"
     assert info.kind == "other" and info.size == 3

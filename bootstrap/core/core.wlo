@@ -2744,14 +2744,12 @@ class FsLayout:
     device_offset: int
     device_size: int
     name_offset: int
-    fnmatch_flags: int
 
 def fs_layout() -> FsLayout:
-    # FNM_NOESCAPE | FNM_PERIOD; dirent's name and stat's fields differ.
     if __os == "darwin":
-        return FsLayout(144, 4, 96, 48, 8, 0, 4, 21, 1 + 4)
+        return FsLayout(144, 4, 96, 48, 8, 0, 4, 21)
     # statx has one layout on both Linux architectures, unlike struct stat.
-    return FsLayout(256, 28, 40, 112, 32, 136, 8, 19, 2 + 4)
+    return FsLayout(256, 28, 40, 112, 32, 136, 8, 19)
 
 def fs_stat(path: ptr, buf: ptr, follow_symlinks: bool) -> int:
     if __os == "linux":
