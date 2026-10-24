@@ -12,7 +12,6 @@ closure_traceback
 closures
 coroutine_traceback
 coroutines
-enums
 file_lines
 function_values
 generator_cleanup

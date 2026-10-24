@@ -1,0 +1,1 @@
+format_union.wlo:2:15: error: format type 'd' requires int, received int | str
