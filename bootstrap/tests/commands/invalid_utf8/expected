@@ -1,0 +1,6 @@
+bad.wlo:2:9: error: invalid UTF-8
+status 1
+util.wlo:1:6: error: invalid UTF-8
+status 1
+test_bad.wlo:3:1: error: invalid UTF-8
+status 1

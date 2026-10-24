@@ -276,8 +276,11 @@ def write_bytes(fd: int, buf: ptr, count: int) -> bool:
     return True
 
 # Failing to write stdout or stderr ends the program with status 1 (spec §10).
+# The report itself is lost when stderr is the stream that failed.
 def write_all(fd: int, buf: ptr, count: int):
     if not write_bytes(fd, buf, count):
+        report = "error: cannot write output: " + os_reason() + "\n"
+        write_bytes(2, str_bytes(report), str_size(report))
         exit(1)
 
 def write_str(fd: int, s: str):
