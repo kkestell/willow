@@ -1692,7 +1692,12 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
     for module in modules:
         for decl in module.declarations:
             if isinstance(decl, ast.ClassDecl):
-                result.descriptors[result.descriptor(decl.type_name)] = [decl.name]
+                # An uncaught exception reports its class by the name types
+                # write, qualified outside the entry module.
+                name = decl.name
+                if decl.exception:
+                    name = decl.type_name
+                result.descriptors[result.descriptor(decl.type_name)] = [name]
             elif isinstance(decl, ast.EnumDecl):
                 texts = [decl.name]
                 for member in decl.members:
