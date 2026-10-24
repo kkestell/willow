@@ -1,0 +1,19 @@
+import random
+
+def main():
+    maximum = 9223372036854775807
+    first = random.generator(maximum)
+    second = random.generator(-maximum)
+    assert first.random() != second.random()
+    negative = False
+    positive = False
+    for i in range(32):
+        value = first.randint(-maximum, maximum)
+        negative = negative or value < 0
+        positive = positive or value > 0
+        assert first.randint(-maximum, -maximum + 1) <= -maximum + 1
+        assert first.randint(maximum - 1, maximum) >= maximum - 1
+    assert negative and positive
+    assert first.randint(-maximum, -maximum) == -maximum
+    assert first.randint(maximum, maximum) == maximum
+    print("random limits passed")

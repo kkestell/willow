@@ -358,34 +358,6 @@ def aio_module() -> Module:
     add_helper(functions, "semaphore", [value], class_type(semaphore), "aio_semaphore")
     return module
 
-def random_module() -> Module:
-    module = new_module("random")
-    generator = native_class("random", "Random", "random")
-    native_method(generator, "random", [], prim("float"))
-    native_method(generator, "randint", [param("a", prim("int")), param("b", prim("int"))], prim("int"))
-    choice = types.TypeVar(-8, "T", None)
-    generic_method(generator, "choice", [choice], [param("items", types.ListType(choice))], choice)
-    shuffle = types.TypeVar(-9, "T", None)
-    generic_method(generator, "shuffle", [shuffle], [param("items", types.ListType(shuffle))], prim("None"))
-    module.classes["Random"] = generator
-    add_helper(module.functions, "generator", [arg("seed", prim("int"))], class_type(generator), "random_generator")
-    add_helper(module.functions, "secure_bytes", [arg("size", prim("int"))], prim("bytes"), "random_secure_bytes")
-    return module
-
-def terminal_module() -> Module:
-    module = new_module("terminal")
-    file = arg("file", class_type(io_file()))
-    add(module.functions, "isatty", [file], prim("bool"))
-    add(module.functions, "color_enabled", [file], prim("bool"))
-    color = defaulted("color", prim("str"), str_default("default"))
-    bold = defaulted("bold", prim("bool"), bool_default(False))
-    enabled = defaulted("enabled", prim("bool"), bool_default(True))
-    add(module.functions, "style", [arg("text", prim("str")), color, bold, enabled], prim("str"))
-    add(module.functions, "progress", [arg("message", prim("str"))], prim("None"))
-    message = defaulted("message", prim("str"), str_default(""))
-    add(module.functions, "finish_progress", [message], prim("None"))
-    return module
-
 def http_module() -> Module:
     module = new_module("http")
     header = provided_class("http", "Header", ["name", "value"], [prim("str"), prim("str")])
@@ -424,8 +396,6 @@ def modules() -> dict[str, Module]:
     return {
         "aio": aio_module(),
         "http": http_module(),
-        "random": random_module(),
-        "terminal": terminal_module(),
     }
 
 # Run-time types of built-in values that protocol dispatch finds converters
