@@ -188,8 +188,10 @@ inline sequences for arithmetic and comparisons.
 
 Only `core` and the standard library modules in `lib/` may use the intrinsic
 layer. The compiler grants it by where a module was loaded from, so a
-program's own module with a standard library name does not get it. The layer
-is:
+program's own module with a standard library name does not get it. A class
+in `lib/` that is not an exception and whose fields all begin with `_` is a
+native type (spec §14): other modules cannot construct it or see its fields.
+The layer is:
 
 - A type `ptr`, a raw address. `None` is not assignable to it; use `0` tests
   through `__addr_is_null`.
@@ -277,7 +279,9 @@ and links libgc. Diagnostics use the spec §13 format.
 
 Symbols are `$W.<module>.<name>` with dots in module names kept as dots; QBE
 accepts them, verified. Class descriptors are `$W.<module>.<Class>.type`.
-String literals are `$W.str.<n>`.
+String literals are `$W.str.<n>`. Stage 1 starts the symbols and descriptors
+of the program's own modules with `$P.` instead, so they never clash with a
+standard library module of the same name.
 
 Stage 0 does no optimization. QBE's own passes are enough.
 
@@ -308,8 +312,9 @@ through the escape hatch in §2.
   `tests/` and `examples/`; `--lua` runs them under the Lua implementation
   instead. It also builds the `willow1` driver and runs `run.sh` with it over
   every top-level program in `bootstrap/tests/programs/` and
-  `bootstrap/tests/core/`, plus every case in `bootstrap/tests/check/`, using
-  `*.wlo` globs so new programs run automatically, and every program in
+  `bootstrap/tests/core/`, plus every case in `bootstrap/tests/check/` and
+  every `bootstrap/tests/modules/*/main.wlo`, using globs so new programs run
+  automatically, and every program in
   `tests/programs/` except those named in `bootstrap/tests/stage1-pending`,
   which stage 1 does not pass yet. It checks the fixpoint by
   building `willow1` with itself and comparing the IL both compilers emit for

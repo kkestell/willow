@@ -1,0 +1,4 @@
+import fixture_store
+
+def main():
+    print(fixture_store.handle(7).id())

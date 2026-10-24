@@ -1,0 +1,4 @@
+import fixture_store
+
+def main():
+    h = fixture_store.Handle(1)

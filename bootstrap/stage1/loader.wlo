@@ -1,6 +1,8 @@
 # Loads an entry file and every module it imports (spec §12). Modules are
 # looked for in the entry file's directory and then in the standard library,
-# so a local file shadows a standard library module of the same name. The
+# so a local file shadows a standard library module of the same name. A
+# library module's imports name only other library modules and core, so one
+# program may hold its own module and the library's of the same name. The
 # standard library's lib/ and core are compiled into the compiler: their text
 # comes from the modules lib_source and core_source, which the build generates
 # (see bootstrap/tests/stage1.sh).
@@ -33,8 +35,12 @@ class Loader:
     root: str
     # In the order load returns them.
     sources: list[Source]
-    # Module names that are loaded or being loaded, including the entry's.
+    # Names of the program's modules that are loaded or being loaded,
+    # including the entry's.
     loaded: dict[str, bool]
+    # The same for core and the modules of lib/, whose names the program's
+    # modules may reuse.
+    libraries: dict[str, bool]
     # The module name each loaded file has, by the file's real path.
     names_by_file: dict[str, str]
     error: diagnostic.Diagnostic | None
@@ -53,7 +59,10 @@ class Loader:
     # Loads module `name` from `text`, read from `path`, and, depth first,
     # every module it imports that is not loaded yet.
     def add(self, name: str, path: str, text: str, privileged: bool):
-        self.loaded[name] = True
+        if privileged:
+            self.libraries[name] = True
+        else:
+            self.loaded[name] = True
         lexed = lexer.lex(path, text)
         if isinstance(lexed, diagnostic.Diagnostic):
             self.error = lexed
@@ -66,12 +75,12 @@ class Loader:
         for item in tree.imports:
             if self.error is not None:
                 return
-            if self.loaded.get(item.name) is None:
-                self.load_import(path, item)
+            self.load_import(path, item, privileged)
 
     # Loads the module that the import `item` in the module at `importer`
-    # names, unless it is a standard library module that stdlib.wlo declares.
-    # Core is never looked for in the program's files.
+    # names, unless it is loaded or is a standard library module that
+    # stdlib.wlo declares. A program's module is looked for in the program's
+    # files first; a library module's imports, and core, never are.
     #
     # L0 cannot see why a file failed to open, so this differs from spec §12
     # in two ways. A path through a file that is not a directory, as `a/b.wlo`
@@ -79,13 +88,19 @@ class Loader:
     # than "Not a directory". A path that exists but cannot be read, such as a
     # directory, ends the program with a fatal OSError from fs.read_file
     # instead of a diagnostic.
-    def load_import(self, importer: str, item: ast.Import):
+    def load_import(self, importer: str, item: ast.Import, privileged: bool):
+        path = "lib/" + item.name + ".wlo"
+        if not privileged and item.name != "core":
+            if self.loaded.get(item.name) is not None:
+                return
+            path = self.root + item.name.replace(".", "/") + ".wlo"
+            if fs.exists(path):
+                self.visit(item.name, path, importer, item)
+                return
+        if self.libraries.get(item.name) is not None:
+            return
         if item.name == "core":
             self.add_core()
-            return
-        path = self.root + item.name.replace(".", "/") + ".wlo"
-        if fs.exists(path):
-            self.visit(item.name, path, importer, item)
             return
         text = lib_source.text(item.name)
         if text != "":
@@ -120,9 +135,9 @@ def entry_name(path: str) -> str:
 # first error instead when a module cannot be loaded, lexed, or parsed.
 # Clashes between imports are the binder's to report, in its order.
 def load(path: str, with_core: bool) -> list[Source] | diagnostic.Diagnostic:
-    loader = Loader(directory_of(path), [], {}, {}, None)
+    loader = Loader(directory_of(path), [], {}, {}, {}, None)
     loader.visit(entry_name(path), path, "", None)
-    if with_core and loader.error is None and loader.loaded.get("core") is None:
+    if with_core and loader.error is None and loader.libraries.get("core") is None:
         loader.add_core()
     error = loader.error
     if error is not None:

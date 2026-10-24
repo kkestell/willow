@@ -1,0 +1,8 @@
+class Item:
+    count: int
+
+def make(label: str) -> Item:
+    return Item(len(label))
+
+def describe(item: Item) -> str:
+    return f"program {item.count}"
