@@ -1,0 +1,4 @@
+Mode.AUTO
+Mode.AUTO
+sys_eprint.wlo:10:9: error: ValueError: invalid environment variable name
+  in main at sys_eprint.wlo:10:9

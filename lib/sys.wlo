@@ -1,0 +1,46 @@
+import core
+
+def args() -> list[str]:
+    return core.sys_arguments()
+
+def eprint(value: str):
+    core.eprint_str(value)
+
+def exit(status: int):
+    core.sys_exit(status)
+
+def getenv(name: str) -> str | None:
+    if name == "" or "=" in name or "\x00" in name:
+        raise ValueError("invalid environment variable name")
+    value = core.getenv(core.str_bytes(name))
+    if __addr_is_null(value):
+        return None
+    return core.str_from_bytes(value, core.strlen(value))
+
+def environ() -> dict[str, str]:
+    environment = core.environment()
+    values: dict[str, str] = {}
+    names: list[str] = []
+    i = 0
+    entry = __ptr(__load8(environment, 0))
+    while not __addr_is_null(entry):
+        text = core.str_from_bytes(entry, core.strlen(entry))
+        split = text.find("=")
+        if split >= 0:
+            name = text[:split]
+            if name not in values:
+                names.append(name)
+                values[name] = text[split + 1:]
+        i = i + 1
+        entry = __ptr(__load8(environment, i * 8))
+    names.sort()
+    result: dict[str, str] = {}
+    for name in names:
+        result[name] = values[name]
+    return result
+
+def getcwd() -> str:
+    buf = __alloc_atomic(4096)
+    if __addr_is_null(core.getcwd(buf, 4096)):
+        raise OSError("cannot get the working directory: " + core.os_reason())
+    return core.str_from_bytes(buf, core.strlen(buf))
