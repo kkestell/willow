@@ -4,6 +4,17 @@ HELLO, WORLD!
 HELLO, ADA!
 HELLO, --VERBOSE!
 status 0
+HELLO, WORLD!
+HELLO, ADA!
+HELLO, --VERBOSE!
+PASS tests/test_shout.wlo test_shout
+PASS tests/unit/test_greet.wlo test_greet
+2 passed, 0 failed
+status 0
+PASS tests/unit/test_greet.wlo test_greet
+1 passed, 0 failed
+status 0
+status 0
 src/app/main.wlo:1:8: error: cannot load module 'app.greet': src/app/app/greet.wlo: No such file or directory
 status 1
 error: no source file given and no willow.json in the current directory

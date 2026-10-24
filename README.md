@@ -6,26 +6,23 @@ LuaJIT. The language is specified in [docs/spec.md](docs/spec.md).
 
 ## Setup
 
-Willow builds on macOS and on Linux with glibc 2.33 or newer or with musl. To
-build it, run:
+Willow builds on macOS and on Linux. Building it needs a Rust toolchain
+(`cargo`), and building programs with it needs QBE 1.3, a C compiler (`cc`),
+and libgc (bdw-gc), found through `pkg-config` when it is available. To build
+the compiler as `build/willow`, run:
 
 ```sh
 make
 ```
 
-This fetches and builds a pinned version of LuaJIT and the stub used for
-standalone executables. To run the test suite:
+To run the test suite:
 
 ```sh
 make test
 ```
 
-The tests pass on macOS 26 (arm64) and on Linux arm64 with glibc 2.36.
-
-The `willow` command is the `willow` script at the root of the checkout. You can
-run it as `./willow`, or put a symlink to it in a directory on your `PATH`.
-To build a standalone Willow compiler and copy it to `~/.local/bin/willow`, run
-`make install`. Add `~/.local/bin` to your `PATH` if needed.
+To copy the compiler to `~/.local/bin/willow`, run `make install`. Add
+`~/.local/bin` to your `PATH` if needed.
 
 ## Usage
 

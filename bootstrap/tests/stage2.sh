@@ -19,29 +19,28 @@
 # in bootstrap/tests/loader/ and bootstrap/tests/bind/ must report the error
 # its NAME.err expects, so that a missed binder error fails too.
 #
-# willow2 then runs, through run.sh, all top-level programs in
-# bootstrap/tests/programs/, core/, and check/, each
-# bootstrap/tests/modules/*/main.wlo, and the programs in tests/programs/
-# except those named in bootstrap/tests/pending, which stage 2 does not pass
-# yet. Each case in bootstrap/tests/commands/ runs its script `command` with
-# sh in a copy of its directory without `expected`, with WILLOW naming
-# willow2; the script must
-# exit with status 0, and its stdout and stderr together must equal the
-# case's `expected`. Last, willow2 must emit the same IL for its own source as
-# a willow2 built by itself.
+# The test runner (tests/runner.wlo) then runs with willow2 all top-level
+# programs in bootstrap/tests/programs/, core/, and check/, and each
+# bootstrap/tests/modules/*/main.wlo, which may import the test library
+# modules. Last, willow2 must emit the same IL for its own source as a
+# willow2 built by itself.
 #
-# WILLOW1 names stage 1's compiler; it defaults to build/willow1, which make
-# bootstrap builds.
+# WILLOW1 names stage 1's compiler and RUNNER the test runner; they default
+# to build/willow1 and build/runner, which make bootstrap-test builds.
 
 set -u
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root" || exit 1
 willow1=${WILLOW1:-$root/build/willow1}
 case $willow1 in /*) ;; *) willow1=$PWD/$willow1 ;; esac
-[ -x "$willow1" ] || {
-    echo "stage2.sh: $willow1 not found; run make bootstrap" >&2
-    exit 1
-}
+runner=${RUNNER:-$root/build/runner}
+case $runner in /*) ;; *) runner=$PWD/$runner ;; esac
+for tool in "$willow1" "$runner"; do
+    [ -x "$tool" ] || {
+        echo "stage2.sh: $tool not found; run make bootstrap-test" >&2
+        exit 1
+    }
+done
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 failed=0
@@ -166,13 +165,6 @@ check_bind_driver() {
     done
 }
 
-# The programs in tests/programs/ that stage 2 passes.
-conformance() {
-    for file in tests/programs/*.wlo; do
-        grep -qxF "$(basename "$file" .wlo)" bootstrap/tests/pending || echo "$file"
-    done
-}
-
 # Weak links and forced collection need callbacks outside ordinary Willow.
 check_coroutines() {
     fixture=$root/bootstrap/tests/check/coroutine_runtime
@@ -185,36 +177,13 @@ check_coroutines() {
     fi
 }
 
-check_commands() {
-    mkdir "$work/commands"
-    for case in bootstrap/tests/commands/*/; do
-        name=$(basename "$case")
-        cp -R "$case" "$work/commands/$name"
-        rm "$work/commands/$name/expected"
-        (cd "$work/commands/$name" && WILLOW=$work/willow sh command >"$work/command.out" 2>&1)
-        status=$?
-        if [ $status -ne 0 ]; then
-            echo "FAIL command $name: exit status $status"
-            failed=1
-        elif ! cmp -s "$case/expected" "$work/command.out"; then
-            echo "FAIL command $name: output differs"
-            diff "$case/expected" "$work/command.out" | sed 's/^/    /'
-            failed=1
-        fi
-    done
-}
-
 check_willow() {
     build willow || return
     check_coroutines
-    check_commands
     WILLOW=$work/willow WILLOW1=$willow1 bootstrap/tests/http.sh || failed=1
     echo "willow2:"
-    STAGE1=1 WILLOW0=$work/willow bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
-        bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo bootstrap/tests/modules/*/main.wlo || failed=1
-    echo "willow2 tests/programs:"
-    # shellcheck disable=SC2046 # the paths have no spaces
-    WILLOW=$root/willow WILLOW0=$work/willow bootstrap/tests/run.sh $(conformance) || failed=1
+    "$runner" "$work/willow" bootstrap/tests/programs/*.wlo bootstrap/tests/core/*.wlo \
+        bootstrap/tests/check/*.wlo bootstrap/tests/modules/*/main.wlo || failed=1
     if ! "$work/willow" build "$src/willow.wlo" -o "$work/willow-self"; then
         echo "FAIL willow2-self: does not compile"
         failed=1

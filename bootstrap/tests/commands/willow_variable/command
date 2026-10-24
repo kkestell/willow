@@ -1,0 +1,12 @@
+# run and test give their programs WILLOW, the willow executable's absolute
+# path, replacing an inherited value; built programs do not set it.
+launcher=$(cd "$(dirname "$WILLOW")" && pwd -P)/$(basename "$WILLOW")
+printf "import sys\n\ndef main():\n    print(sys.getenv('WILLOW'))\n" >prog.wlo
+printf "import sys\n\ndef test_launcher():\n    assert sys.getenv('WILLOW') == '%s'\n" "$launcher" >test_launcher.wlo
+for setting in "env -u WILLOW" "env WILLOW=wrong"; do
+    [ "$($setting "$WILLOW" run prog.wlo)" = "$launcher" ] && echo "run sets WILLOW"
+done
+env WILLOW=wrong "$WILLOW" test
+echo "status $?"
+"$WILLOW" build prog.wlo -o prog
+env -u WILLOW ./prog

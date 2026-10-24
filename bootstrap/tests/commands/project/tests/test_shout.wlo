@@ -1,0 +1,4 @@
+import textkit.shout
+
+def test_shout():
+    assert textkit.shout.shout('a') == 'A!'
