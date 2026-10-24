@@ -1,0 +1,2 @@
+invalid_int.wlo:3:11: error: ValueError: cannot convert str to int
+  in main at invalid_int.wlo:3:11

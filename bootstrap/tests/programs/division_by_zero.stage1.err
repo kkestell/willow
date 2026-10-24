@@ -1,0 +1,2 @@
+division_by_zero.wlo:4:13: error: ZeroDivisionError: division by zero
+  in main at division_by_zero.wlo:4:13

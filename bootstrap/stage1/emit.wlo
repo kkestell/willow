@@ -29,6 +29,27 @@ class Emitter:
     returns: bool
     loop_next: list[str]
     loop_end: list[str]
+    # The path of each module, by name, for the locations of exceptions.
+    module_paths: dict[str, str]
+    # The built-in exception classes, by name.
+    exceptions: dict[str, types.Class]
+    # The enclosing `try` statements with a `finally` clause, innermost last,
+    # and the exceptions the enclosing `except` clauses handle.
+    protects: list[Protect]
+    handled: list[str]
+    # Per function: its name in frames, its module's path, and whether it
+    # records frames, which core's functions do not (agents/bootstrap.md §6).
+    function_name: str = ""
+    path: str = ""
+    frames: bool = False
+    # Where a pending exception goes: the innermost handler, or `@unwind`,
+    # which returns, and whether the function uses `@unwind`.
+    target: str = ""
+    unwinds: bool = False
+    # The location of the expression or statement being emitted, which an
+    # exception raised there records.
+    at_line: int = 0
+    at_col: int = 0
 
     def write(self, text: str):
         self.lines.append(text)
@@ -61,7 +82,13 @@ class Emitter:
         return f"$W.str.{self.strings[text]}"
 
     def core_call(self, name: str, args: list[str], returns: bool) -> str:
-        return self.call_text(f"$W.core.{name}", typed(args), returns)
+        return self.willow_call(f"$W.core.{name}", typed(args), returns)
+
+    # Writes a call of a Willow function, which can raise.
+    def willow_call(self, callee: str, args: list[str], returns: bool) -> str:
+        result = self.call_text(callee, args, returns)
+        self.check_pending()
+        return result
 
     # Writes call `text` and returns its result, or 0 when there is none.
     def call_text(self, callee: str, args: list[str], returns: bool) -> str:
@@ -78,8 +105,17 @@ class Emitter:
     def function(self, function: ast.FunctionDecl):
         record = function.record
         assert record is not None, f"function {function.name} has no signature"
+        module = self.module_names[function.id]
+        if module == "core" and function.name == "fail":
+            self.emit_fail()
+            return
         self.temps = 0
         self.labels = 0
+        self.function_name = frame_name(function)
+        self.path = self.module_paths[module]
+        self.frames = module != "core"
+        self.target = "@unwind"
+        self.unwinds = False
         params: list[str] = []
         for param in function.params:
             params.append(f"l %p.{param.name}")
@@ -101,14 +137,27 @@ class Emitter:
             self.jump("hlt")
         else:
             self.jump("ret")
+        # An exception leaves with a dummy result, which no caller reads.
+        if self.unwinds:
+            self.label("@unwind")
+            if returns:
+                self.jump("ret 0")
+            else:
+                self.jump("ret")
+        self.write("}")
+
+    # Stage 0 compiles core's `fail`, which ends the program. Stage 1 replaces
+    # its body with one that raises the built-in exception it names.
+    def emit_fail(self):
+        self.write("function $W.core.fail(l %p.class_name, l %p.message) {")
+        self.label("@start")
+        self.line("%e =l call $W.core.failure(l $W.exceptions, l %p.class_name, l %p.message)")
+        self.line("storel %e, $W.pending")
+        self.jump("ret")
         self.write("}")
 
     def symbol(self, function: ast.FunctionDecl) -> str:
-        name = function.name
-        owner = function.owner
-        if isinstance(owner, ast.ClassDecl):
-            name = owner.name + "." + name
-        return "$W." + self.module_names[function.id] + "." + name
+        return "$W." + self.module_names[function.id] + "." + frame_name(function)
 
     # The program entry, descriptors, and string literals, after every
     # function. The entry saves argc and argv for sys.args (core/API.md).
@@ -121,12 +170,26 @@ class Emitter:
         self.line("storel %argv, $W.argv")
         self.line("call $W.core.init()")
         self.line(f"call $W.{entry.name}.main()")
+        # Output is not buffered, so there is nothing to flush.
+        self.line("%e =l loadl $W.pending")
+        self.line("jnz %e, @uncaught, @done")
+        self.write("@uncaught")
+        self.line("storel 0, $W.pending")
+        self.line("call $W.core.report(l %e)")
+        self.line("ret 1")
+        self.write("@done")
         self.line("ret 0")
         self.write("}")
         self.write("data $W.argc = { l 0 }")
         self.write("data $W.argv = { l 0 }")
+        self.write("data $W.pending = { l 0 }")
         for name in builtin_types():
             self.write(f"data $W.{name}.type = " + "{ l " + self.string(name) + " }")
+        exceptions: list[str] = []
+        for name in self.exceptions:
+            self.write(f"data $W.{name}.type = " + "{ l " + self.string(name) + " }")
+            exceptions.append(f"l $W.{name}.type")
+        self.write("data $W.exceptions = { " + ", ".join(exceptions) + " }")
         for symbol in self.descriptors:
             values: list[str] = []
             for text in self.descriptors[symbol]:
@@ -149,6 +212,15 @@ class Emitter:
             self.stmt(statement)
 
     def stmt(self, statement: ast.Stmt):
+        line = self.at_line
+        col = self.at_col
+        self.at_line = statement.line
+        self.at_col = statement.col
+        self.emit_stmt(statement)
+        self.at_line = line
+        self.at_col = col
+
+    def emit_stmt(self, statement: ast.Stmt):
         node = statement.node
         if isinstance(node, ast.Assign):
             value = self.expr(node.value)
@@ -169,25 +241,173 @@ class Emitter:
             self.emit_for(node)
         elif isinstance(node, ast.Assert):
             self.emit_assert(node)
+        elif isinstance(node, ast.Raise):
+            self.emit_raise(node)
+        elif isinstance(node, ast.Try):
+            self.emit_try(node)
         elif isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
+                self.leave(self.loop_protects())
                 self.jump("jmp " + self.loop_end[-1])
             elif node == ast.SimpleStatement.CONTINUE:
+                self.leave(self.loop_protects())
                 self.jump("jmp " + self.loop_next[-1])
         else:
             self.unchecked("statement")
 
     # A function without a result returns nothing to QBE, even from
-    # `return None` or the return of a call without a result.
+    # `return None` or the return of a call without a result. The value is
+    # computed before the `finally` clauses the return leaves run.
     def emit_return(self, node: ast.Return):
         returned = node.value
-        if returned is None:
-            self.jump("ret")
-        elif self.returns:
-            self.jump("ret " + self.expr(returned))
+        value = ""
+        if returned is not None:
+            value = self.expr(returned)
+        self.leave(0)
+        if returned is not None and self.returns:
+            self.jump("ret " + value)
         else:
-            self.expr(returned)
             self.jump("ret")
+
+    # Exceptions
+
+    # After a call: when an exception is pending, adds this function's frame
+    # to it and goes to the innermost handler, or returns. The frame's calls
+    # run with no exception pending.
+    def check_pending(self):
+        pending = self.temp()
+        self.line(f"{pending} =l loadl $W.pending")
+        ok = self.new_label()
+        if not self.frames:
+            self.use_target()
+            self.jump(f"jnz {pending}, {self.target}, {ok}")
+        else:
+            failed = self.new_label()
+            self.jump(f"jnz {pending}, {failed}, {ok}")
+            self.label(failed)
+            self.line("storel 0, $W.pending")
+            self.frame_call("trace", pending)
+            self.line(f"storel {pending}, $W.pending")
+            self.propagate()
+        self.label(ok)
+
+    # Calls core function `name` with `exception` and this function's name
+    # and location.
+    def frame_call(self, name: str, exception: str):
+        function = self.string(self.function_name)
+        path = self.string(self.path)
+        self.line(f"call $W.core.{name}(l {exception}, l {function}, l {path}, l {self.at_line}, l {self.at_col})")
+
+    def use_target(self):
+        if self.target == "@unwind":
+            self.unwinds = True
+
+    # Goes to where the pending exception is handled.
+    def propagate(self):
+        self.use_target()
+        self.jump("jmp " + self.target)
+
+    # A bare `raise` raises the exception the innermost `except` clause
+    # handles again, keeping its location and frames.
+    def emit_raise(self, node: ast.Raise):
+        value = node.value
+        exception = ""
+        if value is None:
+            exception = self.handled[-1]
+        else:
+            exception = self.expr(value)
+            self.frame_call("raised", exception)
+        self.line(f"storel {exception}, $W.pending")
+        self.propagate()
+
+    # A handler block tests the `except` clauses in order. A `finally` body
+    # is emitted once for each way of leaving the statement: completing,
+    # raising, and each return, break, or continue that leaves it.
+    def emit_try(self, node: ast.Try):
+        outside = self.target
+        end = self.new_label()
+        normal = end
+        raising = outside
+        has_finally = len(node.finally_body) > 0
+        if has_finally:
+            normal = self.new_label()
+            raising = self.new_label()
+            self.protects.append(Protect(node.finally_body, outside, len(self.loop_end), len(self.handled)))
+        handlers = raising
+        if len(node.handlers) > 0:
+            handlers = self.new_label()
+        self.target = handlers
+        self.block(node.body)
+        self.jump(f"jmp {normal}")
+        if len(node.handlers) > 0:
+            self.label(handlers)
+            self.target = raising
+            exception = self.temp()
+            self.line(f"{exception} =l loadl $W.pending")
+            self.line("storel 0, $W.pending")
+            kind = self.temp()
+            self.line(f"{kind} =l loadl {exception}")
+            for handler in node.handlers:
+                record = handler.type_name.record
+                assert isinstance(record, types.Class), "unchecked except clause"
+                body = self.new_label()
+                next = self.new_label()
+                if record.type_name != "Exception":
+                    matches = self.temp()
+                    self.line(f"{matches} =l ceql {kind}, {self.descriptor(record.type_name)}")
+                    self.jump(f"jnz {matches}, {body}, {next}")
+                self.label(body)
+                if handler.name != "":
+                    self.line(f"storel {exception}, %v.{handler.name}")
+                self.handled.append(exception)
+                self.block(handler.body)
+                self.handled.pop()
+                self.jump(f"jmp {normal}")
+                self.label(next)
+            self.line(f"storel {exception}, $W.pending")
+            self.propagate()
+        self.target = outside
+        if has_finally:
+            self.protects.pop()
+            self.label(normal)
+            self.block(node.finally_body)
+            self.jump(f"jmp {end}")
+            self.label(raising)
+            exception = self.temp()
+            self.line(f"{exception} =l loadl $W.pending")
+            self.line("storel 0, $W.pending")
+            self.block(node.finally_body)
+            # A finally clause that raises replaces the exception.
+            if not self.ended:
+                self.line(f"storel {exception}, $W.pending")
+            self.propagate()
+        self.label(end)
+
+    # Runs the `finally` clauses that a return, break, or continue leaves,
+    # innermost first: those of the protects past the first `count`. Each
+    # runs where its `try` statement is.
+    def leave(self, count: int):
+        protects = self.protects
+        handled = self.handled
+        target = self.target
+        i = len(protects) - 1
+        while i >= count and not self.ended:
+            protect = protects[i]
+            self.protects = protects[:i]
+            self.handled = handled[:protect.handled]
+            self.target = protect.outside
+            self.block(protect.finally_body)
+            i = i - 1
+        self.protects = protects
+        self.handled = handled
+        self.target = target
+
+    # The number of protects outside the innermost loop.
+    def loop_protects(self) -> int:
+        count = len(self.protects)
+        while count > 0 and self.protects[count - 1].loops == len(self.loop_end):
+            count = count - 1
+        return count
 
     # The message is evaluated only when the condition is false.
     def emit_assert(self, node: ast.Assert):
@@ -395,6 +615,8 @@ class Emitter:
             step = args[2]
         zero = self.temp()
         self.line(f"{zero} =l ceql {step}, 0")
+        self.at_line = node.iterable.line
+        self.at_col = node.iterable.col
         self.guard(zero, "ValueError", "range step must not be zero")
         current = self.temp()
         self.line(f"{current} =l copy {first}")
@@ -595,12 +817,18 @@ class Emitter:
     # Writes the instructions that compute `expr` and returns its operand, as
     # a value of the type it is checked against, if any.
     def expr(self, expr: ast.Expr) -> str:
+        line = self.at_line
+        col = self.at_col
+        self.at_line = expr.line
+        self.at_col = expr.col
         value = self.node_value(expr)
         ty = expr.ty
         expected = expr.expected
-        if ty is None or expected is None:
-            return value
-        return self.convert(value, ty, expected)
+        if ty is not None and expected is not None:
+            value = self.convert(value, ty, expected)
+        self.at_line = line
+        self.at_col = col
+        return value
 
     # A value of type `source` as a value of type `target`: a scalar is boxed
     # when it enters a union and unboxed when narrowing takes it out of one.
@@ -626,7 +854,7 @@ class Emitter:
 
     # The descriptor symbol of the built-in type, class, or enum `type_name`.
     def descriptor(self, type_name: str) -> str:
-        if type_name in builtin_types() or "." in type_name:
+        if type_name in builtin_types() or type_name in self.exceptions or "." in type_name:
             return f"$W.{type_name}.type"
         return f"$W.{self.entry}.{type_name}.type"
 
@@ -1022,8 +1250,7 @@ class Emitter:
         self.label(done)
         return result
 
-    # Fails with `class_name` and `message` when `condition` is nonzero. In
-    # L0 a failure does not return.
+    # Raises `class_name` with `message` when `condition` is nonzero.
     def guard(self, condition: str, class_name: str, message: str):
         failed = self.new_label()
         ok = self.new_label()
@@ -1045,7 +1272,7 @@ class Emitter:
                 args.append(self.expr(arg))
             record = target.record
             assert record is not None, f"function {target.name} has no signature"
-            return self.call_text(self.symbol(target), typed(args), not is_none(record.result))
+            return self.willow_call(self.symbol(target), typed(args), not is_none(record.result))
         if isinstance(target, stdlib.Builtin):
             return self.builtin(node, target)
         assert isinstance(target, types.Class), "unchecked constructor"
@@ -1060,10 +1287,12 @@ class Emitter:
                 default = target.fields[i].default
                 assert default is not None, "missing field default"
                 values.append(self.expr(default))
-        object = self.core_call("object_new", [self.descriptor(target.type_name), str(len(values))], True)
+        base = field_base(target)
+        size = len(values) + (base - 8) // 8
+        object = self.core_call("object_new", [self.descriptor(target.type_name), str(size)], True)
         for i in range(len(values)):
             address = self.temp()
-            self.line(f"{address} =l add {object}, {8 + i * 8}")
+            self.line(f"{address} =l add {object}, {base + i * 8}")
             self.line(f"storel {values[i]}, {address}")
         return object
 
@@ -1075,7 +1304,7 @@ class Emitter:
         for i in range(len(ty.decl.fields)):
             if ty.decl.fields[i].name == name:
                 address = self.temp()
-                self.line(f"{address} =l add {object}, {8 + i * 8}")
+                self.line(f"{address} =l add {object}, {field_base(ty.decl) + i * 8}")
                 return address
         return self.unchecked("field")
 
@@ -1092,7 +1321,7 @@ class Emitter:
         for method in ty.decl.methods:
             if method.name == node.name:
                 symbol = self.descriptor(ty.decl.type_name).removesuffix(".type") + "." + method.name
-                return self.call_text(symbol, typed(args), not is_none(method.result))
+                return self.willow_call(symbol, typed(args), not is_none(method.result))
         return self.unchecked("class method")
 
     def fstring(self, node: ast.FString) -> str:
@@ -1287,15 +1516,19 @@ class Emitter:
 # strings, as in stage 0.
 def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
     module_names: dict[int, str] = {}
+    module_paths: dict[str, str] = {}
     for module in modules:
+        module_paths[module.name] = module.path
         for decl in module.declarations:
             if isinstance(decl, ast.FunctionDecl):
                 module_names[decl.id] = module.name
             elif isinstance(decl, ast.ClassDecl):
                 for method in decl.methods:
                     module_names[method.id] = module.name
-    result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [])
+    result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [], module_paths, stdlib.exceptions(), [], [])
     for name in builtin_types():
+        result.string(name)
+    for name in result.exceptions:
         result.string(name)
     for module in modules:
         for decl in module.declarations:
@@ -1307,6 +1540,30 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
                     texts.append(decl.name + "." + member.name)
                 result.descriptors[result.descriptor(decl.type_name)] = texts
     return result
+
+# An enclosing `try` statement with a `finally` clause, which a return,
+# break, or continue that leaves it runs.
+class Protect:
+    finally_body: list[ast.Stmt]
+    # Where an exception goes outside the statement.
+    outside: str
+    # How many loops and handled exceptions enclose the statement.
+    loops: int
+    handled: int
+
+# The name of `function` in frames, and in its symbol.
+def frame_name(function: ast.FunctionDecl) -> str:
+    owner = function.owner
+    if isinstance(owner, ast.ClassDecl):
+        return owner.name + "." + function.name
+    return function.name
+
+# The offset of a class's first field. An exception's location and frames
+# come before its fields (core/API.md).
+def field_base(decl: types.Class) -> int:
+    if decl.exception:
+        return 24
+    return 8
 
 # The built-in types with descriptors, which every program emits.
 def builtin_types() -> list[str]:

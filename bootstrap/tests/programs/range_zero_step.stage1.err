@@ -1,0 +1,2 @@
+range_zero_step.wlo:2:14: error: ValueError: range step must not be zero
+  in main at range_zero_step.wlo:2:14

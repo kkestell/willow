@@ -19,6 +19,10 @@ class Checker:
     # The parameters and the locals assigned so far, by id.
     symbols: dict[int, ast.Symbol]
     loops: int = 0
+    # The number of `finally` clauses enclosing the statement being checked,
+    # and that number at the innermost loop.
+    finally_depth: int = 0
+    loop_finally: int = 0
 
     def fail(self, line: int, col: int, message: str):
         if self.error is None:
@@ -91,6 +95,8 @@ class Checker:
         elif isinstance(node, ast.While):
             self.check_while(node, state)
         elif isinstance(node, ast.Return):
+            if self.finally_depth > 0:
+                self.fail(line, col, "'return' cannot leave a 'finally' clause")
             self.check_return(statement, node, state)
             return True
         elif isinstance(node, ast.IndexAssign):
@@ -101,6 +107,11 @@ class Checker:
             self.check_for(statement, node, state)
         elif isinstance(node, ast.Assert):
             self.check_assert(node, state)
+        elif isinstance(node, ast.Raise):
+            self.check_raise(node, state)
+            return True
+        elif isinstance(node, ast.Try):
+            return self.check_try(node, state)
         elif isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
                 return self.check_transfer(statement, "break")
@@ -163,9 +174,15 @@ class Checker:
         facts = self.check_condition(node.condition, state)
         # The body may run zero times, so its assignments are not definite
         # after the loop.
+        self.check_loop_body(node.body, narrow(state, facts.when_true))
+
+    def check_loop_body(self, body: list[ast.Stmt], state: dict[int, types.Type]):
+        loop_finally = self.loop_finally
+        self.loop_finally = self.finally_depth
         self.loops = self.loops + 1
-        self.check_block(node.body, narrow(state, facts.when_true))
+        self.check_block(body, state)
         self.loops = self.loops - 1
+        self.loop_finally = loop_finally
 
     # The message runs only when the condition is false, and what follows
     # only when it is true.
@@ -184,7 +201,93 @@ class Checker:
     def check_transfer(self, statement: ast.Stmt, name: str) -> bool:
         if self.loops == 0:
             self.fail(statement.line, statement.col, f"'{name}' outside of a loop")
+        elif self.loop_finally < self.finally_depth:
+            self.fail(statement.line, statement.col, f"'{name}' cannot leave a 'finally' clause")
         return True
+
+    def check_raise(self, node: ast.Raise, state: dict[int, types.Type]):
+        value = node.value
+        if value is None:
+            return
+        ty = self.check_expr(value, state)
+        if not self.failed() and not types.is_exception(types.expand(ty)):
+            self.fail(value.line, value.col, f"expected an exception, received {types.display(ty)}")
+
+    # The body may stop at any statement, so the clauses start from the state
+    # before the `try`, without narrowing of the locals the parts before them
+    # assign. Returns whether the statement transfers control.
+    def check_try(self, node: ast.Try, state: dict[int, types.Type]) -> bool:
+        handler_entry = copy(state)
+        self.forget_narrowing(handler_entry, node.body)
+        finally_entry = copy(handler_entry)
+        body_state = copy(state)
+        transfers = self.check_block(node.body, body_state)
+        exits: list[dict[int, types.Type]] = []
+        if not transfers:
+            exits.append(body_state)
+        named: list[str] = []
+        for handler in node.handlers:
+            if self.failed():
+                return transfers
+            record = handler.type_name.record
+            assert isinstance(record, types.Class), "except clause without a class"
+            if "Exception" in named or record.type_name in named:
+                self.fail(handler.line, handler.col, "unreachable 'except' clause")
+                return transfers
+            named.append(record.type_name)
+            handled = types.ClassType(record, [])
+            handler_state = copy(handler_entry)
+            symbol = handler.symbol
+            if symbol is not None:
+                declared = symbol.ty
+                if declared is None:
+                    symbol.ty = handled
+                    declared = handled
+                elif not types.assignable(declared, handled):
+                    self.fail(handler.line, handler.col, f"expected {types.display(declared)}, received {types.display(handled)}")
+                self.symbols[symbol.id] = symbol
+                handler_state[symbol.id] = assigned_type(declared, handled)
+            handler_transfers = self.check_block(handler.body, handler_state)
+            if not handler_transfers:
+                exits.append(handler_state)
+            transfers = transfers and handler_transfers
+            self.forget_narrowing(finally_entry, handler.body)
+            if symbol is not None and symbol.id in finally_entry:
+                finally_entry[symbol.id] = self.declared(symbol.id)
+        result: dict[int, types.Type] = {}
+        if len(exits) > 0:
+            result = exits[0]
+            for i in range(1, len(exits)):
+                result = join(result, exits[i], self.symbols)
+        if len(node.finally_body) > 0:
+            self.finally_depth = self.finally_depth + 1
+            finally_state = copy(finally_entry)
+            finally_transfers = self.check_block(node.finally_body, finally_state)
+            self.finally_depth = self.finally_depth - 1
+            if finally_transfers:
+                return True
+            # The finally clause runs after whichever part completed. A local
+            # it assigns on some paths only may no longer be narrowed.
+            assigned: dict[int, bool] = {}
+            assigned_symbols(node.finally_body, assigned)
+            for id in assigned:
+                if id in result:
+                    result[id] = self.declared(id)
+            for id in finally_state:
+                if id in assigned or not types.same(finally_state[id], self.declared(id)):
+                    result[id] = finally_state[id]
+        if transfers:
+            return True
+        replace(state, result)
+        return False
+
+    # Forgets the narrowing in `state` of the locals `body` assigns.
+    def forget_narrowing(self, state: dict[int, types.Type], body: list[ast.Stmt]):
+        assigned: dict[int, bool] = {}
+        assigned_symbols(body, assigned)
+        for id in assigned:
+            if id in state:
+                state[id] = self.declared(id)
 
     def check_for(self, statement: ast.Stmt, node: ast.For, state: dict[int, types.Type]):
         iterable = node.iterable
@@ -246,9 +349,7 @@ class Checker:
                 state[id] = self.declared(id)
         body_state = copy(state)
         body_state[symbol.id] = item
-        self.loops = self.loops + 1
-        self.check_block(node.body, body_state)
-        self.loops = self.loops - 1
+        self.check_loop_body(node.body, body_state)
 
     def check_for_dict(self, statement: ast.Stmt, node: ast.For, source: types.DictType, part: str, state: dict[int, types.Type]):
         target = node.target
@@ -292,9 +393,7 @@ class Checker:
                 symbol.ty = item
             self.symbols[symbol.id] = symbol
             body_state[symbol.id] = item
-        self.loops = self.loops + 1
-        self.check_block(node.body, body_state)
-        self.loops = self.loops - 1
+        self.check_loop_body(node.body, body_state)
 
     def check_index_assign(self, statement: ast.Stmt, node: ast.IndexAssign, state: dict[int, types.Type]):
         object = types.expand(self.check_expr(node.object, state))
@@ -727,7 +826,7 @@ class Checker:
         return self.check_constructor(expr, node, target, state)
 
     def check_constructor(self, expr: ast.Expr, node: ast.Call, target: types.Class, state: dict[int, types.Type]) -> types.Type:
-        if target.native or target.exception or len(target.typevars) > 0:
+        if target.native or len(target.typevars) > 0:
             return self.unsupported(expr.line, expr.col, "this constructor")
         required = 0
         for field in target.fields:
@@ -1102,6 +1201,14 @@ def assigned_symbols(body: list[ast.Stmt], result: dict[int, bool]):
         elif isinstance(node, ast.For):
             target_symbols(node.target, result)
             assigned_symbols(node.body, result)
+        elif isinstance(node, ast.Try):
+            assigned_symbols(node.body, result)
+            for handler in node.handlers:
+                symbol = handler.symbol
+                if symbol is not None:
+                    result[symbol.id] = True
+                assigned_symbols(handler.body, result)
+            assigned_symbols(node.finally_body, result)
 
 def target_symbols(target: ast.Target, result: dict[int, bool]):
     symbol = target.symbol

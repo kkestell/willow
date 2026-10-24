@@ -3,7 +3,7 @@ def say(n: int) -> int:
     return n
 
 def boom(n: int) -> int:
-    return n * 9007199254740991
+    return 9007199254740991 * 9007199254740991 * n
 
 def show(a: int, b: int, c: int):
     print(a + b + c)

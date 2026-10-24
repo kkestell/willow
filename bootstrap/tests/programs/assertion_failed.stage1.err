@@ -1,0 +1,2 @@
+assertion_failed.wlo:4:5: error: AssertionError: assertion failed
+  in main at assertion_failed.wlo:4:5

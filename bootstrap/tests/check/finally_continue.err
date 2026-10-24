@@ -1,0 +1,1 @@
+finally_continue.wlo:7:17: error: 'continue' cannot leave a 'finally' clause
