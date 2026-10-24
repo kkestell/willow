@@ -69,3 +69,4 @@ b'''
     print(len("abc".split("abc")))
     print(", ".join([]))
     print("".join(["x", "y", "z"]))
+    print("ö".join(["a", "", "bc"]))
