@@ -47,3 +47,38 @@ def main():
     assert core.word_str(core.dict_key_at(s, entry)) == "k1"
     core.dict_set(s, core.str_word(""), core.int_word(-1))
     assert core.word_int(core.dict_get(s, core.str_word(""))) == -1
+
+    # Many string keys force several grows, and every one keeps its value.
+    many = core.dict_new(2)
+    i = 0
+    while i < 5000:
+        core.dict_set(many, core.str_word("key_" + core.int_to_str(i)), core.int_word(i))
+        i = i + 1
+    assert core.dict_len(many) == 5000
+    i = 0
+    while i < 5000:
+        assert core.word_int(core.dict_get(many, core.str_word("key_" + core.int_to_str(i)))) == i
+        i = i + 1
+    assert not core.dict_contains(many, core.str_word("key_5000"))
+
+    # Removing a string key and inserting it again moves it to the end.
+    core.dict_pop(many, core.str_word("key_17"))
+    assert not core.dict_contains(many, core.str_word("key_17"))
+    core.dict_set(many, core.str_word("key_17"), core.int_word(-17))
+    assert core.word_int(core.dict_get(many, core.str_word("key_17"))) == -17
+    version = core.dict_version(many)
+    entry = core.dict_next(many, 0, version)
+    while core.word_str(core.dict_key_at(many, entry)) != "key_17":
+        entry = core.dict_next(many, entry + 1, version)
+    assert core.dict_next(many, entry + 1, version) == -1
+
+    # Negative int keys are found.
+    big = core.dict_new(0)
+    core.dict_set(big, core.int_word(-9223372036854775807), core.int_word(1))
+    core.dict_set(big, core.int_word(-1), core.int_word(2))
+    assert core.word_int(core.dict_get(big, core.int_word(-9223372036854775807))) == 1
+    assert core.word_int(core.dict_get(big, core.int_word(-1))) == 2
+
+    # A string equal by contents but a different object is found.
+    fresh = "ke" + "y_17"
+    assert core.word_int(core.dict_get(many, core.str_word(fresh))) == -17

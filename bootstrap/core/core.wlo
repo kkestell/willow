@@ -3398,12 +3398,13 @@ def tuple_eq(a: ptr, b: ptr) -> bool:
     return True
 
 # A dict keeps its entries in insertion order in an array of three slots per
-# entry: the key, the value, and 1 while the entry is live. Removing a key
-# clears its entry and marks it dead. A hash index of entry numbers, -1 when
-# empty, finds keys by linear probing. Growing compacts the entries and
-# rebuilds the index, which keeps at least twice as many slots as there are
-# entries, so it never fills. Entry numbers change only when the version
-# does, so iteration by entry number stays valid until it fails.
+# entry: the key, the value, and the key's hash, which is -1 while the entry
+# is dead. Removing a key clears its entry and marks it dead. A hash index of
+# entry numbers, -1 when empty, finds keys by linear probing. The index has a
+# power-of-two size, at least twice the entries capacity, so probing never
+# fills it. Growing compacts the entries and rebuilds the index. Entry
+# numbers change only when the version does, so iteration by entry number
+# stays valid until it fails.
 #
 # The object is the header, the key kind, the number of live keys, the
 # version, the entries array, the number of entries used, the entries
@@ -3433,7 +3434,9 @@ def dict_allocate(d: ptr, capacity: int):
     __store8(d, 32, __word(__alloc(capacity * 24)))
     set_dict_slot(d, 5, 0)
     set_dict_slot(d, 6, capacity)
-    size = capacity * 2
+    size = 1
+    while size < capacity * 2:
+        size = size * 2
     index = __alloc_atomic(size * 8)
     i = 0
     while i < size:
@@ -3449,7 +3452,7 @@ def dict_version(d: ptr) -> int:
     return dict_slot(d, 3)
 
 def entry_live(d: ptr, entry: int) -> bool:
-    return __int(__load8(dict_entries(d), entry * 24 + 16)) == 1
+    return __int(__load8(dict_entries(d), entry * 24 + 16)) >= 0
 
 def dict_key_at(d: ptr, entry: int) -> word:
     return __load8(dict_entries(d), entry * 24)
@@ -3457,44 +3460,71 @@ def dict_key_at(d: ptr, entry: int) -> word:
 def dict_value_at(d: ptr, entry: int) -> word:
     return __load8(dict_entries(d), entry * 24 + 8)
 
-# A string hash kept below 2^31 at every step, so it never overflows.
+# A string hash below 2^31, folded four bytes at a time and finished with a
+# large multiplier, so neighbouring keys spread far apart.
 def str_hash(s: str) -> int:
-    h = 0
+    p = 2147483647
+    n = str_size(s)
+    b = str_bytes(s)
+    h = n
     i = 0
-    while i < str_size(s):
-        h = (h * 31 + str_byte(s, i)) % 2147483647
+    while i + 4 <= n:
+        h = (h * 923521 + __load1(b, i) * 29791 + __load1(b, i + 1) * 961
+             + __load1(b, i + 2) * 31 + __load1(b, i + 3)) % p
+        i = i + 4
+    while i < n:
+        h = (h * 31 + __load1(b, i)) % p
         i = i + 1
-    return h
+    return (h * 1000003 + n) % p
 
-# The index slot where the search for `key` starts.
-def dict_home(d: ptr, key: word) -> int:
-    if dict_slot(d, 1) == 2:
-        return str_hash(__str(key)) % dict_slot(d, 8)
-    return __int(key) % dict_slot(d, 8)
+# A key's hash, which is never negative.
+def dict_hash(kind: int, key: word) -> int:
+    if kind == 2:
+        return str_hash(__str(key))
+    return __int(key) % 2305843009213693951
 
-def dict_find(d: ptr, key: word) -> int:
-    size = dict_slot(d, 8)
-    slot = dict_home(d, key)
-    entry = __int(__load8(dict_index(d), slot * 8))
+# The entry holding `key`, whose hash is `hash`, or -1.
+def dict_lookup(d: ptr, key: word, hash: int) -> int:
+    entries = __ptr(__load8(d, 32))
+    index = __ptr(__load8(d, 56))
+    size = __int(__load8(d, 64))
+    kind = __int(__load8(d, 8))
+    slot = hash % size
+    entry = __int(__load8(index, slot * 8))
     while entry != -1:
-        if entry_live(d, entry) and slots_equal(dict_key_at(d, entry), key, dict_slot(d, 1)):
-            return entry
-        slot = (slot + 1) % size
-        entry = __int(__load8(dict_index(d), slot * 8))
+        if __int(__load8(entries, entry * 24 + 16)) == hash:
+            stored = __load8(entries, entry * 24)
+            if kind == 2:
+                if __int(stored) == __int(key) or str_eq(__str(stored), __str(key)):
+                    return entry
+            elif __int(stored) == __int(key):
+                return entry
+        slot = slot + 1
+        if slot == size:
+            slot = 0
+        entry = __int(__load8(index, slot * 8))
     return -1
 
-# Appends a live entry, which the caller has made room for, and indexes it.
-def dict_append(d: ptr, key: word, value: word):
+def dict_find(d: ptr, key: word) -> int:
+    return dict_lookup(d, key, dict_hash(dict_slot(d, 1), key))
+
+# Appends a live entry with its precomputed hash, which the caller has made
+# room for, and indexes it.
+def dict_append(d: ptr, key: word, value: word, hash: int):
     entry = dict_slot(d, 5)
     entries = dict_entries(d)
     __store8(entries, entry * 24, key)
     __store8(entries, entry * 24 + 8, value)
-    __store8(entries, entry * 24 + 16, __word(1))
+    __store8(entries, entry * 24 + 16, __word(hash))
     set_dict_slot(d, 5, entry + 1)
-    slot = dict_home(d, key)
-    while __int(__load8(dict_index(d), slot * 8)) != -1:
-        slot = (slot + 1) % dict_slot(d, 8)
-    __store8(dict_index(d), slot * 8, __word(entry))
+    index = dict_index(d)
+    size = dict_slot(d, 8)
+    slot = hash % size
+    while __int(__load8(index, slot * 8)) != -1:
+        slot = slot + 1
+        if slot == size:
+            slot = 0
+    __store8(index, slot * 8, __word(entry))
 
 # Rebuilds `d` with room for twice its live keys, dropping dead entries.
 def dict_grow(d: ptr):
@@ -3503,19 +3533,21 @@ def dict_grow(d: ptr):
     dict_allocate(d, dict_len(d) * 2 + 8)
     entry = 0
     while entry < used:
-        if __int(__load8(entries, entry * 24 + 16)) == 1:
-            dict_append(d, __load8(entries, entry * 24), __load8(entries, entry * 24 + 8))
+        hash = __int(__load8(entries, entry * 24 + 16))
+        if hash >= 0:
+            dict_append(d, __load8(entries, entry * 24), __load8(entries, entry * 24 + 8), hash)
         entry = entry + 1
 
 # Replacing the value of an existing key keeps its position and the version.
 def dict_set(d: ptr, key: word, value: word):
-    entry = dict_find(d, key)
+    hash = dict_hash(dict_slot(d, 1), key)
+    entry = dict_lookup(d, key, hash)
     if entry >= 0:
         __store8(dict_entries(d), entry * 24 + 8, value)
         return
     if dict_slot(d, 5) == dict_slot(d, 6):
         dict_grow(d)
-    dict_append(d, key, value)
+    dict_append(d, key, value, hash)
     set_dict_slot(d, 2, dict_len(d) + 1)
     set_dict_slot(d, 3, dict_version(d) + 1)
 
@@ -3538,7 +3570,7 @@ def dict_pop(d: ptr, key: word) -> word:
     entries = dict_entries(d)
     __store8(entries, entry * 24, __word(0))
     __store8(entries, entry * 24 + 8, __word(0))
-    __store8(entries, entry * 24 + 16, __word(0))
+    __store8(entries, entry * 24 + 16, __word(-1))
     set_dict_slot(d, 2, dict_len(d) - 1)
     set_dict_slot(d, 3, dict_version(d) + 1)
     return value
