@@ -3460,21 +3460,22 @@ def dict_key_at(d: ptr, entry: int) -> word:
 def dict_value_at(d: ptr, entry: int) -> word:
     return __load8(dict_entries(d), entry * 24 + 8)
 
-# A string hash below 2^31, folded four bytes at a time and finished with a
-# large multiplier, so neighbouring keys spread far apart.
+# A string hash below 2^31 that mixes the length and every byte of `s`.
 def str_hash(s: str) -> int:
     p = 2147483647
-    n = str_size(s)
-    b = str_bytes(s)
+    n = __int(__load8(__ptr(__word(s)), 8))
+    b = __offset(__ptr(__word(s)), 16)
     h = n
     i = 0
     while i + 4 <= n:
-        h = (h * 923521 + __load1(b, i) * 29791 + __load1(b, i + 1) * 961
-             + __load1(b, i + 2) * 31 + __load1(b, i + 3)) % p
+        h = (h * 1103515245 + __load4(b, i)) % p
         i = i + 4
-    while i < n:
-        h = (h * 31 + __load1(b, i)) % p
-        i = i + 1
+    if i < n:
+        tail = 0
+        while i < n:
+            tail = tail * 256 + __load1(b, i)
+            i = i + 1
+        h = (h * 1103515245 + tail) % p
     return (h * 1000003 + n) % p
 
 # A key's hash, which is never negative.
@@ -3506,7 +3507,7 @@ def dict_lookup(d: ptr, key: word, hash: int) -> int:
     return -1
 
 def dict_find(d: ptr, key: word) -> int:
-    return dict_lookup(d, key, dict_hash(dict_slot(d, 1), key))
+    return dict_lookup(d, key, dict_hash(__int(__load8(d, 8)), key))
 
 # Appends a live entry with its precomputed hash, which the caller has made
 # room for, and indexes it.
@@ -3540,12 +3541,12 @@ def dict_grow(d: ptr):
 
 # Replacing the value of an existing key keeps its position and the version.
 def dict_set(d: ptr, key: word, value: word):
-    hash = dict_hash(dict_slot(d, 1), key)
+    hash = dict_hash(__int(__load8(d, 8)), key)
     entry = dict_lookup(d, key, hash)
     if entry >= 0:
-        __store8(dict_entries(d), entry * 24 + 8, value)
+        __store8(__ptr(__load8(d, 32)), entry * 24 + 8, value)
         return
-    if dict_slot(d, 5) == dict_slot(d, 6):
+    if __int(__load8(d, 40)) == __int(__load8(d, 48)):
         dict_grow(d)
     dict_append(d, key, value, hash)
     set_dict_slot(d, 2, dict_len(d) + 1)
