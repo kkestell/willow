@@ -536,6 +536,8 @@ class _Fetch:
         status = exchange.status()
         headers = exchange._headers.headers()
         written = exchange._downloaded
+        if written < 0:
+            raise OverflowError("download size out of range")
         exchange.close()
         if 200 <= status and status <= 299:
             if core.rename(core.str_bytes(self._temp), core.path_bytes(self._path)) != 0:
