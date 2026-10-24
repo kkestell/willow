@@ -900,19 +900,19 @@ class Emitter:
         elif name == "chr":
             return self.unchecked("'chr'")
         elif name == "sys.args":
-            return self.unchecked("'sys.args'")
+            return self.host(node, target)
         elif name == "sys.exit":
-            return self.unchecked("'sys.exit'")
+            return self.host(node, target)
         elif name == "sys.eprint":
-            return self.unchecked("'sys.eprint'")
+            return self.core_call("eprint_str", [self.to_str(node.args[0])], False)
         elif name == "fs.read_file":
-            return self.unchecked("'fs.read_file'")
+            return self.host(node, target)
         elif name == "fs.write_file":
-            return self.unchecked("'fs.write_file'")
+            return self.host(node, target)
         elif name == "fs.exists":
-            return self.unchecked("'fs.exists'")
+            return self.host(node, target)
         elif name == "fs.realpath":
-            return self.unchecked("'fs.realpath'")
+            return self.host(node, target)
         return self.unchecked(f"'{name}'")
 
     # A C function's `cint` travels as QBE `w` and a float as `d`; a C int
@@ -958,6 +958,22 @@ class Emitter:
         else:
             self.line(f"{t} =l cast {r}")
         return t
+
+    # A function of sys or fs, which core implements as `sys_exit`,
+    # `fs_read_file`, and so on. sys.args reads the argc and argv the entry
+    # saved.
+    def host(self, node: ast.Call, target: stdlib.Builtin) -> str:
+        args: list[str] = []
+        if node.name == "sys.args":
+            for word in ["$W.argc", "$W.argv"]:
+                t = self.temp()
+                self.line(f"{t} =l loadl {word}")
+                args.append(t)
+        for arg in node.args:
+            args.append(self.expr(arg))
+        result = target.result
+        assert result is not None, f"{node.name} has no result"
+        return self.core_call(node.name.replace(".", "_"), args, not is_none(result))
 
     def emit_print(self, node: ast.Call) -> str:
         return self.core_call("print_str", [self.to_str(node.args[0])], False)

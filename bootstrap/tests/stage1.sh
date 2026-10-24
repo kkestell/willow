@@ -157,6 +157,12 @@ check_bind_driver() {
 # runs through run.sh as it does with willow0.
 willow1_programs="
 check/list_extend_element_type.wlo
+core/dicts_test.wlo
+core/errno_test.wlo
+core/floats_test.wlo
+core/run_missing_test.wlo
+core/run_test.wlo
+core/strings_test.wlo
 programs/alias_call.wlo
 programs/alias_cycle.wlo
 programs/argument_type.wlo
@@ -166,19 +172,26 @@ programs/branches_and_loops.wlo
 programs/break_continue.wlo
 programs/break_outside_loop.wlo
 programs/conversions.wlo
+programs/core_test_intrinsic.wlo
 programs/division_by_zero.wlo
 programs/empty_list_display.wlo
 programs/enum_member.wlo
+programs/exit_unreachable.wlo
 programs/exponent_without_digits.wlo
 programs/float_division_by_zero.wlo
 programs/float_to_int_overflow.wlo
 programs/floats.wlo
 programs/for_assignment_narrowing.wlo
 programs/for_loops.wlo
+programs/host_args.wlo
+programs/host_exit.wlo
+programs/host_files.wlo
+programs/host_realpath_missing.wlo
 programs/import_name_clash.wlo
 programs/int_true_division.wlo
 programs/integer_overflow.wlo
 programs/integer_range.wlo
+programs/intrinsic_outside_core.wlo
 programs/invalid_int.wlo
 programs/is_none_not_optional.wlo
 programs/isinstance_none.wlo
@@ -202,6 +215,7 @@ programs/operator_types.wlo
 programs/operators.wlo
 programs/private_name.wlo
 programs/range_zero_step.wlo
+programs/read_missing_file.wlo
 programs/return_none.wlo
 programs/slicing.wlo
 programs/sum_to.wlo

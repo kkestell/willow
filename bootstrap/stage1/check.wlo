@@ -81,6 +81,11 @@ class Checker:
             self.check_assign(statement, node, state)
         elif isinstance(node, ast.CallStmt):
             self.check_expr(node.call, state)
+            # sys.exit never returns, so it transfers control.
+            call = node.call.node
+            if isinstance(call, ast.Call):
+                target = call.target
+                return isinstance(target, stdlib.Builtin) and target.name == "exit"
         elif isinstance(node, ast.If):
             return self.check_if(node, state)
         elif isinstance(node, ast.While):
@@ -578,19 +583,19 @@ class Checker:
         elif name == "chr":
             return self.unsupported(line, col, "'chr'")
         elif name == "sys.args":
-            return self.unsupported(line, col, "'sys.args'")
+            return self.check_host(expr, node, target, state)
         elif name == "sys.exit":
-            return self.unsupported(line, col, "'sys.exit'")
+            return self.check_host(expr, node, target, state)
         elif name == "sys.eprint":
-            return self.unsupported(line, col, "'sys.eprint'")
+            return self.check_print(expr, node, state)
         elif name == "fs.read_file":
-            return self.unsupported(line, col, "'fs.read_file'")
+            return self.check_host(expr, node, target, state)
         elif name == "fs.write_file":
-            return self.unsupported(line, col, "'fs.write_file'")
+            return self.check_host(expr, node, target, state)
         elif name == "fs.exists":
-            return self.unsupported(line, col, "'fs.exists'")
+            return self.check_host(expr, node, target, state)
         elif name == "fs.realpath":
-            return self.unsupported(line, col, "'fs.realpath'")
+            return self.check_host(expr, node, target, state)
         # Not in L0.
         return self.unsupported(line, col, f"'{name}'")
 
@@ -614,8 +619,22 @@ class Checker:
                     self.fail(arg.line, arg.col, "variadic arguments must be int, float, or ptr")
         return record.result
 
+    # A function of sys or fs with the signature the spec gives it.
+    def check_host(self, expr: ast.Expr, node: ast.Call, target: stdlib.Builtin, state: dict[int, types.Type]) -> types.Type:
+        self.check_arity(expr, node.name, len(target.params), len(node.args))
+        if self.failed():
+            return none()
+        for i in range(len(node.args)):
+            param = target.params[i].ty
+            assert param is not None, f"{node.name} has an untyped parameter"
+            self.check_against(node.args[i], state, param)
+        result = target.result
+        assert result is not None, f"{node.name} has no result"
+        return result
+
+    # `print`, and `sys.eprint`, which writes to stderr.
     def check_print(self, expr: ast.Expr, node: ast.Call, state: dict[int, types.Type]) -> types.Type:
-        self.check_arity(expr, "print", 1, len(node.args))
+        self.check_arity(expr, node.name, 1, len(node.args))
         if self.failed():
             return none()
         arg = node.args[0]
