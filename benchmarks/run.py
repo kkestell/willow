@@ -50,6 +50,29 @@ BENCHMARKS = [
 
 LANGUAGES = ["C", "LuaJIT", "Python", "Willow"]
 
+# Seconds for Willow's earlier implementation, which compiled to Lua and ran on
+# LuaJIT, recorded on an Apple M4 on 2026-10-21. The README table keeps them
+# beside the native results.
+WILLOW_LUAJIT = {
+    "n-body": 0.36,
+    "spectral-norm": 0.51,
+    "fannkuch-redux": 0.30,
+    "binary-trees": 2.20,
+    "fasta": 1.98,
+    "mandelbrot": 0.40,
+    "k-nucleotide": 0.59,
+    "reverse-complement": 3.22,
+    "recursive": 0.16,
+    "nsieve": 0.42,
+    "matrix": 0.67,
+    "methcall": 0.57,
+    "except": 3.87,
+    "heapsort": 0.47,
+    "hash2": 1.07,
+    "sumcol": 1.86,
+    "raytracer": 0.38,
+}
+
 
 def fasta_input(size, path):
     """Writes the output of fasta for `size`."""
@@ -112,18 +135,20 @@ def machine():
 
 def table(results):
     lines = [
-        f"Seconds of wall-clock time, best of {RUNS} runs, on {machine()}. In",
-        "parentheses is how many times faster Willow is than Python.",
+        f"Seconds of wall-clock time, best of {RUNS} runs, on {machine()}. Willow on",
+        "LuaJIT is the earlier implementation, which compiled to Lua, recorded on an",
+        "Apple M4 on 2026-10-21. In parentheses is how many times faster each Willow",
+        "column is than Python.",
         "",
-        "| Benchmark (size) | C | LuaJIT | Python | Willow (vs Python) |",
-        "|---|---:|---:|---:|---:|",
+        "| Benchmark (size) | C | LuaJIT | Python | Willow on LuaJIT (vs Python) | Willow (vs Python) |",
+        "|---|---:|---:|---:|---:|---:|",
     ]
     for _, title, size in BENCHMARKS:
         times = results[title]
-        speedup = times["Python"] / times["Willow"]
+        old = WILLOW_LUAJIT[title]
         lines.append(
             f"| {title} ({size:,}) | {times['C']:.2f} | {times['LuaJIT']:.2f} | {times['Python']:.2f}"
-            f" | {times['Willow']:.2f} ({speedup:.1f}x) |"
+            f" | {old:.2f} ({times['Python'] / old:.1f}x) | {times['Willow']:.2f} ({times['Python'] / times['Willow']:.1f}x) |"
         )
     return "\n".join(lines)
 
