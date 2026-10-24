@@ -1,0 +1,4 @@
+def main():
+    d = {"one": 1}
+    for pair in d.items():
+        pass

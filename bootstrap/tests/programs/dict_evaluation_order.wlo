@@ -1,0 +1,22 @@
+def number(label: str, value: int) -> int:
+    print(label)
+    return value
+
+def object(d: dict[int, int]) -> dict[int, int]:
+    print("object")
+    return d
+
+def main():
+    d = {number("key", 1): number("value", 2), number("key again", 1): number("replace", 3)}
+    object(d)[number("index", 1)] = number("assigned", 4)
+    print(object(d).get(number("lookup", 1), number("default", 5)))
+    print(len(d))
+
+    empty = {"n": None}
+    print(empty.get("n"))
+    print(empty.get("missing", None))
+
+    groups: dict[int, list[int]] = {}
+    group = groups.get(1, [])
+    group.append(7)
+    print(group[0])

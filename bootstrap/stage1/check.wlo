@@ -200,10 +200,24 @@ class Checker:
             for arg in call.args:
                 self.check_against(arg, state, types.prim("int"))
             item = types.prim("int")
+        elif isinstance(call, ast.MethodCall) and call.name in ["keys", "values", "items"]:
+            source = types.expand(self.check_expr(call.object, state))
+            if not isinstance(source, types.DictType):
+                self.fail(iterable.line, iterable.col, f"type {types.display(source)} has no method '{call.name}'")
+                return
+            if len(call.keywords) > 0:
+                self.unsupported(iterable.line, iterable.col, "keyword arguments")
+                return
+            self.check_arity(iterable, call.name, 0, len(call.args))
+            self.check_for_dict(statement, node, source, call.name, state)
+            return
         else:
             source = types.expand(self.check_expr(iterable, state))
             if isinstance(source, types.ListType):
                 item = types.expand(source.element)
+            elif isinstance(source, types.DictType):
+                self.check_for_dict(statement, node, source, "keys", state)
+                return
             else:
                 self.fail(iterable.line, iterable.col, f"cannot iterate over {types.display(source)}")
         target = node.target
@@ -234,8 +248,58 @@ class Checker:
         self.check_block(node.body, body_state)
         self.loops = self.loops - 1
 
+    def check_for_dict(self, statement: ast.Stmt, node: ast.For, source: types.DictType, part: str, state: dict[int, types.Type]):
+        target = node.target
+        targets = [target]
+        items = [source.key]
+        if part == "values":
+            items = [types.expand(source.value)]
+        elif part == "items":
+            targets = target.elements
+            items = [source.key, types.expand(source.value)]
+            if target.name != "" or len(targets) != 2:
+                self.fail(target.line, target.col, "'items' gives a key and a value, so it needs two targets")
+                return
+            if targets[0].name != "" and targets[0].name == targets[1].name:
+                duplicate = targets[1]
+                self.fail(duplicate.line, duplicate.col, f"duplicate target '{duplicate.name}'")
+                return
+        if part != "items" and target.name == "":
+            self.fail(target.line, target.col, f"cannot unpack a value of type {types.display(items[0])}")
+            return
+        assigned: dict[int, bool] = {}
+        assigned_symbols(node.body, assigned)
+        target_symbols(target, assigned)
+        for id in assigned:
+            if id in state:
+                state[id] = self.declared(id)
+        body_state = copy(state)
+        for i in range(len(targets)):
+            current = targets[i]
+            if current.name == "":
+                self.unsupported(current.line, current.col, "unpacking")
+                return
+            symbol = current.symbol
+            assert symbol is not None, "loop target without a symbol"
+            item = items[i]
+            declared = symbol.ty
+            if declared is not None:
+                if not types.assignable(declared, item):
+                    self.fail(statement.line, statement.col, f"expected {types.display(declared)}, received {types.display(item)}")
+            else:
+                symbol.ty = item
+            self.symbols[symbol.id] = symbol
+            body_state[symbol.id] = item
+        self.loops = self.loops + 1
+        self.check_block(node.body, body_state)
+        self.loops = self.loops - 1
+
     def check_index_assign(self, statement: ast.Stmt, node: ast.IndexAssign, state: dict[int, types.Type]):
         object = types.expand(self.check_expr(node.object, state))
+        if isinstance(object, types.DictType):
+            self.check_against(node.index, state, object.key)
+            self.check_against(node.value, state, types.expand(object.value))
+            return
         if not isinstance(object, types.ListType):
             if types.kind(object) == "str":
                 self.fail(statement.line, statement.col, f"cannot assign to an index of a value of type {types.display(object)}")
@@ -250,6 +314,9 @@ class Checker:
         item: types.Type = none()
         if isinstance(object, types.ListType):
             item = types.expand(object.element)
+        elif isinstance(object, types.DictType):
+            self.check_against(node.index, state, object.key)
+            return types.expand(object.value)
         elif types.kind(object) == "str":
             item = object
         else:
@@ -311,11 +378,71 @@ class Checker:
             return types.expand(object.element)
         return none()
 
+    def check_dict(self, expr: ast.Expr, node: ast.DictDisplay, state: dict[int, types.Type]) -> types.Type:
+        expected = expr.expected
+        if expected is not None:
+            for member in types.members(expected):
+                if isinstance(member, types.DictType):
+                    for i in range(len(node.keys)):
+                        self.check_against(node.keys[i], state, member.key)
+                        self.check_against(node.values[i], state, types.expand(member.value))
+                    return member
+        if len(node.keys) == 0:
+            self.fail(expr.line, expr.col, "cannot infer the key and value types of an empty dict")
+            return none()
+        key = self.check_expr(node.keys[0], state)
+        if not self.failed() and not types.is_key(key):
+            first = node.keys[0]
+            self.fail(first.line, first.col, "dictionary keys must be int, str, or an enum")
+        value = self.check_expr(node.values[0], state)
+        for i in range(1, len(node.keys)):
+            self.check_against(node.keys[i], state, key)
+            self.check_against(node.values[i], state, value)
+        return types.DictType(key, value)
+
+    def check_dict_method(self, expr: ast.Expr, node: ast.MethodCall, object: types.DictType, state: dict[int, types.Type]) -> types.Type:
+        if len(node.keywords) > 0:
+            return self.unsupported(expr.line, expr.col, "keyword arguments")
+        name = node.name
+        if name in ["keys", "values", "items"]:
+            self.fail(expr.line, expr.col, f"'{types.display(object)}.{name}' can only be the source of a for loop")
+            return none()
+        if name not in ["get", "pop"]:
+            self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{name}'")
+            return none()
+        count = len(node.args)
+        if name == "get":
+            if count < 1 or count > 2:
+                self.fail(expr.line, expr.col, f"'get' expects 1 to 2 arguments, received {count}")
+        else:
+            self.check_arity(expr, name, 1, count)
+        if self.failed():
+            return none()
+        self.check_against(node.args[0], state, object.key)
+        value = types.expand(object.value)
+        if name == "pop":
+            return value
+        optional = value
+        if types.kind(value) != "None" and not types.is_optional(value):
+            optional = types.optional(value)
+        default: types.Type = none()
+        if count == 2:
+            arg = node.args[1]
+            arg.expected = optional
+            default = self.check_expr(arg, state)
+            self.expect(arg, optional, default)
+        result = optional
+        if types.assignable(value, default):
+            result = value
+        if count == 2:
+            node.args[1].expected = result
+        return result
+
     def check_len(self, expr: ast.Expr, node: ast.Call, state: dict[int, types.Type]) -> types.Type:
         self.check_arity(expr, "len", 1, len(node.args))
         if not self.failed():
             arg = self.check_expr(node.args[0], state)
-            if types.kind(arg) not in ["list", "str"]:
+            if types.kind(arg) not in ["list", "str", "dict"]:
                 self.fail(expr.line, expr.col, f"'len' cannot be applied to {types.display(arg)}")
         return types.prim("int")
 
@@ -381,7 +508,7 @@ class Checker:
         elif isinstance(node, ast.ListDisplay):
             return self.check_list(expr, node, state)
         elif isinstance(node, ast.DictDisplay):
-            return self.unsupported(line, col, "dicts")
+            return self.check_dict(expr, node, state)
         return self.unsupported(line, col, "this expression")
 
     def check_name(self, expr: ast.Expr, node: ast.Name, state: dict[int, types.Type]) -> types.Type:
@@ -433,7 +560,11 @@ class Checker:
             supported = pair in ["int int", "float float"] or op == "+" and pair == "str str"
         elif op == "in" or op == "not in":
             container = types.expand(right)
-            if isinstance(container, types.ListType):
+            if isinstance(container, types.DictType):
+                if types.assignable(container.key, left):
+                    ty = types.prim("bool")
+                    supported = True
+            elif isinstance(container, types.ListType):
                 element = types.expand(container.element)
                 if types.comparable(left) and types.comparable(element) and (types.assignable(element, left) or types.assignable(left, element)):
                     ty = types.prim("bool")
@@ -606,6 +737,8 @@ class Checker:
             return self.check_class_method(expr, node, object, state)
         if isinstance(object, types.ListType):
             return self.check_list_method(expr, node, state, object)
+        if isinstance(object, types.DictType):
+            return self.check_dict_method(expr, node, object, state)
         return self.unsupported(expr.line, expr.col, "method calls")
 
     def check_class_method(self, expr: ast.Expr, node: ast.MethodCall, object: types.ClassType, state: dict[int, types.Type]) -> types.Type:

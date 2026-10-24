@@ -1,0 +1,16 @@
+def main():
+    key: int | str = "before"
+    d = {1: 10, 2: 20, 3: 30}
+    for key, value in d.items():
+        if key == 2:
+            continue
+        print(key + value)
+        if key == 3:
+            break
+    print(key)
+
+    maybe: dict[int, int | None] = {1: 10, 2: None}
+    for index, item in maybe.items():
+        if index == 1:
+            item = 11
+        print(item)

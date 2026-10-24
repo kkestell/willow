@@ -1,0 +1,3 @@
+def main():
+    d = {"one": 1}
+    keys = d.keys()
