@@ -89,6 +89,19 @@ class Overlap:
     lines: list[int]
     cols: list[int]
 
+# A type argument whose bound is checked once the lazy types in it are
+# resolved, so that `list[int]` satisfies `Iterable[int]`. The Lua binder
+# checks before they are, and so rejects `Box[list[int]]` for a `Box[T:
+# Iterable[int]]`.
+class Bound:
+    module: ast.Module
+    var: types.TypeVar
+    arg: types.Type
+    line: int
+    col: int
+
+type Check = Overlap | Bound
+
 class Binder:
     modules: list[ast.Module]
     by_name: dict[str, ast.Module]
@@ -103,10 +116,9 @@ class Binder:
     # By the alias's type_name.
     aliases: dict[str, AliasState]
     pending: list[PendingLazy]
-    # Whether method signatures are resolved, so that unions with protocol
-    # members can be checked for overlap. Until then those wait.
-    ready: bool
-    waiting: list[Overlap]
+    # Checks that run once the declarations' method signatures and lazy
+    # types are resolved.
+    waiting: list[Check]
 
     def fail(self, module: ast.Module, line: int, col: int, message: str):
         if self.error is None:
@@ -385,6 +397,24 @@ class Binder:
                 self.fail(overlap.module, overlap.lines[i], overlap.cols[i], message)
                 return
 
+    def check_bound(self, bound: Bound):
+        message = types.unsatisfied(bound.var, bound.arg)
+        if message != "":
+            self.fail(bound.module, bound.line, bound.col, message)
+
+    # Resolves the pending lazy types, then runs the waiting checks.
+    def check_waiting(self):
+        self.force_pending()
+        checks = self.waiting
+        self.waiting = []
+        for check in checks:
+            if self.error is not None:
+                return
+            if isinstance(check, Overlap):
+                self.check_overlap(check)
+            else:
+                self.check_bound(check)
+
     # Puts `params`, a declaration's type parameters, in scope over `outer`,
     # making their type variables in `vars` on first use. Bounds resolve with
     # the parameters in scope.
@@ -518,11 +548,8 @@ class Binder:
                 resolved.append(self.resolve_type(arg, module, scope, ""))
                 if self.error is not None:
                     return none
-                if i < len(vars):
-                    message = types.unsatisfied(vars[i], resolved[i])
-                    if message != "":
-                        self.fail(module, parser.type_line(arg), parser.type_col(arg), message)
-                        return none
+                if i < len(vars) and vars[i].bound is not None:
+                    self.waiting.append(Bound(module, vars[i], resolved[i], parser.type_line(arg), parser.type_col(arg)))
             if isinstance(named, AliasState):
                 return self.apply_alias(named, resolved, module, node.line, node.col, scope)
             if isinstance(named, types.Protocol):
@@ -575,10 +602,10 @@ class Binder:
                     overlap.cols.append(parser.type_col(member))
                     if isinstance(m, types.ProtocolType):
                         has_protocol = True
-        if self.ready or not has_protocol:
-            self.check_overlap(overlap)
-        else:
+        if has_protocol:
             self.waiting.append(overlap)
+        else:
+            self.check_overlap(overlap)
         union = types.named_union(overlap.members, name)
         for m in overlap.members:
             if isinstance(m, types.TypeVar) and not (len(overlap.members) == 2 and types.has(union, "None")):
@@ -805,7 +832,10 @@ class Resolver:
         return self.binder.lookup(self.module, path, name, line, col)
 
     def resolve_type(self, node: ast.TypeExpr) -> types.Type:
-        return self.binder.resolve_type(node, self.module, self.type_scope, "")
+        ty = self.binder.resolve_type(node, self.module, self.type_scope, "")
+        if len(self.binder.waiting) > 0:
+            self.binder.check_waiting()
+        return ty
 
     def resolve_types(self, nodes: list[ast.TypeExpr]) -> list[types.Type]:
         result: list[types.Type] = []
@@ -1297,7 +1327,7 @@ class Resolver:
         record = types.Function(nested.id, nested.name, nested.type_name, [], [], types.prim("None"))
         nested.record = record
         self.binder.resolve_signature(self.module, nested, self.type_scope)
-        self.binder.force_pending()
+        self.binder.check_waiting()
         self.binder.check_param_defaults(self.module, nested)
         if self.failed():
             return
@@ -1315,7 +1345,7 @@ def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | No
         source.tree.name = source.name
         modules.append(source.tree)
         by_name[source.name] = source.tree
-    binder = Binder(modules, by_name, modules[0], 0, None, stdlib.builtins(), stdlib.exceptions(), stdlib.protocols(), stdlib.modules(), stdlib.coroutine(), {}, [], False, [])
+    binder = Binder(modules, by_name, modules[0], 0, None, stdlib.builtins(), stdlib.exceptions(), stdlib.protocols(), stdlib.modules(), stdlib.coroutine(), {}, [], [])
     for module in modules:
         binder.declare(module)
         if binder.error is not None:
@@ -1331,11 +1361,7 @@ def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | No
     for module in modules:
         if binder.error is None:
             resolve_declarations(binder, module)
-    binder.force_pending()
-    binder.ready = True
-    for overlap in binder.waiting:
-        if binder.error is None:
-            binder.check_overlap(overlap)
+    binder.check_waiting()
     for module in modules:
         if binder.error is None:
             check_defaults(binder, module)
@@ -1360,7 +1386,7 @@ def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | No
             if record is not None:
                 scope = binder.enter_type_params(module, scope, function.type_params, record.typevars)
             binder.resolve_function(module, function, None, scope)
-    binder.force_pending()
+    binder.check_waiting()
     return binder.error
 
 # The types the binder gave the functions, methods, and class fields of
