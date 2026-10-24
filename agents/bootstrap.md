@@ -307,9 +307,11 @@ through the escape hatch in §2.
   instead. It also builds the `willow1` driver and runs `run.sh` with it over
   every top-level program in `bootstrap/tests/programs/` and
   `bootstrap/tests/core/`, plus every case in `bootstrap/tests/check/`, using
-  `*.wlo` globs so new programs run automatically. `make bootstrap` builds
-  stage 0 and `make bootstrap-test` runs both without LuaJIT. The runners move
-  to a Willow program once stage 2 exists.
+  `*.wlo` globs so new programs run automatically. It checks the fixpoint by
+  building `willow1` with itself and comparing the IL both compilers emit for
+  the same source. `make bootstrap` builds stage 0 and `make bootstrap-test`
+  runs both without LuaJIT. The runners move to a Willow program once stage 2
+  exists.
 
 ## 9. Specification changes
 
