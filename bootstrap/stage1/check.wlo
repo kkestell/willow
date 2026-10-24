@@ -797,11 +797,7 @@ class Checker:
         elif isinstance(node, ast.Field):
             return self.check_field(expr, node, state)
         elif isinstance(node, ast.FunctionValue):
-            signature = node.target.record
-            assert signature is not None, "function value without a signature"
-            if len(signature.typevars) > 0:
-                return self.unsupported(line, col, "generic function values")
-            return types.FunctionType(signature, False, None)
+            return self.check_function_value(expr, node, state)
         elif isinstance(node, ast.BuiltinValue):
             return self.check_builtin_value(expr, node, state)
         elif isinstance(node, ast.Lambda):
@@ -886,11 +882,9 @@ class Checker:
                 if types.comparable(left) and types.comparable(element) and (types.assignable(element, left) or types.assignable(left, element)):
                     ty = types.prim("bool")
                     supported = True
-                    # The item is boxed to compare with a union element.
-                    if not types.assignable(element, left):
-                        if types.tuple_member(left) is None and types.tuple_member(element) is None:
-                            return self.unsupported(expr.line, expr.col, "unions")
-                    else:
+                    # The item is boxed to compare with a union element;
+                    # a union item is compared with each element converted.
+                    if types.assignable(element, left):
                         self.expect(node.left, element, left)
             elif types.kind(container) == "bytes" and types.kind(types.expand(left)) == "int":
                 ty = types.prim("bool")
@@ -1055,9 +1049,53 @@ class Checker:
                         self.fail(expr.line, expr.col, f"generic method '{node.name}' cannot be used as a value")
                         return none()
                     if len(expanded.args) > 0:
-                        return self.unsupported(expr.line, expr.col, "generic function values")
+                        return types.FunctionType(method, True, expanded)
                     return types.FunctionType(method, True, None)
         return self.field_type(expr.line, expr.col, node.name, object)
+
+    # Explicit type arguments or an expected callable specialize a generic
+    # function, whose value takes its positional contract.
+    def check_function_value(self, expr: ast.Expr, node: ast.FunctionValue, state: dict[int, types.Type]) -> types.Type:
+        signature = node.target.record
+        assert signature is not None, "function value without a signature"
+        symbol = node.symbol
+        if symbol is not None and symbol.id not in state:
+            self.fail(expr.line, expr.col, f"variable '{symbol.name}' may be used before assignment")
+            return none()
+        vars = signature.typevars
+        if len(vars) == 0:
+            return types.FunctionType(signature, False, None)
+        name = signature.name
+        callable: types.CallableType | None = None
+        expected = expr.expected
+        if len(node.type_args) == 0 and expected is not None:
+            callable = types.callable_member(expected)
+        positional: list[types.Type] = []
+        for param in signature.params:
+            if param.keyword_only and param.default is None:
+                self.fail(expr.line, expr.col, f"generic function '{name}' has required keyword-only parameters")
+                return none()
+            if not param.keyword_only and (param.default is None or callable is not None and len(positional) < len(callable.params)):
+                positional.append(param.ty)
+        args: list[types.Type] = []
+        if len(node.type_args) > 0:
+            if len(node.type_args) != len(vars):
+                self.fail(expr.line, expr.col, f"'{name}' expects {len(vars)} {bind.plural(len(vars), 'type argument')}, received {len(node.type_args)}")
+                return none()
+            args = node.type_args
+        elif callable is not None:
+            candidates: dict[str, list[types.Type]] = {}
+            for var in vars:
+                candidates[types.var_key(var)] = []
+            collect(types.CallableType(positional, signature.result), callable, candidates, [])
+            args = self.choose_args(expr, name, vars, candidates)
+        else:
+            self.fail(expr.line, expr.col, f"generic function '{name}' needs type arguments or an expected callable type")
+        if self.failed() or not self.check_bounds(expr, vars, args):
+            return none()
+        node.type_args = args
+        bindings = types.bind_vars(vars, args)
+        return types.CallableType(types.substitute_all(positional, bindings), types.substitute(signature.result, bindings))
 
     # A function value takes its whole call signature, and a callable
     # exactly its listed positional arguments.
@@ -1070,7 +1108,7 @@ class Checker:
         result: types.Type = none()
         if isinstance(expanded, types.FunctionType):
             if len(expanded.fn.typevars) > 0:
-                return self.unsupported(expr.line, expr.col, "generic functions")
+                return self.check_generic_call(expr, node, expanded.fn.params, expanded.fn.result, expanded.fn.typevars, state, "parameter")
             declared = types.function_params(expanded)
             self.bind_args(expr, node, call_params(declared), "parameter")
             for param in declared:
@@ -1223,12 +1261,16 @@ class Checker:
         self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{node.name}'")
         return none()
 
-    def check_generic_call(self, expr: ast.Expr, node: ast.Call | ast.MethodCall, params: list[types.Param], result: types.Type, vars: list[types.TypeVar], state: dict[int, types.Type], noun: str) -> types.Type:
+    def check_generic_call(self, expr: ast.Expr, node: ast.Call | ast.MethodCall | ast.CallValue, params: list[types.Param], result: types.Type, vars: list[types.TypeVar], state: dict[int, types.Type], noun: str) -> types.Type:
         name = ""
         explicit: list[types.Type] | None = None
         if isinstance(node, ast.Call):
             name = node.name
             if node.has_type_args:
+                explicit = node.type_args
+        elif isinstance(node, ast.CallValue):
+            name = callee_name(node.callee)
+            if len(node.type_args) > 0:
                 explicit = node.type_args
         else:
             name = node.name
@@ -1246,6 +1288,9 @@ class Checker:
         call_args: list[ast.Expr] = []
         order: list[int] | None = None
         if isinstance(node, ast.Call):
+            call_args = node.args
+            order = node.order
+        elif isinstance(node, ast.CallValue):
             call_args = node.args
             order = node.order
         else:
@@ -1299,27 +1344,15 @@ class Checker:
                     key = types.var_key(var)
                     if len(candidates[key]) == 0 and expected is not None:
                         collect(result, expected, {key: candidates[key]}, [])
-                    choices = candidates[key]
-                    chosen = choose(choices)
-                    if chosen is None:
-                        message = f"cannot infer type parameter '{var.name}' of '{name}'"
-                        if len(choices) > 0:
-                            other = choices[0]
-                            for choice in choices:
-                                if not types.assignable(choices[0], choice):
-                                    other = choice
-                                    break
-                            message = message + f" from {types.display(choices[0])} and {types.display(other)}"
-                        self.fail(expr.line, expr.col, message)
-                        return none()
-                    args.append(chosen)
-            for i in range(len(vars)):
-                message = types.unsatisfied(vars[i], args[i])
-                if message != "":
-                    self.fail(expr.line, expr.col, message)
+                args = self.choose_args(expr, name, vars, candidates)
+                if self.failed():
                     return none()
+            if not self.check_bounds(expr, vars, args):
+                return none()
             bindings = types.bind_vars(vars, args)
             if isinstance(node, ast.Call):
+                node.type_args = args
+            elif isinstance(node, ast.CallValue):
                 node.type_args = args
             else:
                 node.type_args = args
@@ -1332,6 +1365,36 @@ class Checker:
             else:
                 self.check_against(call_args[i], state, param)
         return types.substitute(result, bindings)
+
+    # The type argument of each of `vars` that its `candidates` agree on.
+    # `name` names the generic in errors.
+    def choose_args(self, expr: ast.Expr, name: str, vars: list[types.TypeVar], candidates: dict[str, list[types.Type]]) -> list[types.Type]:
+        args: list[types.Type] = []
+        for var in vars:
+            choices = candidates[types.var_key(var)]
+            chosen = choose(choices)
+            if chosen is None:
+                message = f"cannot infer type parameter '{var.name}' of '{name}'"
+                if len(choices) > 0:
+                    other = choices[0]
+                    for choice in choices:
+                        if not types.assignable(choices[0], choice):
+                            other = choice
+                            break
+                    message = message + f" from {types.display(choices[0])} and {types.display(other)}"
+                self.fail(expr.line, expr.col, message)
+                return args
+            args.append(chosen)
+        return args
+
+    # Whether each of `args` satisfies the bound of its type parameter.
+    def check_bounds(self, expr: ast.Expr, vars: list[types.TypeVar], args: list[types.Type]) -> bool:
+        for i in range(len(vars)):
+            message = types.unsatisfied(vars[i], args[i])
+            if message != "":
+                self.fail(expr.line, expr.col, message)
+                return False
+        return True
 
     def check_fstring(self, node: ast.FString, state: dict[int, types.Type]) -> types.Type:
         for i in range(len(node.parts)):
@@ -1533,43 +1596,10 @@ def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[i
 # Checks every function of every module, in order, and returns the first error.
 def check_program(modules: list[ast.Module]) -> diagnostic.Diagnostic | None:
     for module in modules:
-        for decl in module.declarations:
-            if isinstance(decl, ast.AliasDecl):
-                error = check_alias(module, decl.value, [decl.type_name])
-                if error is not None:
-                    return error
-    for module in modules:
         for function in bind.functions(module):
             error = check_function(module, function, {})
             if error is not None:
                 return error
-    return None
-
-def check_alias(module: ast.Module, node: ast.TypeExpr, expanding: list[str]) -> diagnostic.Diagnostic | None:
-    if isinstance(node, ast.UnionType):
-        for member in node.members:
-            error = check_alias(module, member, expanding)
-            if error is not None:
-                return error
-    elif isinstance(node, ast.TypeName):
-        for arg in node.args:
-            error = check_alias(module, arg, expanding)
-            if error is not None:
-                return error
-        owner = module
-        if node.module != "":
-            imported = module.imported.get(node.module)
-            if imported is None:
-                return None
-            owner = imported
-        decl = owner.names.get(node.name)
-        if isinstance(decl, ast.AliasDecl):
-            if decl.type_name in expanding:
-                return diagnostic.Diagnostic(module.path, node.line, node.col, "recursive type aliases are not supported")
-            expanding.append(decl.type_name)
-            error = check_alias(owner, decl.value, expanding)
-            expanding.pop()
-            return error
     return None
 
 def none() -> types.Type:
