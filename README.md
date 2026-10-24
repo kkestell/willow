@@ -118,7 +118,30 @@ python3 benchmarks/run.py --readme
 ```
 
 <!-- benchmarks:start -->
-Native benchmark results have not been recorded yet.
+Seconds of wall-clock time, best of 3 runs, on Apple M4, Darwin. Willow on
+LuaJIT is the earlier implementation, which compiled to Lua, recorded on an
+Apple M4 on 2026-10-21. In parentheses is how many times faster each Willow
+column is than Python.
+
+| Benchmark (size) | C | LuaJIT | Python | Willow on LuaJIT (vs Python) | Willow (vs Python) |
+|---|---:|---:|---:|---:|---:|
+| n-body (5,000,000) | 0.15 | 0.31 | 12.09 | 0.36 (33.6x) | 1.00 (12.1x) |
+| spectral-norm (2,000) | 0.12 | 0.12 | 12.29 | 0.51 (24.1x) | 1.17 (10.5x) |
+| fannkuch-redux (10) | 0.13 | 0.21 | 2.64 | 0.30 (8.8x) | 1.49 (1.8x) |
+| binary-trees (18) | 0.84 | 2.81 | 11.17 | 2.20 (5.1x) | 0.85 (13.2x) |
+| fasta (2,500,000) | 0.22 | 0.48 | 2.51 | 1.98 (1.3x) | 1.86 (1.4x) |
+| mandelbrot (2,500) | 0.18 | 0.32 | 8.32 | 0.40 (20.8x) | 1.27 (6.5x) |
+| k-nucleotide (2,500,000) | 0.20 | 0.28 | 1.58 | 0.59 (2.7x) | 4.98 (0.3x) |
+| reverse-complement (5,000,000) | 0.10 | 1.32 | 0.27 | 3.22 (0.1x) | 4.43 (0.1x) |
+| recursive (9) | 0.16 | 0.13 | 2.71 | 0.16 (17.0x) | 0.25 (11.0x) |
+| nsieve (11) | 0.09 | 0.40 | 2.74 | 0.42 (6.5x) | 0.96 (2.9x) |
+| matrix (10,000) | 0.06 | 0.32 | 6.08 | 0.67 (9.1x) | 3.15 (1.9x) |
+| methcall (50,000,000) | 0.18 | 0.30 | 4.18 | 0.57 (7.3x) | 1.05 (4.0x) |
+| except (1,000,000) | 0.56 | 0.07 | 0.31 | 3.87 (0.1x) | 0.95 (0.3x) |
+| heapsort (2,000,000) | 0.19 | 0.43 | 3.43 | 0.47 (7.3x) | 1.02 (3.4x) |
+| hash2 (5,000) | 0.54 | 0.20 | 4.02 | 1.07 (3.8x) | 17.17 (0.2x) |
+| sumcol (10,000,000) | 0.30 | 0.88 | 0.62 | 1.86 (0.3x) | 0.56 (1.1x) |
+| raytracer (200) | 0.05 | 0.29 | 7.56 | 0.38 (19.9x) | 0.74 (10.2x) |
 <!-- benchmarks:end -->
 
 ## Editor support
