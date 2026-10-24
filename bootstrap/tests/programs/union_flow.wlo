@@ -1,0 +1,79 @@
+# Unions without floats: boxing at each assignability point, `is None`,
+# `isinstance`, the `and`, `or`, and `not` facts, `elif`, `while`, and
+# assignment narrowing, and `assert` narrowing.
+
+def pick(n: int) -> int | str | bool | None:
+    if n == 0:
+        return None
+    if n == 1:
+        return 41
+    if n == 2:
+        return "two"
+    return n > 3
+
+def describe(value: int | str | bool | None) -> str:
+    if value is None:
+        return "nothing"
+    elif isinstance(value, bool):
+        if value:
+            return "yes"
+        return "no"
+    elif isinstance(value, int):
+        return "int " + twice(value + 1)
+    else:
+        return "str " + value
+
+def twice(n: int) -> str:
+    if n == 42:
+        return "42"
+    return "other"
+
+def positive(value: int | None) -> bool:
+    if not (value is None or value <= 0):
+        return value > 0
+    return False
+
+def both(a: int | None, b: int | None) -> bool:
+    return a is not None and b is not None and a < b
+
+def first(a: int | None, b: int | None) -> int:
+    if a is not None:
+        return a
+    assert b is not None, "both None"
+    return b
+
+def relay(value: int | bool | None) -> int | bool | None:
+    return value
+
+def main():
+    i = 0
+    while i < 5:
+        print(describe(pick(i)))
+        i = i + 1
+    print(positive(3))
+    print(positive(0))
+    print(positive(None))
+    print(both(1, 2))
+    print(both(None, 2))
+    print(first(None, 7))
+    print(first(5, None))
+    kept = relay(True)
+    if isinstance(kept, bool):
+        print(kept)
+    print(relay(None) is None)
+    value: int | str = 5
+    value = value + 1
+    if isinstance(value, int):
+        print(value)
+    value = "six"
+    print(value + "!")
+    total = 0
+    n: int | None = 0
+    while n is not None:
+        total = total + n
+        if n == 4:
+            n = None
+        else:
+            n = n + 1
+    print(total)
+    print(first(None, None))

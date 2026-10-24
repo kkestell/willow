@@ -1,0 +1,1 @@
+for_assignment_narrowing.wlo:4:17: error: operator '+' cannot be applied to int | None and int
