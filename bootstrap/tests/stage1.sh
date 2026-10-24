@@ -156,19 +156,25 @@ check_bind_driver() {
 # The programs in bootstrap/tests/ that willow1 compiles, one per line. Each
 # runs through run.sh as it does with willow0.
 willow1_programs="
+check/list_extend_element_type.wlo
 programs/alias_call.wlo
 programs/alias_cycle.wlo
 programs/argument_type.wlo
+programs/branches_and_loops.wlo
+programs/break_continue.wlo
+programs/break_outside_loop.wlo
 programs/class_symbols.wlo
 programs/constructor_arguments.wlo
 programs/conversions.wlo
 programs/division_by_zero.wlo
+programs/empty_list_display.wlo
 programs/enum_member.wlo
 programs/exponent_without_digits.wlo
 programs/field_type.wlo
 programs/float_division_by_zero.wlo
 programs/float_to_int_overflow.wlo
 programs/floats.wlo
+programs/for_loops.wlo
 programs/format_specification.wlo
 programs/fstring_type.wlo
 programs/import_name_clash.wlo
@@ -178,6 +184,9 @@ programs/integer_range.wlo
 programs/invalid_int.wlo
 programs/isinstance_none.wlo
 programs/keyword_after_condition.wlo
+programs/list_evaluation_order.wlo
+programs/list_index_out_of_range.wlo
+programs/list_values.wlo
 programs/maybe_unassigned.wlo
 programs/missing_comma.wlo
 programs/missing_return.wlo
@@ -190,12 +199,15 @@ programs/operator_types.wlo
 programs/operators.wlo
 programs/optional_field.wlo
 programs/private_name.wlo
+programs/range_zero_step.wlo
 programs/recursive_alias.wlo
 programs/return_none.wlo
+programs/slicing.wlo
 programs/sum_to.wlo
 programs/type_intrinsic_outside_core.wlo
 programs/union_duplicate_member.wlo
 programs/unknown_escape.wlo
+programs/unknown_list_method.wlo
 programs/unreachable.wlo
 "
 
