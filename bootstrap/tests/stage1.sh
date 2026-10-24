@@ -178,6 +178,18 @@ conformance() {
     done
 }
 
+# Raw callback addresses are supplied by QBE until generator lowering exists.
+check_coroutines() {
+    fixture=$root/bootstrap/tests/check/coroutine_runtime
+    cp "$fixture/build.wlo" "$work/willow1-src/coroutine_fixture.wlo"
+    if ! "$work/willow1" build "$work/willow1-src/coroutine_fixture.wlo" -o "$work/coroutine-fixture" ||
+        ! "$work/coroutine-fixture" "$fixture/callbacks.wlo" "$fixture/runtime.ssa" "$work/coroutine-runtime" ||
+        ! "$work/coroutine-runtime"; then
+        echo "FAIL coroutine runtime"
+        failed=1
+    fi
+}
+
 check_willow1() {
     [ $lua -eq 1 ] && return
     mkdir "$work/willow1-src"
@@ -188,6 +200,7 @@ check_willow1() {
         failed=1
         return
     fi
+    check_coroutines
     echo "willow1:"
     STAGE1=1 WILLOW0=$work/willow1 bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
         bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo || failed=1

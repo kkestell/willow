@@ -33,6 +33,134 @@ extern def fmod(x: float, y: float) -> float
 extern def floor(x: float) -> float
 extern def copysign(x: float, y: float) -> float
 
+extern def GC_get_my_stackbottom(base: ptr) -> ptr
+extern def GC_set_stackbottom(thread: ptr, base: ptr)
+extern def GC_alloc_lock()
+extern def GC_alloc_unlock()
+extern def GC_add_roots(low: ptr, high: ptr)
+extern def GC_remove_roots(low: ptr, high: ptr)
+
+# Offsets are shared with the switch assembly and stage 1's core helpers.
+# State is 0 (new), 1 (running), 2 (suspended), or 3 (finished).
+class CoroutineContext:
+    sp: ptr
+    stack: ptr
+    bottom: ptr
+    entry: ptr
+    argument: word
+    value: word
+    caller: CoroutineContext | None
+    pending: ptr
+    error: ptr
+    state: int
+
+def coroutine_context() -> CoroutineContext:
+    current = coroutine_current()
+    if current is None:
+        null = __ptr(__word(0))
+        bottom = __alloc(8)
+        GC_get_my_stackbottom(bottom)
+        current = CoroutineContext(null, null, bottom, null, __word(0), __word(0), None, null, null, 1)
+        coroutine_set_current(current)
+    return current
+
+def coroutine_create(entry: ptr, argument: word) -> CoroutineContext:
+    if not coroutine_available():
+        fail("RuntimeError", "coroutines require stage 1 on arm64")
+    coroutine_context()
+    stack_size = 262144
+    stack = __alloc(stack_size)
+    top = __offset(stack, stack_size - __int(__word(stack)) % 16)
+    bottom = __alloc(8)
+    __store8(bottom, 0, __word(top))
+    sp = __offset(top, -160)
+    __store8(sp, 88, __word(coroutine_start_address()))
+    null = __ptr(__word(0))
+    return CoroutineContext(sp, stack, bottom, entry, argument, __word(0), None, null, null, 0)
+
+def coroutine_finished(coroutine: CoroutineContext) -> bool:
+    return coroutine.state == 3
+
+def coroutine_resume(coroutine: CoroutineContext) -> word:
+    if coroutine.state == 1:
+        fail("RuntimeError", "cannot resume a running coroutine")
+    if coroutine.state == 3:
+        return __word(0)
+    caller = coroutine_context()
+    coroutine.caller = caller
+    coroutine.state = 1
+    coroutine_switch(caller, coroutine)
+    value = coroutine.value
+    coroutine.value = __word(0)
+    if coroutine.state == 3:
+        null = __ptr(__word(0))
+        coroutine.sp = null
+        coroutine.stack = null
+        coroutine.bottom = null
+        coroutine.entry = null
+        coroutine.argument = __word(0)
+    error = coroutine.error
+    coroutine.error = __ptr(__word(0))
+    coroutine_set_pending(error)
+    return value
+
+def coroutine_yield(value: word):
+    current = coroutine_context()
+    caller = current.caller
+    if caller is None:
+        fail("RuntimeError", "cannot yield outside a coroutine")
+        return
+    current.value = value
+    current.state = 2
+    current.caller = None
+    coroutine_switch(current, caller)
+
+# Called after the outgoing registers and SP are saved, before changing SP.
+# The native stack needs explicit roots while a heap stack is active.
+def coroutine_prepare(current: CoroutineContext, resumed: CoroutineContext):
+    if __addr_is_null(current.stack):
+        GC_add_roots(current.sp, __ptr(__load8(current.bottom, 0)))
+    coroutine_set_current(resumed)
+    GC_alloc_lock()
+    GC_set_stackbottom(__ptr(__word(0)), resumed.bottom)
+    GC_alloc_unlock()
+
+def coroutine_start():
+    current = coroutine_context()
+    current.error = coroutine_invoke(current.entry, current.argument)
+    current.state = 3
+    current.value = __word(0)
+    caller = current.caller
+    assert caller is not None, "coroutine has no caller"
+    current.caller = None
+    coroutine_switch(current, caller)
+    exit(1)
+
+# Stage 1 replaces these bodies; stage 0 links core without switch assembly.
+def coroutine_available() -> bool:
+    return False
+
+def coroutine_current() -> CoroutineContext | None:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return None
+
+def coroutine_set_current(current: CoroutineContext):
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+
+def coroutine_set_pending(pending: ptr):
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+
+def coroutine_start_address() -> ptr:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return __ptr(__word(0))
+
+def coroutine_invoke(entry: ptr, argument: word) -> ptr:
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    return __ptr(__word(0))
+
+def coroutine_switch(current: CoroutineContext, resumed: CoroutineContext):
+    fail("RuntimeError", "coroutines require stage 1 on arm64")
+
 # Called by the program entry before main. Writing to a closed pipe must fail
 # the write instead of raising SIGPIPE (spec §10); SIGPIPE is 13 and SIG_IGN
 # is 1 on both Linux and Darwin.
