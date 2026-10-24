@@ -1,0 +1,4 @@
+def main():
+    xs = {"a": 1}
+    for key in xs.keys(k="a"):
+        print(key)

@@ -57,6 +57,73 @@ class Checker:
         if received != count:
             self.fail(expr.line, expr.col, f"'{name}' expects {arguments(count)}, received {received}")
 
+    # Keeps parameter order separate from evaluation order, and gives each call
+    # its own default expressions and type annotations.
+    def bind_args(self, expr: ast.Expr, node: ast.Call | ast.MethodCall, params: list[stdlib.BuiltinParam], noun: str):
+        args: list[ast.Expr] = []
+        keywords: list[ast.Keyword] = []
+        name = ""
+        if isinstance(node, ast.Call):
+            args = node.args
+            keywords = node.keywords
+            name = node.name
+        else:
+            args = node.args
+            keywords = node.keywords
+            name = node.name
+        bound: dict[int, ast.Expr] = {}
+        order: list[int] = []
+        for i in range(len(args)):
+            arg = args[i]
+            if i < len(params) and params[i].keyword_only:
+                self.fail(arg.line, arg.col, f"'{name}' received a positional argument for keyword-only parameter '{params[i].name}'")
+                return
+            bound[i] = arg
+            order.append(i)
+        for keyword in keywords:
+            if noun == "":
+                self.fail(keyword.line, keyword.col, f"'{name}' does not accept keyword arguments")
+                return
+            index = -1
+            for i in range(len(params)):
+                if params[i].name == keyword.name:
+                    index = i
+            if index == -1:
+                self.fail(keyword.line, keyword.col, f"'{name}' has no {noun} '{keyword.name}'")
+                return
+            if index in bound:
+                self.fail(keyword.line, keyword.col, f"'{name}' received more than one value for '{keyword.name}'")
+                return
+            bound[index] = keyword.value
+            order.append(index)
+        required = 0
+        for i in range(len(params)):
+            if params[i].default is None and not params[i].keyword_only:
+                required = i + 1
+        count = len(args) + len(keywords)
+        if required == len(params):
+            self.check_arity(expr, name, required, count)
+        elif count < required or count > len(params):
+            self.fail(expr.line, expr.col, f"'{name}' expects {required} to {len(params)} arguments, received {count}")
+        if self.failed():
+            return
+        result: list[ast.Expr] = []
+        for i in range(len(params)):
+            if i not in bound:
+                default = params[i].default
+                if default is None:
+                    self.fail(expr.line, expr.col, f"'{name}' is missing argument '{params[i].name}'")
+                    return
+                bound[i] = ast.Expr(expr.line, expr.col, default.node)
+                order.append(i)
+            result.append(bound[i])
+        if isinstance(node, ast.Call):
+            node.args = result
+            node.order = order
+        else:
+            node.args = result
+            node.order = order
+
     # Statements
 
     # Checks `body`, updating `state`, the type of each definitely assigned
@@ -205,10 +272,7 @@ class Checker:
             if not isinstance(source, types.DictType):
                 self.fail(iterable.line, iterable.col, f"type {types.display(source)} has no method '{call.name}'")
                 return
-            if len(call.keywords) > 0:
-                self.unsupported(iterable.line, iterable.col, "keyword arguments")
-                return
-            self.check_arity(iterable, call.name, 0, len(call.args))
+            self.bind_args(iterable, call, [], "")
             self.check_for_dict(statement, node, source, call.name, state)
             return
         else:
@@ -355,16 +419,19 @@ class Checker:
         return types.ListType(element)
 
     def check_list_method(self, expr: ast.Expr, node: ast.MethodCall, state: dict[int, types.Type], object: types.ListType) -> types.Type:
-        if len(node.keywords) > 0:
-            return self.unsupported(expr.line, expr.col, "keyword arguments")
         name = node.name
         if name not in ["append", "pop", "extend", "reverse"]:
             self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{name}'")
             return none()
-        count = 0
-        if name == "append" or name == "extend":
-            count = 1
-        self.check_arity(expr, name, count, len(node.args))
+        params: list[stdlib.BuiltinParam] = []
+        if name == "append":
+            params.append(stdlib.arg("v", types.expand(object.element)))
+        elif name == "extend":
+            params.append(stdlib.arg("items", object))
+        noun = ""
+        if len(params) > 0:
+            noun = "parameter"
+        self.bind_args(expr, node, params, noun)
         if self.failed():
             return none()
         if name == "append":
@@ -381,8 +448,6 @@ class Checker:
         return none()
 
     def check_str_method(self, expr: ast.Expr, node: ast.MethodCall, state: dict[int, types.Type], object: types.Type) -> types.Type:
-        if len(node.keywords) > 0:
-            return self.unsupported(expr.line, expr.col, "keyword arguments")
         name = node.name
         methods = stdlib.str_methods()
         if name not in methods:
@@ -392,20 +457,15 @@ class Checker:
             return none()
         method = methods[name]
         params = method.params
-        # Defaults are trailing, so the last parameter without one ends the
-        # required ones.
-        required = 0
-        for i in range(len(params)):
-            if params[i].default is None:
-                required = i + 1
-        count = len(node.args)
-        if required == len(params):
-            self.check_arity(expr, name, required, count)
-        elif count < required or count > len(params):
-            self.fail(expr.line, expr.col, f"'{name}' expects {required} to {len(params)} arguments, received {count}")
+        noun = ""
+        if len(params) > 0:
+            noun = "parameter"
+        self.bind_args(expr, node, params, noun)
         if self.failed():
             return none()
-        for i in range(count):
+        order = node.order
+        assert order is not None, "unbound string method"
+        for i in order:
             param = params[i].ty
             assert param is not None, f"str.{name} has an untyped parameter"
             self.check_against(node.args[i], state, param)
@@ -436,8 +496,6 @@ class Checker:
         return types.DictType(key, value)
 
     def check_dict_method(self, expr: ast.Expr, node: ast.MethodCall, object: types.DictType, state: dict[int, types.Type]) -> types.Type:
-        if len(node.keywords) > 0:
-            return self.unsupported(expr.line, expr.col, "keyword arguments")
         name = node.name
         if name in ["keys", "values", "items"]:
             self.fail(expr.line, expr.col, f"'{types.display(object)}.{name}' can only be the source of a for loop")
@@ -445,32 +503,30 @@ class Checker:
         if name not in ["get", "pop"]:
             self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{name}'")
             return none()
-        count = len(node.args)
-        if name == "get":
-            if count < 1 or count > 2:
-                self.fail(expr.line, expr.col, f"'get' expects 1 to 2 arguments, received {count}")
-        else:
-            self.check_arity(expr, name, 1, count)
-        if self.failed():
-            return none()
-        self.check_against(node.args[0], state, object.key)
         value = types.expand(object.value)
-        if name == "pop":
-            return value
         optional = value
         if types.kind(value) != "None" and not types.is_optional(value):
             optional = types.optional(value)
-        default: types.Type = none()
-        if count == 2:
-            arg = node.args[1]
-            arg.expected = optional
-            default = self.check_expr(arg, state)
-            self.expect(arg, optional, default)
+        params = [stdlib.arg("k", object.key)]
+        if name == "get":
+            params.append(stdlib.defaulted("default", optional, stdlib.none_default()))
+        self.bind_args(expr, node, params, "parameter")
+        if self.failed():
+            return none()
+        order = node.order
+        assert order is not None, "unbound dict method"
+        for i in order:
+            param = params[i].ty
+            assert param is not None, "untyped dict method parameter"
+            self.check_against(node.args[i], state, param)
+        if name == "pop":
+            return value
+        default = node.args[1].ty
+        assert default is not None, "unchecked dict default"
         result = optional
         if types.assignable(value, default):
             result = value
-        if count == 2:
-            node.args[1].expected = result
+        node.args[1].expected = result
         return result
 
     def check_len(self, expr: ast.Expr, node: ast.Call, state: dict[int, types.Type]) -> types.Type:
@@ -716,8 +772,6 @@ class Checker:
     # Calls
 
     def check_call(self, expr: ast.Expr, node: ast.Call, state: dict[int, types.Type]) -> types.Type:
-        if len(node.keywords) > 0:
-            return self.unsupported(expr.line, expr.col, "keyword arguments")
         target = node.target
         if isinstance(target, ast.FunctionDecl):
             return self.check_function_call(expr, node, target, state)
@@ -729,25 +783,16 @@ class Checker:
     def check_constructor(self, expr: ast.Expr, node: ast.Call, target: types.Class, state: dict[int, types.Type]) -> types.Type:
         if target.native or target.exception or len(target.typevars) > 0:
             return self.unsupported(expr.line, expr.col, "this constructor")
-        required = 0
+        params: list[stdlib.BuiltinParam] = []
         for field in target.fields:
-            if field.default is None:
-                required = required + 1
-        count = len(target.fields)
-        if required == count:
-            self.check_arity(expr, node.name, count, len(node.args))
-        elif len(node.args) < required or len(node.args) > count:
-            self.fail(expr.line, expr.col, f"'{node.name}' expects {required} to {arguments(count)}, received {len(node.args)}")
+            params.append(stdlib.BuiltinParam(field.name, field.ty, field.default, False))
+        self.bind_args(expr, node, params, "field")
         if self.failed():
             return none()
-        for i in range(count):
-            field = target.fields[i]
-            if i < len(node.args):
-                self.check_against(node.args[i], state, field.ty)
-            else:
-                default = field.default
-                assert default is not None, "missing field default"
-                self.check_against(default, state, field.ty)
+        order = node.order
+        assert order is not None, "unbound constructor"
+        for i in order:
+            self.check_against(node.args[i], state, target.fields[i].ty)
         return types.ClassType(target, [])
 
     def field_type(self, line: int, col: int, name: str, object: types.Type) -> types.Type:
@@ -782,17 +827,17 @@ class Checker:
         return self.unsupported(expr.line, expr.col, "method calls")
 
     def check_class_method(self, expr: ast.Expr, node: ast.MethodCall, object: types.ClassType, state: dict[int, types.Type]) -> types.Type:
-        if len(node.keywords) > 0:
-            return self.unsupported(expr.line, expr.col, "keyword arguments")
         for method in object.decl.methods:
             if method.name == node.name:
                 if len(method.typevars) > 0 or len(object.args) > 0:
                     return self.unsupported(expr.line, expr.col, "generic methods")
                 params = method.params[1:]
-                self.check_arity(expr, node.name, len(params), len(node.args))
+                self.bind_args(expr, node, call_params(params), "parameter")
                 if self.failed():
                     return none()
-                for i in range(len(node.args)):
+                order = node.order
+                assert order is not None, "unbound class method"
+                for i in order:
                     self.check_against(node.args[i], state, params[i].ty)
                 return method.result
         self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{node.name}'")
@@ -815,9 +860,22 @@ class Checker:
         name = node.name
         line = expr.line
         col = expr.col
-        if name.startswith("__"):
+        if name.startswith("__") or name == "range":
+            if len(node.keywords) > 0:
+                keyword = node.keywords[0]
+                self.fail(keyword.line, keyword.col, f"'{name}' does not accept keyword arguments")
+                return none()
+            if name == "range":
+                self.fail(line, col, "'range' can only be the source of a for loop")
+                return none()
             return self.check_intrinsic(expr, node, target, state)
-        elif name == "print":
+        noun = ""
+        if len(target.params) > 0 and target.params[0].name != "":
+            noun = "parameter"
+        self.bind_args(expr, node, target.params, noun)
+        if self.failed():
+            return none()
+        if name == "print":
             return self.check_print(expr, node, state)
         elif name == "len":
             return self.check_len(expr, node, state)
@@ -827,9 +885,6 @@ class Checker:
             return self.check_conversion(expr, node, state)
         elif name == "float":
             return self.check_conversion(expr, node, state)
-        elif name == "range":
-            self.fail(line, col, "'range' can only be the source of a for loop")
-            return none()
         elif name == "ord":
             return self.check_host(expr, node, target, state)
         elif name == "chr":
@@ -859,16 +914,29 @@ class Checker:
         if len(record.typevars) > 0:
             return self.unsupported(expr.line, expr.col, "generic functions")
         params = record.params
-        if not target.variadic or len(node.args) < len(params):
-            self.check_arity(expr, node.name, len(params), len(node.args))
-        for i in range(len(node.args)):
-            arg = node.args[i]
-            if i < len(params):
-                self.check_against(arg, state, params[i].ty)
-            else:
-                ty = self.check_expr(arg, state)
-                if not self.failed() and types.kind(ty) not in ["int", "float", "ptr"]:
-                    self.fail(arg.line, arg.col, "variadic arguments must be int, float, or ptr")
+        if not target.external:
+            self.bind_args(expr, node, call_params(params), "parameter")
+            if self.failed():
+                return none()
+            order = node.order
+            assert order is not None, "unbound function call"
+            for i in order:
+                self.check_against(node.args[i], state, params[i].ty)
+        else:
+            if len(node.keywords) > 0:
+                keyword = node.keywords[0]
+                self.fail(keyword.line, keyword.col, f"'{node.name}' does not accept keyword arguments")
+                return none()
+            if not target.variadic or len(node.args) < len(params):
+                self.check_arity(expr, node.name, len(params), len(node.args))
+            for i in range(len(node.args)):
+                arg = node.args[i]
+                if i < len(params):
+                    self.check_against(arg, state, params[i].ty)
+                else:
+                    ty = self.check_expr(arg, state)
+                    if not self.failed() and types.kind(ty) not in ["int", "float", "ptr"]:
+                        self.fail(arg.line, arg.col, "variadic arguments must be int, float, or ptr")
         return record.result
 
     # `ord`, `chr`, or a function of sys or fs, with the signature the spec
@@ -877,7 +945,9 @@ class Checker:
         self.check_arity(expr, node.name, len(target.params), len(node.args))
         if self.failed():
             return none()
-        for i in range(len(node.args)):
+        order = node.order
+        assert order is not None, "unbound host call"
+        for i in order:
             param = target.params[i].ty
             assert param is not None, f"{node.name} has an untyped parameter"
             self.check_against(node.args[i], state, param)
@@ -1143,3 +1213,10 @@ def type_name_text(named: ast.TypeName) -> str:
     if isinstance(record, types.Enum):
         return record.type_name
     return named.name
+
+
+def call_params(params: list[types.Param]) -> list[stdlib.BuiltinParam]:
+    result: list[stdlib.BuiltinParam] = []
+    for param in params:
+        result.append(stdlib.BuiltinParam(param.name, param.ty, param.default, param.keyword_only))
+    return result

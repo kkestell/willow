@@ -1,0 +1,9 @@
+class P:
+    x: int
+
+    def m(self, x: int):
+        pass
+
+def main():
+    p = P(1)
+    p.m(self=p, x=2)

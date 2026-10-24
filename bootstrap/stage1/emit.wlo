@@ -452,8 +452,7 @@ class Emitter:
 
     def list_method(self, node: ast.MethodCall) -> str:
         args = [self.expr(node.object)]
-        for arg in node.args:
-            args.append(self.expr(arg))
+        args.extend(self.arg_values(node.args, node.order))
         return self.core_call("list_" + node.name, args, node.name == "pop")
 
     def dict_display(self, expr: ast.Expr, node: ast.DictDisplay) -> str:
@@ -485,27 +484,19 @@ class Emitter:
             return self.str_method(node)
         return self.unchecked("method call")
 
-    # Omitted arguments take their parameters' literal defaults.
     def str_method(self, node: ast.MethodCall) -> str:
         args = [self.expr(node.object)]
-        for arg in node.args:
-            args.append(self.expr(arg))
-        params = stdlib.str_methods()[node.name].params
-        for i in range(len(node.args), len(params)):
-            default = params[i].default
-            assert default is not None, f"str.{node.name} is missing an argument"
-            args.append(self.node_value(default))
+        args.extend(self.arg_values(node.args, node.order))
         return self.core_call("str_" + node.name, args, True)
 
     def dict_method(self, expr: ast.Expr, node: ast.MethodCall) -> str:
         object = self.expr(node.object)
-        key = self.expr(node.args[0])
+        args = self.arg_values(node.args, node.order)
+        key = args[0]
         if node.name == "pop":
             return self.core_call("dict_pop", [object, key], True)
         assert node.name == "get", "unchecked dict method"
-        default = "0"
-        if len(node.args) == 2:
-            default = self.expr(node.args[1])
+        default = args[1]
         entry = self.core_call("dict_find", [object, key], True)
         missing = self.temp()
         self.line(f"{missing} =l csltl {entry}, 0")
@@ -1035,14 +1026,23 @@ class Emitter:
 
     # Calls
 
+    # Save written arguments before evaluating omitted defaults, then pass
+    # the saved values in parameter order.
+    def arg_values(self, args: list[ast.Expr], order: list[int] | None) -> list[str]:
+        assert order is not None, "unbound call arguments"
+        values: list[str] = []
+        for arg in args:
+            values.append("")
+        for i in order:
+            values[i] = self.expr(args[i])
+        return values
+
     def call(self, node: ast.Call) -> str:
         target = node.target
         if isinstance(target, ast.FunctionDecl):
             if target.external:
                 return self.extern_call(node, target)
-            args: list[str] = []
-            for arg in node.args:
-                args.append(self.expr(arg))
+            args = self.arg_values(node.args, node.order)
             record = target.record
             assert record is not None, f"function {target.name} has no signature"
             return self.call_text(self.symbol(target), typed(args), not is_none(record.result))
@@ -1052,14 +1052,7 @@ class Emitter:
         return self.construct(node, target)
 
     def construct(self, node: ast.Call, target: types.Class) -> str:
-        values: list[str] = []
-        for i in range(len(target.fields)):
-            if i < len(node.args):
-                values.append(self.expr(node.args[i]))
-            else:
-                default = target.fields[i].default
-                assert default is not None, "missing field default"
-                values.append(self.expr(default))
+        values = self.arg_values(node.args, node.order)
         object = self.core_call("object_new", [self.descriptor(target.type_name), str(len(values))], True)
         for i in range(len(values)):
             address = self.temp()
@@ -1087,8 +1080,7 @@ class Emitter:
 
     def class_method(self, node: ast.MethodCall, ty: types.ClassType) -> str:
         args = [self.expr(node.object)]
-        for arg in node.args:
-            args.append(self.expr(arg))
+        args.extend(self.arg_values(node.args, node.order))
         for method in ty.decl.methods:
             if method.name == node.name:
                 symbol = self.descriptor(ty.decl.type_name).removesuffix(".type") + "." + method.name
@@ -1197,8 +1189,7 @@ class Emitter:
                 t = self.temp()
                 self.line(f"{t} =l loadl {word}")
                 args.append(t)
-        for arg in node.args:
-            args.append(self.expr(arg))
+        args.extend(self.arg_values(node.args, node.order))
         result = target.result
         assert result is not None, f"{node.name} has no result"
         return self.core_call(node.name.replace(".", "_"), args, not is_none(result))
