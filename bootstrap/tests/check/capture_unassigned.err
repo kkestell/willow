@@ -1,0 +1,1 @@
+capture_unassigned.wlo:3:16: error: variable 'later' may be used before assignment
