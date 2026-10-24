@@ -10,6 +10,8 @@ extern def memcmp(a: ptr, b: ptr, count: int) -> cint
 extern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint
 extern def signal(sig: cint, handler: ptr) -> ptr
 extern def strlen(s: ptr) -> int
+extern def isatty(fd: cint) -> cint
+extern def getentropy(buf: ptr, size: int) -> cint
 extern def open(path: ptr, flags: cint, ...) -> cint
 extern def read(fd: cint, buf: ptr, count: int) -> int
 extern def close(fd: cint) -> cint
@@ -3024,6 +3026,35 @@ def fs_stat(path: ptr, buf: ptr, follow_symlinks: bool) -> int:
         if follow_symlinks:
             return stat(path, buf)
         return lstat(path, buf)
+
+def random_secure_bytes(size: int) -> ptr:
+    if size < 0:
+        fail("ValueError", "size must be nonnegative")
+    data = str_alloc(size)
+    offset = 0
+    # getentropy accepts at most 256 bytes per call on Linux and macOS.
+    while offset < size:
+        count = size - offset
+        if count > 256:
+            count = 256
+        if getentropy(__offset(data, 16 + offset), count) != 0:
+            fail("OSError", "cannot read random bytes: " + os_reason())
+        offset = offset + count
+    return bytes_tag(__str(__word(data)))
+
+# Whether `source` and `destination` name the same existing file, following
+# symlinks.
+def fs_same_file(source: str, destination: str) -> bool:
+    layout = fs_layout()
+    first = __alloc_atomic(layout.buffer_size)
+    second = __alloc_atomic(layout.buffer_size)
+    if fs_stat(str_bytes(source), first, True) != 0 or fs_stat(str_bytes(destination), second, True) != 0:
+        return False
+    if __int(__load8(first, layout.inode_offset)) != __int(__load8(second, layout.inode_offset)):
+        return False
+    if layout.device_size == 4:
+        return __load4(first, layout.device_offset) == __load4(second, layout.device_offset)
+    return __int(__load8(first, layout.device_offset)) == __int(__load8(second, layout.device_offset))
 
 # The process's environment, a C array of strings. L0 cannot name the C
 # variable environ, so Darwin's accessor function or, on Linux, dlsym with

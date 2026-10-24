@@ -1,0 +1,35 @@
+# Commands without a file use willow.json.
+"$WILLOW" check
+echo "status $?"
+"$WILLOW" build -o app.bin
+echo "status $?"
+mkdir elsewhere
+(cd elsewhere && ../app.bin && ../app.bin Ada --verbose)
+"$WILLOW" compile -o out.ssa
+echo "status $?"
+
+# An explicit file keeps the file workflow and ignores the manifest.
+"$WILLOW" check src/app/main.wlo
+echo "status $?"
+(cd elsewhere && "$WILLOW" check)
+echo "status $?"
+
+# A module found in two dependency roots is ambiguous.
+mkdir -p vendor2/textkit
+printf 'def shout(text: str) -> str:\n    return text\n' >vendor2/textkit/shout.wlo
+echo '{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor", "vendor2"]}' >willow.json
+"$WILLOW" check
+echo "status $?"
+
+# A dependency root can reach a loaded file under a second name.
+printf 'import app.greet\nimport greet\n\ndef main():\n    pass\n' >src/app/main.wlo
+echo '{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor", "src/app"]}' >willow.json
+"$WILLOW" check
+echo "status $?"
+
+# A missing module is reported at the source root's path.
+printf 'import textkit.shout\n\ndef main():\n    pass\n' >src/app/main.wlo
+printf 'import textkit.missing\n' >vendor/textkit/shout.wlo
+echo '{"entry": "app/main.wlo", "source": "src", "dependencies": ["vendor"]}' >willow.json
+"$WILLOW" check
+echo "status $?"

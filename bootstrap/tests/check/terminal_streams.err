@@ -1,0 +1,5 @@
+before
+finished
+after
+terminal_streams.wlo:23:5: error: ValueError: done
+  in main at terminal_streams.wlo:23:5

@@ -1,0 +1,8 @@
+# check runs nothing and writes nothing for a valid program.
+"$WILLOW" check prog.wlo
+echo "status $?"
+"$WILLOW" check bad.wlo
+echo "status $?"
+"$WILLOW" check no-such.wlo
+echo "status $?"
+LC_ALL=C ls

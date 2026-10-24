@@ -1,9 +1,10 @@
 import fs
+import loader
 import sys
 import willow
 
 def main():
     args = sys.args()
-    il = willow.compile(args[0])
+    il = willow.emit_il(willow.translate(args[0], fs.read_file(args[0]), loader.file_roots(args[0])))
     il = il.replace("call $P.callbacks.main()", "call $coroutine_test()")
     willow.build(il + fs.read_file(args[1]), args[2])

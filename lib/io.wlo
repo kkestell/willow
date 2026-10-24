@@ -43,6 +43,11 @@ class File:
         if self._closed:
             raise ValueError("I/O operation on closed file")
 
+    def _isatty(self) -> bool:
+        if self._closed:
+            raise ValueError("I/O operation on closed file")
+        return core.isatty(self._fd) == 1
+
     def close(self):
         if self._borrowed:
             raise ValueError("cannot close a standard stream")

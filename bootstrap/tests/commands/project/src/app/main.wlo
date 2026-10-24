@@ -1,0 +1,9 @@
+import app.greet
+import sys
+
+def main():
+    names = sys.args()
+    if len(names) == 0:
+        names = ["world"]
+    for name in names:
+        print(app.greet.greet(name))

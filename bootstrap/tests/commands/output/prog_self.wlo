@@ -1,0 +1,8 @@
+import prog_self
+
+def f() -> int:
+    return 7
+
+def main():
+    f = 1
+    print(prog_self.f())

@@ -324,7 +324,8 @@ through the escape hatch in §2.
   in `bootstrap/tests/check/` and every `bootstrap/tests/modules/*/main.wlo`,
   using globs so new programs run automatically, and every program in
   `tests/programs/` except those named in `bootstrap/tests/pending`, which
-  stage 2 does not pass yet; then it checks `willow2`'s fixpoint.
+  stage 2 does not pass yet, and the `willow` command cases in
+  `bootstrap/tests/commands/`; then it checks `willow2`'s fixpoint.
   `bootstrap/prepare.sh` writes the generated modules that embed core and
   `lib/` for both scripts and the Makefile. `make bootstrap` builds the chain
   in §2 into `build/` and checks the stage 2 fixpoint, and `make

@@ -1,0 +1,32 @@
+error: willow.json: unknown key 'name'
+status 1
+error: willow.json: 'source' must be a string
+status 1
+error: willow.json: 'source' cannot be empty
+status 1
+error: willow.json: 'dependencies' must be a list of strings
+status 1
+error: willow.json: 'dependencies' must be a list of strings
+status 1
+error: willow.json: 'dependencies' cannot contain an empty path
+status 1
+error: willow.json: expected ',' or ']' at line 1, column 20
+status 1
+error: willow.json: expected an object
+status 1
+error: willow.json: expected an object
+status 1
+error: willow.json: expected an object
+status 1
+error: willow.json: expected value at line 1, column 11
+status 1
+error: willow.json: 'entry' must be a .wlo path inside the source root with identifier components
+status 1
+error: willow.json: 'entry' must be a .wlo path inside the source root with identifier components
+status 1
+error: willow.json: 'entry' must be a .wlo path inside the source root with identifier components
+status 1
+error: /willow_missing_entry.wlo: No such file or directory
+status 1
+error: willow.json: Permission denied
+status 1

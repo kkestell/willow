@@ -1,0 +1,10 @@
+# Each usage error writes its message and the usage text and exits with
+# status 1.
+for args in "" "make x.wlo" "run -x x.wlo" "check a.wlo b.wlo" "check a.wlo -o out" \
+    "compile a.wlo -o out b.wlo" "build a.wlo -o out b.wlo" "compile a.wlo" "build a.wlo" \
+    "compile a.wlo -o" "compile a.wlo -o x -o y"; do
+    echo "willow $args"
+    # shellcheck disable=SC2086 # the arguments are split on purpose
+    "$WILLOW" $args
+    echo "status $?"
+done
