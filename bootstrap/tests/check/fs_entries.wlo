@@ -1,0 +1,54 @@
+import core
+import fs
+
+def main():
+    root = fs.temp_dir()
+    fs.mkdir(fs.join(root, "real/sub"), parents=True)
+    source = fs.join(root, "real/inside")
+    fs.write_file(source, "original")
+    assert core.run(["ln", "-s", "real", fs.join(root, "link")]) == 0
+    assert core.run(["ln", "-s", "missing", fs.join(root, "dangling")]) == 0
+    assert core.run(["ln", "-s", "..", fs.join(root, "real/up")]) == 0
+    assert core.run(["ln", source, fs.join(root, "hard")]) == 0
+    assert fs.stat(fs.join(root, "link")).kind == "directory"
+    assert fs.stat(fs.join(root, "link"), follow_symlinks=False).kind == "symlink"
+    assert not fs.exists(fs.join(root, "dangling"))
+    assert len(fs.glob(fs.join(root, "dangling"))) == 1
+    try:
+        fs.copy_file(source, fs.join(root, "hard"))
+        assert False
+    except OSError as error:
+        assert error.message.endswith("they are the same file")
+    assert fs.read_file(source) == "original"
+
+    tree = fs.walk(root)
+    path, directories, files = next(tree)
+    assert path == root
+    assert ",".join(directories) == "real"
+    assert ",".join(files) == "dangling,hard,link"
+    directories.pop()
+    files.append("unused")
+    visited: list[str] = []
+    for path, directories, files in tree:
+        visited.append(path[len(root):])
+    assert ",".join(visited) == "/real,/real/sub"
+    missing = fs.walk(fs.join(root, "missing"))
+    try:
+        next(missing)
+        assert False
+    except OSError as error:
+        assert error.message.startswith("cannot list ")
+
+    fs.write_file(fs.join(root, "a\\z"), "backslash")
+    assert len(fs.glob(fs.join(root, "a\\*"))) == 1
+    info = fs.Stat("file", 3, 2.0)
+    info.kind = "other"
+    assert info.kind == "other" and info.size == 3
+    paths: list[str] = []
+    for path, directories, files in fs.walk(root):
+        paths.append(path)
+        for name in files:
+            fs.remove(fs.join(path, name))
+    for i in range(len(paths) - 1, -1, -1):
+        fs.rmdir(paths[i])
+    print("fs entries passed")

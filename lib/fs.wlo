@@ -1,0 +1,297 @@
+import core
+import sys
+
+extern def opendir(path: ptr) -> ptr
+extern def readdir(directory: ptr) -> ptr
+extern def closedir(directory: ptr) -> cint
+extern def unlink(path: ptr) -> cint
+extern def fnmatch(pattern: ptr, name: ptr, flags: cint) -> cint
+extern def mkstemp(template: ptr) -> cint
+extern def mkdtemp(template: ptr) -> ptr
+
+class Stat:
+    kind: str
+    size: int
+    modified: float
+
+def read_file(path: str) -> str:
+    return core.fs_read_file(path)
+
+def write_file(path: str, text: str):
+    core.fs_write_file(path, text)
+
+def exists(path: str) -> bool:
+    return core.fs_exists(path)
+
+def realpath(path: str) -> str:
+    return core.fs_realpath(path)
+
+def read_bytes(path: str) -> bytes:
+    return __str(__word(core.fs_read_data(path))).encode()
+
+def write_bytes(path: str, data: bytes):
+    core.fs_write_file(path, __str(__word(data)))
+
+def join(a: str, b: str) -> str:
+    core.path_bytes(a)
+    core.path_bytes(b)
+    if b.startswith("/"):
+        return b
+    if a == "" or a.endswith("/"):
+        return a + b
+    return a + "/" + b
+
+def basename(path: str) -> str:
+    core.path_bytes(path)
+    return path.rsplit("/", 1)[-1]
+
+def dirname(path: str) -> str:
+    core.path_bytes(path)
+    parts = path.rsplit("/", 1)
+    if len(parts) == 1:
+        return ""
+    head = parts[0] + "/"
+    if head.replace("/", "") == "":
+        return head
+    while head.endswith("/"):
+        head = head[:-1]
+    return head
+
+def _listdir(path: str, pattern: str | None) -> list[str]:
+    layout = core.fs_layout()
+    directory = opendir(core.path_bytes(path))
+    if __addr_is_null(directory):
+        if pattern is not None:
+            return []
+        core.fail_os("list", path)
+    names: list[str] = []
+    try:
+        while True:
+            core.clear_errno()
+            entry = readdir(directory)
+            if __addr_is_null(entry):
+                if core.errno() != 0:
+                    if pattern is not None:
+                        return []
+                    core.fail_os("list", path)
+                break
+            name = __offset(entry, layout.name_offset)
+            size = core.strlen(name)
+            if size == 1 and __load1(name, 0) == 46:
+                continue
+            if size == 2 and __load1(name, 0) == 46 and __load1(name, 1) == 46:
+                continue
+            if pattern is None or fnmatch(core.str_bytes(pattern), name, layout.fnmatch_flags) == 0:
+                names.append(core.str_from_bytes(name, size))
+    finally:
+        closedir(directory)
+    names.sort()
+    return names
+
+def listdir(path: str) -> list[str]:
+    return _listdir(path, None)
+
+def _kind(buf: ptr, layout: core.FsLayout) -> str:
+    mode = __load4(buf, layout.mode_offset) % 65536 // 4096
+    if mode == 8:
+        return "file"
+    if mode == 4:
+        return "directory"
+    if mode == 10:
+        return "symlink"
+    return "other"
+
+def stat(path: str, follow_symlinks: bool = True) -> Stat:
+    layout = core.fs_layout()
+    buf = __alloc_atomic(layout.buffer_size)
+    if core.fs_stat(core.path_bytes(path), buf, follow_symlinks) != 0:
+        core.fail_os("stat", path)
+    size = __int(__load8(buf, layout.size_offset))
+    if size < 0:
+        raise OverflowError("file size out of range")
+    modified = float(__int(__load8(buf, layout.modified_offset))) + float(__load4(buf, layout.modified_offset + 8)) / 1000000000.0
+    return Stat(_kind(buf, layout), size, modified)
+
+def _is_directory(path: str) -> bool:
+    layout = core.fs_layout()
+    buf = __alloc_atomic(layout.buffer_size)
+    return core.fs_stat(core.path_bytes(path), buf, True) == 0 and _kind(buf, layout) == "directory"
+
+def mkdir(path: str, parents: bool = False, exist_ok: bool = False):
+    core.path_bytes(path)
+    while len(path) > 1 and path.endswith("/"):
+        path = path[:-1]
+    if core.mkdir(core.str_bytes(path), 511) == 0:
+        return
+    code = core.errno()
+    reason = core.os_reason()
+    if code == 2 and parents:
+        parent = dirname(path)
+        if parent != "" and parent != path:
+            mkdir(parent, parents=True, exist_ok=True)
+            if core.mkdir(core.str_bytes(path), 511) == 0:
+                return
+            code = core.errno()
+            reason = core.os_reason()
+    if code == 17 and exist_ok and _is_directory(path):
+        return
+    raise OSError("cannot create directory " + path + ": " + reason)
+
+def remove(path: str):
+    if unlink(core.path_bytes(path)) != 0:
+        core.fail_os("remove", path)
+
+def rmdir(path: str):
+    if core.rmdir(core.path_bytes(path)) != 0:
+        core.fail_os("remove directory", path)
+
+def rename(source: str, destination: str):
+    if core.rename(core.path_bytes(source), core.path_bytes(destination)) != 0:
+        core.fail_os("rename " + source + " to", destination)
+
+def _same_file(source: str, destination: str) -> bool:
+    layout = core.fs_layout()
+    first = __alloc_atomic(layout.buffer_size)
+    second = __alloc_atomic(layout.buffer_size)
+    if core.fs_stat(core.str_bytes(source), first, True) != 0 or core.fs_stat(core.str_bytes(destination), second, True) != 0:
+        return False
+    if __int(__load8(first, layout.inode_offset)) != __int(__load8(second, layout.inode_offset)):
+        return False
+    if layout.device_size == 4:
+        return __load4(first, layout.device_offset) == __load4(second, layout.device_offset)
+    return __int(__load8(first, layout.device_offset)) == __int(__load8(second, layout.device_offset))
+
+def copy_file(source: str, destination: str):
+    source_bytes = core.path_bytes(source)
+    destination_bytes = core.path_bytes(destination)
+    input = core.open(source_bytes, 0)
+    if input < 0:
+        core.fail_os("read", source)
+    output = -1
+    closed = 0
+    try:
+        buf = __alloc_atomic(65536)
+        count = core.read(input, buf, 65536)
+        if count < 0:
+            core.fail_os("read", source)
+        if _same_file(source, destination):
+            raise OSError("cannot copy " + source + " to " + destination + ": they are the same file")
+        output = core.open(destination_bytes, core.write_flags(), 438)
+        if output < 0:
+            core.fail_os("write", destination)
+        while count > 0:
+            done = 0
+            while done < count:
+                written = core.write(output, __offset(buf, done), count - done)
+                if written < 0:
+                    core.fail_os("write", destination)
+                done = done + written
+            count = core.read(input, buf, 65536)
+            if count < 0:
+                core.fail_os("read", source)
+    finally:
+        core.close(input)
+        if output >= 0:
+            closed = core.close(output)
+    if closed < 0:
+        core.fail_os("write", destination)
+
+def normpath(path: str) -> str:
+    core.path_bytes(path)
+    slashes = ""
+    if path.startswith("/"):
+        slashes = "/"
+    if path.startswith("//") and not path.startswith("///"):
+        slashes = "//"
+    parts: list[str] = []
+    for part in path.split("/"):
+        if part == "" or part == ".":
+            continue
+        if part != ".." or (slashes == "" and len(parts) == 0) or (len(parts) > 0 and parts[-1] == ".."):
+            parts.append(part)
+        elif len(parts) > 0:
+            parts.pop()
+    result = slashes + "/".join(parts)
+    if result == "":
+        return "."
+    return result
+
+def abspath(path: str) -> str:
+    if not path.startswith("/"):
+        path = join(sys.getcwd(), path)
+    return normpath(path)
+
+def _has_magic(pattern: str) -> bool:
+    return "*" in pattern or "?" in pattern or "[" in pattern
+
+def _glob(pattern: str) -> list[str]:
+    head = dirname(pattern)
+    tail = basename(pattern)
+    heads = [head]
+    if _has_magic(head):
+        heads = _glob(head)
+    paths: list[str] = []
+    for directory in heads:
+        if tail == "":
+            if _is_directory(directory):
+                paths.append(join(directory, ""))
+        elif _has_magic(tail):
+            scan = directory
+            if scan == "":
+                scan = "."
+            for name in _listdir(scan, tail):
+                paths.append(join(directory, name))
+        else:
+            path = join(directory, tail)
+            layout = core.fs_layout()
+            buf = __alloc_atomic(layout.buffer_size)
+            if core.fs_stat(core.str_bytes(path), buf, False) == 0:
+                paths.append(path)
+    return paths
+
+def glob(pattern: str) -> list[str]:
+    core.path_bytes(pattern)
+    paths = _glob(pattern)
+    paths.sort()
+    return paths
+
+def walk(path: str) -> Iterator[tuple[str, list[str], list[str]]]:
+    pending = [path]
+    while len(pending) > 0:
+        directory = pending.pop()
+        directories: list[str] = []
+        files: list[str] = []
+        for name in listdir(directory):
+            if stat(join(directory, name), follow_symlinks=False).kind == "directory":
+                directories.append(name)
+            else:
+                files.append(name)
+        for i in range(len(directories) - 1, -1, -1):
+            pending.append(join(directory, directories[i]))
+        yield (directory, directories, files)
+
+def _temp(prefix: str, directory: str | None, file: bool) -> str:
+    if "/" in prefix or "\x00" in prefix:
+        raise ValueError("prefix must be a single path component")
+    if directory is None:
+        directory = sys.getenv("TMPDIR")
+        if directory is None or directory == "":
+            directory = "/tmp"
+    text = join(directory, prefix + "XXXXXX")
+    template = __alloc_atomic(core.str_size(text) + 1)
+    core.memcpy(template, core.str_bytes(text), core.str_size(text) + 1)
+    if file:
+        fd = mkstemp(template)
+        if fd < 0:
+            core.fail_os("create temporary file in", directory)
+        if core.close(fd) != 0:
+            core.fail_os("create temporary file in", directory)
+    elif __addr_is_null(mkdtemp(template)):
+        core.fail_os("create temporary directory in", directory)
+    return core.str_from_bytes(template, core.strlen(template))
+
+def temp_file(prefix: str = "willow-", directory: str | None = None) -> str:
+    return _temp(prefix, directory, True)
+
+def temp_dir(prefix: str = "willow-", directory: str | None = None) -> str:
+    return _temp(prefix, directory, False)

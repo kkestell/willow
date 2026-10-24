@@ -17,7 +17,7 @@ import parser
 # stdlib.wlo declares instead.
 def is_stdlib(name: str) -> bool:
     return name in [
-        "aio", "fs", "http", "io", "net", "random",
+        "aio", "http", "io", "net", "random",
         "subprocess", "terminal",
     ]
 

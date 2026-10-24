@@ -230,7 +230,7 @@ check_willow1() {
         bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo || failed=1
     echo "willow1 tests/programs:"
     # shellcheck disable=SC2046 # the paths have no spaces
-    WILLOW0=$work/willow1 bootstrap/tests/run.sh $(conformance) || failed=1
+    WILLOW=$root/willow WILLOW0=$work/willow1 bootstrap/tests/run.sh $(conformance) || failed=1
     if ! "$work/willow1" build "$src/willow1.wlo" -o "$work/willow1-self"; then
         echo "FAIL willow1-self: does not compile"
         failed=1
