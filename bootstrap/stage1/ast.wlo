@@ -204,6 +204,7 @@ class String:
 class FString:
     parts: list[Expr]
     specs: list[str]
+    format_spec: Ident | None = None
 
 enum Constant:
     TRUE

@@ -1,0 +1,26 @@
+import lib.class_symbols
+
+enum Kind:
+    ENTRY
+
+class Value:
+    kind: Kind
+    count: int = -2
+
+    def label(self) -> str:
+        return f"{self.kind} {self.count}"
+
+    def add(self, amount: int):
+        self.count = self.count + amount
+
+type Count = int
+
+def main():
+    value = Value(Kind.ENTRY)
+    amount: Count = 5
+    value.add(amount)
+    print(value.label())
+    print(lib.class_symbols.Value(7, lib.class_symbols.Kind.IMPORTED).label())
+    print(value.kind == Kind.ENTRY)
+    print(lib.class_symbols.Kind.IMPORTED != lib.class_symbols.Kind.OTHER)
+    print(f"{0.5} {True} {None}")
