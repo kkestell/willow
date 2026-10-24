@@ -779,24 +779,35 @@ def str_splitlines(s: str, keepends: bool) -> ptr:
     return parts
 
 def str_join(sep: str, items: ptr) -> str:
-    count = list_len(items)
+    count = __int(__load8(items, 8))
     if count == 0:
         return ""
-    size = str_size(sep) * (count - 1)
+    slots = __ptr(__load8(items, 24))
+    sep_ptr = __ptr(__word(sep))
+    sep_size = __int(__load8(sep_ptr, 8))
+    sep_bytes = __offset(sep_ptr, 16)
+    size = sep_size * (count - 1)
     i = 0
     while i < count:
-        size = size + str_size(__str(list_get(items, i)))
+        item = __ptr(__load8(slots, i * 8))
+        size = size + __int(__load8(item, 8))
         i = i + 1
     s = str_alloc(size)
     at = 16
     i = 0
     while i < count:
         if i > 0:
-            memcpy(__offset(s, at), str_bytes(sep), str_size(sep))
-            at = at + str_size(sep)
-        item = __str(list_get(items, i))
-        memcpy(__offset(s, at), str_bytes(item), str_size(item))
-        at = at + str_size(item)
+            if sep_size != 0:
+                memcpy(__offset(s, at), sep_bytes, sep_size)
+                at = at + sep_size
+        item = __ptr(__load8(slots, i * 8))
+        item_size = __int(__load8(item, 8))
+        if item_size == 1:
+            __store1(s, at, __load1(item, 16))
+            at = at + 1
+        else:
+            memcpy(__offset(s, at), __offset(item, 16), item_size)
+            at = at + item_size
         i = i + 1
     return __str(__word(s))
 
@@ -2365,12 +2376,14 @@ def list_reverse(xs: ptr):
         high = high - 1
 
 def list_slice(xs: ptr, start: int, stop: int) -> ptr:
-    start = clamp(start, list_len(xs))
-    stop = clamp(stop, list_len(xs))
+    length = __int(__load8(xs, 8))
+    start = clamp(start, length)
+    stop = clamp(stop, length)
     if stop < start:
         stop = start
     result = list_new(stop - start)
-    memcpy(list_slots(result), __offset(list_slots(xs), start * 8), (stop - start) * 8)
+    if stop > start:
+        memcpy(__ptr(__load8(result, 24)), __offset(__ptr(__load8(xs, 24)), start * 8), (stop - start) * 8)
     set_list_len(result, stop - start)
     return result
 
