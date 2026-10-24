@@ -104,7 +104,7 @@ String emit(const Program *program) {
     for (size_t n = 0; n < program->strings.len; n++) {
         String text = program->strings.data[n];
         String data = bytes(text);
-        sb_printf(&out, "data $W.str.%zu = { l $W.str.type, l %zu, %.*sb 0 }\n",
+        sb_printf(&out, "data $W.str.%zu = { l $W.str.type, l %zu, l 0, %.*sb 0 }\n",
                   n, text.len, S(data));
     }
     return sb_finish(&out);

@@ -76,7 +76,7 @@ def spawn(args: list[str], cwd: str | None = None, env: dict[str, str] | None = 
 
 def _octets(buffer: ptr, count: int) -> bytes:
     data = core.str_alloc(count)
-    core.memcpy(__offset(data, 16), buffer, count)
+    core.memcpy(__offset(data, 24), buffer, count)
     return __bytes(__word(core.bytes_tag(__str(__word(data)))))
 
 def _join(parts: list[bytes]) -> bytes:
@@ -102,7 +102,7 @@ class _Run:
         progress = False
         if self._offset < len(data):
             count = min(65536, len(data) - self._offset)
-            written = core.write(fd, __offset(__ptr(__word(data)), 16 + self._offset), count)
+            written = core.write(fd, __offset(__ptr(__word(data)), 24 + self._offset), count)
             if written > 0:
                 self._offset = self._offset + written
                 progress = True

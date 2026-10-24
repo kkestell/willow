@@ -292,7 +292,7 @@ class _Stream:
     def body(self) -> bytes:
         buffer = __ptr(__load8(self._slots, 0))
         data = core.str_alloc(self.size())
-        core.memcpy(__offset(data, 16), buffer, self.size())
+        core.memcpy(__offset(data, 24), buffer, self.size())
         return __bytes(__word(core.bytes_tag(__str(__word(data)))))
 
     def headers(self) -> list[Header]:
@@ -460,7 +460,7 @@ def _exchange(curl: _Curl, method: str, url: str, lines: list[str], body: bytes 
             if code != 4:
                 curl.code(code, url)
         if body is not None:
-            exchange._input = fmemopen(__offset(__ptr(__word(body)), 16), max(1, len(body)), core.str_bytes("rb"))
+            exchange._input = fmemopen(__offset(__ptr(__word(body)), 24), max(1, len(body)), core.str_bytes("rb"))
             if __addr_is_null(exchange._input):
                 raise OSError("cannot fetch " + url + ": " + core.os_reason())
             curl.set_int(handle, "post", 1, url)

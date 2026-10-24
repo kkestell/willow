@@ -28,7 +28,7 @@ class File:
 
     def write(self, data: bytes):
         self._usable(False)
-        if not core.write_bytes(self._fd, __offset(__ptr(__word(data)), 16), len(data)):
+        if not core.write_bytes(self._fd, __offset(__ptr(__word(data)), 24), len(data)):
             core.fail_os("write", self._path)
 
     def write_text(self, text: str):
