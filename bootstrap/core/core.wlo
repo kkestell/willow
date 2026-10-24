@@ -3460,21 +3460,28 @@ def dict_key_at(d: ptr, entry: int) -> word:
 def dict_value_at(d: ptr, entry: int) -> word:
     return __load8(dict_entries(d), entry * 24 + 8)
 
-# A string hash below 2^31, folded four bytes at a time and finished with a
-# large multiplier, so neighbouring keys spread far apart.
+# A string hash below 2^31 that folds six bytes per reduction and keeps every
+# multiplication's operands below 2^31.
 def str_hash(s: str) -> int:
     p = 2147483647
-    n = str_size(s)
-    b = str_bytes(s)
+    n = __int(__load8(__ptr(__word(s)), 8))
+    b = __offset(__ptr(__word(s)), 16)
     h = n
     i = 0
-    while i + 4 <= n:
-        h = (h * 923521 + __load1(b, i) * 29791 + __load1(b, i + 1) * 961
-             + __load1(b, i + 2) * 31 + __load1(b, i + 3)) % p
-        i = i + 4
-    while i < n:
-        h = (h * 31 + __load1(b, i)) % p
-        i = i + 1
+    while i + 6 <= n:
+        chunk = (__load1(b, i) * 28629151 + __load1(b, i + 1) * 923521
+                 + __load1(b, i + 2) * 29791 + __load1(b, i + 3) * 961
+                 + __load1(b, i + 4) * 31 + __load1(b, i + 5))
+        h = (h * 887503681 + chunk) % p
+        i = i + 6
+    if i < n:
+        tail = 0
+        scale = 1
+        while i < n:
+            tail = tail * 31 + __load1(b, i)
+            scale = scale * 31
+            i = i + 1
+        h = (h * scale + tail) % p
     return (h * 1000003 + n) % p
 
 # A key's hash, which is never negative.
