@@ -1,0 +1,23 @@
+import coverage_support.compiler
+
+def main():
+    with coverage_support.compiler.checker() as compiler:
+        cases = [
+            ("def main():\n    \"a\".split(1)\n", "2:15: error: expected str | None, received int"),
+            ("def main():\n    \"a\".split(limit=1)\n", "2:15: error: 'split' has no parameter 'limit'"),
+            ("def main():\n    \"a\".splitlines(1)\n", "2:20: error: expected bool, received int"),
+            ("def main():\n    data = bytes([1])\n    x = data.startswith(sub=data)\n", "3:25: error: 'startswith' has no parameter 'sub'"),
+            ("def main():\n    x = bytes.frombytes('')\n", "2:15: error: type 'bytes' has no static method 'frombytes'"),
+            ("def main():\n    x = abs('a')\n", "2:9: error: 'abs' cannot be applied to str"),
+            ("def main():\n    x = min(1, 2.0)\n", "2:9: error: 'min' cannot be applied to int and float"),
+            ("def main():\n    x = all([1])\n", "2:9: error: 'all' cannot be applied to list[int]"),
+            ("def main():\n    f: (list[int], int) -> int = sum\n", "2:34: error: 'sum' expects 1 argument, received 2"),
+            ("import math\ndef main():\n    print(math.atan2(1.0, 2))\n", "3:27: error: expected float, received int"),
+            ("import random\ndef main():\n    r = random.generator(1)\n    r.choice(3)\n", "4:7: error: cannot infer type parameter 'T' of 'choice'"),
+            ("import random\ndef main():\n    r = random.generator(1)\n    x: str = r.choice([1, 2])\n", "4:16: error: expected str, received int"),
+            ("import subprocess\ndef main():\n    p = subprocess.spawn(['x'])\n    p.wait(1)\n", "4:12: error: expected float | None, received int"),
+            ("import aio\nasync def main():\n    sem = aio.semaphore(1)\n    x = aio.semaphore(\"a\")\n", "4:23: error: expected int, received str"),
+            ("import math\ndef main():\n    math.pi = 3.0\n", "3:5: error: module 'math' cannot be used as a value"),
+        ]
+        for source, expected in cases:
+            compiler.reject(source, expected)

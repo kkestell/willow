@@ -1,0 +1,37 @@
+import core
+import coverage_support.compiler
+import fs
+import io
+import subprocess
+
+def main():
+    pipe = core.process_pipe()
+    path = "/dev/fd/" + str(pipe[1])
+    with io.open(path, "w") as output:
+        core.close(pipe[0])
+        core.close(pipe[1])
+        caught = False
+        try:
+            output.write_text("hello")
+        except OSError as error:
+            assert error.message == "cannot write " + path + ": Broken pipe"
+            caught = True
+        assert caught
+
+    with coverage_support.compiler.checker() as compiler:
+        program = compiler.build("import core\nimport io\ndef main():\n    core.close(1)\n    try:\n        io.stdout().write_text('hello')\n    except OSError as error:\n        assert error.message == 'cannot write <stdout>: Bad file descriptor'\n")
+        result = subprocess.run([program], capture_output=True)
+        assert result.returncode == 0
+        assert result.stdout == bytes([])
+        assert result.stderr == bytes([])
+
+        program = compiler.build("import fs\ndef main():\n    file = fs.temp_file()\n    directory = fs.temp_dir()\n    try:\n        print(fs.dirname(file))\n        print(fs.dirname(directory))\n        assert fs.basename(file).startswith('willow-')\n        assert fs.basename(directory).startswith('willow-')\n    finally:\n        fs.remove(file)\n        fs.rmdir(directory)\n")
+        parent = fs.temp_dir()
+        try:
+            for value, expected in [(parent, parent), ("", "/tmp")]:
+                result = subprocess.run([program], env={"TMPDIR": value}, capture_output=True)
+                assert result.returncode == 0
+                assert result.stdout == (expected + "\n" + expected + "\n").encode()
+                assert result.stderr == bytes([])
+        finally:
+            fs.rmdir(parent)

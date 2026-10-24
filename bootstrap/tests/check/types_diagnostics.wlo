@@ -1,0 +1,20 @@
+import coverage_support.compiler
+
+def main():
+    with coverage_support.compiler.checker() as compiler:
+        cases = [
+            ("def main():\n    raise\n", "2:5: error: bare 'raise' is only allowed in an 'except' clause"),
+            ("def main():\n    x = 1\n    def g():\n        print(x)\n        nonlocal x\n", "4:15: error: 'x' is used before its nonlocal declaration"),
+            ("enum E:\n    A\n    B\n    A\ndef main():\n    pass\n", "4:5: error: duplicate enum member 'A'"),
+            ("type Grow[T] = list[Grow[list[T]]]\ndef main():\n    pass\n", "1:21: error: alias 'Grow' expands without end"),
+            ("def main():\n    x = [1]\n    x: list[int] = [2]\n", "3:5: error: only the first assignment to 'x' can have an annotation"),
+            ("class P:\n    value: int | None\ndef f(p: P):\n    if p.value is not None:\n        x = p.value + 1\ndef main():\n    pass\n", "5:21: error: operator '+' cannot be applied to int | None and int"),
+            ("def main():\n    xs: list[int | None] = [1]\n    if xs[0] is not None:\n        print(xs[0] + 1)\n", "4:21: error: operator '+' cannot be applied to int | None and int"),
+            ("def main():\n    x = int(1)\n", "2:13: error: cannot convert a value of type int to int"),
+            ("def main():\n    x = float(1.5)\n", "2:15: error: cannot convert a value of type float to float"),
+            ("def f(a: int) -> int:\n    return a\ndef main():\n    g: (int | None) -> int = f\n", "4:30: error: expected (int | None) -> int, received function f"),
+            ("def main():\n    f: (str) -> str = len\n", "2:23: error: expected str, received int"),
+            ("enum E:\n    A\n    B\ndef main():\n    x = E.A < E.B\n", "5:13: error: operator '<' cannot be applied to E and E"),
+        ]
+        for source, expected in cases:
+            compiler.reject(source, expected)
