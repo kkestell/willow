@@ -1,0 +1,91 @@
+import core
+import io
+
+def main():
+    path = "io_files.tmp"
+    long = "x".ljust(4095) + "é"
+    try:
+        with io.open(path, "w") as target:
+            target.write_text("one\r\n\n" + long + "\n")
+            target.write(bytes([255, 10]))
+            target.flush()
+            try:
+                target.read(1)
+                assert False
+            except ValueError as error:
+                assert error.message == "file is not open for reading"
+        target.close()
+        with io.open(path, "a") as target:
+            target.write_text("last\r")
+
+        source = io.open(path)
+        alias = source
+        try:
+            one = iter(source)
+            two = iter(source)
+            assert next(one) == "one"
+            assert source.read(1) == bytes([10])
+            assert next(two) == long
+            try:
+                next(one)
+                assert False
+            except ValueError as error:
+                assert error.message == "invalid UTF-8"
+            assert source.readline() == "last\r"
+            assert source.readline() is None
+            assert len(source.read(1)) == 0
+            try:
+                next(two)
+                assert False
+            except StopIteration:
+                pass
+        finally:
+            source.close()
+        for operation in ["read", "flush", "enter", "iter"]:
+            try:
+                if operation == "read":
+                    alias.readline()
+                elif operation == "flush":
+                    alias.flush()
+                elif operation == "enter":
+                    alias.enter()
+                else:
+                    next(one)
+                assert False
+            except ValueError as error:
+                assert error.message == "I/O operation on closed file"
+    finally:
+        assert core.run(["rm", "-f", path]) == 0
+
+    for operation in ["size", "mode", "close", "enter", "open", "nul", "missing"]:
+        try:
+            if operation == "size":
+                io.stdin().read(0)
+            elif operation == "mode":
+                io.stdin().write(bytes([]))
+            elif operation == "close":
+                io.stdout().close()
+            elif operation == "enter":
+                with io.stderr():
+                    assert False
+            elif operation == "open":
+                io.open(path, "x")
+            elif operation == "nul":
+                io.open("bad\x00path")
+            else:
+                io.open(path)
+            assert False
+        except ValueError as error:
+            if operation == "size":
+                assert error.message == "read size must be positive"
+            elif operation == "mode":
+                assert error.message == "file is not open for writing"
+            elif operation == "close" or operation == "enter":
+                assert error.message == "cannot close a standard stream"
+            elif operation == "open":
+                assert error.message == "invalid mode 'x'"
+            else:
+                assert error.message == "path contains a NUL character"
+        except OSError as os_error:
+            assert operation == "missing"
+            assert os_error.message == "cannot open io_files.tmp: No such file or directory"

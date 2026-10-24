@@ -178,6 +178,7 @@ def intrinsics() -> dict[str, Builtin]:
     add(table, "__bool", [arg("", prim("word"))], prim("bool"))
     add(table, "__ptr", [arg("", prim("word"))], prim("ptr"))
     add(table, "__str", [arg("", prim("word"))], prim("str"))
+    add(table, "__bytes", [arg("", prim("word"))], prim("bytes"))
     add(table, "__addr_is_null", [arg("", prim("ptr"))], prim("bool"))
     add(table, "__dtosi", [arg("", prim("float"))], prim("int"))
     add(table, "__offset", [arg("", prim("ptr")), arg("", prim("int"))], prim("ptr"))
@@ -258,12 +259,12 @@ def provided_class(module: str, name: str, names: list[str], kinds: list[types.T
     fields: list[types.Field] = []
     for i in range(len(names)):
         fields.append(types.Field(names[i], kinds[i], None))
-    return types.Class(name, module + "." + name, [], fields, [], False, False, "")
+    return types.Class(name, module + "." + name, [], fields, [], False, False, "", True)
 
 # A native type: a provided class with no fields that only its module's
 # functions create. Its methods lower to helpers named after `prefix`.
 def native_class(module: str, name: str, prefix: str) -> types.Class:
-    return types.Class(name, module + "." + name, [], [], [], False, True, prefix)
+    return types.Class(name, module + "." + name, [], [], [], False, True, prefix, True)
 
 def class_type(decl: types.Class) -> types.Type:
     return types.class_self(decl)
@@ -303,17 +304,6 @@ def io_file() -> types.Class:
     native_method(file, "iter", [], types.iterator(prim("str")))
     scoped(file)
     return file
-
-def io_module() -> Module:
-    module = new_module("io")
-    file = io_file()
-    module.classes["File"] = file
-    mode = defaulted("mode", prim("str"), str_default("r"))
-    add(module.functions, "open", [arg("path", prim("str")), mode], class_type(file))
-    add(module.functions, "stdin", [], class_type(file))
-    add(module.functions, "stdout", [], class_type(file))
-    add(module.functions, "stderr", [], class_type(file))
-    return module
 
 def none_param(name: str, ty: types.Type) -> types.Param:
     return default_param(name, ty, none_default())
@@ -505,7 +495,6 @@ def modules() -> dict[str, Module]:
     return {
         "aio": aio_module(),
         "http": http_module(),
-        "io": io_module(),
         "net": net_module(),
         "random": random_module(),
         "subprocess": subprocess_module(),

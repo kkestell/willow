@@ -1,0 +1,21 @@
+# A library module that stage 1's tests import and shadow. stage1.sh embeds
+# bootstrap/tests/lib/ with lib/ in the compilers it builds.
+
+class Item:
+    label: str
+
+# A native type, since its fields are private.
+class Handle:
+    _id: int
+
+    def id(self) -> int:
+        return self._id
+
+def make(label: str) -> Item:
+    return Item(label)
+
+def describe(item: Item) -> str:
+    return "library " + item.label
+
+def handle(id: int) -> Handle:
+    return Handle(id)

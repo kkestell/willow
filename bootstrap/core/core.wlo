@@ -238,14 +238,21 @@ def coroutine_switch(current: CoroutineContext, resumed: CoroutineContext):
 def init():
     signal(13, __ptr(__word(1)))
 
-# Failing to write stdout or stderr ends the program with status 1 (spec §10).
-def write_all(fd: int, buf: ptr, count: int):
+# Both File writes and built-in output use this unbuffered path. The caller
+# decides whether a failed write raises OSError or ends the program.
+def write_bytes(fd: int, buf: ptr, count: int) -> bool:
     done = 0
     while done < count:
         written = write(fd, __offset(buf, done), count - done)
         if written < 0:
-            exit(1)
+            return False
         done = done + written
+    return True
+
+# Failing to write stdout or stderr ends the program with status 1 (spec §10).
+def write_all(fd: int, buf: ptr, count: int):
+    if not write_bytes(fd, buf, count):
+        exit(1)
 
 def write_str(fd: int, s: str):
     write_all(fd, str_bytes(s), str_size(s))
@@ -2530,28 +2537,74 @@ def str_from_bytes(p: ptr, size: int) -> str:
     memcpy(__offset(s, 16), p, size)
     return __str(__word(s))
 
-def input_line() -> str | None:
+# Read buffers hold the next unread offset and the end offset, followed by
+# 4096 octets. Both emitters provide the same zeroed storage for stdin.
+def stdin_buffer() -> ptr:
+    fail("RuntimeError", "stdin buffer was not emitted")
+    return __ptr(__word(0))
+
+def file_buffer() -> ptr:
+    buffer = __alloc_atomic(4112)
+    __store8(buffer, 0, __word(0))
+    __store8(buffer, 8, __word(0))
+    return buffer
+
+def fill_buffer(fd: int, buffer: ptr, path: str, fatal: bool) -> int:
+    count = read(fd, __offset(buffer, 16), 4096)
+    if count < 0:
+        if fatal:
+            eprint_str("error: cannot read input: " + os_reason())
+            exit(1)
+        fail_os("read", path)
+    __store8(buffer, 0, __word(0))
+    __store8(buffer, 8, __word(count))
+    return count
+
+def file_read(fd: int, buffer: ptr, size: int, path: str) -> ptr:
+    start = __int(__load8(buffer, 0))
+    stop = __int(__load8(buffer, 8))
+    if start == stop:
+        stop = fill_buffer(fd, buffer, path, False)
+        start = 0
+    count = stop - start
+    if count > size:
+        count = size
+    data = str_alloc(count)
+    memcpy(__offset(data, 16), __offset(buffer, 16 + start), count)
+    __store8(buffer, 0, __word(start + count))
+    return bytes_tag(__str(__word(data)))
+
+def file_readline(fd: int, buffer: ptr, path: str, fatal: bool) -> str | None:
     capacity = 128
     size = 0
-    buf = __alloc_atomic(capacity)
-    count = read(0, buf, 1)
-    while count != 0:
-        if count < 0:
-            fail("OSError", "cannot read input: " + os_reason())
-        if __load1(buf, size) == 10:
-            if size > 0 and __load1(buf, size - 1) == 13:
+    line = __alloc_atomic(capacity)
+    while True:
+        start = __int(__load8(buffer, 0))
+        stop = __int(__load8(buffer, 8))
+        if start == stop:
+            stop = fill_buffer(fd, buffer, path, fatal)
+            start = 0
+            if stop == 0:
+                break
+        byte = __load1(buffer, 16 + start)
+        __store8(buffer, 0, __word(start + 1))
+        if byte == 10:
+            if size > 0 and __load1(line, size - 1) == 13:
                 size = size - 1
-            return str_from_bytes(buf, size)
-        size = size + 1
+            return str_from_bytes(line, size)
         if size == capacity:
             larger = __alloc_atomic(capacity * 2)
-            memcpy(larger, buf, size)
-            buf = larger
+            memcpy(larger, line, size)
+            line = larger
             capacity = capacity * 2
-        count = read(0, __offset(buf, size), 1)
+        __store1(line, size, byte)
+        size = size + 1
     if size == 0:
         return None
-    return str_from_bytes(buf, size)
+    return str_from_bytes(line, size)
+
+def input_line() -> str | None:
+    return file_readline(0, stdin_buffer(), "<stdin>", True)
 
 # Stage 1 replaces this body to read the arguments saved by program entry.
 def sys_arguments() -> list[str]:
@@ -2611,6 +2664,12 @@ def write_flags() -> int:
     if __os == "linux":
         return 1 + 64 + 512
     return 1 + 512 + 1024
+
+def append_flags() -> int:
+    # O_WRONLY | O_CREAT | O_APPEND
+    if __os == "linux":
+        return 1 + 64 + 1024
+    return 1 + 512 + 8
 
 def fs_read_file(path: str) -> str:
     data = fs_read_data(path)

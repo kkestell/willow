@@ -1,0 +1,9 @@
+# A library module that imports another, for stage 1's tests.
+
+import fixture_store
+
+def label() -> str:
+    return fixture_store.describe(fixture_store.make("item"))
+
+def item() -> fixture_store.Item:
+    return fixture_store.make("shared")

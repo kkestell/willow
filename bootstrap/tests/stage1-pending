@@ -1,14 +1,11 @@
 aio_listener_outside_loop
 aio_sockets
-file_lines
-generics
 http_values
 json_library
 overflow_add
 overflow_sub
 processes
 processes_stdin
-protocol_native_failure
 protocols
 scoped_resources
 sockets
@@ -19,7 +16,6 @@ stdlib_net_reader
 stdlib_random
 stdlib_subprocess
 streams
-streams_invalid_utf8
 task_group_sockets
 terminal_styles
 text_conversions

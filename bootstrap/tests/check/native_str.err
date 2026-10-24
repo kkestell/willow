@@ -1,0 +1,1 @@
+native_str.wlo:5:13: error: cannot convert a value of type fixture_store.Handle to str

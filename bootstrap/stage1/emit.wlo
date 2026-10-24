@@ -1,9 +1,11 @@
 # Writes checked functions as QBE intermediate language, with stage 0's value
 # representation and symbols (agents/bootstrap.md §4, §7): every value is an
 # `l` slot, a function is `$W.<module>.<name>`, a string literal
-# `$W.str.<n>`, and a type descriptor `$W.<type>.type`. Locals live in stack
-# slots, which QBE promotes to registers. Output depends only on the order
-# functions are emitted in.
+# `$W.str.<n>`, and a type descriptor `$W.<type>.type`, except that the
+# program's own modules' functions and types start with `$P.`, apart from
+# library modules of the same name. Locals live in stack slots, which QBE
+# promotes to registers. Output depends only on the order functions are
+# emitted in.
 
 import ast
 import bind
@@ -28,7 +30,10 @@ class Emitter:
     target_os: str
     # The entry module's name, which its types' names leave out.
     entry: str
-    # The module name of each declared function, by its id.
+    # The symbol root of each declared function's module, by the function's
+    # id: "W." and the module's name for core and the library's modules,
+    # and "P." and the name for the program's, which may reuse a library
+    # module's name.
     module_names: dict[int, str]
     descriptors: dict[str, list[str]]
     lines: list[str]
@@ -50,9 +55,11 @@ class Emitter:
     bindings: dict[str, types.Type]
     witnesses: list[Witness]
     protocols: list[types.ProtocolType]
-    # The path of each module, by name, for the locations of exceptions.
+    # The path of each module, by symbol root, for the locations of
+    # exceptions.
     module_paths: dict[str, str]
-    # The privileged modules by name, whose functions record no frames.
+    # The privileged modules by symbol root, whose functions record no
+    # frames.
     privileged: dict[str, bool]
     # The built-in exception classes, by name.
     exceptions: dict[str, types.Class]
@@ -147,15 +154,19 @@ class Emitter:
         if len(function.type_params) > 0 or isinstance(owner, ast.ClassDecl) and len(owner.type_params) > 0:
             return
         module = self.module_names[function.id]
-        if module == "core":
+        if module == "W.core":
             body = coroutine.function(function.name)
             if body != "":
                 self.write(body)
                 return
-        if module == "core" and function.name in ["fail", "fail_at"]:
+        if module == "W.core" and function.name == "stdin_buffer":
+            self.begin(self.symbol(function), [], True)
+            self.end("$W.stdin.buffer")
+            return
+        if module == "W.core" and function.name in ["fail", "fail_at"]:
             self.emit_fail(function.name)
             return
-        if module == "core" and function.name == "sys_arguments":
+        if module == "W.core" and function.name == "sys_arguments":
             self.begin(self.symbol(function), [], True)
             args: list[str] = []
             for word in ["$W.argc", "$W.argv"]:
@@ -351,7 +362,7 @@ class Emitter:
         self.write("}")
 
     def symbol(self, function: ast.FunctionDecl) -> str:
-        return "$W." + self.module_names[function.id] + "." + frame_name(function)
+        return "$" + self.module_names[function.id] + "." + frame_name(function)
 
     def specialization(self, fn: types.Function, receiver: list[types.Type], args: list[types.Type]) -> str:
         if len(receiver) == 0 and len(args) == 0:
@@ -392,7 +403,7 @@ class Emitter:
         for name in own_bindings:
             bindings[name] = own_bindings[name]
         key.extend(own)
-        return self.instance(function, key, bindings, "$W." + self.module_of(function) + "." + frame_name(function) + "." + str(function.id))
+        return self.instance(function, key, bindings, "$" + self.module_of(function) + "." + frame_name(function) + "." + str(function.id))
 
     # The instantiation of `function` whose type arguments are `key`, queued
     # in order of first use and named after `base` and its place.
@@ -542,10 +553,10 @@ class Emitter:
         main = entry.names["main"]
         assert isinstance(main, ast.FunctionDecl), "entry without main"
         if main.is_async:
-            self.line(f"%root =l call $W.{entry.name}.main()")
+            self.line(f"%root =l call $P.{entry.name}.main()")
             self.line("%result =l call $W.core.aio_run(l %root)")
         else:
-            self.line(f"call $W.{entry.name}.main()")
+            self.line(f"call $P.{entry.name}.main()")
         # Output is not buffered, so there is nothing to flush.
         self.line("%e =l loadl $W.pending")
         self.line("jnz %e, @uncaught, @done")
@@ -559,6 +570,7 @@ class Emitter:
         self.write("data $W.argc = { l 0 }")
         self.write("data $W.argv = { l 0 }")
         self.write("data $W.pending = { l 0 }")
+        self.write("data $W.stdin.buffer = { z 4112 }")
         self.write(coroutine.data())
         for name in builtin_types():
             self.write(f"data $W.{name}.type = " + "{ l " + self.string(name) + " }")
@@ -793,7 +805,7 @@ class Emitter:
                 next = self.new_label()
                 if record.type_name != "Exception":
                     matches = self.temp()
-                    self.line(f"{matches} =l ceql {kind}, {self.descriptor(record.type_name)}")
+                    self.line(f"{matches} =l ceql {kind}, {self.descriptor(record.type_name, record.library)}")
                     self.jump(f"jnz {matches}, {body}, {next}")
                 self.label(body)
                 if handler.name != "":
@@ -1549,7 +1561,7 @@ class Emitter:
                 done = self.new_label()
                 result = self.temp()
                 self.line(f"{result} =l copy {value}")
-                held = self.core_call("is_instance", [value, self.descriptor("tuple")], True)
+                held = self.core_call("is_instance", [value, self.descriptor("tuple", False)], True)
                 self.jump(f"jnz {held}, {take}, {done}")
                 self.label(take)
                 converted = self.convert_tuple(value, from_tuple, to_tuple)
@@ -1588,17 +1600,20 @@ class Emitter:
             self.label(done)
             return result
         name = types.kind(member)
+        library = False
         if name == "callable":
             name = "function"
         if isinstance(member, types.ClassType):
             name = member.decl.type_name
+            library = member.decl.library
         elif isinstance(member, types.EnumType):
             name = member.decl.type_name
-        return self.instance_test(value, name)
+            library = member.decl.library
+        return self.instance_test(value, name, library)
 
-    def instance_test(self, value: str, name: str) -> str:
+    def instance_test(self, value: str, name: str, library: bool) -> str:
         if name != "Exception":
-            return self.core_call("is_instance", [value, self.descriptor(name)], True)
+            return self.core_call("is_instance", [value, self.descriptor(name, library)], True)
         result = self.temp()
         present = self.temp()
         take = self.new_label()
@@ -1647,22 +1662,25 @@ class Emitter:
     def box_descriptor(self, t: types.Type) -> str:
         t = types.expand(t)
         if isinstance(t, types.EnumType):
-            return self.descriptor(t.decl.type_name)
+            return self.descriptor(t.decl.type_name, t.decl.library)
         if types.kind(t) in ["int", "float", "bool"]:
-            return self.descriptor(types.kind(t))
+            return self.descriptor(types.kind(t), False)
         return ""
 
-    # The descriptor symbol of the built-in type, class, or enum `type_name`.
-    def descriptor(self, type_name: str) -> str:
+    # The descriptor symbol of the built-in type, class, or enum `type_name`,
+    # which `library` marks as core's or the standard library's.
+    def descriptor(self, type_name: str, library: bool) -> str:
         if type_name == "aio.Task":
             type_name = "core.AioTask"
         elif type_name == "aio.TaskGroup":
             type_name = "core.AioGroup"
         elif type_name == "aio.Semaphore":
             type_name = "core.AioSemaphore"
-        if type_name in builtin_types() or type_name in self.exceptions or "." in type_name:
+        if library or type_name in builtin_types() or type_name in self.exceptions:
             return f"$W.{type_name}.type"
-        return f"$W.{self.entry}.{type_name}.type"
+        if "." in type_name:
+            return f"$P.{type_name}.type"
+        return f"$P.{self.entry}.{type_name}.type"
 
     def node_value(self, expr: ast.Expr) -> str:
         node = expr.node
@@ -1863,12 +1881,15 @@ class Emitter:
             return "1"
         named = node.type_name
         type_name = named.name
+        library = False
         record = named.record
         if isinstance(record, types.Class):
             type_name = record.type_name
+            library = record.library
         elif isinstance(record, types.Enum):
             type_name = record.type_name
-        return self.instance_test(operand, type_name)
+            library = record.library
+        return self.instance_test(operand, type_name, library)
 
     def unary(self, node: ast.Unary) -> str:
         value = self.expr(node.operand)
@@ -2161,7 +2182,7 @@ class Emitter:
         values = self.arg_values(node.args, node.order)
         base = field_base(target)
         size = len(values) + (base - 8) // 8
-        object = self.core_call("object_new", [self.descriptor(target.type_name), str(size)], True)
+        object = self.core_call("object_new", [self.descriptor(target.type_name, target.library), str(size)], True)
         for i in range(len(values)):
             address = self.temp()
             self.line(f"{address} =l add {object}, {base + i * 8}")
@@ -2205,7 +2226,7 @@ class Emitter:
                 passed.extend(args)
                 result = types.substitute(method.result, types.record_map(ty))
                 result = types.substitute(result, types.bind_vars(method.typevars, types.substitute_all(own, self.bindings)))
-                if ty.decl.native:
+                if ty.decl.prefix != "":
                     if ty.decl.type_name == "aio.TaskGroup" and name == "start":
                         passed.extend([self.string(self.path), str(self.at_line), str(self.at_col)])
                     return self.core_call(ty.decl.prefix + "_" + name, passed, not is_none(result))
@@ -2739,7 +2760,7 @@ class Emitter:
         elif kind == "None":
             return self.string("None")
         elif isinstance(ty, types.EnumType):
-            return self.core_call("enum_to_str", [self.descriptor(ty.decl.type_name), value], True)
+            return self.core_call("enum_to_str", [self.descriptor(ty.decl.type_name, ty.decl.library), value], True)
         assert kind == "str", "unchecked scalar conversion"
         return value
 
@@ -2823,7 +2844,7 @@ class Emitter:
     # A closure of nested function or lambda `function` over the cells of
     # the variables it captures.
     def closure(self, function: ast.FunctionDecl) -> str:
-        symbol = "$W." + self.module_of(function) + "." + frame_name(function).replace("<lambda>", "lambda") + "." + str(function.id)
+        symbol = "$" + self.module_of(function) + "." + frame_name(function).replace("<lambda>", "lambda") + "." + str(function.id)
         if len(self.bindings) > 0:
             symbol = symbol + f".inst.{len(self.later)}"
         self.wrap(symbol, Lifted(symbol, function, self.bindings))
@@ -3078,21 +3099,23 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
     module_paths: dict[str, str] = {}
     privileged: dict[str, bool] = {}
     for module in modules:
-        module_paths[module.name] = module.path
+        root = "P." + module.name
         if module.privileged:
-            privileged[module.name] = True
+            root = "W." + module.name
+            privileged[root] = True
+        module_paths[root] = module.path
         for decl in module.declarations:
             if isinstance(decl, ast.FunctionDecl):
-                module_names[decl.id] = module.name
+                module_names[decl.id] = root
             elif isinstance(decl, ast.ClassDecl):
                 for method in decl.methods:
-                    module_names[method.id] = module.name
+                    module_names[method.id] = root
     result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [], {}, functions, [], {}, {}, [], [], module_paths, privileged, stdlib.exceptions(), [], [], [], [], {})
     for name in builtin_types():
         result.string(name)
     for name in result.exceptions:
         result.string(name)
-        result.exception_descriptors.append(result.descriptor(name))
+        result.exception_descriptors.append(result.descriptor(name, False))
     for module in modules:
         for decl in module.declarations:
             if isinstance(decl, ast.ClassDecl):
@@ -3101,13 +3124,13 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
                 name = decl.name
                 if decl.exception:
                     name = decl.type_name
-                    result.exception_descriptors.append(result.descriptor(decl.type_name))
-                result.descriptors[result.descriptor(decl.type_name)] = [name]
+                    result.exception_descriptors.append(result.descriptor(decl.type_name, module.privileged))
+                result.descriptors[result.descriptor(decl.type_name, module.privileged)] = [name]
             elif isinstance(decl, ast.EnumDecl):
                 texts = [decl.name]
                 for member in decl.members:
                     texts.append(decl.name + "." + member.name)
-                result.descriptors[result.descriptor(decl.type_name)] = texts
+                result.descriptors[result.descriptor(decl.type_name, module.privileged)] = texts
     return result
 
 # An enclosing `try` statement with a `finally` clause, which a return,
