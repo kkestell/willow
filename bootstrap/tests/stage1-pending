@@ -1,7 +1,5 @@
 aio_listener_outside_loop
-aio_sleep
 aio_sockets
-bound_methods
 file_lines
 generics
 host

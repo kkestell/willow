@@ -266,6 +266,13 @@ class Binder:
             if name.startswith("_") and target.name != module.name:
                 self.fail(module, line, col, f"'{name}' is private to module '{target.name}'")
                 return None
+            if target.privileged and target.name == "sys":
+                # The compiler converts eprint's printable argument to text
+                # and recognizes exit as a control transfer.
+                if name == "eprint":
+                    return stdlib.Builtin(name, [stdlib.any_arg("value")], types.prim("None"), "")
+                if name == "exit":
+                    return stdlib.Builtin(name, [stdlib.arg("status", types.prim("int"))], types.prim("None"), "")
             return target.names[name]
         provided = module.provided[path]
         if name in provided.functions:

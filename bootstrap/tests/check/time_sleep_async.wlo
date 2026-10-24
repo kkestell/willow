@@ -1,0 +1,14 @@
+import aio
+import time
+
+async def worker(events: list[str]):
+    events.append("worker")
+
+async def main():
+    events: list[str] = []
+    async with aio.task_group() as group:
+        group.start(worker(events))
+        time.sleep(0.01)
+        assert len(events) == 0
+        events.append("main")
+    print(",".join(events))
