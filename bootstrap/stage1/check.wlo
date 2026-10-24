@@ -944,26 +944,39 @@ class Checker:
         object = bound_type(types.expand(self.check_expr(node.object, state)))
         if isinstance(object, types.ClassType):
             return self.check_class_method(expr, node, object, state)
+        if node.type_args is not None:
+            return self.field_type(expr.line, expr.col, node.name, object)
         if isinstance(object, types.ProtocolType):
             signature = types.method(object, node.name)
             if signature is not None:
                 return self.check_generic_call(expr, node, signature.params, signature.result, [], state, "parameter")
-        if node.type_args is not None:
-            self.fail(expr.line, expr.col, f"'{node.name}' is not generic")
-            return none()
         if isinstance(object, types.ListType):
             return self.check_list_method(expr, node, state, object)
         if types.kind(object) == "str":
             return self.check_str_method(expr, node, state, object)
         if isinstance(object, types.DictType):
             return self.check_dict_method(expr, node, object, state)
-        self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{node.name}'")
-        return none()
+        if types.kind(object) in ["protocol", "int", "float", "bool", "None", "enum", "typevar", "union", "callable", "function", "ptr", "word", "cint"]:
+            self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{node.name}'")
+            return none()
+        return self.unsupported(expr.line, expr.col, "method calls")
 
     def check_class_method(self, expr: ast.Expr, node: ast.MethodCall, object: types.ClassType, state: dict[int, types.Type]) -> types.Type:
         bindings = types.record_map(object)
         for method in object.decl.methods:
             if method.name == node.name:
+                if node.type_args is not None and len(method.typevars) == 0:
+                    if object.decl.native:
+                        return self.field_type(expr.line, expr.col, node.name, object)
+                    index = node.index
+                    if index is None:
+                        error = node.index_error
+                        assert error is not None, "specialized method without an index"
+                        self.error = error
+                    else:
+                        fn = types.FunctionType(method, True, object)
+                        self.fail(index.line, index.col, f"cannot index a value of type {types.display(fn)}")
+                    return none()
                 params: list[types.Param] = []
                 for param in method.params[1:]:
                     params.append(types.Param(param.name, types.substitute(param.ty, bindings), param.default, param.keyword_only))

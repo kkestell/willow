@@ -57,6 +57,7 @@ class Emitter:
     # and the exceptions the enclosing `except` clauses handle.
     protects: list[Protect]
     handled: list[str]
+    exception_descriptors: list[str]
     # Per function: its name in frames, its module's path, and whether it
     # records frames, which core's functions do not (agents/bootstrap.md §6).
     function_name: str = ""
@@ -1163,7 +1164,27 @@ class Emitter:
             name = member.decl.type_name
         elif isinstance(member, types.EnumType):
             name = member.decl.type_name
-        return self.core_call("is_instance", [value, self.descriptor(name)], True)
+        return self.instance_test(value, name)
+
+    def instance_test(self, value: str, name: str) -> str:
+        if name != "Exception":
+            return self.core_call("is_instance", [value, self.descriptor(name)], True)
+        result = self.temp()
+        present = self.temp()
+        take = self.new_label()
+        done = self.new_label()
+        self.line(f"{result} =l copy 0")
+        self.line(f"{present} =l cnel {value}, 0")
+        self.jump(f"jnz {present}, {take}, {done}")
+        self.label(take)
+        descriptor = self.temp()
+        self.line(f"{descriptor} =l loadl {value}")
+        for exception in self.exception_descriptors:
+            matches = self.temp()
+            self.line(f"{matches} =l ceql {descriptor}, {exception}")
+            self.line(f"{result} =l or {result}, {matches}")
+        self.label(done)
+        return result
 
     def convert_union(self, value: str, source: types.UnionType, target: types.Type) -> str:
         result = self.temp()
@@ -1380,7 +1401,7 @@ class Emitter:
             type_name = record.type_name
         elif isinstance(record, types.Enum):
             type_name = record.type_name
-        return self.core_call("is_instance", [operand, self.descriptor(type_name)], True)
+        return self.instance_test(operand, type_name)
 
     def unary(self, node: ast.Unary) -> str:
         value = self.expr(node.operand)
@@ -1939,11 +1960,12 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
             elif isinstance(decl, ast.ClassDecl):
                 for method in decl.methods:
                     module_names[method.id] = module.name
-    result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [], {}, functions, [], {}, {}, [], [], module_paths, stdlib.exceptions(), [], [])
+    result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, False, False, [], [], {}, functions, [], {}, {}, [], [], module_paths, stdlib.exceptions(), [], [], [])
     for name in builtin_types():
         result.string(name)
     for name in result.exceptions:
         result.string(name)
+        result.exception_descriptors.append(result.descriptor(name))
     for module in modules:
         for decl in module.declarations:
             if isinstance(decl, ast.ClassDecl):
@@ -1952,6 +1974,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
                 name = decl.name
                 if decl.exception:
                     name = decl.type_name
+                    result.exception_descriptors.append(result.descriptor(decl.type_name))
                 result.descriptors[result.descriptor(decl.type_name)] = [name]
             elif isinstance(decl, ast.EnumDecl):
                 texts = [decl.name]

@@ -1113,7 +1113,7 @@ class Resolver:
                 value_index = self.value_index(index_node.index)
             if not value_index:
                 type_args = self.resolve_types(node.type_args)
-                expr.node = ast.MethodCall(callee.object, callee.name, node.args, node.keywords, None, type_args)
+                expr.node = ast.MethodCall(callee.object, callee.name, node.args, node.keywords, None, type_args, node.index, node.index_error)
                 self.resolve_expr(expr, False)
                 return
         generic = is_generic_member(found)

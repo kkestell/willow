@@ -1,0 +1,8 @@
+protocol P:
+    def get(self) -> int
+
+def call(value: P):
+    value.get[int]()
+
+def main():
+    pass

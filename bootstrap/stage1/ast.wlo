@@ -271,6 +271,8 @@ class MethodCall:
     keywords: list[Keyword]
     order: list[int] | None = None
     type_args: list[types.Type] | None = None
+    index: Expr | None = None
+    index_error: diagnostic.Diagnostic | None = None
 
 class Keyword:
     line: int
