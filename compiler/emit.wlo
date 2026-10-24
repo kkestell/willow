@@ -1907,6 +1907,19 @@ class Emitter:
             self.check_divisor(right)
             return self.float_bits(self.int_quotient(left, right))
         if op == "//" or op == "%":
+            literal = node.right.node
+            if isinstance(literal, ast.Int):
+                shift = power_of_two(literal.text)
+                if shift != 0:
+                    # In two's complement, an arithmetic shift is floor
+                    # division by 2^k, and masking with 2^k - 1 is the floor
+                    # remainder, negative operands included.
+                    t = self.temp()
+                    if op == "//":
+                        self.line(f"{t} =l sar {left}, {shift}")
+                    else:
+                        self.line(f"{t} =l and {left}, {bit(shift) - 1}")
+                    return t
             return self.floor_divide(op, left, right)
         if op in ["+", "-", "*"]:
             return self.checked(arithmetic_instruction(op), left, right)
@@ -3294,6 +3307,19 @@ def bit(i: int) -> int:
     for j in range(i):
         result = result * 2
     return result
+
+# The exponent of the power of two that the int literal `text` holds, or 0.
+def power_of_two(text: str) -> int:
+    value = int(text)
+    if value < 2 or value > 4611686018427387904:
+        return 0
+    k = 0
+    while value % 2 == 0:
+        value = value // 2
+        k = k + 1
+    if value == 1:
+        return k
+    return 0
 
 # The name of `function` in frames, and in its symbol.
 def frame_name(function: ast.FunctionDecl) -> str:

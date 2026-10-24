@@ -27,3 +27,10 @@ def main():
     print((top - 1) % -4)
     print(4503599627370494 // -4)
     print(4503599627370494 % -4)
+    # Powers of two divide with a shift and mod with a mask, negative
+    # operands included.
+    for x in [1, -1, 7, -7, 8, -8, 1023, 1024, -1024, 9223372036854775807, -9223372036854775807]:
+        print(x // 4)
+        print(x % 4)
+        print(x // 1024)
+        print(x % 1024)
