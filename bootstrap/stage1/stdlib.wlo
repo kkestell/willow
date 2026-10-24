@@ -178,6 +178,7 @@ def intrinsics() -> dict[str, Builtin]:
     add(table, "__bool", [arg("", prim("word"))], prim("bool"))
     add(table, "__ptr", [arg("", prim("word"))], prim("ptr"))
     add(table, "__str", [arg("", prim("word"))], prim("str"))
+    add(table, "__bytes", [arg("", prim("word"))], prim("bytes"))
     add(table, "__addr_is_null", [arg("", prim("ptr"))], prim("bool"))
     add(table, "__dtosi", [arg("", prim("float"))], prim("int"))
     add(table, "__offset", [arg("", prim("ptr")), arg("", prim("int"))], prim("ptr"))
@@ -303,17 +304,6 @@ def io_file() -> types.Class:
     native_method(file, "iter", [], types.iterator(prim("str")))
     scoped(file)
     return file
-
-def io_module() -> Module:
-    module = new_module("io")
-    file = io_file()
-    module.classes["File"] = file
-    mode = defaulted("mode", prim("str"), str_default("r"))
-    add(module.functions, "open", [arg("path", prim("str")), mode], class_type(file))
-    add(module.functions, "stdin", [], class_type(file))
-    add(module.functions, "stdout", [], class_type(file))
-    add(module.functions, "stderr", [], class_type(file))
-    return module
 
 def fs_module() -> Module:
     module = new_module("fs")
@@ -544,7 +534,6 @@ def modules() -> dict[str, Module]:
         "aio": aio_module(),
         "fs": fs_module(),
         "http": http_module(),
-        "io": io_module(),
         "net": net_module(),
         "random": random_module(),
         "subprocess": subprocess_module(),

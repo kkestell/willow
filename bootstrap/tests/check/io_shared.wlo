@@ -1,0 +1,27 @@
+import io
+import sys
+
+def main():
+    first = io.stdin()
+    second = io.stdin()
+    assert input() == "first"
+    assert first.read(2) == bytes([97, 98])
+    assert second.readline() == "c"
+    assert input() == ""
+    try:
+        first.readline()
+        assert False
+    except ValueError as error:
+        assert error.message == "invalid UTF-8"
+    assert input() == "end"
+    assert second.readline() is None
+    assert len(first.read(1)) == 0
+
+    io.stdout().write_text("a")
+    print("b")
+    io.stdout().write("c\n".encode())
+    io.stdout().flush()
+    io.stderr().write_text("d")
+    sys.eprint("e")
+    io.stderr().write("f\n".encode())
+    sys.exit(1)

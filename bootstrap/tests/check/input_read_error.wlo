@@ -1,0 +1,15 @@
+import core
+import io
+
+def main():
+    stdin = io.stdin()
+    assert core.close(0) == 0
+    try:
+        stdin.readline()
+        assert False
+    except OSError as error:
+        assert error.message == "cannot read <stdin>: Bad file descriptor"
+    try:
+        input()
+    except OSError:
+        print("unexpected catch")
