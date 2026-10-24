@@ -999,7 +999,10 @@ class Emitter:
         source = types.expand(source)
         target = types.expand(target)
         if adapts(source, target):
-            return self.adapt(value, source, target)
+            value = self.adapt(value, source, target)
+            # The union's tuple member may convert too.
+            if not is_union(source):
+                return value
         from_tuple = types.tuple_member(source)
         to_tuple = types.tuple_member(target)
         if from_tuple is not None and to_tuple is not None and representation_changes(from_tuple, to_tuple):
