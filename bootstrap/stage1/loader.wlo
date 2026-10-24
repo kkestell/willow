@@ -19,7 +19,8 @@ import parser
 # stdlib.wlo declares instead.
 def is_stdlib(name: str) -> bool:
     return name in [
-        "aio", "http", "net", "random", "terminal",
+        "aio", "http", "net", "random",
+        "subprocess", "terminal",
     ]
 
 # A module read from source: its full name, as in "app.util", and its syntax

@@ -386,6 +386,46 @@ def terminal_module() -> Module:
     add(module.functions, "finish_progress", [message], prim("None"))
     return module
 
+# The parameters of subprocess.run and run_async.
+def run_params() -> list[BuiltinParam]:
+    environment = types.optional(types.DictType(prim("str"), prim("str")))
+    return [
+        arg("args", list_of("str")),
+        defaulted("input", optional("bytes"), none_default()),
+        defaulted("capture_output", prim("bool"), bool_default(False)),
+        defaulted("cwd", optional("str"), none_default()),
+        defaulted("env", environment, none_default()),
+        defaulted("timeout", optional("float"), none_default()),
+    ]
+
+def subprocess_module() -> Module:
+    module = new_module("subprocess")
+    result = provided_class("subprocess", "Result", ["returncode", "stdout", "stderr"], [prim("int"), optional("bytes"), optional("bytes")])
+    process = native_class("subprocess", "Process", "process")
+    native_method(process, "poll", [], optional("int"))
+    timeout = none_param("timeout", optional("float"))
+    native_method(process, "wait", [timeout], prim("int"))
+    native_method(process, "wait_async", [timeout], coroutine_of(prim("int")))
+    native_method(process, "terminate", [], prim("None"))
+    native_method(process, "kill", [], prim("None"))
+    module.classes["Result"] = result
+    module.classes["Process"] = process
+    functions = module.functions
+    add_helper(functions, "run", run_params(), class_type(result), "process_run")
+    add_helper(functions, "run_async", run_params(), coroutine_of(class_type(result)), "process_run_async")
+    environment = types.optional(types.DictType(prim("str"), prim("str")))
+    file = types.optional(class_type(io_file()))
+    spawn = [
+        arg("args", list_of("str")),
+        defaulted("cwd", optional("str"), none_default()),
+        defaulted("env", environment, none_default()),
+        defaulted("stdin", file, none_default()),
+        defaulted("stdout", file, none_default()),
+        defaulted("stderr", file, none_default()),
+    ]
+    add_helper(functions, "spawn", spawn, class_type(process), "process_spawn")
+    return module
+
 def http_module() -> Module:
     module = new_module("http")
     header = provided_class("http", "Header", ["name", "value"], [prim("str"), prim("str")])
@@ -457,6 +497,7 @@ def modules() -> dict[str, Module]:
         "http": http_module(),
         "net": net_module(),
         "random": random_module(),
+        "subprocess": subprocess_module(),
         "terminal": terminal_module(),
     }
 
