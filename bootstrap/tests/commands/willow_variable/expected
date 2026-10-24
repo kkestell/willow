@@ -1,0 +1,6 @@
+run sets WILLOW
+run sets WILLOW
+PASS test_launcher.wlo test_launcher
+1 passed, 0 failed
+status 0
+None

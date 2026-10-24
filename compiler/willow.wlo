@@ -1,5 +1,4 @@
 # The willow command (spec §12), with compiler/cli.lua's usage and messages.
-# `run`, `test`, and `init` are not available yet.
 #
 # Core is compiled into every program. Its text and the standard library's
 # are compiled into the compiler (see loader.wlo).
@@ -12,8 +11,11 @@ import coroutine
 import diagnostic
 import emit
 import fs
+import init
 import loader
 import manifest
+import runner
+import subprocess
 import sys
 
 def usage_text() -> str:
@@ -78,13 +80,35 @@ def parse_args(args: list[str]) -> Command:
         usage_error(f"{name} needs -o <output>")
     return Command(name, input, output, program_args)
 
+# `willow test [--check] [path]`: the path, or None, and whether to check
+# only.
+def parse_test_args(args: list[str]) -> tuple[str | None, bool]:
+    check_only = False
+    path: str | None = None
+    for argument in args[1:]:
+        if argument == "--check" and not check_only:
+            check_only = True
+        elif argument == "--check":
+            usage_error("--check given more than once")
+        elif argument.startswith("-"):
+            usage_error(f"unknown option '{argument}'")
+        elif path is not None:
+            usage_error(f"unexpected argument '{argument}'")
+        else:
+            path = argument
+    return (path, check_only)
+
 def main():
     args = sys.args()
-    if len(args) > 0 and args[0] in ["init", "test"]:
-        fail(f"error: willow {args[0]} is not available yet")
+    if len(args) > 0 and args[0] == "init":
+        if len(args) > 1:
+            usage_error(f"unexpected argument '{args[1]}'")
+        init.init()
+        return
+    if len(args) > 0 and args[0] == "test":
+        test(args)
+        return
     command = parse_args(args)
-    if command.name == "run":
-        fail("error: willow run is not available yet")
     path = command.input
     if path is None:
         project = read_project()
@@ -107,12 +131,14 @@ def main():
     if output is not None and core.fs_same_file(path, output):
         fail(f"error: output {output} is the input file")
     modules = translate(path, text, roots)
+    if command.name == "run":
+        run(emit_il(modules, False), command.program_args)
     if output is None:
         return
     for module in modules[1:]:
         if not module.privileged and core.fs_same_file(module.path, output):
             fail(f"error: output {output} is the module file {module.path}")
-    il = emit_il(modules)
+    il = emit_il(modules, False)
     if command.name == "compile":
         write_output(output, il)
     else:
@@ -130,27 +156,123 @@ def read_project() -> manifest.Project | None:
 # the text `text`, entry first and core among them. Fails with the first
 # error.
 def translate(path: str, text: str, roots: loader.Roots) -> list[ast.Module]:
+    modules = checked(path, text, roots, False)
+    if isinstance(modules, diagnostic.Diagnostic):
+        fail(modules.format())
+        return []
+    return modules
+
+# The modules translate gives, or the first error. A test file (`test`)
+# needs no `main`.
+def checked(path: str, text: str, roots: loader.Roots, test: bool) -> list[ast.Module] | diagnostic.Diagnostic:
     sources = loader.load(path, text, roots, True)
     if isinstance(sources, diagnostic.Diagnostic):
-        fail(sources.format())
-        return []
-    error = bind.bind(sources, False)
+        return sources
+    error = bind.bind(sources, test)
     if error is not None:
-        fail(error.format())
+        return error
     modules: list[ast.Module] = []
     for source in sources:
         modules.append(source.tree)
     error = check.check_program(modules)
     if error is not None:
-        fail(error.format())
+        return error
     return modules
 
-def emit_il(modules: list[ast.Module]) -> str:
+# The IL of the program of `modules`, whose entry is a test file when
+# `test`.
+def emit_il(modules: list[ast.Module], test: bool) -> str:
     emitter = emit.emitter(modules, core.os())
     for module in modules:
         for function in bind.functions(module):
             emitter.function(function)
-    return emitter.finish(modules[0])
+    return emitter.finish(modules[0], test)
+
+# The environment of the programs that run and test start: this one's, with
+# WILLOW naming this executable.
+def program_environment() -> dict[str, str]:
+    env = sys.environ()
+    env["WILLOW"] = core.executable_path()
+    return env
+
+# Builds `il` to a temporary file, runs it with `args`, and exits with its
+# status.
+def run(il: str, args: list[str]):
+    directory = fs.temp_dir()
+    program = directory + "/program"
+    message = link(il, program)
+    if message != "":
+        core.run(["rm", "-rf", directory])
+        fail(message)
+    command = [program]
+    command.extend(args)
+    try:
+        status = subprocess.run(command, env=program_environment()).returncode
+    finally:
+        core.run(["rm", "-rf", directory])
+    if status < 0:
+        status = 128 - status
+    sys.exit(status)
+
+# A test file that checked: its path, its program's IL, and its tests' names.
+class TestFile:
+    path: str
+    il: str
+    names: list[str]
+
+# `willow test`: checks every test file, then runs each test in its own
+# process.
+def test(args: list[str]):
+    path, check_only = parse_test_args(args)
+    project = read_project()
+    if path is None:
+        path = "."
+        if project is not None:
+            path = project.tests
+    files: list[TestFile] = []
+    failed_checks = False
+    count = 0
+    for file in runner.discover(path, project is not None):
+        roots = loader.file_roots(file)
+        if project is not None:
+            roots = loader.Roots(project.source, project.dependencies, roots.entry)
+        try:
+            text = fs.read_file(file)
+        except OSError as error:
+            sys.eprint("error: " + loader.read_reason(error))
+            failed_checks = True
+            continue
+        modules = checked(file, text, roots, True)
+        if isinstance(modules, diagnostic.Diagnostic):
+            sys.eprint(modules.format())
+            failed_checks = True
+            continue
+        names: list[str] = []
+        for function in modules[0].tests:
+            names.append(function.name)
+        count = count + len(names)
+        files.append(TestFile(file, emit_il(modules, True), names))
+    if failed_checks:
+        sys.exit(1)
+    if count == 0:
+        fail(f"error: no tests found in {path}")
+    if check_only:
+        return
+    env = program_environment()
+    directory = fs.temp_dir()
+    tally = runner.Tally(0, 0)
+    try:
+        for test_file in files:
+            message = link(test_file.il, directory + "/program")
+            if message != "":
+                core.run(["rm", "-rf", directory])
+                fail(message)
+            runner.run_file(directory + "/program", test_file.path, test_file.names, env, directory, tally)
+    finally:
+        core.run(["rm", "-rf", directory])
+    print(f"{tally.passed} passed, {tally.failed} failed")
+    if tally.failed > 0:
+        sys.exit(1)
 
 # Writes `text` to `output` through a sibling file renamed into place, so a
 # failure leaves an existing output unchanged.
@@ -162,56 +284,64 @@ def write_output(output: str, text: str):
     except OSError as error:
         if fs.exists(temp):
             fs.remove(temp)
-        cannot_write(output, error)
+        fail(cannot_write(output, error))
 
-# Fails for an OSError from fs while writing `output` through its temporary
-# file, naming that file as cli.lua does.
-def cannot_write(output: str, error: OSError):
+# The message for an OSError from fs while writing `output` through its
+# temporary file, which names that file as cli.lua does.
+def cannot_write(output: str, error: OSError) -> str:
     parts = error.message.split(": ")
-    fail(f"error: cannot write {output}: {output}.tmp: {parts[len(parts) - 1]}")
+    return f"error: cannot write {output}: {output}.tmp: {parts[len(parts) - 1]}"
+
+# Builds `il` into the executable `output`, failing if it cannot.
+def build(il: str, output: str):
+    message = link(il, output)
+    if message != "":
+        fail(message)
 
 # Assembles `il` with qbe and links it with libgc into the executable
 # `output`, through a sibling file renamed into place. The intermediate files
-# go in a temporary directory.
-def build(il: str, output: str):
-    directory = fs.temp_dir()
-    ssa = directory + "/program.ssa"
-    asm = directory + "/program.s"
-    scratch = directory + "/scratch"
+# go in a temporary directory. Returns the error message, or "".
+def link(il: str, output: str) -> str:
     linked = output + ".tmp"
     # Creating the file first reports an unwritable output before cc does.
     try:
         fs.write_file(linked, "")
     except OSError as error:
-        core.run(["rm", "-rf", directory])
-        cannot_write(output, error)
+        return cannot_write(output, error)
+    directory = fs.temp_dir()
+    ssa = directory + "/program.ssa"
+    asm = directory + "/program.s"
+    scratch = directory + "/scratch"
     fs.write_file(ssa, il)
-    target = qbe_target(scratch)
+    arch = shell_output("uname -m", scratch).strip()
+    target = qbe_target(arch)
     message = ""
-    if core.run(["qbe", "-t", target, "-o", asm, ssa]) != 0:
-        message = "qbe failed"
+    if target == "":
+        message = f"error: unsupported host {core.os()} {arch}"
+    elif core.run(["qbe", "-t", target, "-o", asm, ssa]) != 0:
+        message = "error: qbe failed"
     else:
         fs.write_file(asm, fs.read_file(asm) + coroutine.assembly(target))
         command = ["cc", "-o", linked, asm]
         command.extend(gc_flags(scratch))
         command.append("-lm")
         if core.run(command) != 0:
-            message = "cc failed"
+            message = "error: cc failed"
     core.run(["rm", "-rf", directory])
     if message != "":
-        if fs.exists(linked):
-            fs.remove(linked)
-        fail("error: " + message)
+        fs.remove(linked)
+        return message
     try:
         fs.rename(linked, output)
     except OSError as error:
         fs.remove(linked)
-        cannot_write(output, error)
+        return cannot_write(output, error)
+    return ""
 
-# The QBE target for the host, whose architecture `uname -m` names.
-def qbe_target(scratch: str) -> str:
+# The QBE target for the host's operating system and the architecture
+# `arch`, as `uname -m` names it, or "" for an unsupported host.
+def qbe_target(arch: str) -> str:
     os = core.os()
-    arch = shell_output("uname -m", scratch).strip()
     if arch == "aarch64" or arch == "arm64":
         if os == "darwin":
             return "arm64_apple"
@@ -220,7 +350,6 @@ def qbe_target(scratch: str) -> str:
         if os == "darwin":
             return "amd64_apple"
         return "amd64_sysv"
-    fail(f"error: unsupported host {os} {arch}")
     return ""
 
 # The compiler flags that link libgc.

@@ -1,0 +1,52 @@
+test_b.wlo:2:14: error: expected int, received str
+status 1
+PASS helper.wlo test_helper
+1 passed, 0 failed
+status 0
+FAIL test_a.wlo test_a
+  ran
+  test_a.wlo:3:5: error: AssertionError: assertion failed
+    in test_a at test_a.wlo:3:5
+  test did not return (exit status 1)
+0 passed, 1 failed
+status 1
+test_c.wlo:1:5: error: test function 'test_c' must take no parameters and return None
+status 1
+test_c.wlo:1:11: error: test function 'test_c' must take no parameters and return None
+status 1
+error: no tests found in empty
+status 1
+error: unknown option '--verbose'
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+error: unexpected argument 'b'
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+error: --check given more than once
+usage: willow init
+       willow check [file]
+       willow run [file [args...] | -- args...]
+       willow compile [file] -o <output>
+       willow build [file] -o <output>
+       willow test [--check] [path]
+Without a file, the command uses willow.json in the current directory.
+status 1
+FAIL test_sleep.wlo test_bad_sleep
+  test_sleep.wlo:8:15: error: ValueError: sleep length must be finite and nonnegative
+    in test_bad_sleep at test_sleep.wlo:8:5
+  test did not return (exit status 1)
+PASS test_sleep.wlo test_sleeps
+1 passed, 1 failed
+status 1

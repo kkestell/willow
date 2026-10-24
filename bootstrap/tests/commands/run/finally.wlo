@@ -1,0 +1,7 @@
+import sys
+
+def main():
+    try:
+        sys.exit(0)
+    finally:
+        print(1)

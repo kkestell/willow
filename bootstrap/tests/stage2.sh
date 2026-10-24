@@ -25,7 +25,7 @@
 # except those named in bootstrap/tests/pending, which stage 2 does not pass
 # yet. Each case in bootstrap/tests/commands/ runs its script `command` with
 # sh in a copy of its directory without `expected`, with WILLOW naming
-# willow2; the script must
+# willow2 and ROOT the repository's root; the script must
 # exit with status 0, and its stdout and stderr together must equal the
 # case's `expected`. Last, willow2 must emit the same IL for its own source as
 # a willow2 built by itself.
@@ -191,7 +191,7 @@ check_commands() {
         name=$(basename "$case")
         cp -R "$case" "$work/commands/$name"
         rm "$work/commands/$name/expected"
-        (cd "$work/commands/$name" && WILLOW=$work/willow sh command >"$work/command.out" 2>&1)
+        (cd "$work/commands/$name" && WILLOW=$work/willow ROOT=$root sh command >"$work/command.out" 2>&1)
         status=$?
         if [ $status -ne 0 ]; then
             echo "FAIL command $name: exit status $status"

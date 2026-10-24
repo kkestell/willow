@@ -1,0 +1,35 @@
+# All test files are checked before any test runs.
+printf "def test_a():\n    print('ran')\n    assert False\n" >test_a.wlo
+printf "def test_b():\n    x: int = 'b'\n" >test_b.wlo
+printf 'def io():\n    pass\n\ndef test_helper():\n    pass\n' >helper.wlo
+"$WILLOW" test
+echo "status $?"
+# A file given explicitly may have any name.
+"$WILLOW" test helper.wlo
+echo "status $?"
+rm test_b.wlo
+"$WILLOW" test .
+echo "status $?"
+printf 'def test_c(x: int):\n    pass\n' >test_c.wlo
+"$WILLOW" test --check
+echo "status $?"
+printf 'async def test_c() -> int:\n    return 1\n' >test_c.wlo
+"$WILLOW" test --check
+echo "status $?"
+rm test_c.wlo
+mkdir empty
+"$WILLOW" test --check empty
+echo "status $?"
+"$WILLOW" test --verbose
+echo "status $?"
+"$WILLOW" test a b
+echo "status $?"
+"$WILLOW" test --check --check
+echo "status $?"
+
+# Async tests run in the event loop.
+mkdir sleep
+cd sleep || exit 1
+printf 'import aio\n\nasync def test_sleeps():\n    await aio.sleep(0.0)\n    print("woke")\n\nasync def test_bad_sleep():\n    await aio.sleep(-1.0)\n' >test_sleep.wlo
+"$WILLOW" test
+echo "status $?"

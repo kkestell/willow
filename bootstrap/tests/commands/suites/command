@@ -1,0 +1,13 @@
+# The repository's test suites, run from its root, report as under the Lua
+# implementation.
+cd "$ROOT" || exit 1
+"$WILLOW" test tests/suites/failing
+echo "status $?"
+"$WILLOW" test --check tests/suites/failing
+echo "status $?"
+"$WILLOW" test tests/suites/async
+echo "status $?"
+"$WILLOW" test tests/fixtures/cart
+echo "status $?"
+"$WILLOW" run tests/fixtures/cart/main.wlo
+echo "status $?"

@@ -1,0 +1,8 @@
+import sys
+
+def main():
+    first = sys.args()
+    args = sys.args()
+    print(len(args))
+    for a in args:
+        print(a)

@@ -1,0 +1,22 @@
+4
+a
+-o
+--x
+b c
+status 0
+4
+a
+-o
+--x
+b c
+1
+status 3
+status 0
+range.wlo:4:9: error: ValueError: exit status out of range
+  in main at range.wlo:4:9
+status 1
+range.wlo:4:9: error: ValueError: exit status out of range
+  in main at range.wlo:4:9
+status 1
+7
+[1,2.5]

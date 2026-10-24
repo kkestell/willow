@@ -45,6 +45,7 @@ extern def sigaddset(signals: ptr, sig: cint) -> cint
 extern def waitpid(pid: cint, status: ptr, options: cint) -> cint
 extern def dlsym(handle: ptr, name: ptr) -> ptr
 extern def _NSGetEnviron() -> ptr
+extern def _NSGetExecutablePath(buf: ptr, size: ptr) -> cint
 extern def __errno_location() -> ptr
 extern def __error() -> ptr
 extern def strtod(s: ptr, end: ptr) -> float
@@ -3064,6 +3065,18 @@ def environment() -> ptr:
         return __ptr(__load8(_NSGetEnviron(), 0))
     else:
         return __ptr(__load8(dlsym(__ptr(__word(0)), str_bytes("environ")), 0))
+
+# The absolute path of the running executable, with symlinks resolved.
+def executable_path() -> str:
+    if __os == "darwin":
+        size = __alloc_atomic(8)
+        __store4(size, 0, 4096)
+        buf = __alloc_atomic(4096)
+        if _NSGetExecutablePath(buf, size) != 0:
+            fail("OSError", "cannot find the executable's path")
+        return fs_realpath(str_from_bytes(buf, strlen(buf)))
+    else:
+        return fs_realpath("/proc/self/exe")
 
 # The target's operating system, for stage 1's driver.
 def os() -> str:

@@ -1,0 +1,11 @@
+error: cc failed
+status 1
+error: cc failed
+status 1
+error: cc failed
+status 1
+bin
+command
+prog.wlo
+test_one.wlo
+tmp
