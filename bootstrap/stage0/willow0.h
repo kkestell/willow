@@ -91,8 +91,8 @@ bool map_contains(const Map *map, String key);
 bool map_insert(Map *map, String key, void *value);
 Map map_clone(const Map *map);
 
-/* Nullable object pointers represent Option<T>; a nonnull pointer to an empty
- * vector is distinct from None. C's default keyword is spelled default_. */
+/* Nullable object pointers represent optional values; a nonnull pointer to an
+ * empty vector is distinct from NULL. C's default keyword is spelled default_. */
 typedef struct OptionSize {
     bool some;
     size_t value;
@@ -112,7 +112,7 @@ typedef struct Diag {
 
 _Noreturn void fail(String path, Pos pos, String message);
 /* Prints an already formatted driver error, followed by a newline, and exits 1.
- * io_error preserves Rust's io::Error display; module-load errors instead use
+ * io_error appends " (os error N)"; module-load errors instead use
  * strerror(error) alone. Capture errno before formatting an error. */
 _Noreturn void fatal(String message);
 String io_error(int error);
@@ -263,7 +263,7 @@ struct Alias {
     TypeExpr ty;
 };
 
-/// A `def`, or an `extern def` when `body` is `None`.
+/// A `def`, or an `extern def` when `body` is NULL.
 struct Func {
     Pos pos;
     String name;
@@ -421,7 +421,7 @@ typedef enum TypeTag {
 } TypeTag;
 
 /// A type. A union's members are sorted and distinct, and a union has at
-/// least two members; `Type::union` builds one.
+/// least two members; `type_union` builds one.
 struct Type {
     TypeTag tag;
     union {
@@ -603,7 +603,7 @@ struct Value {
         /// A new dict with keys of the equality kind, holding the entries.
         struct { int64_t kind; ValueEntryVec entries; } DictDisplay;
         /// `d.get(key, default)`: `present`, built from the found value as
-        /// `Value::Item(0)`, or `default`, which is evaluated first.
+        /// a `VALUE_Item` with index 0, or `default`, which is evaluated first.
         struct {
             Value *dict;
             Value *key;
@@ -684,14 +684,13 @@ struct Op {
             Value index;
             Value value;
         } SetItem;
-        /// A loop over a list; `stores` assign `Value::Item(0)` to the loop
-        /// variable.
+        /// A loop over a list; `stores` assign the `VALUE_Item` at index 0
+        /// to the loop variable.
         struct { Value list; OpVec stores; OpVec body; } ForList;
         /// A loop over the code points of a string, each as a string.
         struct { Value text; OpVec stores; OpVec body; } ForStr;
-        /// A loop over a dict's live entries; `Value::Item(0)` is the key and
-        /// `Value::Item(1)` the value. A change to the dict's keys fails the
-        /// next step.
+        /// A loop over a dict's live entries; `VALUE_Item` indices 0 and 1
+        /// are the key and value. A change to the dict's keys fails the next step.
         struct { Value dict; OpVec stores; OpVec body; } ForDict;
         /// A loop over `range(start, stop, step)`, which calls `fail` for a zero
         /// step.

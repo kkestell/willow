@@ -76,7 +76,7 @@ static int write_file(const char *path, String text) {
         }
         if (!len) {
             close(fd);
-            /* Rust's write_all reports WriteZero without an OS error. */
+            /* A zero-byte write is a failure without an OS error. */
             return -1;
         }
         at += (size_t)len;
@@ -90,8 +90,8 @@ static String file_error(String path, int error) {
     return str_format("willow0: %s: %s", path.data, reason.data);
 }
 
-/* Trim the separators and trailing current-directory components that Unix
- * Path components skip, while retaining a leading root or current directory. */
+/* Trim the separators and trailing current-directory components in Unix
+ * paths, while retaining a leading root or current directory. */
 static size_t path_end(String path, size_t end) {
     for (;;) {
         while (end > 1 && path.data[end - 1] == '/') {
@@ -256,7 +256,7 @@ static String run(StringVec command) {
     return STR("");
 }
 
-/* Rust's from_utf8_lossy replaces each invalid sequence with U+FFFD. */
+/* Replace each invalid UTF-8 sequence with U+FFFD. */
 static String from_utf8_lossy(String bytes) {
     StringBuilder text = {0};
     size_t at = 0;
@@ -289,8 +289,7 @@ static bool whitespace(uint32_t c) {
         c == 0x205f || c == 0x3000;
 }
 
-/* Compiler flags that link libgc. Command::output captures stderr and gives
- * the child null stdin; neither stream is exposed by this caller. */
+/* Compiler flags that link libgc. Discard stderr and give the child null stdin. */
 static StringVec gc_flags(void) {
     StringVec fallback = {0};
     vec_push(fallback, STR("-lgc"));

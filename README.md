@@ -6,10 +6,10 @@ through QBE. The language is specified in [docs/spec.md](docs/spec.md).
 
 ## Setup
 
-Willow builds on macOS and on Linux. Building it needs a Rust toolchain
-(`cargo`), and building programs with it needs QBE 1.3, a C compiler (`cc`),
-and libgc (bdw-gc), found through `pkg-config` when it is available. To build
-the compiler as `build/willow`, run:
+Willow builds on macOS and on Linux. Building the compiler and programs
+needs a C compiler (`cc`), QBE 1.3, and libgc (bdw-gc), found through
+`pkg-config` when it is available. To build the compiler as `build/willow`,
+run:
 
 ```sh
 make

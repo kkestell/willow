@@ -15,7 +15,7 @@ Goals:
   compiles itself.
 - Native executables for macOS and Linux on arm64 and amd64 through QBE.
 - As little non-Willow code as possible. The runtime is written in Willow.
-  The only permanent foreign code is a small Rust translator for the first
+  The only permanent foreign code is a small C translator for the first
   stage, a few dozen lines of assembly for stack switching, and libc, libgc,
   and the system assembler and linker.
 - A bootstrap chain that is rebuilt from source in one command, with no
@@ -34,7 +34,7 @@ the language it is written in.
 
 | Stage | Written in | Accepts | Role |
 | --- | --- | --- | --- |
-| 0 | Rust | L0 | Translator from L0 to QBE IL. No runtime of its own. |
+| 0 | C | L0 | Translator from L0 to QBE IL. No runtime of its own. |
 | 1 | L0 | Full Willow | Bootstrap compiler. Compiled by stage 0, then by itself. |
 | 2 | Full Willow | Full Willow | The compiler users run. Compiled by stage 1, then by itself. |
 
@@ -58,7 +58,7 @@ and stage 1 changes only when `willow1` needs it to build stage 2. `willow1`
 compiles `compiler/`, core, and the `lib/` modules `compiler/` imports, so
 those use only what stage 1 compiles correctly.
 
-Escape hatch: stage 0 is small Rust, so extending L0 during stage 1
+Escape hatch: stage 0 is a small C program, so extending L0 during stage 1
 development is cheap when a missing feature turns out to hurt. Candidates are
 keyword arguments and defaults, and tuples. Exceptions, closures, generators,
 and async never enter L0; the whole point of stage 1 is to build them.
@@ -66,7 +66,7 @@ and async never enter L0; the whole point of stage 1 is to build them.
 Build order:
 
 ```text
-cargo build  -> willow0                     (stage 0)
+make build/stage0/willow0 -> willow0         (stage 0)
 willow0  bootstrap/stage1/*.wlo + core -> willow1a
 willow1a bootstrap/stage1/*.wlo + core -> willow1b
 willow1b bootstrap/stage1/*.wlo + core -> willow1c   ; willow1b.ssa == willow1c.ssa
@@ -279,9 +279,9 @@ result can fail to round-trip while the next `n`-digit decimal up succeeds,
 and Python picks that one, so both are tried at each length. Unicode
 case mapping tables are generated once from Unicode 17.0 as Willow data.
 
-## 7. Stage 0 in Rust
+## 7. Stage 0 in C
 
-Stage 0 is a single crate, `willow0`. It has a lexer, a parser, a binder and
+Stage 0 is a C11 program, `willow0`. It has a lexer, a parser, a binder and
 checker for L0, a QBE emitter, and a driver. It does whole-program compilation:
 it loads the entry file, follows imports, always adds `core`, checks
 everything, and writes one `.ssa` file. The driver then runs `qbe` and `cc`
@@ -357,21 +357,21 @@ runtime-failure format in §3 is an implementation gap, not a spec change.
 ## 10. Toolchain and layout
 
 Verified on this machine on 2026-10-23: QBE 1.3 with `arm64_apple` as the
-default target, bdw-gc 8.2.12 at `/opt/homebrew/opt/bdw-gc`, Rust 1.96, and
-Apple `cc`. A program using dotted QBE symbols, `cast`, a variadic `printf`
-call, `GC_init`, and `GC_malloc` was assembled, linked, and run.
+default target, bdw-gc 8.2.12 at `/opt/homebrew/opt/bdw-gc`, and Apple `cc`.
+A program using dotted QBE symbols, `cast`, a variadic `printf` call,
+`GC_init`, and `GC_malloc` was assembled, linked, and run.
 
-Dependencies for compiling programs: `qbe`, `cc`, libgc. Dependency for
-rebuilding the bootstrap: `cargo`. Linux uses `amd64_sysv` or `arm64` and the
-distribution's libgc. `Dockerfile.gnat` extends the gnat agent image with
-QBE 1.3 built from the release tarball, `libgc-dev`, `pkg-config`, and a Rust
-toolchain; the agents that do this work run in it, on arm64 Debian. Each
-change is therefore tested on Linux arm64 by its agent and on macOS arm64 by
-the operator before it merges. `amd64_sysv` has no test machine yet.
+Dependencies for building the bootstrap and compiling programs: `qbe`, `cc`,
+libgc. Linux uses `amd64_sysv` or `arm64` and the distribution's libgc.
+`Dockerfile.gnat` extends the gnat agent image with QBE 1.3 built from the
+release tarball, `libgc-dev`, and `pkg-config`; the agents that do this work
+run in it, on arm64 Debian. Each change is therefore tested on Linux arm64
+by its agent and on macOS arm64 by the operator before it merges.
+`amd64_sysv` has no test machine yet.
 
 ```text
 bootstrap/
-  stage0/      Rust crate willow0
+  stage0/      C11 program willow0
   core/        core module in L0
   stage1/      stage 1 compiler in L0
   prepare.sh   writes the generated modules that embed core and lib/

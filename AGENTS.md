@@ -18,7 +18,7 @@ on the compiler, library, or bootstrap chain.
 
 - Do less. Keep correct code simple, ordinary, and cheap to change. Follow KISS
   and YAGNI.
-- Write idiomatic code for each part: Rust in `bootstrap/stage0/`, the L0
+- Write idiomatic code for each part: C in `bootstrap/stage0/`, the L0
   subset of Willow in `bootstrap/core/` and the frozen `bootstrap/stage1/`,
   and Willow in `compiler/` and `lib/`. Prefer plain data, direct functions,
   and explicit control flow. Keep responsibilities clear without turning
@@ -27,7 +27,7 @@ on the compiler, library, or bootstrap chain.
   configuration systems, or fallback paths for hypothetical future needs.
 - Handle expected invalid source and ordinary operation failures clearly. Do not
   turn every imaginable host failure or pathological program into a new subsystem.
-- Trust internal invariants; fail clearly when they break. Avoid redundant checks,
+- Rely on internal invariants; fail clearly when they break. Avoid redundant checks,
   speculative recovery, and layers of defensive wrappers.
 - Let repeated, concrete needs earn abstractions and dependencies. Measure before
   optimizing. Fix demonstrated problems rather than inventing them.

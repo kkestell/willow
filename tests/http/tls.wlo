@@ -4,7 +4,7 @@ import sys
 def rejected(url: str, ca_file: str | None):
     try:
         http.request("GET", url, ca_file=ca_file, timeout=2.0)
-        assert False, "untrusted certificate accepted"
+        assert False, "invalid certificate accepted"
     except OSError as error:
         assert error.message.startswith("cannot fetch " + url + ": ")
 

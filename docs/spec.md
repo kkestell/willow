@@ -2034,7 +2034,7 @@ timeout does not include looking up the host name, which may take longer. The
 timeout must be finite and positive.
 
 HTTPS requests always verify the server's certificate and host name. By default,
-the certificate is checked against the platform's trusted certificates. When
+the certificate is checked against the platform's CA certificates. When
 `ca_file` is given, it is checked only against the PEM bundle in that file.
 
 `download` writes a 2xx response body to a temporary file in the same directory

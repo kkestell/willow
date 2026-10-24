@@ -194,8 +194,7 @@ typedef struct MethodSignature {
     Type ret;
 } MethodSignature;
 
-/* Lookup errors remain values while probing for narrowing or module names;
- * their Rust callers deliberately ignore errors in those two contexts. */
+/* Lookup errors remain values so narrowing and module-name probes can ignore them. */
 typedef enum NsTag {
     NS_None,
     NS_Module,
@@ -460,7 +459,7 @@ static Namespace declare_types(const Module *module, String entry, Names *names)
         const Alias *a = &module->aliases.data[i];
         vec_push(decls, (Declaration){a->pos, "alias", a->name});
     }
-    /* Insertion sort preserves Rust sort_by_key's order at equal positions. */
+    /* Preserve declaration order at equal positions. */
     for (size_t i = 1; i < decls.len; i++) {
         Declaration item = decls.data[i];
         size_t j = i;

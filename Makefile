@@ -23,7 +23,7 @@ $(RUNNER): $(WILLOW) tests/runner.wlo
 # The bootstrap chain: willow0 builds stage 1, stage 1 builds stage 2, and
 # stage 2 builds itself, which must emit the same IL as the stage 2 that
 # stage 1 built. build/willow is that last stage 2.
-WILLOW0 := bootstrap/stage0/target/release/willow0
+WILLOW0 := $(BUILD_DIR)/stage0/willow0
 STAGE1_SOURCES := $(wildcard bootstrap/stage1/*.wlo) bootstrap/core/core.wlo $(wildcard lib/*.wlo)
 STAGE2_SOURCES := $(wildcard compiler/*.wlo) bootstrap/core/core.wlo $(wildcard lib/*.wlo)
 
@@ -32,15 +32,11 @@ bootstrap: $(BUILD_DIR)/willow2b
 	$(BUILD_DIR)/willow2b compile $(BUILD_DIR)/stage2/willow.wlo -o $(BUILD_DIR)/stage2b.ssa
 	cmp $(BUILD_DIR)/stage2a.ssa $(BUILD_DIR)/stage2b.ssa
 
-$(WILLOW0): $(wildcard bootstrap/stage0/src/*.rs) bootstrap/stage0/Cargo.toml
-	cargo build --release --manifest-path bootstrap/stage0/Cargo.toml
-
-# The C stage 0 port is built separately until bootstrap integration.
 $(BUILD_DIR)/stage0/core.inc: bootstrap/core/core.wlo
 	mkdir -p $(BUILD_DIR)/stage0
 	sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/?/\\?/g' -e 's/^/"/' -e 's/$$/\\n"/' $< > $@
 
-$(BUILD_DIR)/stage0/willow0: $(wildcard bootstrap/stage0/*.c) bootstrap/stage0/willow0.h $(BUILD_DIR)/stage0/core.inc
+$(WILLOW0): $(wildcard bootstrap/stage0/*.c) bootstrap/stage0/willow0.h $(BUILD_DIR)/stage0/core.inc
 	$(CC) -std=c11 -Wall -Wextra -O2 $(wildcard bootstrap/stage0/*.c) -o $@
 
 $(BUILD_DIR)/willow1: $(WILLOW0) bootstrap/prepare.sh $(STAGE1_SOURCES)
@@ -70,4 +66,3 @@ bootstrap-test: bootstrap $(RUNNER)
 
 clean:
 	rm -rf $(BUILD_DIR)
-	cargo clean --manifest-path bootstrap/stage0/Cargo.toml
