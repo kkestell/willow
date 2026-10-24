@@ -1,0 +1,5 @@
+import aio
+
+async def main():
+    async with aio.task_group() as group:
+        group.start(aio.sleep(-1.0))

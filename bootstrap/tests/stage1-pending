@@ -2,7 +2,6 @@ aio_listener_outside_loop
 aio_sleep
 aio_sockets
 bound_methods
-cancel_after_raising_finally
 cli_parsing
 file_lines
 generator_cleanup
@@ -25,8 +24,6 @@ sockets
 sort_keys
 sorting
 square_root
-stdlib_aio_semaphore
-stdlib_aio_semaphore_deadlock
 stdlib_builtins
 stdlib_builtins_errors
 stdlib_fs
@@ -39,12 +36,7 @@ stdlib_str
 stdlib_subprocess
 streams
 streams_invalid_utf8
-task_group_cleanup
-task_group_deadlock
-task_group_failure
-task_group_patterns
 task_group_sockets
-task_groups
 terminal_styles
 text_collections
 text_conversions

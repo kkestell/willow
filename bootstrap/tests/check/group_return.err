@@ -1,0 +1,1 @@
+group_return.wlo:3:11: error: function 'value' must return a value on every path

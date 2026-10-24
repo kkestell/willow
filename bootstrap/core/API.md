@@ -233,6 +233,7 @@ sets the flag and clears its body reference; aliases share the flag.
 | Signature | Meaning |
 | --- | --- |
 | `async_coroutine(body: ptr) -> ptr` | Wrap a deferred body closure in an unconsumed coroutine |
+| `async_consume(coroutine: ptr) -> ptr` | Mark consumed and return the body, or raise for a repeated consumption |
 | `async_await(coroutine: ptr) -> word` | Consume and invoke the body on the current task's stack |
 | `aio_run(body: ptr) -> word` | Run a coroutine as the root task; return its outcome or transfer its exception to the caller |
 | `aio_sleep_coroutine(seconds: float, path: str, line: int, col: int) -> ptr` | Create a sleep coroutine; validate when it runs, reporting this creation site |
@@ -243,10 +244,43 @@ orders timers by deadline then wait ID. An ended wait invalidates its timers.
 The loop holds references to suspended tasks, and finished contexts release
 their stacks through `coroutine_resume`.
 
-`AioTask`'s fields follow its header: context, body, result, error, and wait ID.
-The low-level `aio_resume` helper uses the context at byte 8 and error at byte
-32 to capture a task failure without unwinding the scheduler. `aio_loop` and
-`aio_set_loop` access the running loop, rooted by `$W.aio.loop`.
+`AioTask`'s fields follow its header: context, body, result, error, wait ID,
+state, scope, group, waiters, interruptible, and start location. State is 0
+(running), 1 (done), 2 (failed), or 3 (cancelled). The low-level `aio_resume`
+helper uses the context at byte 8 and error at byte 32 to capture a task failure
+without unwinding the scheduler. `aio_loop` and `aio_set_loop` access the
+running loop, rooted by `$W.aio.loop`. Public `aio.Task`, `aio.TaskGroup`, and
+`aio.Semaphore` values use the core `AioTask`, `AioGroup`, and `AioSemaphore`
+headers respectively.
+
+| Signature | Meaning |
+| --- | --- |
+| `aio_task_group() -> AioGroup` | Create an inactive group |
+| `aio_group_enter(group: AioGroup)` | Enter a single-use group and install its cancellation scope |
+| `aio_group_exit(group: AioGroup, error: ptr) -> ptr` | Join children; return the first final failure, an outer cancellation, or 0 |
+| `aio_group_start(group: AioGroup, coroutine: ptr, path: str, line: int, col: int) -> AioTask` | Check admission, consume, and queue a child without running it inline |
+| `aio_group_cancel(group: AioGroup)` | Request an idempotent stop while active |
+| `aio_task_result(task: AioTask) -> word` | Return the outcome without waiting |
+| `aio_await_task(task: AioTask) -> word` | Check cancellation, wait if needed, and return the outcome |
+| `aio_semaphore(value: int) -> AioSemaphore` | Create a positive, bounded permit count |
+| `aio_semaphore_acquire(semaphore: AioSemaphore) -> ptr` | Create a coroutine that acquires a permit at a checkpoint |
+| `aio_semaphore_release(semaphore: AioSemaphore)` | Hand a permit to the first live waiter or return it to the count |
+
+`$W.aio.cancel` is a pending control-transfer marker, outside `Exception`.
+Requests remain on the originating groups and follow each task's scope chain.
+`aio_checkpoint` delivers a request; `aio_request` wakes interruptible waits
+in wait-ID order, using the loop's insertion-ordered waiting dictionary. Joins
+are uninterruptible and keep waiting for child cleanup. Async finally bodies
+and resource exits save and clear the current scope and restore it on both
+normal and exceptional departure. `aio_exception` maps cancellation to 0 for
+plain resource exits.
+
+A group records only its first final body or child failure. At task completion,
+a child failure's frames end with its start location; `trace` leaves that
+terminal traceback unchanged when handles or groups observe it again. Finished
+tasks clear body and waiter references; `coroutine_resume` releases their stacks.
+Semaphore waiters remember a granted permit so cancellation after handoff can
+return it without leaking or overtaking another waiter.
 
 ## Inline in stage 0
 

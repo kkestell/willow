@@ -1,0 +1,3 @@
+group_task_traceback.wlo:5:5: error: ValueError: boom
+  in worker at group_task_traceback.wlo:5:5
+  in task started at group_task_traceback.wlo:11:32

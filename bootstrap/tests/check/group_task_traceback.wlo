@@ -1,0 +1,20 @@
+import aio
+
+async def worker() -> int:
+    await aio.sleep(0.0)
+    raise ValueError("boom")
+
+async def main():
+    tasks: list[aio.Task[int]] = []
+    try:
+        async with aio.task_group() as group:
+            tasks.append(group.start(worker()))
+            await aio.sleep(1.0)
+    except ValueError as joined:
+        print(joined.message)
+    task = tasks[0]
+    try:
+        task.result()
+    except ValueError as observed:
+        print(observed.message)
+    await task
