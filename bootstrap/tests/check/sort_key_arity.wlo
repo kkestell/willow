@@ -1,0 +1,3 @@
+def main():
+    xs = [1]
+    xs.sort(key=lambda a, b: a)

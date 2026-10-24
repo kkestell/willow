@@ -1,0 +1,1 @@
+sort_unsortable.wlo:3:8: error: cannot sort a value of type list[bool]
