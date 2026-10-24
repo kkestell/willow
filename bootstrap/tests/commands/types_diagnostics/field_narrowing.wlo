@@ -1,0 +1,7 @@
+class P:
+    value: int | None
+def f(p: P):
+    if p.value is not None:
+        x = p.value + 1
+def main():
+    pass

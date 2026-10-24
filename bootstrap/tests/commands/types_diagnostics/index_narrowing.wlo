@@ -1,0 +1,4 @@
+def main():
+    xs: list[int | None] = [1]
+    if xs[0] is not None:
+        print(xs[0] + 1)

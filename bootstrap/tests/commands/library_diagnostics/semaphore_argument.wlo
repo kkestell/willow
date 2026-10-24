@@ -1,0 +1,4 @@
+import aio
+async def main():
+    sem = aio.semaphore(1)
+    x = aio.semaphore("a")

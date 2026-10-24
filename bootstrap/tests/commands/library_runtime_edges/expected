@@ -1,0 +1,5 @@
+1
+invalid UTF-8
+invalid_utf8_argument.wlo:9:9: error: ValueError: invalid UTF-8
+  in main at invalid_utf8_argument.wlo:9:9
+status 1

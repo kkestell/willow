@@ -1,0 +1,28 @@
+carriage_return.wlo:2:10: error: bare carriage return; line endings must be LF or CRLF
+status 1
+comparison_chain.wlo:2:16: error: comparison chains are not supported
+status 1
+default_order.wlo:1:19: error: parameter 'b' without a default follows one with a default
+status 1
+duplicate_target.wlo:2:8: error: duplicate target 'a'
+status 1
+fstring_comment.wlo:2:13: error: f-string fields cannot contain '#'
+status 1
+hex_literal.wlo:2:9: error: invalid number literal '0x1F'
+status 1
+indentation.wlo:2:3: error: indentation must be a multiple of four spaces
+status 1
+leading_zeros.wlo:2:9: error: integer literal has leading zeros
+status 1
+method_self.wlo:2:11: error: method 'f' must take 'self' as its first parameter
+status 1
+positional_after_keyword.wlo:2:12: error: positional argument follows keyword argument
+status 1
+surrogate_escape.wlo:2:10: error: escape '\uD800' is not a valid code point
+status 1
+tabs.wlo:2:1: error: tabs are not allowed outside strings and comments
+status 1
+try_else.wlo:6:5: error: 'else' clause on 'try' is not supported
+status 1
+unicode_column.wlo:2:15: error: unknown name 'missing'
+status 1

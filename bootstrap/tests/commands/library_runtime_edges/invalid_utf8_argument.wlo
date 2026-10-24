@@ -1,0 +1,9 @@
+import sys
+
+def main():
+    print(1)
+    try:
+        sys.args()
+    except ValueError as error:
+        print(error.message)
+    sys.args()

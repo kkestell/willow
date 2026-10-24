@@ -1,0 +1,15 @@
+import fs
+import sys
+
+def main():
+    parent = sys.args()[0]
+    file = fs.temp_file()
+    directory = fs.temp_dir()
+    try:
+        assert fs.dirname(file) == parent
+        assert fs.dirname(directory) == parent
+        assert fs.basename(file).startswith("willow-")
+        assert fs.basename(directory).startswith("willow-")
+    finally:
+        fs.remove(file)
+        fs.rmdir(directory)
