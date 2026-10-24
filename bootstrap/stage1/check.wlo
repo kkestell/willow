@@ -761,8 +761,6 @@ class Checker:
         if types.kind(object) == "bytes":
             methods = stdlib.bytes_methods()
         if name not in methods:
-            if types.kind(object) == "str" and name in ["rsplit", "splitlines", "lstrip", "rstrip", "isascii", "lower", "upper"]:
-                return self.unsupported(expr.line, expr.col, f"'str.{name}'")
             self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{name}'")
             return none()
         method = methods[name]
