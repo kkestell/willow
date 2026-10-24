@@ -34,10 +34,11 @@ next. The swarm runs as `agents/bootstrap-swarm.md` describes. Updated
   QBE's output; creating a coroutine on amd64 fails with a clear error.
 - `stage1.sh` runs `tests/programs/` under `willow1` except the programs in
   `bootstrap/tests/stage1-pending`; 75 of 110 pass. Of the 35 pending, 30
-  need §14 standard library modules (milestone 7). `overflow_add`,
-  `overflow_sub`, `stdlib_builtins_errors`, and `text_conversions` expect
-  the Lua implementation's 53-bit integer range rather than spec §4's
-  64-bit range, as does `tests/modules/runtime_frames`, and leave the list
+  need §14 standard library modules (milestone 7). `json_library`,
+  `overflow_add`, `overflow_sub`, `stdlib_builtins_errors`, and
+  `text_conversions` expect the Lua implementation's 53-bit integer range
+  rather than spec §4's 64-bit range, as does `tests/modules/runtime_frames`,
+  and leave the list
   when the Lua implementation is deleted. `type_errors` expects every
   checker error, and stage 1 reports the first.
 - Stage 1 reaches the fixpoint: `willow1` built by `willow0` and `willow1`

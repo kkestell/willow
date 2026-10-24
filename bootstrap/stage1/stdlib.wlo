@@ -493,44 +493,6 @@ def subprocess_module() -> Module:
     add_helper(functions, "spawn", spawn, class_type(process), "process_spawn")
     return module
 
-# A cli.Parser method that adds an option taking a value of type `kind`.
-def value_option(decl: types.Class, name: str, kind: types.Type):
-    params = [
-        param("name", prim("str")),
-        param("default", kind),
-        default_param("help", prim("str"), str_default("")),
-        none_param("short", optional("str")),
-        default_param("required", prim("bool"), bool_default(False)),
-    ]
-    native_method(decl, name, params, prim("None"))
-
-def cli_module() -> Module:
-    module = new_module("cli")
-    args = native_class("cli", "Args", "cli_args")
-    name = param("name", prim("str"))
-    native_method(args, "get_str", [name], prim("str"))
-    native_method(args, "get_int", [name], prim("int"))
-    native_method(args, "get_float", [name], prim("float"))
-    native_method(args, "get_bool", [name], prim("bool"))
-    native_method(args, "get_list", [name], list_of("str"))
-    parser = native_class("cli", "Parser", "cli_parser")
-    value_option(parser, "add_str", prim("str"))
-    value_option(parser, "add_int", prim("int"))
-    value_option(parser, "add_float", prim("float"))
-    help = default_param("help", prim("str"), str_default(""))
-    native_method(parser, "add_flag", [name, help, none_param("short", optional("str"))], prim("None"))
-    native_method(parser, "add_positional", [name, help], prim("None"))
-    native_method(parser, "add_rest", [name, help], prim("None"))
-    native_method(parser, "parse", [param("args", list_of("str"))], class_type(args))
-    native_method(parser, "help", [], prim("str"))
-    module.classes["Parser"] = parser
-    module.classes["Args"] = args
-    module.classes["UsageError"] = exception("UsageError", "cli.UsageError")
-    module.classes["HelpRequested"] = exception("HelpRequested", "cli.HelpRequested")
-    description = defaulted("description", prim("str"), str_default(""))
-    add_helper(module.functions, "parser", [arg("prog", prim("str")), description], class_type(parser), "cli_parser_new")
-    return module
-
 def http_module() -> Module:
     module = new_module("http")
     header = provided_class("http", "Header", ["name", "value"], [prim("str"), prim("str")])
@@ -562,24 +524,6 @@ def http_module() -> Module:
     add_helper(functions, "header", [arg("headers", headers), arg("name", prim("str"))], optional("str"), "http_header")
     values = arg("values", types.DictType(prim("str"), prim("str")))
     add_helper(functions, "urlencode", [values], prim("str"), "http_urlencode")
-    return module
-
-# `type Json = None | bool | int | float | str | list[Json] | dict[str, Json]`,
-# built as the binder builds a recursive alias.
-def json_type() -> types.Type:
-    element = types.Lazy("json.Json", None)
-    parts = [prim("None"), prim("bool"), prim("int"), prim("float"), prim("str"), types.ListType(element), types.DictType(prim("str"), element)]
-    value = types.named_union(parts, "json.Json")
-    element.target = value
-    return value
-
-def json_module() -> Module:
-    module = new_module("json")
-    value = json_type()
-    module.aliases["Json"] = value
-    module.classes["JsonError"] = exception("JsonError", "json.JsonError")
-    add_helper(module.functions, "parse", [arg("text", prim("str"))], value, "json_parse")
-    add_helper(module.functions, "dump", [arg("value", value)], prim("str"), "json_dump")
     return module
 
 def net_module() -> Module:
@@ -617,11 +561,9 @@ def net_module() -> Module:
 def modules() -> dict[str, Module]:
     return {
         "aio": aio_module(),
-        "cli": cli_module(),
         "fs": fs_module(),
         "http": http_module(),
         "io": io_module(),
-        "json": json_module(),
         "net": net_module(),
         "random": random_module(),
         "subprocess": subprocess_module(),
