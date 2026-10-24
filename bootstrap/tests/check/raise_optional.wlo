@@ -1,0 +1,3 @@
+def main():
+    e: Exception | None = None
+    raise e

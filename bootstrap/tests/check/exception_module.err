@@ -1,0 +1,3 @@
+exception_module/errors.wlo:6:5: error: exception_module.errors.ParseError: worse
+  in fail at exception_module/errors.wlo:6:5
+  called from main at exception_module.wlo:10:29

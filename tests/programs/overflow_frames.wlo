@@ -2,7 +2,7 @@ def safe(n: int) -> int:
     return n
 
 def boom(n: int) -> int:
-    return n * 9007199254740991
+    return 9007199254740991 * 9007199254740991 * n
 
 def wrap(n: int) -> int:
     return boom(n)

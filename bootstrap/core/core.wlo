@@ -51,7 +51,8 @@ def write_all(fd: int, buf: ptr, count: int):
 def write_str(fd: int, s: str):
     write_all(fd, str_bytes(s), str_size(s))
 
-# Reports a fatal L0 failure (agents/bootstrap.md §3).
+# Reports a fatal L0 failure (agents/bootstrap.md §3). Stage 1 compiles its
+# own body instead, which raises the exception through `failure`.
 def fail(class_name: str, message: str):
     write_str(2, "error: ")
     write_str(2, class_name)
@@ -59,6 +60,41 @@ def fail(class_name: str, message: str):
     write_str(2, message)
     write_str(2, "\n")
     exit(1)
+
+# Exceptions, which only programs compiled by stage 1 raise (API.md).
+
+# A new exception of the built-in class named `class_name`, whose descriptor
+# is in the array `descriptors`.
+def failure(descriptors: ptr, class_name: str, message: str) -> ptr:
+    i = 0
+    descriptor = __ptr(__load8(descriptors, 0))
+    while not str_eq(__str(__load8(descriptor, 0)), class_name):
+        i = i + 1
+        descriptor = __ptr(__load8(descriptors, i * 8))
+    e = object_new(descriptor, 3)
+    __store8(e, 24, __word(message))
+    return e
+
+# Starts the frames of `e`, raised by a raise statement.
+def raised(e: ptr, function: str, path: str, line: int, col: int):
+    __store8(e, 8, __word(0))
+    trace(e, function, path, line, col)
+
+# Adds the frame of `function` at `path`, `line`, and `col` to `e`. The first
+# frame's location is the exception's.
+def trace(e: ptr, function: str, path: str, line: int, col: int):
+    where = path + ":" + int_to_str(line) + ":" + int_to_str(col)
+    if __addr_is_null(__ptr(__load8(e, 8))):
+        __store8(e, 8, __word(where))
+        __store8(e, 16, __word("\n  in " + function + " at " + where))
+    else:
+        __store8(e, 16, __word(__str(__load8(e, 16)) + "\n  called from " + function + " at " + where))
+
+# Writes the report of `e`, which propagated out of main (spec §13).
+def report(e: ptr):
+    name = __str(__load8(header(e), 0))
+    message = __str(__load8(e, 24))
+    write_str(2, __str(__load8(e, 8)) + ": error: " + name + ": " + message + __str(__load8(e, 16)) + "\n")
 
 def print_str(s: str):
     write_str(1, s)

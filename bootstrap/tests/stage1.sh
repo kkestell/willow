@@ -189,7 +189,7 @@ check_willow1() {
         return
     fi
     echo "willow1:"
-    WILLOW0=$work/willow1 bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
+    STAGE1=1 WILLOW0=$work/willow1 bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
         bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo || failed=1
     echo "willow1 tests/programs:"
     # shellcheck disable=SC2046 # the paths have no spaces

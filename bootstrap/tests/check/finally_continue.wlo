@@ -1,0 +1,7 @@
+def main():
+    while True:
+        try:
+            pass
+        finally:
+            if True:
+                continue

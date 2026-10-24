@@ -1,0 +1,1 @@
+except_name_type.wlo:6:5: error: expected KeyError, received IndexError

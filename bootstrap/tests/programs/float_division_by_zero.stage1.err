@@ -1,0 +1,2 @@
+float_division_by_zero.wlo:3:15: error: ZeroDivisionError: division by zero
+  in main at float_division_by_zero.wlo:3:15

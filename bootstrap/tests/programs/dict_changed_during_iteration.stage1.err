@@ -1,0 +1,2 @@
+dict_changed_during_iteration.wlo:3:5: error: RuntimeError: dictionary changed size during iteration
+  in main at dict_changed_during_iteration.wlo:3:5

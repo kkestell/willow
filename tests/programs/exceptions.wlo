@@ -20,7 +20,7 @@ def builtin_failures():
     for step in range(7):
         try:
             if step == 0:
-                print(9007199254740991 + step + 1)
+                print(9007199254740991 * 9007199254740991 + step)
             elif step == 1:
                 print(1 // (step - 1))
             elif step == 2:

@@ -1,0 +1,2 @@
+host_realpath_missing.wlo:5:14: error: OSError: cannot resolve host_realpath_missing.tmp: No such file or directory
+  in main at host_realpath_missing.wlo:5:14
