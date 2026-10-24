@@ -2054,13 +2054,17 @@ class Emitter:
     def floor_divide(self, op: str, left: str, right: str) -> str:
         self.check_divisor(right)
         q = self.temp()
+        product = self.temp()
         m = self.temp()
         signs = self.temp()
         differ = self.temp()
         nonzero = self.temp()
         adjust = self.temp()
         self.line(f"{q} =l div {left}, {right}")
-        self.line(f"{m} =l rem {left}, {right}")
+        # The quotient rounds toward zero, so |q * right| <= |left| and the
+        # plain multiply cannot wrap.
+        self.line(f"{product} =l mul {q}, {right}")
+        self.line(f"{m} =l sub {left}, {product}")
         self.line(f"{signs} =l xor {m}, {right}")
         self.line(f"{differ} =l csltl {signs}, 0")
         self.line(f"{nonzero} =l cnel {m}, 0")
