@@ -200,7 +200,10 @@ def program_environment() -> dict[str, str]:
 def run(il: str, args: list[str]):
     directory = fs.temp_dir()
     program = directory + "/program"
-    build(il, program)
+    message = link(il, program)
+    if message != "":
+        core.run(["rm", "-rf", directory])
+        fail(message)
     command = [program]
     command.extend(args)
     try:
@@ -260,7 +263,10 @@ def test(args: list[str]):
     tally = runner.Tally(0, 0)
     try:
         for test_file in files:
-            build(test_file.il, directory + "/program")
+            message = link(test_file.il, directory + "/program")
+            if message != "":
+                core.run(["rm", "-rf", directory])
+                fail(message)
             runner.run_file(directory + "/program", test_file.path, test_file.names, env, directory, tally)
     finally:
         core.run(["rm", "-rf", directory])
@@ -278,56 +284,64 @@ def write_output(output: str, text: str):
     except OSError as error:
         if fs.exists(temp):
             fs.remove(temp)
-        cannot_write(output, error)
+        fail(cannot_write(output, error))
 
-# Fails for an OSError from fs while writing `output` through its temporary
-# file, naming that file as cli.lua does.
-def cannot_write(output: str, error: OSError):
+# The message for an OSError from fs while writing `output` through its
+# temporary file, which names that file as cli.lua does.
+def cannot_write(output: str, error: OSError) -> str:
     parts = error.message.split(": ")
-    fail(f"error: cannot write {output}: {output}.tmp: {parts[len(parts) - 1]}")
+    return f"error: cannot write {output}: {output}.tmp: {parts[len(parts) - 1]}"
+
+# Builds `il` into the executable `output`, failing if it cannot.
+def build(il: str, output: str):
+    message = link(il, output)
+    if message != "":
+        fail(message)
 
 # Assembles `il` with qbe and links it with libgc into the executable
 # `output`, through a sibling file renamed into place. The intermediate files
-# go in a temporary directory.
-def build(il: str, output: str):
-    directory = fs.temp_dir()
-    ssa = directory + "/program.ssa"
-    asm = directory + "/program.s"
-    scratch = directory + "/scratch"
+# go in a temporary directory. Returns the error message, or "".
+def link(il: str, output: str) -> str:
     linked = output + ".tmp"
     # Creating the file first reports an unwritable output before cc does.
     try:
         fs.write_file(linked, "")
     except OSError as error:
-        core.run(["rm", "-rf", directory])
-        cannot_write(output, error)
+        return cannot_write(output, error)
+    directory = fs.temp_dir()
+    ssa = directory + "/program.ssa"
+    asm = directory + "/program.s"
+    scratch = directory + "/scratch"
     fs.write_file(ssa, il)
-    target = qbe_target(scratch)
+    arch = shell_output("uname -m", scratch).strip()
+    target = qbe_target(arch)
     message = ""
-    if core.run(["qbe", "-t", target, "-o", asm, ssa]) != 0:
-        message = "qbe failed"
+    if target == "":
+        message = f"error: unsupported host {core.os()} {arch}"
+    elif core.run(["qbe", "-t", target, "-o", asm, ssa]) != 0:
+        message = "error: qbe failed"
     else:
         fs.write_file(asm, fs.read_file(asm) + coroutine.assembly(target))
         command = ["cc", "-o", linked, asm]
         command.extend(gc_flags(scratch))
         command.append("-lm")
         if core.run(command) != 0:
-            message = "cc failed"
+            message = "error: cc failed"
     core.run(["rm", "-rf", directory])
     if message != "":
-        if fs.exists(linked):
-            fs.remove(linked)
-        fail("error: " + message)
+        fs.remove(linked)
+        return message
     try:
         fs.rename(linked, output)
     except OSError as error:
         fs.remove(linked)
-        cannot_write(output, error)
+        return cannot_write(output, error)
+    return ""
 
-# The QBE target for the host, whose architecture `uname -m` names.
-def qbe_target(scratch: str) -> str:
+# The QBE target for the host's operating system and the architecture
+# `arch`, as `uname -m` names it, or "" for an unsupported host.
+def qbe_target(arch: str) -> str:
     os = core.os()
-    arch = shell_output("uname -m", scratch).strip()
     if arch == "aarch64" or arch == "arm64":
         if os == "darwin":
             return "arm64_apple"
@@ -336,7 +350,6 @@ def qbe_target(scratch: str) -> str:
         if os == "darwin":
             return "amd64_apple"
         return "amd64_sysv"
-    fail(f"error: unsupported host {os} {arch}")
     return ""
 
 # The compiler flags that link libgc.

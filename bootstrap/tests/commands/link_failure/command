@@ -1,0 +1,14 @@
+# When linking fails, run, test, and build report it and leave no temporary
+# files behind.
+mkdir bin tmp
+printf '#!/bin/sh\nexit 1\n' >bin/cc
+chmod +x bin/cc
+export PATH="$PWD/bin:$PATH" TMPDIR="$PWD/tmp"
+"$WILLOW" run prog.wlo
+echo "status $?"
+"$WILLOW" test test_one.wlo
+echo "status $?"
+"$WILLOW" build prog.wlo -o prog
+echo "status $?"
+ls tmp
+LC_ALL=C ls
