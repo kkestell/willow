@@ -1,0 +1,40 @@
+def receiver(items: list[float]) -> list[float]:
+    print("object")
+    return items
+
+def grow(items: list[float]) -> int:
+    print("index")
+    for i in range(8):
+        items.append(float(i))
+    return -1
+
+def value() -> float:
+    print("value")
+    return 9.5
+
+def main():
+    items = [1.25]
+    alias = items
+    receiver(items)[grow(alias)] = value()
+    assert len(items) == 9 and items[-1] == 9.5
+    assert receiver(items)[grow(alias)] == 7.0
+    assert len(items) == 17 and items[-len(items)] == 1.25
+    refs = [items]
+    refs[-1] = alias
+    refs[0][0] = 2.5
+    assert items[0] == 2.5
+
+    empty: list[int] = []
+    try:
+        try:
+            empty[0] = 1
+        finally:
+            print(len(empty))
+    except IndexError as error:
+        assert error.message == "list index out of range"
+    try:
+        print(items[-9223372036854775807])
+    except IndexError as error:
+        assert error.message == "list index out of range"
+        print("bounds")
+    print("ok")

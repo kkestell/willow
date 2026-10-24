@@ -123,7 +123,59 @@ class Emitter:
         return f"$W.str.{self.strings[text]}"
 
     def core_call(self, name: str, args: list[str], returns: bool) -> str:
+        if name == "list_len":
+            address = self.temp()
+            result = self.temp()
+            self.line(f"{address} =l add {args[0]}, 8")
+            self.line(f"{result} =l loadl {address}")
+            return result
+        if name == "list_get" or name == "list_set":
+            return self.inline_list(name, args, returns)
         return self.willow_call(f"$W.core.{name}", typed(args), returns)
+
+    # Arguments are already evaluated. Only the failing path calls core, so
+    # it keeps the original exception handler and source location.
+    def inline_list(self, name: str, args: list[str], returns: bool) -> str:
+        address = self.temp()
+        length = self.temp()
+        index = self.temp()
+        negative = self.temp()
+        bad = self.temp()
+        normalize = self.new_label()
+        bounds = self.new_label()
+        access = self.new_label()
+        failed = self.new_label()
+        done = self.new_label()
+        result = self.temp()
+        self.line(f"{address} =l add {args[0]}, 8")
+        self.line(f"{length} =l loadl {address}")
+        self.line(f"{index} =l copy {args[1]}")
+        self.line(f"{negative} =l csltl {index}, 0")
+        self.jump(f"jnz {negative}, {normalize}, {bounds}")
+        self.label(normalize)
+        # A negative index plus a non-negative length cannot overflow.
+        self.line(f"{index} =l add {index}, {length}")
+        self.label(bounds)
+        self.line(f"{bad} =l cugel {index}, {length}")
+        self.jump(f"jnz {bad}, {failed}, {access}")
+        self.label(failed)
+        slow = self.willow_call(f"$W.core.{name}", typed(args), returns)
+        self.line(f"{result} =l copy {slow}")
+        self.jump(f"jmp {done}")
+        self.label(access)
+        self.line(f"{address} =l add {args[0]}, 24")
+        self.line(f"{address} =l loadl {address}")
+        offset = self.temp()
+        # A valid index addresses an existing slot in the allocated array.
+        self.line(f"{offset} =l mul {index}, 8")
+        self.line(f"{address} =l add {address}, {offset}")
+        if returns:
+            self.line(f"{result} =l loadl {address}")
+        else:
+            self.line(f"storel {args[2]}, {address}")
+            self.line(f"{result} =l copy 0")
+        self.label(done)
+        return result
 
     # Writes a call of a Willow function, which can raise.
     def willow_call(self, callee: str, args: list[str], returns: bool) -> str:
