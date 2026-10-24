@@ -1,0 +1,2 @@
+def main():
+    x = float(1.5)

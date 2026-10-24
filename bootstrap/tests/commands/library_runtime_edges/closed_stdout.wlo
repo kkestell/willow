@@ -1,0 +1,12 @@
+import core
+import io
+
+def main():
+    core.close(1)
+    caught = False
+    try:
+        io.stdout().write_text("hello")
+    except OSError as error:
+        assert error.message == "cannot write <stdout>: Bad file descriptor"
+        caught = True
+    assert caught

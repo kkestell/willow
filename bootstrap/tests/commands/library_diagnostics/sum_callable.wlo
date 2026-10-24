@@ -1,0 +1,2 @@
+def main():
+    f: (list[int], int) -> int = sum

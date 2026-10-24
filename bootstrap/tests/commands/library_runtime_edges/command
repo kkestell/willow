@@ -1,0 +1,11 @@
+set -e
+"$WILLOW" build closed_stdout.wlo -o closed_stdout
+./closed_stdout
+"$WILLOW" build temporary_parent.wlo -o temporary_parent
+mkdir parent
+TMPDIR="$PWD/parent" ./temporary_parent "$PWD/parent"
+TMPDIR= ./temporary_parent /tmp
+"$WILLOW" build invalid_utf8_argument.wlo -o invalid_utf8_argument
+set +e
+./invalid_utf8_argument ok "$(printf '\377')"
+echo "status $?"

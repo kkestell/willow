@@ -1,0 +1,4 @@
+def f(a: int = 1, b: int):
+    pass
+def main():
+    pass
