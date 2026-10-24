@@ -982,7 +982,7 @@ class Checker:
         explicit: list[types.Type] | None = None
         if isinstance(node, ast.Call):
             name = node.name
-            if len(node.type_args) > 0:
+            if node.has_type_args:
                 explicit = node.type_args
         else:
             name = node.name

@@ -51,6 +51,12 @@ def take[T](source: Source[T]) -> T:
 def bounded[T: Source[int]](value: T) -> int:
     return value.get()
 
+def nullable[T: Source[int | None]](value: T) -> int | None:
+    return value.get()
+
+def bounded_set[T: Setter](value: T) -> float:
+    return value.set(2.5)
+
 def read_pair[T: Pair](pair: T) -> tuple[Source[int]]:
     return pair.get()
 
@@ -63,6 +69,8 @@ def main():
     print(take(Box(2.5)))
     print(bounded(Box(4)))
     print(bounded(source))
+    print(nullable(Box(5)))
+    print(bounded_set(Adjuster()))
     setter: Setter = Adjuster()
     print(setter.set())
     print(setter.set(flag=True, value=2.5))

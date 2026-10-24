@@ -934,6 +934,17 @@ class Emitter:
     def method_call(self, expr: ast.Expr, node: ast.MethodCall) -> str:
         ty = self.concrete_type(node.object.ty)
         ty = types.expand(ty)
+        declared = node.object.ty
+        assert declared is not None, "unchecked method receiver"
+        declared = types.expand(declared)
+        if isinstance(declared, types.TypeVar):
+            bound = declared.bound
+            if bound is not None:
+                receiver_type = self.concrete_type(bound)
+                if isinstance(receiver_type, types.ProtocolType):
+                    object = self.convert(self.expr(node.object), ty, receiver_type)
+                    args = self.arg_values(node.args, node.order)
+                    return self.protocol_call(object, receiver_type, node.name, args)
         if isinstance(ty, types.ClassType):
             return self.class_method(node, ty)
         if isinstance(ty, types.ProtocolType):

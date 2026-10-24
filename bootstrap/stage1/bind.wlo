@@ -1127,9 +1127,9 @@ class Resolver:
             if symbol is not None:
                 expr.node = ast.CallValue(node.callee, node.args, node.keywords, type_args)
             elif isinstance(found, ast.FunctionDecl):
-                expr.node = ast.Call(name, node.args, node.keywords, type_args, found)
+                expr.node = ast.Call(name, node.args, node.keywords, type_args, found, None, True)
             elif isinstance(found, ast.ClassDecl):
-                expr.node = ast.Call(name, node.args, node.keywords, type_args, found.record)
+                expr.node = ast.Call(name, node.args, node.keywords, type_args, found.record, None, True)
         else:
             # An index followed by a call, as in `handlers[i](x)`.
             if found is not None:

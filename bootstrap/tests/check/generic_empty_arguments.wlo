@@ -1,0 +1,5 @@
+def identity[T](value: T) -> T:
+    return value
+
+def main():
+    identity[](1)

@@ -249,6 +249,7 @@ class Call:
     target: FunctionDecl | stdlib.Builtin | types.Class | None = None
     # Parameter indexes in evaluation order: written arguments, then defaults.
     order: list[int] | None = None
+    has_type_args: bool = False
 
 # A call of any other callee, at its `(`.
 class CallValue:
