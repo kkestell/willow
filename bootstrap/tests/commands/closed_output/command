@@ -1,0 +1,4 @@
+# A failed write to stdout is reported and ends the program with status 1.
+"$WILLOW" build prog.wlo -o prog
+./prog >&-
+echo "status $?"

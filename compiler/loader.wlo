@@ -59,9 +59,12 @@ class Loader:
             return
         self.names_by_file[file] = name
         try:
-            text = fs.read_file(path)
+            text = read_source(path)
         except OSError as error:
             self.fail(importer, importing, f"cannot load module '{name}': {read_reason(error)}")
+            return
+        if isinstance(text, diagnostic.Diagnostic):
+            self.error = text
             return
         self.add(name, path, text, False)
 
@@ -163,6 +166,39 @@ def file_roots(path: str) -> Roots:
 # message.
 def read_reason(error: OSError) -> str:
     return error.message.removeprefix("cannot read ")
+
+# The text of the source file at `path`, or a diagnostic at its first byte
+# that is not valid UTF-8 (spec §2). Raises OSError when it cannot be read.
+def read_source(path: str) -> str | diagnostic.Diagnostic:
+    data = fs.read_bytes(path)
+    try:
+        return data.decode()
+    except ValueError:
+        pass
+    line = 1
+    col = 1
+    i = 0
+    size = char_size(data, i)
+    while size > 0:
+        if data[i] == 10:
+            line = line + 1
+            col = 0
+        col = col + 1
+        i = i + size
+        size = char_size(data, i)
+    return diagnostic.Diagnostic(path, line, col, "invalid UTF-8")
+
+# The byte length of the UTF-8 character at byte `i` of `data`, or 0 when the
+# bytes there are not valid UTF-8. No prefix of a character decodes, so the
+# shortest slice that does is one character.
+def char_size(data: bytes, i: int) -> int:
+    for size in range(1, 5):
+        try:
+            data[i:i + size].decode()
+            return size
+        except ValueError:
+            pass
+    return 0
 
 # The modules of the program whose entry file is at `path` and has the text
 # `text`: the entry first, then each module in the order a depth-first walk
