@@ -1,0 +1,16 @@
+def main():
+    assert input() == "\x00é"
+    assert input() == "x".ljust(300)
+    for i in range(4):
+        try:
+            input()
+            assert False
+        except ValueError as error:
+            assert error.message == "invalid UTF-8"
+    assert input() == "end"
+    try:
+        input()
+        assert False
+    except ValueError as error:
+        assert error.message == "invalid UTF-8"
+    assert input() is None
