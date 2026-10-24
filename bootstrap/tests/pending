@@ -1,15 +1,12 @@
 aio_listener_outside_loop
 aio_sockets
-host
 http_values
 json_library
 overflow_add
 overflow_sub
 processes
 processes_stdin
-scoped_resources
 stdlib_builtins_errors
-stdlib_fs
 stdlib_fs_symlinks
 stdlib_http_async
 stdlib_random

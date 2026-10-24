@@ -1,0 +1,145 @@
+# Loads an entry file and every module it imports (spec §12). Modules are
+# looked for in the entry file's directory and then in the standard library,
+# so a local file shadows a standard library module of the same name. A
+# library module's imports name only other library modules and core, so one
+# program may hold its own module and the library's of the same name. The
+# standard library's lib/ and core are compiled into the compiler: their text
+# comes from the modules lib_source and core_source, which the build generates
+# (see bootstrap/prepare.sh).
+
+import ast
+import core_source
+import diagnostic
+import fs
+import lexer
+import lib_source
+import parser
+
+# Whether `name` is a standard library module with no source in lib/, which
+# stdlib.wlo declares instead.
+def is_stdlib(name: str) -> bool:
+    return name in [
+        "aio", "http", "random",
+        "subprocess", "terminal",
+    ]
+
+# A module read from source: its full name, as in "app.util", and its syntax
+# tree, whose path is the file it was read from.
+class Source:
+    name: str
+    tree: ast.Module
+
+class Loader:
+    # The entry file's directory with a trailing "/", or "" for the current
+    # directory.
+    root: str
+    # In the order load returns them.
+    sources: list[Source]
+    # Names of the program's modules that are loaded or being loaded,
+    # including the entry's.
+    loaded: dict[str, bool]
+    # The same for core and the modules of lib/, whose names the program's
+    # modules may reuse.
+    libraries: dict[str, bool]
+    # The module name each loaded file has, by the file's real path.
+    names_by_file: dict[str, str]
+    error: diagnostic.Diagnostic | None
+
+    # Loads module `name` from the file at `path`. `importer` is the path of
+    # the module whose `importing` names it, or "" for the entry.
+    def visit(self, name: str, path: str, importer: str, importing: ast.Import | None):
+        file = fs.realpath(path)
+        other = self.names_by_file.get(file)
+        if other is not None and importing is not None:
+            self.fail(importer, importing, f"module '{name}' is the same file as module '{other}'")
+            return
+        self.names_by_file[file] = name
+        self.add(name, path, fs.read_file(path), False)
+
+    # Loads module `name` from `text`, read from `path`, and, depth first,
+    # every module it imports that is not loaded yet.
+    def add(self, name: str, path: str, text: str, privileged: bool):
+        if privileged:
+            self.libraries[name] = True
+        else:
+            self.loaded[name] = True
+        lexed = lexer.lex(path, text)
+        if isinstance(lexed, diagnostic.Diagnostic):
+            self.error = lexed
+            return
+        tree = parser.parse(path, lexed, privileged)
+        if isinstance(tree, diagnostic.Diagnostic):
+            self.error = tree
+            return
+        self.sources.append(Source(name, tree))
+        for item in tree.imports:
+            if self.error is not None:
+                return
+            self.load_import(path, item, privileged)
+
+    # Loads the module that the import `item` in the module at `importer`
+    # names, unless it is loaded or is a standard library module that
+    # stdlib.wlo declares. A program's module is looked for in the program's
+    # files first; a library module's imports, and core, never are.
+    #
+    # L0 cannot see why a file failed to open, so this differs from spec §12
+    # in two ways. A path through a file that is not a directory, as `a/b.wlo`
+    # is when `a` is a file, is reported as "No such file or directory" rather
+    # than "Not a directory". A path that exists but cannot be read, such as a
+    # directory, ends the program with a fatal OSError from fs.read_file
+    # instead of a diagnostic.
+    def load_import(self, importer: str, item: ast.Import, privileged: bool):
+        path = "lib/" + item.name + ".wlo"
+        if not privileged and item.name != "core":
+            if self.loaded.get(item.name) is not None:
+                return
+            path = self.root + item.name.replace(".", "/") + ".wlo"
+            if fs.exists(path):
+                self.visit(item.name, path, importer, item)
+                return
+        if self.libraries.get(item.name) is not None:
+            return
+        if item.name == "core":
+            self.add_core()
+            return
+        text = lib_source.text(item.name)
+        if text != "":
+            self.add(item.name, "lib/" + item.name + ".wlo", text, True)
+        elif not is_stdlib(item.name):
+            self.fail(importer, item, f"cannot load module '{item.name}': {path}: No such file or directory")
+
+    def add_core(self):
+        self.add("core", "bootstrap/core/core.wlo", core_source.text(), True)
+
+    def fail(self, path: str, item: ast.Import, message: str):
+        self.error = diagnostic.Diagnostic(path, item.line, item.col, message)
+
+# The directory part of `path` with its trailing "/", or "" when it has none.
+def directory_of(path: str) -> str:
+    end = 0
+    i = 0
+    for c in path:
+        i = i + 1
+        if c == "/":
+            end = i
+    return path[:end]
+
+# The module name of the entry file at `path`: its file name without ".wlo".
+def entry_name(path: str) -> str:
+    return path[len(directory_of(path)):].removesuffix(".wlo")
+
+# The modules of the program whose entry file is at `path`: the entry first,
+# then each module in the order a depth-first walk of the imports first
+# reaches it, and last core if `with_core` and nothing imported it. Standard
+# library modules that stdlib.wlo declares are not included. Returns the
+# first error instead when a module cannot be loaded, lexed, or parsed.
+# Clashes between imports are the binder's to report, in its order.
+def load(path: str, with_core: bool) -> list[Source] | diagnostic.Diagnostic:
+    loader = Loader(directory_of(path), [], {}, {}, {}, None)
+    loader.visit(entry_name(path), path, "", None)
+    if with_core and loader.error is None and loader.libraries.get("core") is None:
+        loader.add_core()
+    error = loader.error
+    if error is not None:
+        return error
+    return loader.sources

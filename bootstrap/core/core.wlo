@@ -16,6 +16,12 @@ extern def close(fd: cint) -> cint
 extern def strerror(code: cint) -> ptr
 extern def access(path: ptr, mode: cint) -> cint
 extern def realpath(path: ptr, resolved: ptr) -> ptr
+extern def stat(path: ptr, buf: ptr) -> cint
+extern def lstat(path: ptr, buf: ptr) -> cint
+extern def statx(directory: cint, path: ptr, flags: cint, mask: cint, buf: ptr) -> cint
+extern def mkdir(path: ptr, mode: cint) -> cint
+extern def rmdir(path: ptr) -> cint
+extern def rename(source: ptr, destination: ptr) -> cint
 extern def getenv(name: ptr) -> ptr
 extern def getcwd(buf: ptr, size: int) -> ptr
 extern def posix_spawnp(pid: ptr, file: ptr, actions: ptr, attributes: ptr, argv: ptr, envp: ptr) -> cint
@@ -2644,11 +2650,17 @@ def path_bytes(path: str) -> ptr:
 # libc reaches the calling thread's errno through a function whose name
 # depends on the system. Stage 0 emits only the branch for the target, so the
 # other function is never linked.
-def errno() -> int:
+def errno_address() -> ptr:
     if __os == "darwin":
-        return __load4(__error(), 0)
+        return __error()
     else:
-        return __load4(__errno_location(), 0)
+        return __errno_location()
+
+def errno() -> int:
+    return __load4(errno_address(), 0)
+
+def clear_errno():
+    __store4(errno_address(), 0, 0)
 
 # The strerror text for the current errno. It is read before anything else
 # runs, since allocating may change errno.
@@ -2675,6 +2687,11 @@ def append_flags() -> int:
     return 1 + 512 + 8
 
 def fs_read_file(path: str) -> str:
+    data = fs_read_data(path)
+    return str_from_bytes(__offset(data, 16), __int(__load8(data, 8)))
+
+# Raw bytes share the string layout; the caller decides whether to decode.
+def fs_read_data(path: str) -> ptr:
     fd = open(path_bytes(path), 0)
     if fd < 0:
         fail_os("read", path)
@@ -2684,7 +2701,9 @@ def fs_read_file(path: str) -> str:
     count = read(fd, buf, capacity)
     while count != 0:
         if count < 0:
-            fail_os("read", path)
+            reason = os_reason()
+            close(fd)
+            fail("OSError", "cannot read " + path + ": " + reason)
         size = size + count
         if size == capacity:
             larger = __alloc_atomic(capacity * 2)
@@ -2692,8 +2711,11 @@ def fs_read_file(path: str) -> str:
             buf = larger
             capacity = capacity * 2
         count = read(fd, __offset(buf, size), capacity - size)
-    close(fd)
-    return str_from_bytes(buf, size)
+    if close(fd) < 0:
+        fail_os("read", path)
+    data = str_alloc(size)
+    memcpy(__offset(data, 16), buf, size)
+    return data
 
 def fs_write_file(path: str, text: str):
     # 438 is mode 0666, which the umask then restricts.
@@ -2704,7 +2726,9 @@ def fs_write_file(path: str, text: str):
     while done < str_size(text):
         written = write(fd, __offset(str_bytes(text), done), str_size(text) - done)
         if written < 0:
-            fail_os("write", path)
+            reason = os_reason()
+            close(fd)
+            fail("OSError", "cannot write " + path + ": " + reason)
         done = done + written
     if close(fd) < 0:
         fail_os("write", path)
@@ -2842,6 +2866,34 @@ def net_local_port(fd: int) -> int:
         fail("OSError", "cannot get local port: " + os_reason())
     # sockaddr_in and sockaddr_in6 both put the network-order port at byte 2.
     return __load1(address, 2) * 256 + __load1(address, 3)
+
+class FsLayout:
+    buffer_size: int
+    mode_offset: int
+    size_offset: int
+    modified_offset: int
+    inode_offset: int
+    device_offset: int
+    device_size: int
+    name_offset: int
+
+def fs_layout() -> FsLayout:
+    if __os == "darwin":
+        return FsLayout(144, 4, 96, 48, 8, 0, 4, 21)
+    # statx has one layout on both Linux architectures, unlike struct stat.
+    return FsLayout(256, 28, 40, 112, 32, 136, 8, 19)
+
+def fs_stat(path: ptr, buf: ptr, follow_symlinks: bool) -> int:
+    if __os == "linux":
+        flags = 0
+        if not follow_symlinks:
+            flags = 256
+        # AT_FDCWD, AT_SYMLINK_NOFOLLOW, and STATX_BASIC_STATS.
+        return statx(-100, path, flags, 2047, buf)
+    else:
+        if follow_symlinks:
+            return stat(path, buf)
+        return lstat(path, buf)
 
 # The process's environment, a C array of strings. L0 cannot name the C
 # variable environ, so Darwin's accessor function or, on Linux, dlsym with
