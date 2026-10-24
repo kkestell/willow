@@ -1501,6 +1501,10 @@ class Checker:
         name = node.name
         params = target.params
         if name in ["min", "max"]:
+            if len(node.keywords) > 0:
+                keyword = node.keywords[0]
+                self.fail(keyword.line, keyword.col, f"'{name}' does not accept keyword arguments")
+                return none()
             count = len(node.args)
             if count < 1 or count > 2:
                 self.fail(expr.line, expr.col, f"'{name}' expects 1 to 2 arguments, received {count}")
