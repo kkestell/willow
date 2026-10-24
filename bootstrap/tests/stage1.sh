@@ -2,6 +2,8 @@
 # Runs stage 1's tests and drivers. By default each is compiled with willow0
 # and run natively; with --lua each runs under the Lua implementation
 # (./willow run, after make), which helps when a stage 0 bug is suspected.
+# Native runs also check that willow1 and a self-built willow1 emit identical
+# IL for their own source.
 #
 # A test exits with status 1 on a failure. A file driver takes every .wlo
 # file in tests/ and examples/ and writes the first error in each to stderr as
@@ -180,6 +182,21 @@ check_willow1() {
     echo "willow1:"
     WILLOW0=$work/willow1 bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
         bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo || failed=1
+    if ! "$work/willow1" build "$work/willow1-src/willow1.wlo" -o "$work/willow1-self"; then
+        echo "FAIL willow1-self: does not compile"
+        failed=1
+        return
+    fi
+    if ! "$work/willow1" compile "$work/willow1-src/willow1.wlo" -o "$work/willow1.ssa" ||
+        ! "$work/willow1-self" compile "$work/willow1-src/willow1.wlo" -o "$work/willow1-self.ssa"; then
+        echo "FAIL fixpoint: does not compile"
+        failed=1
+        return
+    fi
+    if ! cmp -s "$work/willow1.ssa" "$work/willow1-self.ssa"; then
+        echo "FAIL fixpoint: IL differs between willow1 and willow1-self"
+        failed=1
+    fi
 }
 
 check_test lexer_test
