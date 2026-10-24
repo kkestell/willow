@@ -1,0 +1,8 @@
+class Task:
+    value: int
+
+class TaskGroup:
+    value: int
+
+class Semaphore:
+    value: int

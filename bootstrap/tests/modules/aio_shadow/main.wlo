@@ -1,0 +1,21 @@
+import aio
+
+def task_value(value: aio.Task | None) -> int:
+    if isinstance(value, aio.Task):
+        return value.value
+    return 0
+
+def group_value(value: aio.TaskGroup | None) -> int:
+    if isinstance(value, aio.TaskGroup):
+        return value.value
+    return 0
+
+def semaphore_value(value: aio.Semaphore | None) -> int:
+    if isinstance(value, aio.Semaphore):
+        return value.value
+    return 0
+
+def main():
+    assert task_value(aio.Task(1)) == 1
+    assert group_value(aio.TaskGroup(2)) == 2
+    assert semaphore_value(aio.Semaphore(3)) == 3
