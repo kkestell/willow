@@ -186,8 +186,10 @@ operation lowers either to inline QBE or to a call into `core`. Stage 0
 contains no runtime code; it knows the names of core functions and the
 inline sequences for arithmetic and comparisons.
 
-Only `core` may use the intrinsic layer. The checker rejects it elsewhere by
-module name. The layer is:
+Only `core` and the standard library modules in `lib/` may use the intrinsic
+layer. The compiler grants it by where a module was loaded from, so a
+program's own module with a standard library name does not get it. The layer
+is:
 
 - A type `ptr`, a raw address. `None` is not assignable to it; use `0` tests
   through `__addr_is_null`.

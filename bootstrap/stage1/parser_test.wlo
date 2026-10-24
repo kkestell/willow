@@ -15,7 +15,7 @@ def parse(source: str) -> ast.Module | str:
     lexed = lexer.lex("test.wlo", source)
     if isinstance(lexed, diagnostic.Diagnostic):
         return f"{lexed.line}:{lexed.col}: {lexed.message}"
-    parsed = parser.parse("test.wlo", lexed)
+    parsed = parser.parse("test.wlo", lexed, False)
     if isinstance(parsed, diagnostic.Diagnostic):
         return f"{parsed.line}:{parsed.col}: {parsed.message}"
     return parsed

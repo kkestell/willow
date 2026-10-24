@@ -14,6 +14,8 @@ class Parser:
     # The index of the EOF token.
     last: int
     error: diagnostic.Diagnostic | None
+    # Whether file scope may declare constants.
+    privileged: bool
 
     def peek(self) -> tokens.Token:
         return self.tokens[self.pos]
@@ -915,6 +917,17 @@ class Parser:
         decl.variadic = variadic
         return decl
 
+    # `name: float = literal`, a constant of a privileged module.
+    def parse_constant(self, module: ast.Module):
+        name = self.advance()
+        self.advance()
+        self.expect(tokens.Kind.FLOAT, "'float'")
+        self.expect(tokens.Kind.EQUAL, "'='")
+        value = self.expect(tokens.Kind.FLOAT_LITERAL, "a float literal")
+        self.expect(tokens.Kind.NEWLINE, "end of line")
+        if self.error is None:
+            module.constants[name.text] = float(value.text)
+
     # Accepts `...`, which the lexer gives as three adjacent dots.
     def accept_ellipsis(self) -> bool:
         first = self.peek()
@@ -1022,7 +1035,7 @@ class Parser:
         return decl
 
     def parse_module(self) -> ast.Module:
-        module = ast.Module(self.path, "", [], [], {}, {}, {}, {}, [])
+        module = ast.Module(self.path, "", self.privileged, [], [], {}, {}, {}, {}, {}, [])
         while self.peek().kind == tokens.Kind.IMPORT:
             self.advance()
             name = self.expect(tokens.Kind.NAME, "a module name")
@@ -1048,6 +1061,8 @@ class Parser:
                 module.declarations.append(self.parse_enum())
             elif kind == tokens.Kind.TYPE:
                 module.declarations.append(self.parse_alias())
+            elif kind == tokens.Kind.NAME and self.privileged and self.ahead(1).kind == tokens.Kind.COLON:
+                self.parse_constant(module)
             elif is_unsupported(kind):
                 self.fail(token, f"'{token.text}' is not supported")
             else:
@@ -1055,9 +1070,9 @@ class Parser:
         return module
 
 # The syntax tree of the file at `path` with tokens `toks`, or its first
-# syntax error.
-def parse(path: str, toks: list[tokens.Token]) -> ast.Module | diagnostic.Diagnostic:
-    parser = Parser(path, toks, 0, len(toks) - 1, None)
+# syntax error. A `privileged` module may declare constants.
+def parse(path: str, toks: list[tokens.Token], privileged: bool) -> ast.Module | diagnostic.Diagnostic:
+    parser = Parser(path, toks, 0, len(toks) - 1, None, privileged)
     module = parser.parse_module()
     error = parser.error
     if error is not None:

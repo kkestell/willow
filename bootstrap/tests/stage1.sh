@@ -34,10 +34,47 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 failed=0
 
-# Builds bootstrap/stage1/NAME.wlo when native.
+# Writes the module core_source to DIR/core_source.wlo: core's text as one
+# string, which the loader compiles into every program.
+core_source() {
+    {
+        printf 'def text() -> str:\n    return "'
+        quote bootstrap/core/core.wlo
+        printf '"\n'
+    } >"$1/core_source.wlo"
+}
+
+# Writes the module lib_source to DIR/lib_source.wlo: the text of each module
+# in lib/ by name, which the loader finds standard library modules in.
+lib_source() {
+    {
+        printf 'def text(name: str) -> str:\n'
+        for file in lib/*.wlo; do
+            printf '    if name == "%s":\n        return "' "$(basename "$file" .wlo)"
+            quote "$file"
+            printf '"\n'
+        done
+        printf '    return ""\n'
+    } >"$1/lib_source.wlo"
+}
+
+# Writes FILE's text escaped for a string literal, on one line.
+quote() {
+    sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/$/\\n/' "$1" | tr -d '\n'
+}
+
+# Stage 1's sources and the modules generated for them, which the drivers
+# and tests are built from.
+src=$work/src
+mkdir "$src"
+cp bootstrap/stage1/*.wlo "$src/"
+core_source "$src"
+lib_source "$src"
+
+# Builds stage 1's NAME.wlo when native.
 build() {
     [ $lua -eq 1 ] && return 0
-    "$willow0" build "bootstrap/stage1/$1.wlo" -o "$work/$1" && return 0
+    "$willow0" build "$src/$1.wlo" -o "$work/$1" && return 0
     echo "FAIL $1: does not compile"
     failed=1
     return 1
@@ -48,7 +85,7 @@ run() {
     name=$1
     shift
     if [ $lua -eq 1 ]; then
-        ./willow run "bootstrap/stage1/$name.wlo" "$@"
+        ./willow run "$src/$name.wlo" "$@"
     else
         "$work/$name" "$@"
     fi
@@ -155,19 +192,9 @@ check_bind_driver() {
     done
 }
 
-# Writes the module core_source to DIR/core_source.wlo: core's text as one
-# string, which willow1 compiles into every program.
-core_source() {
-    {
-        printf 'def text() -> str:\n    return "'
-        sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/$/\\n/' bootstrap/core/core.wlo | tr -d '\n'
-        printf '"\n'
-    } >"$1/core_source.wlo"
-}
-
-# Builds willow1 from stage 1's sources and core_source and runs all top-level
-# programs in bootstrap/tests/programs/, core/, and check/ through run.sh, then
-# the programs in tests/programs/ except those named in
+# Builds willow1 from stage 1's sources and the generated modules and runs
+# all top-level programs in bootstrap/tests/programs/, core/, and check/
+# through run.sh, then the programs in tests/programs/ except those named in
 # bootstrap/tests/stage1-pending, which stage 1 does not pass yet.
 # Under --lua there is no willow1, since the Lua implementation has no core
 # module for willow1 to import.
@@ -181,8 +208,8 @@ conformance() {
 # Weak links and forced collection need callbacks outside ordinary Willow.
 check_coroutines() {
     fixture=$root/bootstrap/tests/check/coroutine_runtime
-    cp "$fixture/build.wlo" "$work/willow1-src/coroutine_fixture.wlo"
-    if ! "$work/willow1" build "$work/willow1-src/coroutine_fixture.wlo" -o "$work/coroutine-fixture" ||
+    cp "$fixture/build.wlo" "$src/coroutine_fixture.wlo"
+    if ! "$work/willow1" build "$src/coroutine_fixture.wlo" -o "$work/coroutine-fixture" ||
         ! "$work/coroutine-fixture" "$fixture/callbacks.wlo" "$fixture/runtime.ssa" "$work/coroutine-runtime" ||
         ! "$work/coroutine-runtime"; then
         echo "FAIL coroutine runtime"
@@ -192,10 +219,7 @@ check_coroutines() {
 
 check_willow1() {
     [ $lua -eq 1 ] && return
-    mkdir "$work/willow1-src"
-    cp bootstrap/stage1/*.wlo "$work/willow1-src/"
-    core_source "$work/willow1-src"
-    if ! "$willow0" build "$work/willow1-src/willow1.wlo" -o "$work/willow1"; then
+    if ! "$willow0" build "$src/willow1.wlo" -o "$work/willow1"; then
         echo "FAIL willow1: does not compile"
         failed=1
         return
@@ -207,13 +231,13 @@ check_willow1() {
     echo "willow1 tests/programs:"
     # shellcheck disable=SC2046 # the paths have no spaces
     WILLOW0=$work/willow1 bootstrap/tests/run.sh $(conformance) || failed=1
-    if ! "$work/willow1" build "$work/willow1-src/willow1.wlo" -o "$work/willow1-self"; then
+    if ! "$work/willow1" build "$src/willow1.wlo" -o "$work/willow1-self"; then
         echo "FAIL willow1-self: does not compile"
         failed=1
         return
     fi
-    if ! "$work/willow1" compile "$work/willow1-src/willow1.wlo" -o "$work/willow1.ssa" ||
-        ! "$work/willow1-self" compile "$work/willow1-src/willow1.wlo" -o "$work/willow1-self.ssa"; then
+    if ! "$work/willow1" compile "$src/willow1.wlo" -o "$work/willow1.ssa" ||
+        ! "$work/willow1-self" compile "$src/willow1.wlo" -o "$work/willow1-self.ssa"; then
         echo "FAIL fixpoint: does not compile"
         failed=1
         return

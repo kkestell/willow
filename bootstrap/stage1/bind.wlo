@@ -109,7 +109,7 @@ class Binder:
     last_id: int
     error: diagnostic.Diagnostic | None
     builtins: dict[str, stdlib.Builtin]
-    # Only core may call these.
+    # Only privileged modules may call these.
     intrinsics: dict[str, stdlib.Builtin]
     exceptions: dict[str, types.Class]
     protocols: dict[str, types.Protocol]
@@ -199,7 +199,7 @@ class Binder:
     # their type variables now so that other declarations can name them.
     def declare_record(self, module: ast.Module, decl: ast.Decl, type_name: str) -> bool:
         if isinstance(decl, ast.FunctionDecl):
-            if decl.external and module.name != "core":
+            if decl.external and not module.privileged:
                 self.fail(module, decl.line, decl.col, "extern functions are only allowed in core")
                 return False
             decl.id = self.new_id()
@@ -243,6 +243,8 @@ class Binder:
     def lookup(self, module: ast.Module, path: str, name: str, line: int, col: int) -> Member | None:
         if path in module.imported:
             target = module.imported[path]
+            if name in target.constants:
+                return ProvidedConstant(name, target.constants[name])
             if name not in target.names:
                 self.fail(module, line, col, f"module '{target.name}' has no function, class, enum, or alias '{name}'")
                 return None
@@ -522,7 +524,7 @@ class Binder:
                 return types.TupleType(elements)
             if is_scalar(written):
                 return types.prim(written)
-            if module.name == "core" and written in ["ptr", "word"]:
+            if module.privileged and written in ["ptr", "word"]:
                 return types.prim(written)
             found = scope.find(written)
             if found is not None:
@@ -1015,8 +1017,8 @@ class Resolver:
                 self.resolve_expr(node.keys[i], False)
                 self.resolve_expr(node.values[i], False)
         elif isinstance(node, ast.TypeOf):
-            # As in stage 0, only core may name a built-in type's descriptor.
-            if self.module.name != "core":
+            # Only privileged modules may name a built-in type's descriptor.
+            if not self.module.privileged:
                 self.fail(expr.line, expr.col, "intrinsic '__type' is only available in core")
                 return
             target = node.target
@@ -1036,7 +1038,7 @@ class Resolver:
             self.fail(expr.line, expr.col, f"'{node.name}' is used before its nonlocal declaration")
             return
         if symbol is None:
-            if node.name == "__os" and self.module.name == "core":
+            if node.name == "__os" and self.module.privileged:
                 # The target's name, which the checker and emitter fold.
                 return
             if node.name in self.module.roots:
@@ -1071,7 +1073,7 @@ class Resolver:
             elif node.name in self.binder.exceptions:
                 found = self.binder.exceptions[node.name]
             elif node.name in self.binder.intrinsics:
-                if self.module.name != "core":
+                if not self.module.privileged:
                     self.fail(expr.line, expr.col, f"intrinsic '{node.name}' is only available in core")
                     return
                 found = self.binder.intrinsics[node.name]

@@ -417,27 +417,6 @@ def aio_module() -> Module:
     add_helper(functions, "semaphore", [value], class_type(semaphore), "aio_semaphore")
     return module
 
-def math_module() -> Module:
-    module = new_module("math")
-    functions = module.functions
-    x = arg("x", prim("float"))
-    # sqrt is a core helper; the rest are in the runtime's math module.
-    add(functions, "sqrt", [x], prim("float"))
-    add_helper(functions, "floor", [x], prim("int"), "math_floor")
-    add_helper(functions, "ceil", [x], prim("int"), "math_ceil")
-    add_helper(functions, "isfinite", [x], prim("bool"), "math_isfinite")
-    add_helper(functions, "isnan", [x], prim("bool"), "math_isnan")
-    add_helper(functions, "isinf", [x], prim("bool"), "math_isinf")
-    y = arg("y", prim("float"))
-    add_helper(functions, "pow", [x, y], prim("float"), "math_pow")
-    add_helper(functions, "atan2", [y, x], prim("float"), "math_atan2")
-    for name in "exp log log10 sin cos tan asin acos atan".split(" "):
-        add_helper(functions, name, [x], prim("float"), "math_" + name)
-    module.constants["pi"] = 3.141592653589793
-    module.constants["e"] = 2.718281828459045
-    module.constants["tau"] = 6.283185307179586
-    return module
-
 def random_module() -> Module:
     module = new_module("random")
     generator = native_class("random", "Random", "random")
@@ -643,7 +622,6 @@ def modules() -> dict[str, Module]:
         "http": http_module(),
         "io": io_module(),
         "json": json_module(),
-        "math": math_module(),
         "net": net_module(),
         "random": random_module(),
         "subprocess": subprocess_module(),
