@@ -3460,23 +3460,30 @@ def dict_key_at(d: ptr, entry: int) -> word:
 def dict_value_at(d: ptr, entry: int) -> word:
     return __load8(dict_entries(d), entry * 24 + 8)
 
-# A string hash below 2^31 that mixes the length and every byte of `s`.
+# A string hash below 2^32 that mixes the length and every byte of `s`. A fold
+# of `x` to `x % 2^31 + x // 2^31` reduces `x` modulo 2^31 - 1; two folds leave
+# `h` in [0, 2^31], so the next multiply stays below 2^62, and the final fold
+# returns a non-negative result below 2^32.
 def str_hash(s: str) -> int:
-    p = 2147483647
     n = __int(__load8(__ptr(__word(s)), 8))
     b = __offset(__ptr(__word(s)), 16)
     h = n
     i = 0
     while i + 4 <= n:
-        h = (h * 1103515245 + __load4(b, i)) % p
+        x = h * 1103515245 + __load4(b, i)
+        x = x % 2147483648 + x // 2147483648
+        h = x % 2147483648 + x // 2147483648
         i = i + 4
     if i < n:
         tail = 0
         while i < n:
             tail = tail * 256 + __load1(b, i)
             i = i + 1
-        h = (h * 1103515245 + tail) % p
-    return (h * 1000003 + n) % p
+        x = h * 1103515245 + tail
+        x = x % 2147483648 + x // 2147483648
+        h = x % 2147483648 + x // 2147483648
+    x = h * 1000003 + n
+    return x % 2147483648 + x // 2147483648
 
 # A key's hash, which is never negative.
 def dict_hash(kind: int, key: word) -> int:
