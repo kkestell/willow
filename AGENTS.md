@@ -18,7 +18,7 @@ on the compiler, library, or bootstrap chain.
 
 - Do less. Keep correct code simple, ordinary, and cheap to change. Follow KISS
   and YAGNI.
-- Write idiomatic code for each part: Rust in `bootstrap/stage0/`, the L0
+- Write idiomatic code for each part: C in `bootstrap/stage0/`, the L0
   subset of Willow in `bootstrap/core/` and the frozen `bootstrap/stage1/`,
   and Willow in `compiler/` and `lib/`. Prefer plain data, direct functions,
   and explicit control flow. Keep responsibilities clear without turning

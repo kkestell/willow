@@ -6,7 +6,7 @@ merged.
 
 ## State
 
-- Milestones 1 through 7 are done. `make` builds willow0 (Rust), willow1
+- Milestones 1 through 7 are done. `make` builds willow0 (C), willow1
   (stage 1, L0), and stage 2 from `compiler/*.wlo`, which builds itself;
   `build/willow` is that stage 2. Both fixpoints hold.
 - Stage 2 implements every command in spec §12, including projects,
@@ -41,5 +41,5 @@ merged.
 
 ## Resuming elsewhere
 
-Create a fresh swarm from the swarm notes. Building needs `cargo`, `qbe`,
-`cc`, libgc, and `pkg-config` (Homebrew on macOS).
+Create a fresh swarm from the swarm notes. Building needs `cc`, `qbe`,
+libgc, and `pkg-config` (Homebrew on macOS).

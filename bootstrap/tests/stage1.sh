@@ -6,7 +6,7 @@
 # IL both compilers emit for their own source. A test exits with status 1 on
 # a failure.
 #
-# WILLOW0 names the compiler; it defaults to the release build of stage 0.
+# WILLOW0 names the compiler; it defaults to build/stage0/willow0.
 
 set -u
 if [ "$#" -ne 0 ]; then
@@ -15,7 +15,7 @@ if [ "$#" -ne 0 ]; then
 fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root" || exit 1
-willow0=${WILLOW0:-$root/bootstrap/stage0/target/release/willow0}
+willow0=${WILLOW0:-$root/build/stage0/willow0}
 case $willow0 in /*) ;; *) willow0=$PWD/$willow0 ;; esac
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
