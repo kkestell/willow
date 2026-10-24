@@ -1,0 +1,23 @@
+import fs
+import io
+import sys
+import terminal
+
+def main():
+    path = fs.temp_file()
+    file = io.open(path)
+    file.close()
+    fs.remove(path)
+    try:
+        terminal.isatty(file)
+    except ValueError as closed:
+        print(closed.message)
+    try:
+        terminal.progress("one\rtwo")
+    except ValueError as invalid:
+        print(invalid.message)
+    sys.eprint("before")
+    terminal.progress("hidden")
+    terminal.finish_progress("finished")
+    sys.eprint("after")
+    raise ValueError("done")

@@ -1,0 +1,113 @@
+import core
+
+def _xor(a: int, b: int) -> int:
+    result = 0
+    bit = 1
+    while a > 0 or b > 0:
+        if a % 2 != b % 2:
+            result = result + bit
+        a = a // 2
+        b = b // 2
+        bit = bit * 2
+    return result
+
+def _mul(a: int, b: int) -> int:
+    return (a * (b % 65536) + (a * (b // 65536) % 65536) * 65536) % 4294967296
+
+def _rotl(value: int, bits: int) -> int:
+    scale = 1
+    for i in range(bits):
+        scale = scale * 2
+    return value * scale % 4294967296 + value // (4294967296 // scale)
+
+def _cover(value: int) -> int:
+    limit = 1
+    while limit <= value:
+        limit = limit * 2
+    return limit
+
+class Random:
+    _s0: int
+    _s1: int
+    _s2: int
+    _s3: int
+
+    def _next(self) -> int:
+        s0 = self._s0
+        s1 = self._s1
+        s2 = self._s2
+        s3 = self._s3
+        result = _rotl(s1 * 5 % 4294967296, 7) * 9 % 4294967296
+        t = s1 * 512 % 4294967296
+        s2 = _xor(s2, s0)
+        s3 = _xor(s3, s1)
+        s1 = _xor(s1, s2)
+        s0 = _xor(s0, s3)
+        s2 = _xor(s2, t)
+        s3 = _rotl(s3, 11)
+        self._s0 = s0
+        self._s1 = s1
+        self._s2 = s2
+        self._s3 = s3
+        return result
+
+    def random(self) -> float:
+        high = self._next() % 134217728
+        low = self._next() % 67108864
+        return float(high * 67108864 + low) / 9007199254740992.0
+
+    def randint(self, a: int, b: int) -> int:
+        if a > b:
+            raise ValueError("randint range is empty")
+        # Two unsigned halves keep b - a representable across the int range.
+        low = b % 4294967296 - a % 4294967296
+        high = b // 4294967296 - a // 4294967296
+        if low < 0:
+            low = low + 4294967296
+            high = high - 1
+        high_limit = _cover(high)
+        low_limit = 4294967296
+        if high == 0:
+            low_limit = _cover(low)
+        chosen_high = self._next() % high_limit
+        chosen_low = self._next() % low_limit
+        while chosen_high > high or (chosen_high == high and chosen_low > low):
+            chosen_high = self._next() % high_limit
+            chosen_low = self._next() % low_limit
+        total = a % 4294967296 + chosen_low
+        result_high = a // 4294967296 + chosen_high + total // 4294967296
+        result_low = total % 4294967296
+        if result_high < 0:
+            # Avoid the excluded -2^63 even as an intermediate result.
+            return (result_high + 1) * 4294967296 - (4294967296 - result_low)
+        return result_high * 4294967296 + result_low
+
+    def choice[T](self, items: list[T]) -> T:
+        if len(items) == 0:
+            raise ValueError("cannot choose from an empty list")
+        return items[self.randint(0, len(items) - 1)]
+
+    def shuffle[T](self, items: list[T]):
+        for i in range(len(items) - 1, 0, -1):
+            j = self.randint(0, i)
+            item = items[i]
+            items[i] = items[j]
+            items[j] = item
+
+def generator(seed: int) -> Random:
+    state = seed % 4294967296
+    high = seed // 4294967296 % 4294967296
+    words: list[int] = []
+    for i in range(4):
+        state = (state + 2654435769) % 4294967296
+        z = _mul(_xor(state, state // 65536), 2246822507)
+        z = _mul(_xor(z, z // 8192), 3266489909)
+        words.append(_xor(z, z // 65536))
+        if i == 0:
+            state = (state + high) % 4294967296
+    if words[0] == 0 and words[1] == 0 and words[2] == 0 and words[3] == 0:
+        words[0] = 1
+    return Random(words[0], words[1], words[2], words[3])
+
+def secure_bytes(size: int) -> bytes:
+    return __bytes(__word(core.random_secure_bytes(size)))
