@@ -1,0 +1,11 @@
+# A source file that is not valid UTF-8 is an error at its first bad byte.
+printf 'def main():\n    # \303\251 \377\n    pass\n' >bad.wlo
+"$WILLOW" check bad.wlo
+echo "status $?"
+printf 'import util\n\ndef main():\n    pass\n' >prog.wlo
+printf 'x = "\300\200"\n' >util.wlo
+"$WILLOW" run prog.wlo
+echo "status $?"
+printf 'def test_bad():\n    pass\n\377\n' >test_bad.wlo
+"$WILLOW" test test_bad.wlo
+echo "status $?"

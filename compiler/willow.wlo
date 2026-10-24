@@ -120,9 +120,12 @@ def main():
     else:
         roots = loader.file_roots(path)
     try:
-        text = fs.read_file(path)
+        text = loader.read_source(path)
     except OSError as error:
         fail("error: " + loader.read_reason(error))
+        return
+    if isinstance(text, diagnostic.Diagnostic):
+        fail(text.format())
         return
     # A project's entry name was checked with its manifest.
     if roots.entry == "core" or command.input is not None and not loader.is_identifier(roots.entry):
@@ -237,9 +240,13 @@ def test(args: list[str]):
         if project is not None:
             roots = loader.Roots(project.source, project.dependencies, roots.entry)
         try:
-            text = fs.read_file(file)
+            text = loader.read_source(file)
         except OSError as error:
             sys.eprint("error: " + loader.read_reason(error))
+            failed_checks = True
+            continue
+        if isinstance(text, diagnostic.Diagnostic):
+            sys.eprint(text.format())
             failed_checks = True
             continue
         modules = checked(file, text, roots, True)

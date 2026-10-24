@@ -69,7 +69,7 @@ Fatal failures of L0 (agents/bootstrap.md §3):
 | `bool_to_str(b: bool) -> str` | `True` or `False` |
 | `enum_to_str(descriptor: ptr, ordinal: int) -> str` | The member's text from the enum's descriptor |
 | `union_to_str(value: ptr) -> str` | The text of a printable union value; `None` for 0 |
-| `print_str(s: str)` | Writes `s` and a newline to stdout; exits with status 1 if the write fails |
+| `print_str(s: str)` | Writes `s` and a newline to stdout; reports a failed write and exits with status 1 |
 | `eprint_str(s: str)` | Writes `s` and a newline to stderr, for `sys.eprint`; exits with status 1 if the write fails |
 
 `print(v)`, `sys.eprint(v)`, `str(v)`, and f-string fields convert `v` with
