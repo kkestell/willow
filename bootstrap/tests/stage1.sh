@@ -179,6 +179,9 @@ check_willow1() {
         failed=1
         return
     fi
+    echo "willow1:"
+    WILLOW0=$work/willow1 bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
+        bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo || failed=1
     if ! "$work/willow1" build "$work/willow1-src/willow1.wlo" -o "$work/willow1-self"; then
         echo "FAIL willow1-self: does not compile"
         failed=1
@@ -194,9 +197,6 @@ check_willow1() {
         echo "FAIL fixpoint: IL differs between willow1 and willow1-self"
         failed=1
     fi
-    echo "willow1:"
-    WILLOW0=$work/willow1 bootstrap/tests/run.sh bootstrap/tests/programs/*.wlo \
-        bootstrap/tests/core/*.wlo bootstrap/tests/check/*.wlo || failed=1
 }
 
 check_test lexer_test
