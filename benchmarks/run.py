@@ -4,7 +4,7 @@ program's output against benchmarks/expected.
 
 By default it times only Willow and prints one line per benchmark, for
 comparing Willow with itself before and after a change. `--all` also times
-the other languages, which needs cc and luajit on PATH. `--readme` times every
+the other languages, which needs cc on PATH. `--readme` times every
 language and replaces the results table in README.md.
 
 Run it from anywhere after `make`.
@@ -13,7 +13,6 @@ Run it from anywhere after `make`.
 import argparse
 import hashlib
 import platform
-import shutil
 import subprocess
 import sys
 import time
@@ -22,7 +21,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HERE = ROOT / "benchmarks"
 BUILD = HERE / "build"
-LUAJIT = "luajit"
 README = ROOT / "README.md"
 START = "<!-- benchmarks:start -->"
 END = "<!-- benchmarks:end -->"
@@ -48,30 +46,7 @@ BENCHMARKS = [
     ("raytracer", "raytracer", 200),
 ]
 
-LANGUAGES = ["C", "LuaJIT", "Python", "Willow"]
-
-# Seconds for Willow's earlier implementation, which compiled to Lua and ran on
-# LuaJIT, recorded on an Apple M4 on 2026-10-21. The README table keeps them
-# beside the native results.
-WILLOW_LUAJIT = {
-    "n-body": 0.36,
-    "spectral-norm": 0.51,
-    "fannkuch-redux": 0.30,
-    "binary-trees": 2.20,
-    "fasta": 1.98,
-    "mandelbrot": 0.40,
-    "k-nucleotide": 0.59,
-    "reverse-complement": 3.22,
-    "recursive": 0.16,
-    "nsieve": 0.42,
-    "matrix": 0.67,
-    "methcall": 0.57,
-    "except": 3.87,
-    "heapsort": 0.47,
-    "hash2": 1.07,
-    "sumcol": 1.86,
-    "raytracer": 0.38,
-}
+LANGUAGES = ["C", "Willow", "Python"]
 
 
 def fasta_input(size, path):
@@ -105,7 +80,6 @@ def build(name, languages):
     subprocess.run([ROOT / "willow", "build", HERE / "willow" / f"{name}.wlo", "-o", willow], check=True)
     return {
         "C": [c],
-        "LuaJIT": [LUAJIT, HERE / "lua" / f"{name}.lua"],
         "Willow": [willow],
         "Python": [sys.executable, HERE / "python" / f"{name}.py"],
     }
@@ -135,19 +109,15 @@ def machine():
 
 def table(results):
     lines = [
-        f"Seconds of wall-clock time, best of {RUNS} runs, on {machine()}. Willow",
-        "(LuaJIT) is the earlier implementation, which compiled to Lua, recorded on an",
-        "Apple M4 on 2026-10-21.",
+        f"Seconds of wall-clock time, best of {RUNS} runs, on {machine()}.",
         "",
-        "| Benchmark (size) | C | LuaJIT | Python | Willow (LuaJIT) | Willow (Native) |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Benchmark (size) | C | Willow | Python |",
+        "|---|---:|---:|---:|",
     ]
     for _, title, size in BENCHMARKS:
         times = results[title]
-        old = WILLOW_LUAJIT[title]
         lines.append(
-            f"| {title} ({size:,}) | {times['C']:.2f} | {times['LuaJIT']:.2f} | {times['Python']:.2f}"
-            f" | {old:.2f} | {times['Willow']:.2f} |"
+            f"| {title} ({size:,}) | {times['C']:.2f} | {times['Willow']:.2f} | {times['Python']:.2f} |"
         )
     return "\n".join(lines)
 
@@ -166,8 +136,6 @@ def main():
     if args.readme and args.names:
         parser.error("--readme runs every benchmark")
     languages = LANGUAGES if args.all or args.readme else ["Willow"]
-    if "LuaJIT" in languages and shutil.which(LUAJIT) is None:
-        parser.error("--all and --readme need luajit on PATH for the independent Lua benchmarks")
 
     BUILD.mkdir(exist_ok=True)
     results = {}
