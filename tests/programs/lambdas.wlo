@@ -25,7 +25,7 @@ def apply(f: (int) -> int, x: int) -> int:
     return f(x)
 
 def threshold(minimum: int) -> (int) -> bool:
-    return lambda score: score >= minimum
+    return (score) => score >= minimum
 
 def main():
     a = counter()
@@ -34,24 +34,24 @@ def main():
     print(a())
     print(b())
     print(total())
-    print(apply(lambda x: x * 10, 4))
+    print(apply((x) => x * 10, 4))
     ok = threshold(5)
     print(ok(3))
     print(ok(7))
-    fs: list[(int) -> int] = [lambda x: x + 1, lambda x: x * x]
+    fs: list[(int) -> int] = [(x) => x + 1, (x) => x * x]
     for f in fs:
         print(f(5))
     # A parameterless lambda needs no expected type.
-    answer = lambda: 42
+    answer = () => 42
     print(answer())
     # The lambda's float result is boxed for the callable's result type.
-    half: () -> int | float = lambda: 1.5
+    half: () -> int | float = () => 1.5
     r = half()
     print(isinstance(r, float))
     # A lambda in a loop shares the loop variable's binding.
     getters: list[() -> int] = []
     for i in range(3):
-        getters.append(lambda: i)
+        getters.append(() => i)
     print(getters[0]())
-    add = lambda: lambda: 7
+    add = () => () => 7
     print(add()())

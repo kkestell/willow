@@ -121,7 +121,7 @@
     },
     "keyword": {
       "patterns": [
-        { "name": "storage.type.function.lambda.willow", "match": "\\blambda\\b" },
+        { "name": "storage.type.function.lambda.willow", "match": "=>" },
         { "name": "storage.modifier.async.willow", "match": "\\basync(?=\\s+with\\b)" },
         {
           "name": "keyword.control.willow",

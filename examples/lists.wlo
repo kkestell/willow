@@ -15,7 +15,7 @@ def main():
     print(", ".join(names))
     names.sort(reverse=true)
     print(", ".join(names))
-    print(", ".join(sorted(names, key=lambda name: len(name))))
+    print(", ".join(sorted(names, key=(name) => len(name))))
 
     # Assignment shares a list; a slice copies it.
     alias = names

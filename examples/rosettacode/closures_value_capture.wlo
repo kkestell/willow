@@ -3,7 +3,7 @@
 # A loop reuses its variable's binding, so each closure gets its own index
 # through a call.
 def square_of(i: int) -> () -> int:
-    return lambda: i * i
+    return () => i * i
 
 def main():
     funcs: list[() -> int] = []

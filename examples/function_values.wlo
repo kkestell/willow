@@ -11,7 +11,7 @@ def apply_all(functions: list[(int) -> int], value: int) -> list[int]:
     return results
 
 def compose(f: (int) -> int, g: (int) -> int) -> (int) -> int:
-    return lambda n: g(f(n))
+    return (n) => g(f(n))
 
 class Greeter:
     greeting: str
@@ -20,7 +20,7 @@ class Greeter:
         return f"{self.greeting}, {name}"
 
 def main():
-    increment: (int) -> int = lambda n: n + 1
+    increment: (int) -> int = (n) => n + 1
     for result in apply_all([double, increment, compose(double, increment)], 5):
         print(result)
 
@@ -29,7 +29,7 @@ def main():
     print(hello("Ada"))
 
     names = ["grace", "Ada", "alan"]
-    print(", ".join(sorted(names, key=lambda name: name.lower())))
+    print(", ".join(sorted(names, key=(name) => name.lower())))
 
-    operations: dict[str, (int) -> int] = {"double": double, "square": lambda n: n * n}
+    operations: dict[str, (int) -> int] = {"double": double, "square": (n) => n * n}
     print(operations["square"](4))

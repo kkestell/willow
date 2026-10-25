@@ -21,7 +21,7 @@ def main():
     print(f"{a} {b}")
 
     scores = [("bob", 2), ("amy", 2), ("cat", 1)]
-    for name, score in sorted(scores, key=lambda entry: (entry[1], entry[0])):
+    for name, score in sorted(scores, key=(entry) => (entry[1], entry[0])):
         print(f"{name} {score}")
 
     print((1, "a") < (1, "b"))

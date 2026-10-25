@@ -94,7 +94,7 @@ def main():
     levels = sorted(counts)
     if options.sort == Sort.COUNT:
         # Most lines first, then by name.
-        levels = sorted(counts, key=lambda level: (-counts[level], level))
+        levels = sorted(counts, key=(level) => (-counts[level], level))
     print(terminal.style(f"{'level':<10}{'lines':>8}", bold=true, enabled=options.color))
     for level in levels[:options.limit]:
         name = terminal.style(f"{level:<10}", color=level_color(level), enabled=options.color)

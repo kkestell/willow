@@ -1,2 +1,2 @@
 def main():
-    x = sorted([1], key=lambda x: [x])
+    x = sorted([1], key=(x) => [x])

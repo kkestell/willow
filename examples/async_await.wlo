@@ -46,4 +46,4 @@ async def main():
         print(error.message)
 
     print(await total(Cache({"a": 1, "b": 2}), ["a", "b", "c"]))
-    print(await run_twice(lambda: fetch("again", 0.0)))
+    print(await run_twice(() => fetch("again", 0.0)))

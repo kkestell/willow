@@ -9,14 +9,14 @@
 static const char *const RESERVED[] = {
     "and", "as", "assert", "async", "await", "break", "case", "class", "continue",
     "def", "del", "else", "enum", "except", "false", "finally", "for",
-    "from", "global", "if", "import", "in", "is", "lambda", "match", "none",
+    "from", "global", "if", "import", "in", "is", "match", "none",
     "nonlocal", "not", "or", "pass", "protocol", "raise", "return", "true", "try",
     "type", "while", "with", "yield", "int", "float", "bool", "str", "bytes",
     "list", "dict", "tuple", "Iterable", "Iterator", "ContextManager", "Generator",
     "Coroutine"
 };
 static const char *const OPERATORS[] = {
-    "...", "->", "==", "!=", "<=", ">=", "//", "<", ">", "=", "+", "-", "*", "/",
+    "...", "->", "=>", "==", "!=", "<=", ">=", "//", "<", ">", "=", "+", "-", "*", "/",
     "%", "|", "(", ")", "[", "]", "{", "}", ",", ":", "."
 };
 static const char *const UNSUPPORTED[] = {

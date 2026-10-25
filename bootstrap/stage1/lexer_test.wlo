@@ -43,6 +43,7 @@ def position(source: str, index: int) -> str:
 
 def main():
     cases = [
+        ["() => 1", "( ) => INT_LITERAL:1 NEWLINE EOF"],
         ["def inc(x: int) -> int:\n    return x + 1\n", "def NAME ( NAME : int ) -> int : NEWLINE INDENT return NAME + INT_LITERAL:1 NEWLINE DEDENT EOF"],
         ["def f():\r\n    pass\r\n", "def NAME ( ) : NEWLINE INDENT pass NEWLINE DEDENT EOF"],
         ["x = 1\ry = 2\n", "1:6: bare carriage return; line endings must be LF or CRLF"],
@@ -58,7 +59,7 @@ def main():
         ["x = (1,\n", "NAME = ( INT_LITERAL:1 , EOF"],
         ["def f():\n  pass\n", "2:3: indentation must be a multiple of four spaces"],
         ["def f():\n        pass\n", "2:9: unexpected indent"],
-        ["while true and not x_1 int Iterable none lambda print _\n", "while true and not NAME int Iterable none lambda NAME NAME NEWLINE EOF"],
+        ["while true and not x_1 int Iterable none lambda print _\n", "while true and not NAME int Iterable none NAME NAME NAME NEWLINE EOF"],
         ["elif else if\n", "NAME else if NEWLINE EOF"],
         ["9223372036854775807", "INT_LITERAL:9223372036854775807 NEWLINE EOF"],
         ["x = 9223372036854775808\n", "1:5: integer literal out of range"],

@@ -12,7 +12,7 @@ def counter() -> () -> int:
     return increment
 
 def multiplier(factor: int) -> (int) -> int:
-    return lambda n: n * factor
+    return (n) => n * factor
 
 def main():
     tick = counter()

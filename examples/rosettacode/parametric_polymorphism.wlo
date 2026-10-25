@@ -23,4 +23,4 @@ def show(tree: Tree[str] | none) -> str:
 
 def main():
     numbers = Tree(2, Tree(1), Tree(3))
-    print(show(numbers.map(lambda n: str(n * n))))
+    print(show(numbers.map((n) => str(n * n))))

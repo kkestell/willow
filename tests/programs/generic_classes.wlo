@@ -36,7 +36,7 @@ def main():
     print(b.value)
     s = Box[str]("a")
     print(s.get())
-    lengths = s.map(lambda x: len(x) + 10)
+    lengths = s.map((x) => len(x) + 10)
     print(lengths.get())
     chain = Node(1, Node(2, Node(3)))
     print(length(chain))

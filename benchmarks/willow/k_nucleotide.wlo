@@ -39,7 +39,7 @@ def count(sequence: list[str], k: int) -> dict[str, int]:
 def print_frequencies(sequence: list[str], k: int):
     counts = count(sequence, k)
     total = float(len(sequence) - k + 1)
-    for kmer in sorted(counts, key=lambda kmer: (-counts[kmer], kmer)):
+    for kmer in sorted(counts, key=(kmer) => (-counts[kmer], kmer)):
         print(f"{kmer} {100.0 * float(counts[kmer]) / total:.3f}")
     print("")
 

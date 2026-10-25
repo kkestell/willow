@@ -1,5 +1,5 @@
 def optional[T](value: T) -> () -> T | none:
-    return lambda: value
+    return () => value
 
 def apply[T, U](value: T, callback: (T) -> U) -> U:
     return callback(value)
@@ -12,5 +12,5 @@ def main():
     decimal = optional(2.5)
     print(integer())
     print(decimal())
-    print(apply(3, lambda value: value + 1))
+    print(apply(3, (value) => value + 1))
     print(apply(5, text))

@@ -8,4 +8,4 @@ def second(n: int) -> int:
 
 def main():
     print(first(second))
-    print(first(lambda n: n + 1))
+    print(first((n) => n + 1))

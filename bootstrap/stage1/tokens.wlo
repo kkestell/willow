@@ -42,7 +42,6 @@ enum Kind:
     IMPORT
     IN
     IS
-    LAMBDA
     MATCH
     NONLOCAL
     NOT
@@ -72,6 +71,7 @@ enum Kind:
     COROUTINE
 
     ARROW
+    FAT_ARROW
     EQUAL_EQUAL
     NOT_EQUAL
     LESS_EQUAL
@@ -134,7 +134,6 @@ def keywords() -> dict[str, Kind]:
         "import": Kind.IMPORT,
         "in": Kind.IN,
         "is": Kind.IS,
-        "lambda": Kind.LAMBDA,
         "match": Kind.MATCH,
         "nonlocal": Kind.NONLOCAL,
         "not": Kind.NOT,
@@ -166,6 +165,7 @@ def keywords() -> dict[str, Kind]:
 def operators() -> dict[str, Kind]:
     return {
         "->": Kind.ARROW,
+        "=>": Kind.FAT_ARROW,
         "==": Kind.EQUAL_EQUAL,
         "!=": Kind.NOT_EQUAL,
         "<=": Kind.LESS_EQUAL,

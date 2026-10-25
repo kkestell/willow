@@ -586,7 +586,8 @@ They do not support equality or printing.
 A lambda is a single-expression function written as a parenthesized parameter
 list followed by `=>` and an expression, as in `(row) => row.score`. The
 parentheses are required, including for one parameter; `() => 42` has no
-parameters. Each parameter may have a type annotation, as in `(x: int) => x + 1`.
+parameters. A trailing comma is allowed in a nonempty parameter list.
+Each parameter may have a type annotation, as in `(x: int) => x + 1`.
 An unannotated parameter takes its type from an expected callable type; a
 parameter with neither an annotation nor an expected type is a compile-time
 error. The expression determines the return type, and an expected callable

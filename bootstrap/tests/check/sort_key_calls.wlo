@@ -22,9 +22,9 @@ def by_name(row: Row) -> str:
 
 def main():
     data = [Row("cy", 2), Row("ada", 3), Row("bob", 2), Row("dee", 1)]
-    print(names(sorted(data, key=lambda row: row.score)))
-    print(names(sorted(data, reverse=true, key=lambda row: row.score)))
-    print(names(sorted(data, key=lambda row: (row.score, row.name))))
+    print(names(sorted(data, key=(row) => row.score)))
+    print(names(sorted(data, reverse=true, key=(row) => row.score)))
+    print(names(sorted(data, key=(row) => (row.score, row.name))))
     print(names(sorted(data, key=by_name)))
     print(names(sorted(data, key=Row("", 10).rank)))
     words = ["bb", "a", "ccc"]
@@ -60,7 +60,7 @@ def main():
         print(failure.message)
     print(names(data))
     try:
-        data.sort(key=lambda row: (row.score, float("nan")))
+        data.sort(key=(row) => (row.score, float("nan")))
     except ValueError as again:
         print(again.message)
     print(names(data))

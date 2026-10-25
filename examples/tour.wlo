@@ -151,6 +151,6 @@ async def main():
                 if alert is not none:
                     print(f"{label()} {entry.host}: {entry.text} ({alert})")
 
-    error = first(entries, where=lambda entry: entry.level == Level.ERROR)
+    error = first(entries, where=(entry) => entry.level == Level.ERROR)
     if error is not none:
         print(f"First error: {error.text} on {error.host}")

@@ -13,7 +13,7 @@ typedef struct Parser {
 static const char *const COMPARISONS[] = {"==", "!=", "<", "<=", ">", ">=", "in"};
 static const char *const UNSUPPORTED_WORDS[] = {
     "as", "async", "await", "case", "del", "except", "finally", "from", "global",
-    "lambda", "match", "nonlocal", "protocol", "raise", "try", "with", "yield"
+    "match", "nonlocal", "protocol", "raise", "try", "with", "yield"
 };
 
 static bool word_is(const Kind *kind, const char *word) {

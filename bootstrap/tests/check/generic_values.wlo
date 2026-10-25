@@ -16,7 +16,7 @@ def twice[T](f: (T) -> T, x: T) -> T:
 # and an int differ in representation inside a union.
 def wrap[T](x: T) -> list[T | none]:
     f = identity[T]
-    g = lambda: f(x)
+    g = () => f(x)
     get = Box(x).get
 
     def nested(y: T) -> T | none:

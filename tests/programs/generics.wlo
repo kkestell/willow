@@ -54,13 +54,13 @@ def inferred():
     y: int | none = first([1])
     print(y)
     # A lambda's parameter types come from the other arguments; its result infers U.
-    doubled = map_list(lambda x: x * 2, [1, 2])
+    doubled = map_list((x) => x * 2, [1, 2])
     print(doubled[1])
-    words = map_list(lambda x: str(x) + "!", [7])
+    words = map_list((x) => str(x) + "!", [7])
     print(words[0])
     print(count([1, 2]))
     # A result the callee fixes is checked against it.
-    print(len(apply_maybe(lambda v: [v, 1], 2)))
+    print(len(apply_maybe((v) => [v, 1], 2)))
 
     def wrap[V](v: V) -> list[V]:
         return [v]

@@ -168,20 +168,33 @@ class Parser:
 
     # Expressions
 
-    # A lambda binds less tightly than every operator, so its body extends as
-    # far as the enclosing expression allows.
+    # Only a matching `) =>` makes an opening parenthesis a lambda list.
+    def starts_lambda(self) -> bool:
+        if self.peek().kind != tokens.Kind.LPAREN:
+            return false
+        depth = 0
+        for i in range(self.pos, self.last):
+            kind = self.tokens[i].kind
+            if kind == tokens.Kind.LPAREN:
+                depth = depth + 1
+            else if kind == tokens.Kind.RPAREN:
+                depth = depth - 1
+                if depth == 0:
+                    return self.tokens[i + 1].kind == tokens.Kind.FAT_ARROW
+        return false
+
+    # The body extends as far as the enclosing expression allows.
     def parse_expression(self) -> ast.Expr:
-        token = self.peek()
-        if not self.accept(tokens.Kind.LAMBDA):
+        if not self.starts_lambda():
             return self.parse_or()
+        token = self.advance()
         params: list[ast.Param] = []
-        if not self.accept(tokens.Kind.COLON):
-            while true:
-                name = self.expect(tokens.Kind.NAME, "a parameter name")
-                params.append(ast.Param(name.line, name.col, name.text, none, none, false))
-                if not self.accept(tokens.Kind.COMMA) or self.peek().kind == tokens.Kind.COLON:
-                    break
-            self.expect(tokens.Kind.COLON, "',' or ':'")
+        while not self.accept(tokens.Kind.RPAREN):
+            name = self.expect(tokens.Kind.NAME, "a parameter name")
+            params.append(ast.Param(name.line, name.col, name.text, none, none, false))
+            if self.list_end(tokens.Kind.RPAREN, "')'"):
+                break
+        self.expect(tokens.Kind.FAT_ARROW, "'=>'")
         return ast.Expr(token.line, token.col, ast.Lambda(params, self.parse_expression()))
 
     def parse_or(self) -> ast.Expr:

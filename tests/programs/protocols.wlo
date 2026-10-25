@@ -128,7 +128,7 @@ def main():
         print(shape.scaled(2.0).area())
     area: Area = shapes[0]
     print(area.area())
-    later = lambda: area.area()
+    later = () => area.area()
     print(later())
 
     def nested() -> float:
