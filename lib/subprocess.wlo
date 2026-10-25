@@ -26,10 +26,10 @@ def _delay(deadline: float | none) -> float:
 class Process:
     _child: core.Child
 
-    def poll(self) -> int | none:
+    def poll() -> int | none:
         return core.process_poll(self._child, false)
 
-    def wait(self, timeout: float | none = none) -> int:
+    def wait(timeout: float | none = none) -> int:
         _check_timeout(timeout)
         if timeout is none:
             code = core.process_poll(self._child, true)
@@ -45,7 +45,7 @@ class Process:
         assert code is not none
         return code
 
-    async def wait_async(self, timeout: float | none = none) -> int:
+    async def wait_async(timeout: float | none = none) -> int:
         await aio.sleep(0.0)
         _check_timeout(timeout)
         deadline = _deadline(timeout)
@@ -58,10 +58,10 @@ class Process:
         assert code is not none
         return code
 
-    def terminate(self):
+    def terminate():
         core.process_signal(self._child, 15)
 
-    def kill(self):
+    def kill():
         core.process_signal(self._child, 9)
 
 def spawn(args: list[str], cwd: str | none = none, env: dict[str, str] | none = none, stdin: io.File | none = none, stdout: io.File | none = none, stderr: io.File | none = none) -> Process:
@@ -94,7 +94,7 @@ class _Run:
     _buffer: ptr
     _offset: int = 0
 
-    def _write(self) -> bool:
+    def _write() -> bool:
         fd = self._input_fd
         data = self._input
         if fd < 0 or data is none:
@@ -118,7 +118,7 @@ class _Run:
             progress = true
         return progress
 
-    def _read(self, fd: int, parts: list[bytes], size: int) -> int:
+    def _read(fd: int, parts: list[bytes], size: int) -> int:
         count = core.read(fd, self._buffer, size)
         if count > 0:
             parts.append(_octets(self._buffer, count))
@@ -128,7 +128,7 @@ class _Run:
                 raise OSError("cannot read output: " + core.os_reason())
         return count
 
-    def step(self) -> bool:
+    def step() -> bool:
         progress = self._write()
         for which in range(2):
             fd = self._output_fd
@@ -148,7 +148,7 @@ class _Run:
                         self._error_fd = -1
         return progress
 
-    def wait(self, seconds: float):
+    def wait(seconds: float):
         fds = __alloc_atomic(24)
         count = 0
         for fd in [self._input_fd, self._output_fd, self._error_fd]:
@@ -163,7 +163,7 @@ class _Run:
             if core.errno() != 4:
                 raise OSError("cannot poll: " + core.os_reason())
 
-    def finish(self, code: int) -> Result:
+    def finish(code: int) -> Result:
         for which in range(2):
             fd = self._output_fd
             parts = self._output
@@ -184,7 +184,7 @@ class _Run:
             error = _join(self._error)
         return Result(code, output, error)
 
-    def close(self):
+    def close():
         for fd in [self._input_fd, self._output_fd, self._error_fd]:
             if fd >= 0:
                 core.close(fd)

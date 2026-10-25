@@ -1,7 +1,7 @@
 import random
 
 protocol RandomSource:
-    def random(self) -> float
+    def random() -> float
 
 def draw(source: RandomSource) -> float:
     return source.random()

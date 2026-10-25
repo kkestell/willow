@@ -44,6 +44,7 @@ def position(source: str, index: int) -> str:
 def main():
     cases = [
         ["() => 1", "( ) => INT_LITERAL:1 NEWLINE EOF"],
+        ["self selfish\n", "self NAME NEWLINE EOF"],
         ["def inc(x: int) -> int:\n    return x + 1\n", "def NAME ( NAME : int ) -> int : NEWLINE INDENT return NAME + INT_LITERAL:1 NEWLINE DEDENT EOF"],
         ["def f():\r\n    pass\r\n", "def NAME ( ) : NEWLINE INDENT pass NEWLINE DEDENT EOF"],
         ["x = 1\ry = 2\n", "1:6: bare carriage return; line endings must be LF or CRLF"],

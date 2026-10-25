@@ -2,7 +2,7 @@ class Source:
     name: str
     log: list[str]
 
-    def iter(self) -> Iterator[int]:
+    def iter() -> Iterator[int]:
         self.log.append("iter " + self.name)
         if self.name == "bad":
             raise ValueError("cannot iterate")

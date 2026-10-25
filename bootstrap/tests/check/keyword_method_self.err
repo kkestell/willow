@@ -1,1 +1,1 @@
-keyword_method_self.wlo:9:9: error: 'm' has no parameter 'self'
+keyword_method_self.wlo:9:13: error: expected ',' or ')', found '='

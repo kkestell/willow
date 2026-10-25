@@ -10,7 +10,7 @@ class Options:
     limit: int | none = 3
     kind: Kind | none = none
 
-    def describe(self) -> str:
+    def describe() -> str:
         return self.name + " " + str(self.level) + " " + str(self.limit) + " " + str(self.kind)
 
 def main():

@@ -1,14 +1,14 @@
 class Box[T]:
     value: T
 
-    def get(self) -> T:
+    def get() -> T:
         return self.value
 
-    def set(self, value: T):
+    def set(value: T):
         self.value = value
 
     # A method's own type parameter is inferred at each call.
-    def map[U](self, f: (T) -> U) -> Box[U]:
+    def map[U](f: (T) -> U) -> Box[U]:
         return Box(f(self.value))
 
 # A generic class may refer to its own specialization.

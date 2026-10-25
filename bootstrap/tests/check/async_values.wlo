@@ -1,19 +1,19 @@
 import aio
 
 protocol Source:
-    def read(self, value: float) -> Coroutine[float]
+    def read(value: float) -> Coroutine[float]
 
 class Scale[T]:
     values: list[T]
 
-    async def first(self, *, fallback: T) -> T:
+    async def first(*, fallback: T) -> T:
         await aio.sleep(0.0)
         if len(self.values) > 0:
             return self.values[0]
         return fallback
 
 class Number:
-    async def read(self, value: float) -> float:
+    async def read(value: float) -> float:
         await aio.sleep(0.0)
         return value * 2.0
 

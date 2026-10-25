@@ -3,13 +3,13 @@ type Items[T] = list[T | none]
 class Slot[T]:
     value: T | none = none
 
-    def set(self, value: T):
+    def set(value: T):
         self.value = value
 
-    def get(self) -> T | none:
+    def get() -> T | none:
         return self.value
 
-    def choose[U](self, value: U) -> U | none:
+    def choose[U](value: U) -> U | none:
         return value
 
 def optional[T](value: T) -> T | none:

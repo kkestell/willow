@@ -4,32 +4,32 @@
 import sys
 
 protocol Shape:
-    def area(self) -> float
-    def scaled(self, factor: float) -> Shape
+    def area() -> float
+    def scaled(factor: float) -> Shape
 
 class Rect:
     width: float
     height: float
 
-    def area(self) -> float:
+    def area() -> float:
         return self.width * self.height
 
-    def scaled(self, factor: float) -> Rect:
+    def scaled(factor: float) -> Rect:
         return Rect(self.width * factor, self.height * factor)
 
 class Circle:
     radius: float
 
-    def area(self) -> float:
+    def area() -> float:
         return 3.141592653589793 * self.radius * self.radius
 
-    def scaled(self, factor: float) -> Circle:
+    def scaled(factor: float) -> Circle:
         return Circle(self.radius * factor)
 
 class ShapeError(Exception):
     text: str
 
-    def report(self) -> str:
+    def report() -> str:
         return f"{self.text}: {self.message}"
 
 def parse_number(number: str, text: str) -> float:

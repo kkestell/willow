@@ -1,16 +1,16 @@
 import aio
 
 protocol Named:
-    def name(self) -> str
+    def name() -> str
 
 protocol Greeter:
-    async def greet(self, who: str) -> str
+    async def greet(who: str) -> str
 
 class Host:
-    def name(self) -> str:
+    def name() -> str:
         return "host"
 
-    async def greet(self, who: str) -> str:
+    async def greet(who: str) -> str:
         await aio.sleep(0.0)
         return "hello, " + who
 

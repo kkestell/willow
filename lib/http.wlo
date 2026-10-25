@@ -64,24 +64,24 @@ class _Curl:
     _options: dict[str, int]
     _info: dict[str, int]
 
-    def code(self, code: int, url: str):
+    def code(code: int, url: str):
         if code != 0:
             reason = __ccall(curl_easy_strerror, self._symbols["curl_easy_strerror"], code)
             raise OSError("cannot fetch " + url + ": " + core.str_from_bytes(reason, core.strlen(reason)))
 
-    def set_int(self, handle: ptr, option: str, value: int, url: str):
+    def set_int(handle: ptr, option: str, value: int, url: str):
         self.code(__ccall(curl_easy_setopt, self._symbols["curl_easy_setopt"], handle, self._options[option], value), url)
 
-    def set_ptr(self, handle: ptr, option: str, value: ptr, url: str):
+    def set_ptr(handle: ptr, option: str, value: ptr, url: str):
         self.code(__ccall(curl_easy_setopt, self._symbols["curl_easy_setopt"], handle, self._options[option], value), url)
 
-    def info(self, handle: ptr, option: str, url: str) -> int:
+    def info(handle: ptr, option: str, url: str) -> int:
         value = __alloc_atomic(8)
         __store8(value, 0, __word(0))
         self.code(__ccall(curl_easy_getinfo, self._symbols["curl_easy_getinfo"], handle, self._info[option], value), url)
         return __int(__load8(value, 0))
 
-    def text(self, handle: ptr, option: str, url: str) -> str | none:
+    def text(handle: ptr, option: str, url: str) -> str | none:
         value = self.info(handle, option, url)
         pointer = __ptr(__word(value))
         if __addr_is_null(pointer):
@@ -282,27 +282,27 @@ class _Stream:
     _slots: ptr
     _memory: bool
 
-    def flush(self, failure: str):
+    def flush(failure: str):
         if fflush(self._file) != 0:
             raise OSError(failure + ": " + core.os_reason())
 
-    def size(self) -> int:
+    def size() -> int:
         return __int(__load8(self._slots, 8))
 
-    def body(self) -> bytes:
+    def body() -> bytes:
         buffer = __ptr(__load8(self._slots, 0))
         data = core.str_alloc(self.size())
         core.memcpy(__offset(data, 24), buffer, self.size())
         return __bytes(__word(core.bytes_tag(__str(__word(data)))))
 
-    def headers(self) -> list[Header]:
+    def headers() -> list[Header]:
         buffer = __ptr(__load8(self._slots, 0))
         parts: list[str] = []
         for i in range(self.size()):
             parts.append(chr(__load1(buffer, i)))
         return _response_headers("".join(parts))
 
-    def close(self, failure: str):
+    def close(failure: str):
         if __addr_is_null(self._file):
             return
         status = fclose(self._file)
@@ -341,7 +341,7 @@ class _Exchange:
     _uploaded: int = 0
     _head_size: int = 0
 
-    def step(self) -> bool:
+    def step() -> bool:
         curl = self._curl
         symbols = curl._symbols
         running = __alloc_atomic(4)
@@ -381,7 +381,7 @@ class _Exchange:
             raise TimeoutError(f"request timed out after {self._timeout} seconds")
         return false
 
-    def delay(self) -> float:
+    def delay() -> float:
         milliseconds = __alloc_atomic(8)
         code = __ccall(curl_multi_timeout, self._curl._symbols["curl_multi_timeout"], self._multi, milliseconds)
         assert code == 0, "cannot get transfer timeout"
@@ -393,7 +393,7 @@ class _Exchange:
             delay = min(delay, max(0.0, self._last + self._timeout - time.monotonic()))
         return delay
 
-    def close(self):
+    def close():
         symbols = self._curl._symbols
         if not __addr_is_null(self._multi):
             __ccall(curl_multi_remove_handle, symbols["curl_multi_remove_handle"], self._multi, self._handle)
@@ -412,10 +412,10 @@ class _Exchange:
         finally:
             self._output.close(self._failure)
 
-    def status(self) -> int:
+    def status() -> int:
         return self._curl.info(self._handle, "status", self._url)
 
-    def redirect(self) -> str | none:
+    def redirect() -> str | none:
         return self._curl.text(self._handle, "redirect_url", self._url)
 
 def _exchange(curl: _Curl, method: str, url: str, lines: list[str], body: bytes | none, timeout: float, ca_file: str | none, path: str, target: str) -> _Exchange:
@@ -503,7 +503,7 @@ class _Fetch:
     _exchange: _Exchange | none = none
     _hops: int = 0
 
-    def step(self) -> bool:
+    def step() -> bool:
         exchange = self._exchange
         if exchange is none:
             exchange = _exchange(self._curl, self._method, self._current.text, self._lines, self._body, self._timeout, self._ca_file, self._temp, self._path)
@@ -530,18 +530,18 @@ class _Fetch:
             return false
         return true
 
-    def delay(self) -> float:
+    def delay() -> float:
         exchange = self._exchange
         if exchange is none:
             return 0.0
         return exchange.delay()
 
-    def response(self) -> Response:
+    def response() -> Response:
         exchange = self._exchange
         assert exchange is not none
         return Response(exchange.status(), exchange._headers.headers(), exchange._output.body(), self._current.text)
 
-    def download(self) -> Download:
+    def download() -> Download:
         exchange = self._exchange
         assert exchange is not none
         status = exchange.status()
@@ -558,7 +558,7 @@ class _Fetch:
             written = 0
         return Download(status, headers, self._current.text, written)
 
-    def close(self):
+    def close():
         try:
             exchange = self._exchange
             if exchange is not none:

@@ -7,16 +7,16 @@ class _Parser:
     text: list[str]
     pos: int = 0
 
-    def peek(self) -> str:
+    def peek() -> str:
         if self.pos >= len(self.text):
             return ""
         return self.text[self.pos]
 
-    def space(self):
+    def space():
         while self.peek() in [" ", "\t", "\n", "\r"]:
             self.pos = self.pos + 1
 
-    def error(self, problem: str, pos: int) -> JsonError:
+    def error(problem: str, pos: int) -> JsonError:
         if pos >= len(self.text):
             problem = "unexpected end of input"
         line = 1
@@ -29,14 +29,14 @@ class _Parser:
                 column = column + 1
         return JsonError(f"{problem} at line {line}, column {column}")
 
-    def word(self, word: str, value: Json) -> Json:
+    def word(word: str, value: Json) -> Json:
         for c in word:
             if self.peek() != c:
                 raise self.error("expected '" + word + "'", self.pos)
             self.pos = self.pos + 1
         return value
 
-    def hex4(self, start: int) -> int:
+    def hex4(start: int) -> int:
         code = 0
         for i in range(4):
             c = self.peek()
@@ -49,7 +49,7 @@ class _Parser:
             self.pos = self.pos + 1
         return code
 
-    def string(self) -> str:
+    def string() -> str:
         self.pos = self.pos + 1
         parts: list[str] = []
         escapes = {"\"": "\"", "\\": "\\", "/": "/", "b": chr(8), "f": chr(12), "n": "\n", "r": "\r", "t": "\t"}
@@ -87,7 +87,7 @@ class _Parser:
         self.pos = self.pos + 1
         return "".join(parts)
 
-    def number(self) -> Json:
+    def number() -> Json:
         start = self.pos
         if self.peek() == "-":
             self.pos = self.pos + 1
@@ -124,7 +124,7 @@ class _Parser:
                 raise self.error("integer out of range", start)
         return float(token)
 
-    def value(self) -> Json:
+    def value() -> Json:
         self.space()
         c = self.peek()
         if c == "{":

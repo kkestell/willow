@@ -1,8 +1,8 @@
 class Manager:
-    def enter(self) -> int:
+    def enter() -> int:
         return 1
 
-    def exit(self, failure: Exception | none):
+    def exit(failure: Exception | none):
         pass
 
 def main():

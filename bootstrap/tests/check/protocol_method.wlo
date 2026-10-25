@@ -1,11 +1,11 @@
 protocol Reader:
-    def read(self) -> str
+    def read() -> str
 
 class Source:
-    def read(self) -> str:
+    def read() -> str:
         return "text"
 
-    def extra(self):
+    def extra():
         pass
 
 def main():

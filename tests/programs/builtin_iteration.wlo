@@ -1,14 +1,14 @@
 class Bag:
     size: int
 
-    def iter(self) -> Iterator[int]:
+    def iter() -> Iterator[int]:
         return range(self.size).iter()
 
 # A class may share a name with the run-time type of built-in iterators.
 class iterator:
     n: int
 
-    def iter(self) -> Iterator[int]:
+    def iter() -> Iterator[int]:
         return [self.n].iter()
 
 def floats(xs: Iterable[int | float]):

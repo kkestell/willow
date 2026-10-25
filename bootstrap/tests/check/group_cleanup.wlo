@@ -1,10 +1,10 @@
 import aio
 
 class Resource:
-    def enter(self) -> Resource:
+    def enter() -> Resource:
         return self
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         print(error is none)
 
 async def enter_then_wait():

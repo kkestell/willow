@@ -21,17 +21,17 @@ class Lexer:
     error: diagnostic.Diagnostic | none
 
     # The character at `pos`, or "" past the end.
-    def at(self, pos: int) -> str:
+    def at(pos: int) -> str:
         if pos < self.size:
             return self.chars[pos]
         return ""
 
-    def text(self, start: int, stop: int) -> str:
+    def text(start: int, stop: int) -> str:
         return "".join(self.chars[start:stop])
 
     # Records the first error and moves to the end of the source, which ends
     # every loop in the lexer.
-    def fail(self, pos: int, message: str):
+    def fail(pos: int, message: str):
         if self.error is none:
             line = 1
             line_start = 0
@@ -45,17 +45,17 @@ class Lexer:
         self.pos = self.size
 
     # Adds a token starting at `pos` on the current line.
-    def add(self, kind: tokens.Kind, text: str, pos: int) -> tokens.Token:
+    def add(kind: tokens.Kind, text: str, pos: int) -> tokens.Token:
         token = tokens.Token(kind, text, self.line, pos - self.line_start + 1)
         self.tokens.append(token)
         return token
 
     # Called for the LF at `pos`.
-    def newline(self, pos: int):
+    def newline(pos: int):
         self.line = self.line + 1
         self.line_start = pos + 1
 
-    def run(self):
+    def run():
         # A carriage return is only valid before LF, so later scans treat
         # every CR as the start of a CRLF.
         i = 0
@@ -101,7 +101,7 @@ class Lexer:
     # Reads the indentation of the line at `pos`. Skips a blank or
     # comment-only line, including its newline, and returns false; otherwise
     # adds any INDENT or DEDENT tokens and returns true.
-    def start_line(self) -> bool:
+    def start_line() -> bool:
         p = self.pos
         while self.at(p) == " ":
             p = p + 1
@@ -139,7 +139,7 @@ class Lexer:
         return true
 
     # Reads one token, a space, or a comment at `pos`, which is not a newline.
-    def lex_token(self):
+    def lex_token():
         p = self.pos
         c = self.chars[p]
         if c == " ":
@@ -169,7 +169,7 @@ class Lexer:
         else:
             self.read_operator()
 
-    def read_operator(self):
+    def read_operator():
         p = self.pos
         length = 3
         while length > 0:
@@ -184,7 +184,7 @@ class Lexer:
             length = length - 1
         self.fail(p, f"unexpected character '{self.chars[p]}'")
 
-    def read_number(self):
+    def read_number():
         start = self.pos
         p = start
         while is_digit(self.at(p)):
@@ -233,7 +233,7 @@ class Lexer:
         self.pos = p
 
     # Reads the string literal at `pos`, or the f-string whose `f` is at `pos`.
-    def read_string(self, formatted: bool):
+    def read_string(formatted: bool):
         start = self.pos
         q = start
         if formatted:
@@ -296,7 +296,7 @@ class Lexer:
 
     # Reads the escape sequence at `pos` in the string that starts at `start`
     # and returns its text.
-    def read_escape(self, start: int, triple: bool) -> str:
+    def read_escape(start: int, triple: bool) -> str:
         p = self.pos
         e = self.at(p + 1)
         if e == "" or not triple and (e == "\n" or e == "\r"):
@@ -340,7 +340,7 @@ class Lexer:
     # Reads the f-string field whose `{` is at `pos`, in an f-string delimited
     # by `quote`. The field's text is checked and its end found before its
     # tokens are read, which decides which error comes first.
-    def read_field(self, quote: str, triple: bool):
+    def read_field(quote: str, triple: bool):
         brace = self.pos
         p = brace + 1
         nesting = 0

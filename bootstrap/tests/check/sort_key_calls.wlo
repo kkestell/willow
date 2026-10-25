@@ -2,7 +2,7 @@ class Row:
     name: str
     score: int
 
-    def rank(self, row: Row) -> int:
+    def rank(row: Row) -> int:
         return self.score - row.score
 
 def names(xs: list[Row]) -> str:

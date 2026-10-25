@@ -8,12 +8,12 @@ import types
 class Printer:
     positions: bool
 
-    def at(self, text: str, line: int, col: int) -> str:
+    def at(text: str, line: int, col: int) -> str:
         if self.positions:
             return f"{text}@{line}:{col}"
         return text
 
-    def module(self, module: ast.Module) -> str:
+    def module(module: ast.Module) -> str:
         lines: list[str] = []
         for imported in module.imports:
             lines.append(self.at(f"import {imported.name}", imported.line, imported.col))
@@ -21,7 +21,7 @@ class Printer:
             lines.append(self.decl(decl))
         return "\n".join(lines)
 
-    def decl(self, decl: ast.Decl) -> str:
+    def decl(decl: ast.Decl) -> str:
         if isinstance(decl, ast.FunctionDecl):
             return self.function(decl)
         if isinstance(decl, ast.ClassDecl):
@@ -47,7 +47,7 @@ class Printer:
             return self.at(f"enum {decl.name}", decl.line, decl.col) + " { " + "; ".join(members) + " }"
         return self.at(f"type {decl.name}{self.type_params(decl.type_params)}", decl.line, decl.col) + " = " + self.annotation(decl.value)
 
-    def type_params(self, params: list[ast.TypeParam]) -> str:
+    def type_params(params: list[ast.TypeParam]) -> str:
         if len(params) == 0:
             return ""
         parts: list[str] = []
@@ -60,10 +60,11 @@ class Printer:
         return "[" + ", ".join(parts) + "]"
 
     # A function, or a protocol method signature when its body is empty.
-    def function(self, function: ast.FunctionDecl) -> str:
+    def function(function: ast.FunctionDecl) -> str:
         params: list[str] = []
         for param in function.params:
-            params.append(self.param(param))
+            if param.name != "self":
+                params.append(self.param(param))
         if function.variadic:
             params.append("...")
         text = f"def {function.name}{self.type_params(function.type_params)}"
@@ -76,7 +77,7 @@ class Printer:
             return text
         return text + " " + self.block(function.body)
 
-    def param(self, param: ast.Param) -> str:
+    def param(param: ast.Param) -> str:
         text = param.name
         if param.keyword_only:
             text = "*" + text
@@ -89,7 +90,7 @@ class Printer:
             text = text + " = " + self.expr(default)
         return text
 
-    def annotation(self, t: ast.TypeExpr) -> str:
+    def annotation(t: ast.TypeExpr) -> str:
         if isinstance(t, ast.TypeName):
             return self.type_name(t)
         if isinstance(t, ast.UnionType):
@@ -102,7 +103,7 @@ class Printer:
             params.append(self.annotation(param))
         return self.at("((" + ", ".join(params) + ") -> " + self.annotation(t.result) + ")", t.line, t.col)
 
-    def type_name(self, t: ast.TypeName) -> str:
+    def type_name(t: ast.TypeName) -> str:
         text = t.name
         if t.module != "":
             text = t.module + "." + text
@@ -113,7 +114,7 @@ class Printer:
             text = text + "[" + ", ".join(args) + "]"
         return self.at(text, t.line, t.col)
 
-    def target(self, target: ast.Target) -> str:
+    def target(target: ast.Target) -> str:
         if target.name != "":
             return target.name
         elements: list[str] = []
@@ -121,13 +122,13 @@ class Printer:
             elements.append(self.target(element))
         return "<" + ", ".join(elements) + ">"
 
-    def exprs(self, exprs: list[ast.Expr]) -> str:
+    def exprs(exprs: list[ast.Expr]) -> str:
         parts: list[str] = []
         for expr in exprs:
             parts.append(self.expr(expr))
         return ", ".join(parts)
 
-    def args(self, args: list[ast.Expr], keywords: list[ast.Keyword]) -> str:
+    def args(args: list[ast.Expr], keywords: list[ast.Keyword]) -> str:
         parts: list[str] = []
         for arg in args:
             parts.append(self.expr(arg))
@@ -135,14 +136,14 @@ class Printer:
             parts.append(self.at(keyword.name, keyword.line, keyword.col) + "=" + self.expr(keyword.value))
         return ", ".join(parts)
 
-    def type_args(self, args: list[ast.TypeExpr]) -> str:
+    def type_args(args: list[ast.TypeExpr]) -> str:
         parts: list[str] = []
         for t in args:
             parts.append(self.annotation(t))
         return ", ".join(parts)
 
     # The resolved type arguments of a generic call or function value.
-    def type_arg_list(self, args: list[types.Type]) -> str:
+    def type_arg_list(args: list[types.Type]) -> str:
         if len(args) == 0:
             return ""
         names: list[str] = []
@@ -150,10 +151,10 @@ class Printer:
             names.append(types.display(arg))
         return "[" + ", ".join(names) + "]"
 
-    def expr(self, expr: ast.Expr) -> str:
+    def expr(expr: ast.Expr) -> str:
         return self.at(self.expr_node(expr.node), expr.line, expr.col)
 
-    def expr_node(self, node: ast.ExprNode) -> str:
+    def expr_node(node: ast.ExprNode) -> str:
         if isinstance(node, ast.Int):
             return node.text
         if isinstance(node, ast.Float):
@@ -232,16 +233,16 @@ class Printer:
             i = i + 1
         return "{" + ", ".join(entries) + "}"
 
-    def block(self, body: list[ast.Stmt]) -> str:
+    def block(body: list[ast.Stmt]) -> str:
         parts: list[str] = []
         for statement in body:
             parts.append(self.stmt(statement))
         return "{ " + "; ".join(parts) + " }"
 
-    def stmt(self, statement: ast.Stmt) -> str:
+    def stmt(statement: ast.Stmt) -> str:
         return self.at(self.stmt_node(statement.node), statement.line, statement.col)
 
-    def stmt_node(self, node: ast.StmtNode) -> str:
+    def stmt_node(node: ast.StmtNode) -> str:
         if isinstance(node, ast.Assign):
             text = node.name
             annotation = node.annotation

@@ -5,17 +5,17 @@
 import sys
 
 protocol Switch:
-    def activate(self) -> Switch
-    def value(self) -> bool
+    def activate() -> Switch
+    def value() -> bool
 
 class Toggle:
     state: bool
 
-    def activate(self) -> Toggle:
+    def activate() -> Toggle:
         self.state = not self.state
         return self
 
-    def value(self) -> bool:
+    def value() -> bool:
         return self.state
 
 # A toggle that changes state on every count_max-th activation.
@@ -24,14 +24,14 @@ class NthToggle:
     count_max: int
     counter: int = 0
 
-    def activate(self) -> NthToggle:
+    def activate() -> NthToggle:
         self.counter = self.counter + 1
         if self.counter >= self.count_max:
             self.state = not self.state
             self.counter = 0
         return self
 
-    def value(self) -> bool:
+    def value() -> bool:
         return self.state
 
 def run(switch: Switch, n: int):

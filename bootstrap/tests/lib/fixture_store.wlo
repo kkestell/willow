@@ -8,7 +8,7 @@ class Item:
 class Handle:
     _id: int
 
-    def id(self) -> int:
+    def id() -> int:
         return self._id
 
 def make(label: str) -> Item:

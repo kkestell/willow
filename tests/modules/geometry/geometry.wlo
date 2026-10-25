@@ -2,7 +2,7 @@ class Point:
     x: float
     y: float
 
-    def moved(self, dx: float) -> Point:
+    def moved(dx: float) -> Point:
         return Point(self.x + dx, self.y)
 
 def distance_squared(a: Point, b: Point) -> float:

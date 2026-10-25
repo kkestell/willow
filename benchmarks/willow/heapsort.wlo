@@ -7,7 +7,7 @@ class Random:
     last: int = 42
 
     # A float in [0, maximum) from the benchmark's generator.
-    def next(self, maximum: float) -> float:
+    def next(maximum: float) -> float:
         self.last = (self.last * 3877 + 29573) % 139968
         return maximum * float(self.last) / 139968.0
 

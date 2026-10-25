@@ -6,5 +6,5 @@ class Diagnostic:
     col: int
     message: str
 
-    def format(self) -> str:
+    def format() -> str:
         return f"{self.path}:{self.line}:{self.col}: error: {self.message}"

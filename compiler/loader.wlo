@@ -51,7 +51,7 @@ class Loader:
 
     # Loads module `name` from the file at `path`, which the import
     # `importing` in the module at `importer` names.
-    def visit(self, name: str, path: str, importer: str, importing: ast.Import):
+    def visit(name: str, path: str, importer: str, importing: ast.Import):
         file = fs.realpath(path)
         other = self.names_by_file.get(file)
         if other is not none:
@@ -70,7 +70,7 @@ class Loader:
 
     # Loads module `name` from `text`, read from `path`, and, depth first,
     # every module it imports that is not loaded yet.
-    def add(self, name: str, path: str, text: str, privileged: bool):
+    def add(name: str, path: str, text: str, privileged: bool):
         if privileged:
             self.libraries[name] = true
         else:
@@ -98,7 +98,7 @@ class Loader:
     # way: a path through a file that is not a directory, as `a/b.wlo` is
     # when `a` is a file, is reported as "No such file or directory" rather
     # than "Not a directory".
-    def load_import(self, importer: str, item: ast.Import, privileged: bool):
+    def load_import(importer: str, item: ast.Import, privileged: bool):
         path = "lib/" + item.name + ".wlo"
         if not privileged and item.name != "core":
             if self.loaded.get(item.name) is not none:
@@ -129,10 +129,10 @@ class Loader:
         else if not is_stdlib(item.name):
             self.fail(importer, item, f"cannot load module '{item.name}': {path}: No such file or directory")
 
-    def add_core(self):
+    def add_core():
         self.add("core", "bootstrap/core/core.wlo", core_source.text(), true)
 
-    def fail(self, path: str, item: ast.Import, message: str):
+    def fail(path: str, item: ast.Import, message: str):
         self.error = diagnostic.Diagnostic(path, item.line, item.col, message)
 
 # The directory part of `path` with its trailing "/", or "" when it has none.

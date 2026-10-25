@@ -1,10 +1,10 @@
 class Countdown:
     n: int
 
-    def iter(self) -> Countdown:
+    def iter() -> Countdown:
         return self
 
-    def next(self) -> int:
+    def next() -> int:
         if self.n == 0:
             raise StopIteration("")
         self.n = self.n - 1
@@ -14,25 +14,25 @@ class Countdown:
 class Bag:
     size: int
 
-    def iter(self) -> Countdown:
+    def iter() -> Countdown:
         return Countdown(self.size)
 
 class Faulty:
     n: int
 
-    def iter(self) -> Faulty:
+    def iter() -> Faulty:
         return self
 
-    def next(self) -> int:
+    def next() -> int:
         raise ValueError("broken")
 
 class Pairs:
     left: int
 
-    def iter(self) -> Pairs:
+    def iter() -> Pairs:
         return self
 
-    def next(self) -> tuple[str, int]:
+    def next() -> tuple[str, int]:
         if self.left == 0:
             raise StopIteration("")
         self.left = self.left - 1

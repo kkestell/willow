@@ -20,12 +20,12 @@ type Timing = tuple[int, str]
 
 # Any class with a matching `check` method is a Rule; no declaration needed.
 protocol Rule:
-    def check(self, entry: Entry) -> str | none
+    def check(entry: Entry) -> str | none
 
 class SlowerThan:
     limit: int
 
-    def check(self, entry: Entry) -> str | none:
+    def check(entry: Entry) -> str | none:
         # Fields are not narrowed, so copy to a local before testing for none.
         millis = entry.millis
         if millis is not none and millis > self.limit:
@@ -35,7 +35,7 @@ class SlowerThan:
 class Mentions:
     word: str
 
-    def check(self, entry: Entry) -> str | none:
+    def check(entry: Entry) -> str | none:
         if self.word in entry.text:
             return f"mentions {self.word}"
         return none
@@ -44,10 +44,10 @@ class Mentions:
 class Section:
     title: str
 
-    def enter(self):
+    def enter():
         print(f"== {self.title} ==")
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         print("")
 
 def sample_logs() -> dict[str, str]:

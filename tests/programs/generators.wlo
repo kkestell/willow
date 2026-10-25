@@ -26,7 +26,7 @@ def leaking() -> Iterator[int]:
 class Words:
     text: str
 
-    def words(self) -> Iterable[str]:
+    def words() -> Iterable[str]:
         for word in self.text.split(" "):
             yield word
 

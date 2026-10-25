@@ -58,7 +58,7 @@ static bool starts_expression(const Kind *kind) {
     case KIND_Name: case KIND_Int: case KIND_Float: case KIND_Str: case KIND_FStr:
         return true;
     case KIND_Word:
-        return WORD_IN(kind, "true", "false", "none", "int", "float", "str", "bytes",
+        return WORD_IN(kind, "self", "true", "false", "none", "int", "float", "str", "bytes",
                        "(", "[", "{", "-", "+", "not", "await");
     default: return false;
     }
@@ -140,7 +140,7 @@ static bool list_end(Parser *self, const char *close) {
 
 static Class class(Parser *self);
 static Enum enumeration(Parser *self);
-static Func declaration(Parser *self, bool method);
+static Func declaration(Parser *self);
 static TypeExpr type_expr(Parser *self);
 static TypeName parser_type_name(Parser *self);
 static StmtVec block(Parser *self);
@@ -190,7 +190,7 @@ Module parse(String module_name, String path, TokenVec tokens) {
             end_of_line(&p);
             vec_push(module.aliases, ((Alias){item.pos, item.name, ty}));
         } else {
-            vec_push(module.funcs, declaration(&p, false));
+            vec_push(module.funcs, declaration(&p));
         }
     }
     return module;
@@ -262,7 +262,7 @@ static Class class(Parser *self) {
     FuncVec methods = {0};
     while (!accept_kind(self, KIND_Dedent)) {
         if (word_is(peek(self), "def")) {
-            vec_push(methods, declaration(self, true));
+            vec_push(methods, declaration(self));
             continue;
         }
         bool is_field = peek(self)->tag == KIND_Name &&
@@ -301,8 +301,8 @@ static Enum enumeration(Parser *self) {
     return (Enum){item.pos, item.name, members};
 }
 
-/* A function, extern def, or method with an unannotated first self parameter. */
-static Func declaration(Parser *self, bool method) {
+/* A function, extern def, or method. */
+static Func declaration(Parser *self) {
     bool external = peek(self)->tag == KIND_Name && str_equal(peek(self)->as.Name, STR("extern")) &&
         word_is(&self->tokens.data[self->i + 1].kind, "def");
     if (external) {
@@ -316,18 +316,6 @@ static Func declaration(Parser *self, bool method) {
     self->i++;
     PosName item = name(self, "a function name");
     expect(self, "(");
-    if (method) {
-        if (peek(self)->tag != KIND_Name || !str_equal(peek(self)->as.Name, STR("self"))) {
-            parser_fail(self, pos(self), str_format("method '%s' must take 'self' as its first parameter", item.name.data));
-        }
-        self->i++;
-        if (word_is(peek(self), ":")) {
-            parser_fail(self, pos(self), STR("'self' cannot have an annotation"));
-        }
-        if (!accept(self, ",") && !word_is(peek(self), ")")) {
-            unexpected(self, "',' or ')'");
-        }
-    }
     ParamVec params = {0};
     bool variadic = false;
     while (!accept(self, ")")) {
@@ -488,6 +476,10 @@ static StmtKind simple_statement(Parser *self) {
     Expr target = expr(self);
     Pos equals = pos(self);
     TypeExpr *annotation = NULL;
+    if (target.kind.tag == EXPR_Name && str_equal(target.kind.as.Name, STR("self")) &&
+        WORD_IN(peek(self), "=", ":")) {
+        parser_fail(self, target.pos, STR("cannot assign to 'self'"));
+    }
     if (word_is(peek(self), ":")) {
         if (target.kind.tag != EXPR_Name) {
             parser_fail(self, pos(self), STR("only a name can have an annotation"));
@@ -700,7 +692,7 @@ static Expr primary(Parser *self) {
         kind = (ExprKind){.tag = EXPR_Name, .as.Name = token.as.Name};
         break;
     case KIND_Word:
-        if (WORD_IN(&token, "int", "float", "bool", "str", "list", "dict")) {
+        if (WORD_IN(&token, "self", "int", "float", "bool", "str", "list", "dict")) {
             kind = (ExprKind){.tag = EXPR_Name, .as.Name = str_from_cstr(token.as.Word)};
         } else if (word_is(&token, "{")) {
             self->i++;

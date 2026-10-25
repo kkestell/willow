@@ -65,28 +65,28 @@ class Parser:
     tokens: list[Token]
     index: int = 0
 
-    def peek(self) -> str:
+    def peek() -> str:
         return self.tokens[self.index].text
 
-    def take(self) -> Token:
+    def take() -> Token:
         token = self.tokens[self.index]
         if token.text != "":
             self.index = self.index + 1
         return token
 
-    def sum(self) -> Expr:
+    def sum() -> Expr:
         left = self.product()
         while self.peek() == "+" or self.peek() == "-":
             left = Binary(operator(self.take().text), left, self.product())
         return left
 
-    def product(self) -> Expr:
+    def product() -> Expr:
         left = self.unary()
         while self.peek() == "*" or self.peek() == "/":
             left = Binary(operator(self.take().text), left, self.unary())
         return left
 
-    def unary(self) -> Expr:
+    def unary() -> Expr:
         token = self.take()
         if token.text == "-":
             return Negate(self.unary())

@@ -11,7 +11,7 @@ class string:
 class C_:
     x: int
 
-    def get(self) -> int:
+    def get() -> int:
         return self.x
 
 def end(local: int) -> int:

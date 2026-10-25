@@ -14,7 +14,7 @@ indentation.wlo:2:3: error: indentation must be a multiple of four spaces
 status 1
 leading_zeros.wlo:2:9: error: integer literal has leading zeros
 status 1
-method_self.wlo:2:11: error: method 'f' must take 'self' as its first parameter
+method_self.wlo:2:11: error: expected a parameter name, found 'self'
 status 1
 positional_after_keyword.wlo:2:12: error: positional argument follows keyword argument
 status 1

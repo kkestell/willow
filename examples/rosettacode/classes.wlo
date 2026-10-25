@@ -4,16 +4,16 @@ class Account:
     owner: str
     balance: int = 0
 
-    def deposit(self, amount: int):
+    def deposit(amount: int):
         self.balance = self.balance + amount
 
-    def withdraw(self, amount: int) -> bool:
+    def withdraw(amount: int) -> bool:
         if amount > self.balance:
             return false
         self.balance = self.balance - amount
         return true
 
-    def describe(self) -> str:
+    def describe() -> str:
         return f"{self.owner} has {self.balance}"
 
 def main():

@@ -4,10 +4,10 @@ enum Key:
 class Counter:
     value: int
 
-    def get(self) -> int:
+    def get() -> int:
         return self.value
 
-    def pop(self) -> int:
+    def pop() -> int:
         self.value = self.value - 1
         return self.value
 

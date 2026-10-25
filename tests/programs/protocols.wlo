@@ -1,41 +1,41 @@
 import io
 
 protocol Shape:
-    def area(self) -> float
-    def scaled(self, factor: float) -> Shape
+    def area() -> float
+    def scaled(factor: float) -> Shape
 
 protocol Area:
-    def area(self) -> float
+    def area() -> float
 
 protocol Writer:
-    def write_text(self, text: str)
+    def write_text(text: str)
 
 protocol Source[T]:
-    def get(self) -> T
+    def get() -> T
 
 protocol Greeter:
-    def greet(self, name: str | none = "you", *, loud: bool = false) -> str
+    def greet(name: str | none = "you", *, loud: bool = false) -> str
 
 protocol Number:
-    def value(self) -> int | float
+    def value() -> int | float
 
 protocol Scaler:
-    def scale(self, by: float = 1.0) -> float
+    def scale(by: float = 1.0) -> float
 
 protocol Pair:
-    def pair(self) -> tuple[int]
+    def pair() -> tuple[int]
 
 protocol Described:
-    def describe(self) -> str
+    def describe() -> str
 
 class Rect:
     width: float
     height: float
 
-    def area(self) -> float:
+    def area() -> float:
         return self.width * self.height
 
-    def scaled(self, factor: float, *, square: bool = false) -> Rect:
+    def scaled(factor: float, *, square: bool = false) -> Rect:
         if square:
             return Rect(self.width * factor, self.width * factor)
         return Rect(self.width * factor, self.height * factor)
@@ -43,19 +43,19 @@ class Rect:
 class Circle:
     radius: float
 
-    def area(self) -> float:
+    def area() -> float:
         return 3.0 * self.radius * self.radius
 
-    def scaled(self, factor: float) -> Circle:
+    def scaled(factor: float) -> Circle:
         return Circle(self.radius * factor)
 
-    def get(self) -> float:
+    def get() -> float:
         return self.radius
 
 class Box[T]:
     item: T
 
-    def get(self) -> T:
+    def get() -> T:
         return self.item
 
 # The protocol's keyword-only `loud` comes after an extra `polite`, and the
@@ -63,7 +63,7 @@ class Box[T]:
 class Host:
     tag: str
 
-    def greet(self, name: str | none = "friend", *, polite: bool = true, loud: bool = true) -> str:
+    def greet(name: str | none = "friend", *, polite: bool = true, loud: bool = true) -> str:
         who = "nobody"
         if name is not none:
             who = name
@@ -77,19 +77,19 @@ class Host:
 class Half:
     n: int
 
-    def value(self) -> float:
+    def value() -> float:
         return 2.5
 
 class Three:
     n: int
 
-    def value(self) -> int:
+    def value() -> int:
         return 3
 
 class Doubler:
     n: int
 
-    def scale(self, by: int | float = 3) -> float:
+    def scale(by: int | float = 3) -> float:
         if isinstance(by, float):
             return by * 2.0
         return -1.0
@@ -97,20 +97,20 @@ class Doubler:
 class One:
     n: int
 
-    def pair(self) -> tuple[int]:
+    def pair() -> tuple[int]:
         return (self.n,)
 
 # Not a Pair: its tuple is longer.
 class Two:
     n: int
 
-    def pair(self) -> tuple[int, float]:
+    def pair() -> tuple[int, float]:
         return (self.n, 1.0)
 
 class Oops(Exception):
     code: int
 
-    def describe(self) -> str:
+    def describe() -> str:
         return self.message + " " + str(self.code)
 
 def take[T](source: Source[T]) -> T:

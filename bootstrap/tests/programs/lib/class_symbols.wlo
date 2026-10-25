@@ -6,5 +6,5 @@ class Value:
     count: int
     kind: Kind
 
-    def label(self) -> str:
+    def label() -> str:
         return str(self.kind) + " " + str(self.count)

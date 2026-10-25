@@ -3,13 +3,13 @@ class Resource:
     fail_enter: bool
     fail_exit: bool
 
-    def enter(self) -> str:
+    def enter() -> str:
         if self.fail_enter:
             raise ValueError("cannot enter " + self.name)
         print("enter " + self.name)
         return self.name
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         if error is none:
             print("exit " + self.name)
         else:
@@ -20,10 +20,10 @@ class Resource:
 class Pair:
     n: int
 
-    def enter(self) -> tuple[str, int]:
+    def enter() -> tuple[str, int]:
         return ("pair", self.n)
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         print("pair done")
 
 def plain(name: str) -> Resource:

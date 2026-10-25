@@ -1,10 +1,10 @@
 class Box[T]:
     value: T
 
-    def get(self) -> T:
+    def get() -> T:
         return self.value
 
-    def replace(self, value: T, *, keep: bool = false) -> T:
+    def replace(value: T, *, keep: bool = false) -> T:
         previous = self.value
         if not keep:
             self.value = value

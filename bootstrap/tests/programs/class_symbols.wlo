@@ -7,10 +7,10 @@ class Value:
     kind: Kind
     count: int = -2
 
-    def label(self) -> str:
+    def label() -> str:
         return f"{self.kind} {self.count}"
 
-    def add(self, amount: int):
+    def add(amount: int):
         self.count = self.count + amount
 
 type Count = int

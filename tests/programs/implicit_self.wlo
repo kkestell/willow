@@ -1,0 +1,30 @@
+protocol Counter:
+    def read() -> int
+    def add(amount: int) -> int
+
+class Box:
+    value: int
+
+    def read() -> int:
+        return self.value
+
+    def add(amount: int) -> int:
+        self.value = self.value + amount
+        return self.read()
+
+    def capture() -> () -> int:
+        def outer() -> () -> int:
+            return () => self.read()
+        return outer()
+
+def apply(counter: Counter) -> int:
+    counter.add(3)
+    return counter.read()
+
+def main():
+    box = Box(2)
+    read = box.capture()
+    add = box.add
+    print(add(4))
+    print(apply(box))
+    print(read())

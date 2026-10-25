@@ -12,15 +12,15 @@ import types
 class Results:
     failed: bool
 
-    def text(self, label: str, actual: str, expected: str):
+    def text(label: str, actual: str, expected: str):
         if actual != expected:
             print(f"FAIL {label}: got {actual}, expected {expected}")
             self.failed = true
 
-    def shows(self, label: str, t: types.Type, expected: str):
+    def shows(label: str, t: types.Type, expected: str):
         self.text(label, types.display(t), expected)
 
-    def check(self, label: str, actual: bool, expected: bool):
+    def check(label: str, actual: bool, expected: bool):
         if actual != expected:
             print(f"FAIL {label}: got {actual}, expected {expected}")
             self.failed = true
@@ -38,7 +38,7 @@ def method(decl: types.Class, id: int, name: str, params: list[types.Param], res
     decl.methods.append(fn)
     return fn
 
-# `class Box[T]` with `item: T` and `def get(self) -> T`.
+# `class Box[T]` with `item: T` and `def get() -> T`.
 def box() -> types.Class:
     t = types.TypeVar(1, "T", none)
     decl = types.Class("Box", "Box", [t], [types.Field("item", t, none)], [], false, false, "")
@@ -48,8 +48,8 @@ def box() -> types.Class:
 def box_of(arg: types.Type) -> types.ClassType:
     return types.ClassType(box(), [arg])
 
-# `class Pair[A, B]` with `def swap(self) -> Pair[B, A]` and
-# `def apply(self, f: (A) -> B) -> dict[str, B | none]`.
+# `class Pair[A, B]` with `def swap() -> Pair[B, A]` and
+# `def apply(f: (A) -> B) -> dict[str, B | none]`.
 def pair() -> types.Class:
     a = types.TypeVar(2, "A", none)
     b = types.TypeVar(3, "B", none)

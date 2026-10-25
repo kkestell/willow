@@ -1,30 +1,30 @@
 protocol Source[T]:
-    def get(self) -> T
+    def get() -> T
 
 protocol Tagged[T]:
-    def get(self) -> T
-    def tag(self) -> str
+    def get() -> T
+    def tag() -> str
 
 protocol Setter:
-    def set(self, value: float = 1.5, *, flag: bool = false) -> float
+    def set(value: float = 1.5, *, flag: bool = false) -> float
 
 protocol Pair:
-    def get(self) -> tuple[Source[int]]
+    def get() -> tuple[Source[int]]
 
 protocol Chain:
-    def next(self) -> Chain | none
+    def next() -> Chain | none
 
 class Box[T]:
     value: T
 
-    def get(self) -> T:
+    def get() -> T:
         return self.value
 
-    def tag(self) -> str:
+    def tag() -> str:
         return "box"
 
 class Adjuster:
-    def set(self, value: int | float = 3, *, extra: bool = true, flag: bool = true) -> float:
+    def set(value: int | float = 3, *, extra: bool = true, flag: bool = true) -> float:
         if isinstance(value, float):
             if extra and not flag:
                 return value * 2.0
@@ -32,17 +32,17 @@ class Adjuster:
         return -1.0
 
 class PairBox:
-    def get(self) -> tuple[Box[int]]:
+    def get() -> tuple[Box[int]]:
         return (Box(8),)
 
 class FailedPair:
-    def get(self) -> tuple[Box[int]]:
+    def get() -> tuple[Box[int]]:
         raise ValueError("failed")
 
 class Link:
     tail: Link | none
 
-    def next(self) -> Link | none:
+    def next() -> Link | none:
         return self.tail
 
 def take[T](source: Source[T]) -> T:

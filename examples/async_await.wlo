@@ -8,12 +8,12 @@ async def fetch(name: str, seconds: float) -> str:
     return f"{name} ready"
 
 protocol Loader:
-    async def load(self, key: str) -> int
+    async def load(key: str) -> int
 
 class Cache:
     values: dict[str, int]
 
-    async def load(self, key: str) -> int:
+    async def load(key: str) -> int:
         await aio.sleep(0.0)
         value = self.values.get(key)
         if value is none:

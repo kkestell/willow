@@ -1,8 +1,8 @@
 class Manager:
-    def enter(self) -> int:
+    def enter() -> int:
         raise ValueError("entry")
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         pass
 
 def main():

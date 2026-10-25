@@ -1,14 +1,14 @@
 class Broken:
-    def iter(self) -> Iterator[int]:
+    def iter() -> Iterator[int]:
         raise StopIteration("creation")
 
 class Failing:
     count: int = 0
 
-    def iter(self, unused: int = 0) -> Failing:
+    def iter(unused: int = 0) -> Failing:
         return self
 
-    def next(self, value: int = 7) -> int:
+    def next(value: int = 7) -> int:
         self.count = self.count + 1
         if self.count == 1:
             return value
@@ -17,13 +17,13 @@ class Failing:
 class PairSource[T]:
     values: list[T]
 
-    def iter(self) -> Iterator[T]:
+    def iter() -> Iterator[T]:
         return iter(self.values)
 
 class Factory[T: Iterator[int]]:
     value: T
 
-    def iter(self) -> T:
+    def iter() -> T:
         return self.value
 
 def wrap[T: Iterator[int]](iterator: T) -> Iterator[tuple[int, int]]:

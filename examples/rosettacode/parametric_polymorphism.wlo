@@ -6,7 +6,7 @@ class Tree[T]:
     right: Tree[T] | none = none
 
     # Builds a tree of the same shape whose values are `f` of this tree's.
-    def map[U](self, f: (T) -> U) -> Tree[U]:
+    def map[U](f: (T) -> U) -> Tree[U]:
         result = Tree(f(self.value))
         left = self.left
         if left is not none:

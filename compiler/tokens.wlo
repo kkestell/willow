@@ -50,6 +50,7 @@ enum Kind:
     PROTOCOL
     RAISE
     RETURN
+    SELF
     TRY
     TYPE
     WHILE
@@ -141,6 +142,7 @@ def keywords() -> dict[str, Kind]:
         "protocol": Kind.PROTOCOL,
         "raise": Kind.RAISE,
         "return": Kind.RETURN,
+        "self": Kind.SELF,
         "true": Kind.TRUE,
         "try": Kind.TRY,
         "type": Kind.TYPE,

@@ -1,37 +1,37 @@
 protocol Shape:
-    def area(self) -> float
+    def area() -> float
 
 class Countdown:
     n: int
 
-    def iter(self) -> Countdown:
+    def iter() -> Countdown:
         return self
 
-    def next(self) -> int:
+    def next() -> int:
         self.n = self.n - 1
         return self.n
 
 class Session:
     name: str
 
-    def enter(self) -> str:
+    def enter() -> str:
         print("enter " + self.name)
         return self.name
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         print(error is none)
 
 class Rect:
     width: float
     height: float
 
-    def area(self) -> float:
+    def area() -> float:
         return self.width * self.height
 
 class Circle:
     radius: float
 
-    def area(self) -> float:
+    def area() -> float:
         return 3.0 * self.radius * self.radius
 
 def total[T: Shape](shapes: list[T]) -> float:

@@ -16,10 +16,10 @@ class Server:
     port_file: str
     port: int
 
-    def enter(self) -> Server:
+    def enter() -> Server:
         return self
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         _stop(self)
 
 def _server_path() -> str:

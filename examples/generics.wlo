@@ -10,22 +10,22 @@ def swap[A, B](pair: tuple[A, B]) -> tuple[B, A]:
 class Stack[T]:
     items: list[T]
 
-    def push(self, item: T):
+    def push(item: T):
         self.items.append(item)
 
-    def pop(self) -> T:
+    def pop() -> T:
         return self.items.pop()
 
-    def size(self) -> int:
+    def size() -> int:
         return len(self.items)
 
 protocol Named:
-    def name(self) -> str
+    def name() -> str
 
 class User:
     login: str
 
-    def name(self) -> str:
+    def name() -> str:
         return self.login
 
 # The bound `T: Named` lets the body call `name` on any `T`.

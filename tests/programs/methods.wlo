@@ -1,26 +1,26 @@
 class Counter:
     count: int = 0
 
-    def add(self, amount: int = 1) -> int:
+    def add(amount: int = 1) -> int:
         self.count = self.count + amount
         return self.count
 
-    def add_twice(self, amount: int) -> int:
+    def add_twice(amount: int) -> int:
         self.add(amount)
         return self.add(amount=amount)
 
-    def countdown(self, n: int) -> str:
+    def countdown(n: int) -> str:
         if n == 0:
             return "go"
         return f"{n} " + self.countdown(n - 1)
 
-    def end(self) -> str:
+    def end() -> str:
         return f"ended at {self.count}"
 
 class ParseError(Exception):
     line: int
 
-    def describe(self) -> str:
+    def describe() -> str:
         return f"line {self.line}: {self.message}"
 
 def shadowed(counter: Counter) -> int:

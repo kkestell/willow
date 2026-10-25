@@ -5,7 +5,7 @@ class Row:
 class Ranker:
     bonus: int
 
-    def rank(self, row: Row) -> int:
+    def rank(row: Row) -> int:
         return self.bonus - row.score
 
 def by_name(row: Row) -> str:

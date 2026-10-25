@@ -9,7 +9,7 @@ class Point:
     y: int
     unit: Unit
 
-    def label(self) -> str:
+    def label() -> str:
         return str(self.x) + "," + str(self.y) + " " + qualified_names.unit_name(self.unit)
 
 type Points = list[Point]

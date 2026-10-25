@@ -39,7 +39,7 @@ def report(path: str, *, limit: int = 100, verbose: bool, tag: str = "x") -> str
 class Counter:
     n: int
 
-    def scaled(self, *, by: int = 2) -> int:
+    def scaled(*, by: int = 2) -> int:
         return self.n * by
 
 def main():

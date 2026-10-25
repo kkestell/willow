@@ -1,10 +1,10 @@
 class Flags:
     calls: int = 0
 
-    def iter(self) -> Flags:
+    def iter() -> Flags:
         return self
 
-    def next(self) -> bool:
+    def next() -> bool:
         self.calls = self.calls + 1
         if self.calls > 1:
             raise ValueError("too far")

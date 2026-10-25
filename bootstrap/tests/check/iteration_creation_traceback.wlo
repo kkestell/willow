@@ -1,5 +1,5 @@
 class Source:
-    def iter(self) -> Iterator[int]:
+    def iter() -> Iterator[int]:
         raise ValueError("creation")
 
 def main():

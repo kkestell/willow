@@ -1,10 +1,10 @@
 protocol Reader:
-    def get(self) -> int | none
+    def get() -> int | none
 
 class Source:
     value: int
 
-    def get(self) -> int:
+    def get() -> int:
         return self.value
 
 def read(value: Reader) -> int | none:

@@ -7,7 +7,7 @@ type Value = tuple[Mode | none, tuple[int | float, str | none], tuple[()], bool]
 class Options:
     value: Value = (Mode.ON, (-2.5, none), (), true)
 
-    def choose(self, *, value: Value = (Mode.OFF, (+3, "method"), (), false)) -> Value:
+    def choose(*, value: Value = (Mode.OFF, (+3, "method"), (), false)) -> Value:
         return value
 
 def choose(Mode: int = 0, *, value: Value = (Mode.ON, (-0.0, "function"), (), true)) -> Value:

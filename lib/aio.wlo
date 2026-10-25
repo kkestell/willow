@@ -3,7 +3,7 @@ import core
 class Task[T]:
     _task: core.AioTask
 
-    def result(self) -> T:
+    def result() -> T:
         # A typed list load restores T from core's unboxed result slot.
         values: list[T] = []
         core.list_append(__ptr(__word(values)), core.aio_task_result(self._task))
@@ -12,13 +12,13 @@ class Task[T]:
 class TaskGroup:
     _group: core.AioGroup
 
-    def start[T](self, coro: Coroutine[T]) -> Task[T]:
+    def start[T](coro: Coroutine[T]) -> Task[T]:
         return self._start(coro, "", 0, 0)
 
-    def _start[T](self, coro: Coroutine[T], path: str, line: int, col: int) -> Task[T]:
+    def _start[T](coro: Coroutine[T], path: str, line: int, col: int) -> Task[T]:
         return Task[T](core.aio_group_start(self._group, __ptr(__word(coro)), path, line, col))
 
-    def cancel(self):
+    def cancel():
         core.aio_group_cancel(self._group)
 
 def task_group() -> TaskGroup:
@@ -30,10 +30,10 @@ async def sleep(seconds: float):
 class Semaphore:
     _semaphore: core.AioSemaphore
 
-    async def acquire(self):
+    async def acquire():
         core.aio_semaphore_wait(self._semaphore)
 
-    def release(self):
+    def release():
         core.aio_semaphore_release(self._semaphore)
 
 def semaphore(value: int = 1) -> Semaphore:
@@ -45,13 +45,13 @@ class Connection:
     _receiving: bool = false
     _sending: bool = false
 
-    def _usable(self):
+    def _usable():
         if self._fd < 0:
             raise ValueError("I/O operation on closed connection")
         if self._broken:
             raise ValueError("connection is unusable after a failed send")
 
-    async def recv(self, size: int, timeout: float | none = none) -> bytes:
+    async def recv(size: int, timeout: float | none = none) -> bytes:
         core.aio_checkpoint()
         if self._receiving:
             raise RuntimeError("recv is already in progress")
@@ -74,7 +74,7 @@ class Connection:
         finally:
             self._receiving = false
 
-    async def sendall(self, data: bytes, timeout: float | none = none):
+    async def sendall(data: bytes, timeout: float | none = none):
         core.aio_checkpoint()
         if self._sending:
             raise RuntimeError("sendall is already in progress")
@@ -100,28 +100,28 @@ class Connection:
             if not complete:
                 self._broken = true
 
-    def close(self):
+    def close():
         if self._fd >= 0:
             fd = self._fd
             self._fd = -1
             core.aio_close_fd(fd, core.aio_loop())
 
-    def enter(self) -> Connection:
+    def enter() -> Connection:
         self._usable()
         return self
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         self.close()
 
 class Listener:
     _fd: int
     _accepting: bool = false
 
-    def _usable(self):
+    def _usable():
         if self._fd < 0:
             raise ValueError("I/O operation on closed listener")
 
-    async def accept(self, timeout: float | none = none) -> Connection:
+    async def accept(timeout: float | none = none) -> Connection:
         core.aio_checkpoint()
         if self._accepting:
             raise RuntimeError("accept is already in progress")
@@ -141,21 +141,21 @@ class Listener:
         finally:
             self._accepting = false
 
-    def local_port(self) -> int:
+    def local_port() -> int:
         self._usable()
         return core.net_local_port(self._fd)
 
-    def close(self):
+    def close():
         if self._fd >= 0:
             fd = self._fd
             self._fd = -1
             core.aio_close_fd(fd, core.aio_loop())
 
-    def enter(self) -> Listener:
+    def enter() -> Listener:
         self._usable()
         return self
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         self.close()
 
 async def connect(host: str, port: int, timeout: float | none = 30.0) -> Connection:

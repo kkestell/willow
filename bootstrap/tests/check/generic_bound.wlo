@@ -1,5 +1,5 @@
 protocol Named:
-    def name(self) -> str
+    def name() -> str
 
 def label[T: Named](value: T) -> str:
     return value.name()

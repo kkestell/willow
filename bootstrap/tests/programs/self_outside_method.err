@@ -1,0 +1,1 @@
+self_outside_method.wlo:2:11: error: 'self' is only available inside methods

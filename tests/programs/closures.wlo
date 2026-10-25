@@ -29,7 +29,7 @@ def loop():
 class Box:
     n: int
 
-    def doubler(self) -> (int) -> int:
+    def doubler() -> (int) -> int:
         def apply(x: int) -> int:
             return x * self.n
         return apply

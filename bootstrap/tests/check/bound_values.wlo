@@ -4,7 +4,7 @@ import fs
 class Counter:
     n: int
 
-    def add(self, by: int = 1, *, times: int = 1) -> int:
+    def add(by: int = 1, *, times: int = 1) -> int:
         self.n = self.n + by * times
         return self.n
 

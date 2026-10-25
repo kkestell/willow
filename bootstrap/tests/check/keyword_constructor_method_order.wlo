@@ -3,7 +3,7 @@ class Pair:
     b: int
     c: int | float = 3.5
 
-    def show(self, a: int = 1, *, c: int = 3, b: int) -> str:
+    def show(a: int = 1, *, c: int = 3, b: int) -> str:
         return f"{self.a} {a} {b} {c}"
 
 def value(label: str, n: int) -> int:

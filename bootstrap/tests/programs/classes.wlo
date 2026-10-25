@@ -3,24 +3,24 @@ class Counter:
     count: int = 0
     step: int = 1
 
-    def add(self, amount: int) -> int:
+    def add(amount: int) -> int:
         self.count = self.count + amount * self.step
         return self.count
 
-    def bump(self) -> int:
+    def bump() -> int:
         return self.add(1)
 
-    def label(self) -> str:
+    def label() -> str:
         return f"{self.name}={self.count}"
 
 class Stack:
     items: list[int]
     parent: Stack | none
 
-    def push(self, value: int):
+    def push(value: int):
         self.items.append(value)
 
-    def depth(self) -> int:
+    def depth() -> int:
         parent = self.parent
         if parent is none:
             return 1

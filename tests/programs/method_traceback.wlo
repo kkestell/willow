@@ -1,7 +1,7 @@
 class Counter:
     count: int
 
-    def per(self, parts: int) -> int:
+    def per(parts: int) -> int:
         return self.count // parts
 
 def main():

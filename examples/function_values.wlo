@@ -16,7 +16,7 @@ def compose(f: (int) -> int, g: (int) -> int) -> (int) -> int:
 class Greeter:
     greeting: str
 
-    def greet(self, name: str) -> str:
+    def greet(name: str) -> str:
         return f"{self.greeting}, {name}"
 
 def main():

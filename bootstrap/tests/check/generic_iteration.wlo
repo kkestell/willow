@@ -1,10 +1,10 @@
 class Countdown:
     remaining: int
 
-    def iter(self) -> Countdown:
+    def iter() -> Countdown:
         return self
 
-    def next(self) -> int:
+    def next() -> int:
         if self.remaining == 0:
             raise StopIteration("")
         value = self.remaining

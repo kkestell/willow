@@ -4,10 +4,10 @@
 class Countdown:
     current: int
 
-    def iter(self) -> Countdown:
+    def iter() -> Countdown:
         return self
 
-    def next(self) -> int:
+    def next() -> int:
         if self.current <= 0:
             raise StopIteration("")
         self.current = self.current - 1

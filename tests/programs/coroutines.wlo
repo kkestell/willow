@@ -1,16 +1,16 @@
 protocol Source:
-    async def read(self) -> str
+    async def read() -> str
 
 class Fixed:
     text: str
 
-    def read(self) -> Coroutine[str]:
+    def read() -> Coroutine[str]:
         return echo(self.text)
 
 class Counter:
     count: int
 
-    async def read(self) -> str:
+    async def read() -> str:
         self.count = self.count + 1
         return f"count {self.count}"
 

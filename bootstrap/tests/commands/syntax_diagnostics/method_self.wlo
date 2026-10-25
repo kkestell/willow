@@ -1,5 +1,5 @@
 class A:
-    def f(x: int):
+    def f(self):
         pass
 def main():
     pass

@@ -1,5 +1,5 @@
 class Source:
-    def next(self) -> int:
+    def next() -> int:
         return 1
 
 def main():

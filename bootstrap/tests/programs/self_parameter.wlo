@@ -1,0 +1,6 @@
+class Box:
+    def read(self):
+        pass
+
+def main():
+    pass

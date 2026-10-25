@@ -139,6 +139,8 @@ def collect_in_block(body: list[ast.Stmt], found: list[ast.FunctionDecl]):
 def main():
     cases = [
         # Declarations
+        ["main.wlo:2:11: error: 'self' is only available inside methods", "def main():\n    print(self)\n"],
+        ["main.wlo:3:16: error: 'self' is only available inside methods", "def main():\n    def f() -> int:\n        return self\n"],
         ["main.wlo:3:5: error: duplicate function 'f'", "def f():\n    pass\ndef f():\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:3:7: error: duplicate class 'f'", "def f():\n    pass\nclass f:\n    x: int\ndef main():\n    pass\n"],
         ["main.wlo:2:5: error: duplicate function 'a'", "import a\ndef a():\n    pass\ndef main():\n    pass\n", "a", "def g():\n    pass\n"],
@@ -146,11 +148,11 @@ def main():
         ["main.wlo:2:8: error: 'a' is imported as a module and as a namespace", "import a\nimport a.b\ndef main():\n    pass\n", "a", "def g():\n    pass\n", "a.b", "def h():\n    pass\n"],
         ["main.wlo:4:5: error: duplicate enum member 'A'", "enum E:\n    A\n    B\n    A\ndef main():\n    pass\n"],
         ["main.wlo:3:5: error: duplicate field 'x'", "class C:\n    x: int\n    x: str\ndef main():\n    pass\n"],
-        ["main.wlo:5:9: error: duplicate method 'm'", "class C:\n    def m(self):\n        pass\n\n    def m(self):\n        pass\ndef main():\n    pass\n"],
-        ["main.wlo:4:9: error: method 'x' has the same name as a field", "class C:\n    x: int\n\n    def x(self):\n        pass\ndef main():\n    pass\n"],
+        ["main.wlo:5:9: error: duplicate method 'm'", "class C:\n    def m():\n        pass\n\n    def m():\n        pass\ndef main():\n    pass\n"],
+        ["main.wlo:4:9: error: method 'x' has the same name as a field", "class C:\n    x: int\n\n    def x():\n        pass\ndef main():\n    pass\n"],
         ["main.wlo:1:15: error: duplicate parameter 'a'", "def f(a: int, a: int):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:10: error: type parameter 'T' hides another type parameter", "def f[T, T](x: T) -> T:\n    return x\ndef main():\n    pass\n"],
-        ["main.wlo:4:11: error: type parameter 'T' hides another type parameter", "class Box[T]:\n    value: T\n\n    def m[T](self, x: T) -> T:\n        return x\ndef main():\n    pass\n"],
+        ["main.wlo:4:11: error: type parameter 'T' hides another type parameter", "class Box[T]:\n    value: T\n\n    def m[T](x: T) -> T:\n        return x\ndef main():\n    pass\n"],
         ["main.wlo:1:1: error: program has no main function", "def f():\n    pass\n"],
         ["main.wlo:1:1: error: program has no main function", "class main:\n    x: int\n"],
         ["main.wlo:1:5: error: main must take no parameters and return none", "def main(x: int):\n    pass\n"],
@@ -162,7 +164,7 @@ def main():
         ["main.wlo:3:9: error: alias 'T' cannot be used as a value", "type T = int\ndef main():\n    y = T\n"],
         ["main.wlo:4:5: error: enum 'E' cannot be called", "enum E:\n    A\ndef main():\n    E()\n"],
         ["main.wlo:3:5: error: alias 'T' cannot be called", "type T = int\ndef main():\n    T()\n"],
-        ["main.wlo:4:5: error: protocol 'P' cannot be called", "protocol P:\n    def m(self)\ndef main():\n    P()\n"],
+        ["main.wlo:4:5: error: protocol 'P' cannot be called", "protocol P:\n    def m()\ndef main():\n    P()\n"],
         ["main.wlo:5:11: error: enum 'E' has no member 'B'", "enum E:\n    A\ndef main():\n    x = E.A\n    y = E.B\n"],
         ["main.wlo:4:7: error: enum 'E' has no method 'm'", "enum E:\n    A\ndef main():\n    E.m()\n"],
         ["main.wlo:4:7: error: cannot assign to a member of enum 'E'", "enum E:\n    A\ndef main():\n    E.A = E.A\n"],
@@ -217,8 +219,8 @@ def main():
         ["main.wlo:1:13: error: a type parameter can be in a union only with none", "def f[T](x: T | int) -> T:\n    return x\ndef main():\n    pass\n"],
         ["main.wlo:1:13: error: type parameter 'T' does not take type arguments", "def f[T](x: T[int]) -> T:\n    return x\ndef main():\n    pass\n"],
         ["main.wlo:1:10: error: a type parameter's bound must be a class, native type, or protocol", "def f[T: int](x: T) -> T:\n    return x\ndef main():\n    pass\n"],
-        ["main.wlo:5:14: error: type argument int does not satisfy the bound Named of 'T'", "protocol Named:\n    def name(self) -> str\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[int]):\n    pass\ndef main():\n    pass\n"],
-        ["main.wlo:7:14: error: union members P and C overlap", "protocol P:\n    def m(self) -> int\nclass C:\n    x: int\n    def m(self) -> int:\n        return 1\ndef f(x: P | C):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:5:14: error: type argument int does not satisfy the bound Named of 'T'", "protocol Named:\n    def name() -> str\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[int]):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:7:14: error: union members P and C overlap", "protocol P:\n    def m() -> int\nclass C:\n    x: int\n    def m() -> int:\n        return 1\ndef f(x: P | C):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:26: error: union members Iterable[int] and list[str] overlap", "def f(x: Iterable[int] | list[str]):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:2:24: error: union members Iterable[int] and list[str] overlap", "def main():\n    x: Iterable[int] | list[str] = []\n"],
         # Bounds are checked once the lazy types in the argument are
@@ -264,12 +266,12 @@ def main():
         ["main: def f(connection: net.Connection) -> net.Connection\nmain: def main() -> none", "import net\ndef f(connection: net.Connection) -> net.Connection:\n    return connection\ndef main():\n    pass\n"],
         ["main: def f(x: E, y: E | none, z: tuple[E, int]) -> none\nmain: def main() -> none\nmain: field C.e: E", "enum E:\n    A\n    B\ndef f(x: E = E.B, y: E | none = none, z: tuple[E, int] = (E.A, -1)):\n    pass\nclass C:\n    e: E = E.A\ndef main():\n    pass\n"],
         ["main: def f(x: (int) -> str | none, y: ((int) -> str) | none) -> none\nmain: def main() -> none", "def f(x: (int) -> str | none, y: ((int) -> str) | none):\n    pass\ndef main():\n    pass\n"],
-        ["main: def f(x: P | C | none) -> none\nmain: def main() -> none\nmain: field C.x: int", "protocol P:\n    def m(self) -> int\nclass C:\n    x: int\ndef f(x: P | C | none):\n    pass\ndef main():\n    pass\n"],
-        ["main: def f(x: T) -> T\nmain: def g(b: Box[P]) -> none\nmain: def main() -> none\nmain: def P.name(self: P) -> str\nmain: field P.n: str\nmain: field Box.v: T", "protocol Named:\n    def name(self) -> str\nclass P:\n    n: str\n    def name(self) -> str:\n        return self.n\ndef f[T: Named](x: T) -> T:\n    return x\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[P]):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(x: P | C | none) -> none\nmain: def main() -> none\nmain: field C.x: int", "protocol P:\n    def m() -> int\nclass C:\n    x: int\ndef f(x: P | C | none):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(x: T) -> T\nmain: def g(b: Box[P]) -> none\nmain: def main() -> none\nmain: def P.name() -> str\nmain: field P.n: str\nmain: field Box.v: T", "protocol Named:\n    def name() -> str\nclass P:\n    n: str\n    def name() -> str:\n        return self.n\ndef f[T: Named](x: T) -> T:\n    return x\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[P]):\n    pass\ndef main():\n    pass\n"],
         ["main: def f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind\nmain: def main() -> none\nshapes: field shapes.Circle.r: float\nshapes: field shapes.Square.s: float", "import shapes\ndef f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind:\n    return shapes.Kind.A\ndef main():\n    pass\n", "shapes", "type Shape = Circle | Square\nclass Circle:\n    r: float\nclass Square:\n    s: float\nenum Kind:\n    A\n"],
         ["main: def main() -> Coroutine[none]", "async def main():\n    pass\n"],
         ["main: def f(b: Box[list[int]], s: list[list[int]], u: Box[list[int | float]]) -> Box[list[int]]\nmain: def main() -> none\nmain: field Box.item: T", "class Box[T: Iterable[int | float]]:\n    item: T\ntype SBox[T: Iterable[int]] = list[T]\ndef f(b: Box[list[int]], s: SBox[list[int]], u: Box[list[int | float]]) -> Box[list[int]]:\n    return b\ndef main():\n    pass\n"],
-        ["main: def f(b: Box[L]) -> none\nmain: def main() -> none\nmain: def L.items(self: L) -> list[int]\nmain: field Box.item: T", "protocol HasList:\n    def items(self) -> list[int]\nclass L:\n    def items(self) -> list[int]:\n        return [1]\nclass Box[T: HasList]:\n    item: T\ndef f(b: Box[L]):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(b: Box[L]) -> none\nmain: def main() -> none\nmain: def L.items() -> list[int]\nmain: field Box.item: T", "protocol HasList:\n    def items() -> list[int]\nclass L:\n    def items() -> list[int]:\n        return [1]\nclass Box[T: HasList]:\n    item: T\ndef f(b: Box[L]):\n    pass\ndef main():\n    pass\n"],
         ["main: def f(a: tuple[int, str], b: tuple[()], c: tuple[int]) -> none\nmain: def main() -> none", "def f(a: tuple[int, str], b: tuple[()], c: tuple[int]):\n    pass\ndef main():\n    pass\n"],
     ]
     for program in signature_cases:
@@ -303,7 +305,7 @@ def main():
         if " ".join(order) != "test_a test_b":
             print("FAIL tests in name order: " + " ".join(order))
             ok = false
-    names = function_names(["", "import a\nprotocol P:\n    def f(self) -> int\n    def g(self) -> int\nclass C:\n    x: int\n    def m(self) -> int:\n        return 1\ndef h() -> int:\n    return 1\ndef main():\n    if true:\n        def g[T](x: T) -> T:\n            return x\n    else:\n        def g[T](x: T) -> T:\n            f = () => x\n            return x\n", "a", "class D:\n    y: int\n    def n(self):\n        pass\n"])
+    names = function_names(["", "import a\nprotocol P:\n    def f() -> int\n    def g() -> int\nclass C:\n    x: int\n    def m() -> int:\n        return 1\ndef h() -> int:\n    return 1\ndef main():\n    if true:\n        def g[T](x: T) -> T:\n            return x\n    else:\n        def g[T](x: T) -> T:\n            f = () => x\n            return x\n", "a", "class D:\n    y: int\n    def n():\n        pass\n"])
     expected = "P.f P.g C.m h main main.g main.g main.g.<lambda> a.D.n"
     if names != expected:
         print("FAIL function ids and type names")

@@ -1,17 +1,17 @@
 protocol Reader:
-    def read(self) -> int
+    def read() -> int
 
 protocol TaggedReader:
-    def read(self) -> int
-    def tag(self) -> str
+    def read() -> int
+    def tag() -> str
 
 class Source:
     n: int
 
-    def read(self) -> int:
+    def read() -> int:
         return self.n
 
-    def tag(self) -> str:
+    def tag() -> str:
         return "source"
 
 class Box:

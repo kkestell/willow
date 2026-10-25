@@ -107,7 +107,7 @@ def leaves[T](t: Tree[T]) -> list[T]:
 class Named:
     name: str
 
-    def greet(self) -> str:
+    def greet() -> str:
         return "hi " + self.name
 
 # A bounded type parameter has its bound's fields and methods.

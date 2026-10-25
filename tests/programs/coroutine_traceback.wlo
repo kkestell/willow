@@ -1,7 +1,7 @@
 class Stack:
     depth: int
 
-    async def descend(self, n: int) -> int:
+    async def descend(n: int) -> int:
         if n == 0:
             raise ValueError("bottom")
         return await self.descend(n - 1)

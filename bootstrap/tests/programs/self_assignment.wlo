@@ -1,0 +1,6 @@
+class Box:
+    def reset():
+        self = Box()
+
+def main():
+    pass

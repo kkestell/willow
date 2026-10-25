@@ -1,5 +1,5 @@
 protocol P:
-    def get(self) -> int
+    def get() -> int
 
 def call(value: P):
     value.get[int]()

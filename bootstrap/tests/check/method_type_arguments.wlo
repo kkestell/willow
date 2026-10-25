@@ -1,5 +1,5 @@
 class C:
-    def get(self) -> int:
+    def get() -> int:
         return 1
 
 def main():

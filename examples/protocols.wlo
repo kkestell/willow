@@ -2,25 +2,25 @@
 # methods; it does not declare that it implements it.
 
 protocol Shape:
-    def area(self) -> float
-    def name(self) -> str
+    def area() -> float
+    def name() -> str
 
 class Square:
     side: float
 
-    def area(self) -> float:
+    def area() -> float:
         return self.side * self.side
 
-    def name(self) -> str:
+    def name() -> str:
         return "square"
 
 class Circle:
     radius: float
 
-    def area(self) -> float:
+    def area() -> float:
         return 3.14159 * self.radius * self.radius
 
-    def name(self) -> str:
+    def name() -> str:
         return "circle"
 
 def report(shapes: list[Shape]):
@@ -29,12 +29,12 @@ def report(shapes: list[Shape]):
 
 # A protocol can take type parameters.
 protocol Source[T]:
-    def read(self) -> T | none
+    def read() -> T | none
 
 class Countdown:
     current: int
 
-    def read(self) -> int | none:
+    def read() -> int | none:
         if self.current == 0:
             return none
         self.current = self.current - 1

@@ -1721,6 +1721,9 @@ static TypedValue expr(Checker *self, const Expr *expression, const State *state
             Value value = narrowed(VAL(Local, name), &declared->ty, current);
             return typed(value, *current);
         }
+        if (eq(name, "self")) {
+            fail(self->module->path, expression->pos, STR("'self' is only available inside methods"));
+        }
         if (is_intrinsic(name) && !self->intrinsics) {
             fail(self->module->path, expression->pos,
                 str_format("intrinsic '" FMT "' is only available in core", S(name)));

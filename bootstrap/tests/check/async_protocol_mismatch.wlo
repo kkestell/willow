@@ -1,8 +1,8 @@
 protocol Source:
-    async def read(self) -> int
+    async def read() -> int
 
 class Number:
-    def read(self) -> int:
+    def read() -> int:
         return 1
 
 def main():

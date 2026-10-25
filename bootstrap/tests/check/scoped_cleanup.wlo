@@ -4,13 +4,13 @@ class Manager:
     fail_enter: bool = false
     fail_exit: bool = false
 
-    def enter(self, value: int = 3) -> tuple[str, int]:
+    def enter(value: int = 3) -> tuple[str, int]:
         self.log.append("enter " + self.name)
         if self.fail_enter:
             raise ValueError("entry")
         return (self.name, value)
 
-    def exit(self, error: Exception | none, extra: int = 0):
+    def exit(error: Exception | none, extra: int = 0):
         if error is none:
             self.log.append("exit " + self.name)
         else:

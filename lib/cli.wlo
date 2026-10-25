@@ -18,7 +18,7 @@ class Args:
     _values: dict[str, _Value]
     _kinds: dict[str, str]
 
-    def _get(self, name: str, kind: str) -> _Value:
+    def _get(name: str, kind: str) -> _Value:
         actual = self._kinds.get(name)
         if actual is none:
             raise ValueError(f"no argument named '{name}'")
@@ -29,27 +29,27 @@ class Args:
             raise ValueError(f"'{name}' is not {article} {kind} argument")
         return self._values[name]
 
-    def get_str(self, name: str) -> str:
+    def get_str(name: str) -> str:
         value = self._get(name, "str")
         assert isinstance(value, str)
         return value
 
-    def get_int(self, name: str) -> int:
+    def get_int(name: str) -> int:
         value = self._get(name, "int")
         assert isinstance(value, int)
         return value
 
-    def get_float(self, name: str) -> float:
+    def get_float(name: str) -> float:
         value = self._get(name, "float")
         assert isinstance(value, float)
         return value
 
-    def get_bool(self, name: str) -> bool:
+    def get_bool(name: str) -> bool:
         value = self._get(name, "bool")
         assert isinstance(value, bool)
         return value
 
-    def get_list(self, name: str) -> list[str]:
+    def get_list(name: str) -> list[str]:
         value = self._get(name, "list")
         assert isinstance(value, list)
         return value[:]
@@ -86,7 +86,7 @@ class Parser:
     _by_short: dict[str, _Entry]
     _has_rest: bool
 
-    def _add(self, entry: _Entry):
+    def _add(entry: _Entry):
         name = entry.name
         short = entry.short
         if not _valid_name(name):
@@ -112,25 +112,25 @@ class Parser:
         if short is not none:
             self._by_short[short] = entry
 
-    def add_str(self, name: str, default: str, help: str = "", short: str | none = none, required: bool = false):
+    def add_str(name: str, default: str, help: str = "", short: str | none = none, required: bool = false):
         self._add(_Entry(name, "str", default, help, short, required))
 
-    def add_int(self, name: str, default: int, help: str = "", short: str | none = none, required: bool = false):
+    def add_int(name: str, default: int, help: str = "", short: str | none = none, required: bool = false):
         self._add(_Entry(name, "int", default, help, short, required))
 
-    def add_float(self, name: str, default: float, help: str = "", short: str | none = none, required: bool = false):
+    def add_float(name: str, default: float, help: str = "", short: str | none = none, required: bool = false):
         self._add(_Entry(name, "float", default, help, short, required))
 
-    def add_flag(self, name: str, help: str = "", short: str | none = none):
+    def add_flag(name: str, help: str = "", short: str | none = none):
         self._add(_Entry(name, "flag", false, help, short, false))
 
-    def add_positional(self, name: str, help: str = ""):
+    def add_positional(name: str, help: str = ""):
         self._add(_Entry(name, "positional", "", help, none, false))
 
-    def add_rest(self, name: str, help: str = ""):
+    def add_rest(name: str, help: str = ""):
         self._add(_Entry(name, "rest", "", help, none, false))
 
-    def _usage(self) -> str:
+    def _usage() -> str:
         parts = [f"usage: {self._prog} [options]"]
         for entry in self._entries:
             if entry.kind == "positional":
@@ -139,7 +139,7 @@ class Parser:
                 parts.append(f"[{entry.name} ...]")
         return " ".join(parts)
 
-    def help(self) -> str:
+    def help() -> str:
         lines = [self._usage()]
         if self._description != "":
             lines.append("")
@@ -184,10 +184,10 @@ class Parser:
         _rows(lines, "options:", options)
         return "\n".join(lines) + "\n"
 
-    def _error(self, problem: str) -> UsageError:
+    def _error(problem: str) -> UsageError:
         return UsageError(self._usage() + "\n" + self._prog + ": error: " + problem)
 
-    def _convert(self, entry: _Entry, text: str) -> _Value:
+    def _convert(entry: _Entry, text: str) -> _Value:
         if entry.kind == "str":
             return text
         try:
@@ -203,7 +203,7 @@ class Parser:
             expected = "an integer"
         raise self._error(f"option '--{entry.name}' expects {expected}, received '{text}'")
 
-    def parse(self, args: list[str]) -> Args:
+    def parse(args: list[str]) -> Args:
         values: dict[str, _Value] = {}
         kinds: dict[str, str] = {}
         positionals: list[str] = []

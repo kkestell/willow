@@ -1,7 +1,7 @@
 class P:
     value: int
 
-    def m(self):
+    def m():
         pass
 
 def main():

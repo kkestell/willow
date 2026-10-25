@@ -91,37 +91,37 @@ class Emitter:
     at_line: int = 0
     at_col: int = 0
 
-    def write(self, text: str):
+    def write(text: str):
         self.lines.append(text)
 
-    def line(self, text: str):
+    def line(text: str):
         self.lines.append("\t" + text)
 
-    def temp(self) -> str:
+    def temp() -> str:
         self.temps = self.temps + 1
         return f"%.{self.temps}"
 
-    def new_label(self) -> str:
+    def new_label() -> str:
         self.labels = self.labels + 1
         return f"@L.{self.labels}"
 
-    def label(self, label: str):
+    def label(label: str):
         self.write(label)
         self.ended = false
 
     # Writes a jump or return, unless the block has already ended: the jumps
     # that close an `if` or `while` body can follow a return.
-    def jump(self, text: str):
+    def jump(text: str):
         if not self.ended:
             self.line(text)
             self.ended = true
 
-    def string(self, text: str) -> str:
+    def string(text: str) -> str:
         if text not in self.strings:
             self.strings[text] = len(self.strings)
         return f"$W.str.{self.strings[text]}"
 
-    def core_call(self, name: str, args: list[str], returns: bool) -> str:
+    def core_call(name: str, args: list[str], returns: bool) -> str:
         if name == "list_len":
             address = self.temp()
             result = self.temp()
@@ -134,7 +134,7 @@ class Emitter:
 
     # Arguments are already evaluated. Only the failing path calls core, so
     # it keeps the original exception handler and source location.
-    def inline_list(self, name: str, args: list[str], returns: bool) -> str:
+    def inline_list(name: str, args: list[str], returns: bool) -> str:
         address = self.temp()
         length = self.temp()
         index = self.temp()
@@ -177,13 +177,13 @@ class Emitter:
         return result
 
     # Writes a call of a Willow function, which can raise.
-    def willow_call(self, callee: str, args: list[str], returns: bool) -> str:
+    def willow_call(callee: str, args: list[str], returns: bool) -> str:
         result = self.call_text(callee, args, returns)
         self.check_pending()
         return result
 
     # Writes call `text` and returns its result, or 0 when there is none.
-    def call_text(self, callee: str, args: list[str], returns: bool) -> str:
+    def call_text(callee: str, args: list[str], returns: bool) -> str:
         text = "call " + callee + "(" + ", ".join(args) + ")"
         if not returns:
             self.line(text)
@@ -194,13 +194,13 @@ class Emitter:
 
     # Functions
 
-    def concrete_type(self, ty: types.Type | none) -> types.Type:
+    def concrete_type(ty: types.Type | none) -> types.Type:
         assert ty is not none, "unchecked type"
         if len(self.bindings) == 0:
             return types.expand(ty)
         return types.expand(types.substitute(ty, self.bindings))
 
-    def function(self, function: ast.FunctionDecl):
+    def function(function: ast.FunctionDecl):
         owner = function.owner
         if len(function.type_params) > 0 or isinstance(owner, ast.ClassDecl) and len(owner.type_params) > 0:
             return
@@ -239,7 +239,7 @@ class Emitter:
             self.emitted = self.emitted + 1
             self.emit_later(self.later[self.emitted - 1])
 
-    def emit_ascii_character(self):
+    def emit_ascii_character():
         self.write("\n".join([
             "function l $W.core.ascii_character(l %code) {",
             "@start",
@@ -249,7 +249,7 @@ class Emitter:
             "}",
         ]))
 
-    def emit_ascii_characters(self):
+    def emit_ascii_characters():
         # Aligned string objects: descriptor, length, empty hash cache, byte, NUL.
         entries: list[str] = []
         for code in range(128):
@@ -258,7 +258,7 @@ class Emitter:
 
     # Emits `function` as `symbol`, whose parameters start with `first`. A
     # captured parameter or local lives in a cell that its closures share.
-    def emit_function(self, function: ast.FunctionDecl, symbol: str, first: list[str], bindings: dict[str, types.Type]):
+    def emit_function(function: ast.FunctionDecl, symbol: str, first: list[str], bindings: dict[str, types.Type]):
         self.bindings = bindings
         record = function.record
         assert record is not none, f"function {function.name} has no signature"
@@ -278,7 +278,7 @@ class Emitter:
         self.begin(symbol, params, not is_none(result))
         self.function_body(function)
 
-    def function_body(self, function: ast.FunctionDecl):
+    def function_body(function: ast.FunctionDecl):
         module = self.module_of(function)
         self.function_name = frame_name(function)
         self.path = self.module_paths[module]
@@ -305,7 +305,7 @@ class Emitter:
             self.jump("hlt")
         self.end("0")
 
-    def emit_generator_factory(self, function: ast.FunctionDecl, symbol: str, params: list[str]):
+    def emit_generator_factory(function: ast.FunctionDecl, symbol: str, params: list[str]):
         record = function.record
         assert record is not none, "generator without a signature"
         result = self.concrete_type(record.result)
@@ -325,7 +325,7 @@ class Emitter:
         value = self.protocol_value(symbol + ".generator.type", generator)
         self.end(self.convert(value, generator_type, result))
 
-    def emit_generator_body(self, body: GeneratorBody):
+    def emit_generator_body(body: GeneratorBody):
         self.bindings = body.bindings
         function = body.function
         record = function.record
@@ -356,7 +356,7 @@ class Emitter:
             self.line(f"%p.{function.params[i].name} =l copy {value}")
         self.function_body(function)
 
-    def emit_yield(self, node: ast.Yield):
+    def emit_yield(node: ast.Yield):
         value = self.expr(node.value)
         self.core_call("coroutine_yield", [value], false)
         closing = self.core_call("generator_closing", ["%generator"], true)
@@ -368,7 +368,7 @@ class Emitter:
         self.jump("ret")
         self.label(resume)
 
-    def emit_async_constructor(self, function: ast.FunctionDecl, symbol: str, first: list[str]):
+    def emit_async_constructor(function: ast.FunctionDecl, symbol: str, first: list[str]):
         params: list[str] = []
         params.extend(first)
         values: list[str] = []
@@ -392,7 +392,7 @@ class Emitter:
 
     # Starts function `symbol` with `params`, which returns a value when
     # `returns`. Its frames are recorded only when the caller says so.
-    def begin(self, symbol: str, params: list[str], returns: bool):
+    def begin(symbol: str, params: list[str], returns: bool):
         self.temps = 0
         self.labels = 0
         self.target = "@unwind"
@@ -408,7 +408,7 @@ class Emitter:
 
     # Returns `value`, or nothing when the function has no result, and ends
     # the function.
-    def end(self, value: str):
+    def end(value: str):
         if self.returns:
             self.jump("ret " + value)
         else:
@@ -424,7 +424,7 @@ class Emitter:
 
     # Stage 0 compiles core's `fail`, which ends the program. Stage 1 replaces
     # its body with one that raises the built-in exception it names.
-    def emit_fail(self, name: str):
+    def emit_fail(name: str):
         params = "l %p.class_name, l %p.message"
         if name == "fail_at":
             params = params + ", l %p.path, l %p.line, l %p.col"
@@ -437,15 +437,15 @@ class Emitter:
         self.jump("ret")
         self.write("}")
 
-    def symbol(self, function: ast.FunctionDecl) -> str:
+    def symbol(function: ast.FunctionDecl) -> str:
         return "$" + self.module_names[function.id] + "." + frame_name(function)
 
-    def specialization(self, fn: types.Function, receiver: list[types.Type], args: list[types.Type]) -> str:
+    def specialization(fn: types.Function, receiver: list[types.Type], args: list[types.Type]) -> str:
         if len(receiver) == 0 and len(args) == 0:
             return self.symbol(self.functions[fn.id])
         return self.instantiation(fn, receiver, args).symbol
 
-    def instantiation(self, fn: types.Function, receiver: list[types.Type], args: list[types.Type]) -> Instantiation:
+    def instantiation(fn: types.Function, receiver: list[types.Type], args: list[types.Type]) -> Instantiation:
         function = self.functions[fn.id]
         bindings: dict[str, types.Type] = {}
         concrete = types.substitute_all(receiver, self.bindings)
@@ -465,7 +465,7 @@ class Emitter:
     # within the current specialization of the functions that enclose it,
     # whose type arguments are part of its key. Its code takes the closure
     # that holds its cells first.
-    def nested_specialization(self, function: ast.FunctionDecl, args: list[types.Type]) -> Instantiation:
+    def nested_specialization(function: ast.FunctionDecl, args: list[types.Type]) -> Instantiation:
         record = function.record
         assert record is not none, f"function {function.name} has no signature"
         bindings: dict[str, types.Type] = {}
@@ -483,7 +483,7 @@ class Emitter:
 
     # The instantiation of `function` whose type arguments are `key`, queued
     # in order of first use and named after `base` and its place.
-    def instance(self, function: ast.FunctionDecl, key: list[types.Type], bindings: dict[str, types.Type], base: str) -> Instantiation:
+    def instance(function: ast.FunctionDecl, key: list[types.Type], bindings: dict[str, types.Type], base: str) -> Instantiation:
         if function.id not in self.instances:
             self.instances[function.id] = []
         for instance in self.instances[function.id]:
@@ -494,14 +494,14 @@ class Emitter:
         self.instantiations.append(instance)
         return instance
 
-    def protocol_marker(self, target: types.ProtocolType) -> str:
+    def protocol_marker(target: types.ProtocolType) -> str:
         for i in range(len(self.protocols)):
             if types.same(self.protocols[i], target):
                 return self.string(f"<protocol {i}>")
         self.protocols.append(target)
         return self.string(f"<protocol {len(self.protocols) - 1}>")
 
-    def witness(self, source: types.Type, target: types.ProtocolType) -> Witness:
+    def witness(source: types.Type, target: types.ProtocolType) -> Witness:
         for witness in self.witnesses:
             if types.same(witness.source, source) and types.same(witness.target, target):
                 return witness
@@ -513,7 +513,7 @@ class Emitter:
     # adapters. `written` has bit i set when the caller wrote argument i
     # rather than taking the protocol's default, which the implementation
     # replaces with its own.
-    def protocol_call(self, object: str, receiver_type: types.ProtocolType, name: str, args: list[str], written: str) -> str:
+    def protocol_call(object: str, receiver_type: types.ProtocolType, name: str, args: list[str], written: str) -> str:
         descriptor = self.temp()
         receiver_address = self.temp()
         receiver = self.temp()
@@ -534,7 +534,7 @@ class Emitter:
                 return self.willow_call(callee, typed(passed), not is_none(signature.result))
         return self.unchecked("protocol method")
 
-    def emit_witness(self, witness: Witness):
+    def emit_witness(witness: Witness):
         self.bindings = {}
         entries = ["l " + witness.marker]
         for i in range(len(witness.target.decl.methods)):
@@ -624,13 +624,13 @@ class Emitter:
 
     # The value of `param`'s default, of an implementation of a protocol
     # method, as the parameter's type.
-    def implementation_default(self, param: types.Param) -> str:
+    def implementation_default(param: types.Param) -> str:
         default = param.default
         assert default is not none, "missing implementation default"
         return self.convert(self.expr(default), self.concrete_type(default.ty), param.ty)
 
     # `mask` with bit `j` set when `present`, 0 or 1, is 1.
-    def add_bit(self, mask: str, present: str, j: int) -> str:
+    def add_bit(mask: str, present: str, j: int) -> str:
         if present == "1" and mask == "0":
             return str(bit(j))
         shifted = self.temp()
@@ -641,14 +641,14 @@ class Emitter:
 
     # Calls `function`, `main` or a test of the entry module, an async one
     # as the event loop's root task.
-    def call_entry(self, entry: ast.Module, function: ast.FunctionDecl):
+    def call_entry(entry: ast.Module, function: ast.FunctionDecl):
         if function.is_async:
             self.line(f"%root =l call $P.{entry.name}.{function.name}()")
             self.line("%result =l call $W.core.aio_run(l %root)")
         else:
             self.line(f"call $P.{entry.name}.{function.name}()")
 
-    def emit_instantiations(self):
+    def emit_instantiations():
         function_index = 0
         witness_index = 0
         while function_index < len(self.instantiations) or witness_index < len(self.witnesses) or self.emitted < len(self.later):
@@ -672,7 +672,7 @@ class Emitter:
         self.bindings = {}
 
     # The module of `function`, which may be nested.
-    def module_of(self, function: ast.FunctionDecl) -> str:
+    def module_of(function: ast.FunctionDecl) -> str:
         parent = function.parent
         while parent is not none:
             function = parent
@@ -685,7 +685,7 @@ class Emitter:
     # The entry of a test file (`test`) runs the test that its first argument
     # names, and once it returns, creates the file its second argument names;
     # the program's own arguments are the rest.
-    def finish(self, entry: ast.Module, test: bool) -> str:
+    def finish(entry: ast.Module, test: bool) -> str:
         self.emit_instantiations()
         self.write("export function w $main(w %argc, l %argv) {")
         self.write("@start")
@@ -776,7 +776,7 @@ class Emitter:
 
     # Statements
 
-    def block(self, body: list[ast.Stmt]):
+    def block(body: list[ast.Stmt]):
         for statement in body:
             # Statements after a jump or return cannot run. The checker
             # rejects them, except after a kept `__os` arm that transfers
@@ -785,7 +785,7 @@ class Emitter:
                 return
             self.stmt(statement)
 
-    def stmt(self, statement: ast.Stmt):
+    def stmt(statement: ast.Stmt):
         line = self.at_line
         col = self.at_col
         self.at_line = statement.line
@@ -794,7 +794,7 @@ class Emitter:
         self.at_line = line
         self.at_col = col
 
-    def emit_stmt(self, statement: ast.Stmt):
+    def emit_stmt(statement: ast.Stmt):
         node = statement.node
         if isinstance(node, ast.Assign):
             value = self.expr(node.value)
@@ -853,7 +853,7 @@ class Emitter:
     # A function without a result returns nothing to QBE, even from
     # `return none` or the return of a call without a result. The value is
     # computed before the `finally` clauses the return leaves run.
-    def emit_return(self, node: ast.Return):
+    def emit_return(node: ast.Return):
         returned = node.value
         value = ""
         if returned is not none:
@@ -869,7 +869,7 @@ class Emitter:
     # After a call: when an exception is pending, adds this function's frame
     # to it and goes to the innermost handler, or returns. The frame's calls
     # run with no exception pending.
-    def check_pending(self):
+    def check_pending():
         pending = self.temp()
         self.line(f"{pending} =l loadl $W.pending")
         ok = self.new_label()
@@ -888,31 +888,31 @@ class Emitter:
 
     # Calls core function `name` with `exception` and this function's name
     # and location.
-    def frame_call(self, name: str, exception: str):
+    def frame_call(name: str, exception: str):
         function = self.string(self.function_name)
         path = self.string(self.path)
         self.line(f"call $W.core.{name}(l {exception}, l {function}, l {path}, l {self.at_line}, l {self.at_col})")
 
     # Clears the location and frames of `exception`, which may have been
     # raised before, so that the first frame recorded is its caller's.
-    def clear_frames(self, exception: str):
+    def clear_frames(exception: str):
         for offset in ["8", "16"]:
             address = self.temp()
             self.line(f"{address} =l add {exception}, {offset}")
             self.line(f"storel 0, {address}")
 
-    def use_target(self):
+    def use_target():
         if self.target == "@unwind":
             self.unwinds = true
 
     # Goes to where the pending exception is handled.
-    def propagate(self):
+    def propagate():
         self.use_target()
         self.jump("jmp " + self.target)
 
     # A bare `raise` raises the exception the innermost `except` clause
     # handles again, keeping its location and frames.
-    def emit_raise(self, node: ast.Raise):
+    def emit_raise(node: ast.Raise):
         value = node.value
         exception = ""
         if value is none:
@@ -929,7 +929,7 @@ class Emitter:
     # A handler block tests the `except` clauses in order. A `finally` body
     # is emitted once for each way of leaving the statement: completing,
     # raising, and each return, break, or continue that leaves it.
-    def emit_try(self, node: ast.Try):
+    def emit_try(node: ast.Try):
         outside = self.target
         end = self.new_label()
         normal = end
@@ -1002,7 +1002,7 @@ class Emitter:
     # Runs the `finally` clauses that a return, break, or continue leaves,
     # innermost first: those of the protects past the first `count`. Each
     # runs where its `try` statement is.
-    def leave(self, count: int):
+    def leave(count: int):
         protects = self.protects
         handled = self.handled
         target = self.target
@@ -1018,7 +1018,7 @@ class Emitter:
         self.handled = handled
         self.target = target
 
-    def cleanup(self, protect: Protect, error: str):
+    def cleanup(protect: Protect, error: str):
         if protect.group:
             self.emit_group_exit(protect.manager, error)
             return
@@ -1052,7 +1052,7 @@ class Emitter:
             self.propagate()
             self.label(end)
 
-    def emit_group_exit(self, group: str, error: str):
+    def emit_group_exit(group: str, error: str):
         outcome = self.core_call("aio_group_exit", [group, error], true)
         self.line(f"storel {outcome}, $W.pending")
         ok = self.new_label()
@@ -1060,7 +1060,7 @@ class Emitter:
         self.jump(f"jnz {outcome}, {self.target}, {ok}")
         self.label(ok)
 
-    def emit_async_with(self, node: ast.AsyncWith):
+    def emit_async_with(node: ast.AsyncWith):
         manager = self.expr(node.manager)
         group = self.load_field(manager, 8)
         self.core_call("aio_group_enter", [group], false)
@@ -1086,7 +1086,7 @@ class Emitter:
         self.emit_group_exit(group, error)
         self.label(end)
 
-    def emit_with(self, node: ast.With, index: int):
+    def emit_with(node: ast.With, index: int):
         if index == len(node.items):
             self.block(node.body)
             return
@@ -1123,14 +1123,14 @@ class Emitter:
         self.label(end)
 
     # The number of protects outside the innermost loop.
-    def loop_protects(self) -> int:
+    def loop_protects() -> int:
         count = len(self.protects)
         while count > 0 and self.protects[count - 1].loops == len(self.loop_end):
             count = count - 1
         return count
 
     # The message is evaluated only when the condition is false.
-    def emit_assert(self, node: ast.Assert):
+    def emit_assert(node: ast.Assert):
         condition = self.expr(node.condition)
         ok = self.new_label()
         failed = self.new_label()
@@ -1145,13 +1145,13 @@ class Emitter:
         self.label(ok)
 
     # Fails on a construct the checker does not accept yet.
-    def unchecked(self, what: str) -> str:
+    def unchecked(what: str) -> str:
         assert false, f"unchecked {what}"
         return "0"
 
     # An `__os` test emits only the arm it selects, so core can call
     # functions that exist on only one platform.
-    def emit_if(self, node: ast.If):
+    def emit_if(node: ast.If):
         test = self.os_test(node.condition)
         if test == "true":
             self.block(node.body)
@@ -1173,7 +1173,7 @@ class Emitter:
 
     # "true" or "false" when `condition` compares `__os` with a string
     # literal using `==` or `!=`, and "" otherwise.
-    def os_test(self, condition: ast.Expr) -> str:
+    def os_test(condition: ast.Expr) -> str:
         node = condition.node
         if not isinstance(node, ast.Binary) or node.op not in ["==", "!="]:
             return ""
@@ -1190,7 +1190,7 @@ class Emitter:
             return "true"
         return "false"
 
-    def emit_while(self, node: ast.While):
+    def emit_while(node: ast.While):
         test = self.new_label()
         body = self.new_label()
         end = self.new_label()
@@ -1206,14 +1206,14 @@ class Emitter:
         self.jump(f"jmp {test}")
         self.label(end)
 
-    def emit_index_assign(self, node: ast.IndexAssign):
+    def emit_index_assign(node: ast.IndexAssign):
         value = self.expr(node.value)
         object = self.expr(node.object)
         index = self.expr(node.index)
         ty = self.concrete_type(node.object.ty)
         self.core_call(types.kind(ty) + "_set", [object, index, value], false)
 
-    def emit_for(self, node: ast.For):
+    def emit_for(node: ast.For):
         call = node.iterable.node
         declared = node.iterable.ty
         assert declared is not none, "unchecked iterable"
@@ -1236,7 +1236,7 @@ class Emitter:
             else:
                 self.for_protocol(node)
 
-    def for_protocol(self, node: ast.For):
+    def for_protocol(node: ast.For):
         iteration = node.iteration
         assert iteration is not none, "unchecked iterable"
         source = self.expr(node.iterable)
@@ -1250,7 +1250,7 @@ class Emitter:
 
     # Only advancement consumes StopIteration. Creation, assignment, and the
     # body keep the surrounding exception target.
-    def advance(self, iterator: str, call: ast.Expr, end: str) -> str:
+    def advance(iterator: str, call: ast.Expr, end: str) -> str:
         outside = self.target
         failed = self.new_label()
         ready = self.new_label()
@@ -1280,7 +1280,7 @@ class Emitter:
         self.label(ready)
         return value
 
-    def for_dict(self, node: ast.For, source: ast.Expr, part: str):
+    def for_dict(node: ast.For, source: ast.Expr, part: str):
         object = self.expr(source)
         ty = self.concrete_type(source.ty)
         ty = types.expand(ty)
@@ -1321,7 +1321,7 @@ class Emitter:
         self.jump(f"jmp {test}")
         self.label(end)
 
-    def for_list(self, node: ast.For):
+    def for_list(node: ast.For):
         source = self.expr(node.iterable)
         index = self.temp()
         self.line(f"{index} =l copy 0")
@@ -1342,7 +1342,7 @@ class Emitter:
 
     # Each step takes the code point at a byte offset, which advances by its
     # size before the body.
-    def for_sequence(self, node: ast.For):
+    def for_sequence(node: ast.For):
         source = self.expr(node.iterable)
         at = self.temp()
         self.line(f"{at} =l copy 0")
@@ -1369,7 +1369,7 @@ class Emitter:
         self.jump(f"jmp {test}")
         self.label(end)
 
-    def for_range(self, node: ast.For, call: ast.Call):
+    def for_range(node: ast.For, call: ast.Call):
         args: list[str] = []
         for arg in call.args:
             args.append(self.expr(arg))
@@ -1424,7 +1424,7 @@ class Emitter:
         self.jump(f"jmp {test}")
         self.label(end)
 
-    def for_body(self, node: ast.For, item: str, next: str, end: str):
+    def for_body(node: ast.For, item: str, next: str, end: str):
         ty = self.concrete_type(node.item)
         self.store_pattern(node.target, item, ty)
         self.loop_next.append(next)
@@ -1434,7 +1434,7 @@ class Emitter:
         self.loop_end.pop()
         self.jump(f"jmp {next}")
 
-    def store_pattern(self, target: ast.Target, value: str, ty: types.Type):
+    def store_pattern(target: ast.Target, value: str, ty: types.Type):
         ty = self.concrete_type(ty)
         if target.name != "":
             symbol = target.symbol
@@ -1448,7 +1448,7 @@ class Emitter:
             item = self.core_call("tuple_get", [value, str(i)], true)
             self.store_pattern(target.elements[i], item, ty.elements[i])
 
-    def for_tuple(self, node: ast.For):
+    def for_tuple(node: ast.For):
         source = self.expr(node.iterable)
         ty = self.concrete_type(node.iterable.ty)
         item_type = self.concrete_type(node.item)
@@ -1469,7 +1469,7 @@ class Emitter:
         self.for_body(node, item, test, end)
         self.label(end)
 
-    def tuple_value(self, ty: types.TupleType, values: list[str]) -> str:
+    def tuple_value(ty: types.TupleType, values: list[str]) -> str:
         kinds: list[str] = []
         for element in ty.elements:
             kinds.append(equality_kind(element))
@@ -1482,7 +1482,7 @@ class Emitter:
             self.core_call("tuple_set", [result, str(i), values[i]], false)
         return result
 
-    def tuple_display(self, expr: ast.Expr, node: ast.TupleDisplay) -> str:
+    def tuple_display(expr: ast.Expr, node: ast.TupleDisplay) -> str:
         ty = self.concrete_type(expr.ty)
         assert isinstance(ty, types.TupleType), "unchecked tuple display"
         values: list[str] = []
@@ -1490,14 +1490,14 @@ class Emitter:
             values.append(self.expr(element))
         return self.tuple_value(ty, values)
 
-    def list_display(self, node: ast.ListDisplay) -> str:
+    def list_display(node: ast.ListDisplay) -> str:
         result = self.core_call("list_new", [str(len(node.elements))], true)
         for element in node.elements:
             value = self.expr(element)
             self.core_call("list_append", [result, value], false)
         return result
 
-    def list_method(self, node: ast.MethodCall) -> str:
+    def list_method(node: ast.MethodCall) -> str:
         args = [self.expr(node.object)]
         args.extend(self.arg_values(node.args, node.order))
         if node.name == "extend":
@@ -1514,7 +1514,7 @@ class Emitter:
             return "0"
         return self.core_call("list_" + node.name, args, node.name == "pop")
 
-    def dict_display(self, expr: ast.Expr, node: ast.DictDisplay) -> str:
+    def dict_display(expr: ast.Expr, node: ast.DictDisplay) -> str:
         ty = self.concrete_type(expr.ty)
         ty = types.expand(ty)
         assert isinstance(ty, types.DictType), "unchecked dict type"
@@ -1528,7 +1528,7 @@ class Emitter:
             self.core_call("dict_set", [result, key, value], false)
         return result
 
-    def method_call(self, expr: ast.Expr, node: ast.MethodCall) -> str:
+    def method_call(expr: ast.Expr, node: ast.MethodCall) -> str:
         ty = self.concrete_type(node.object.ty)
         ty = types.expand(ty)
         declared = node.object.ty
@@ -1558,7 +1558,7 @@ class Emitter:
             return self.core_call(ty.name + "_" + node.name, args, true)
         return self.unchecked("method call")
 
-    def dict_method(self, expr: ast.Expr, node: ast.MethodCall) -> str:
+    def dict_method(expr: ast.Expr, node: ast.MethodCall) -> str:
         object = self.expr(node.object)
         args = self.arg_values(node.args, node.order)
         if node.name in ["keys", "values", "items"]:
@@ -1590,7 +1590,7 @@ class Emitter:
         self.label(done)
         return result
 
-    def index(self, node: ast.Index) -> str:
+    def index(node: ast.Index) -> str:
         object = self.expr(node.object)
         ty = self.concrete_type(node.object.ty)
         if isinstance(ty, types.TupleType):
@@ -1605,7 +1605,7 @@ class Emitter:
             name = "dict_get"
         return self.core_call(name, [object, index], true)
 
-    def slice(self, node: ast.Slice) -> str:
+    def slice(node: ast.Slice) -> str:
         object = self.expr(node.object)
         start = node.start
         stop = node.stop
@@ -1618,7 +1618,7 @@ class Emitter:
         ty = self.concrete_type(node.object.ty)
         return self.core_call(types.kind(ty) + "_slice", [object, first, last], true)
 
-    def emit_len(self, node: ast.Call) -> str:
+    def emit_len(node: ast.Call) -> str:
         arg = node.args[0]
         value = self.expr(arg)
         ty = self.concrete_type(arg.ty)
@@ -1626,7 +1626,7 @@ class Emitter:
             return self.core_call("str_size", [value], true)
         return self.core_call(types.kind(ty) + "_len", [value], true)
 
-    def contains(self, node: ast.Binary) -> str:
+    def contains(node: ast.Binary) -> str:
         item = self.expr(node.left)
         container = self.expr(node.right)
         ty = self.concrete_type(node.right.ty)
@@ -1650,7 +1650,7 @@ class Emitter:
             return negated
         return result
 
-    def tuple_contains(self, node: ast.Binary, item: str, container: str, element: types.Type) -> str:
+    def tuple_contains(node: ast.Binary, item: str, container: str, element: types.Type) -> str:
         left = self.concrete_type(node.left.ty)
         target = element
         if types.assignable(left, element):
@@ -1681,7 +1681,7 @@ class Emitter:
 
     # Writes the instructions that compute `expr` and returns its operand, as
     # a value of the type it is checked against, if any.
-    def expr(self, expr: ast.Expr) -> str:
+    def expr(expr: ast.Expr) -> str:
         line = self.at_line
         col = self.at_col
         self.at_line = expr.line
@@ -1696,7 +1696,7 @@ class Emitter:
         return value
 
     # A tuple is copied only when its positions change representation.
-    def convert(self, value: str, source: types.Type, target: types.Type) -> str:
+    def convert(value: str, source: types.Type, target: types.Type) -> str:
         source = self.concrete_type(source)
         target = self.concrete_type(target)
         if types.same(source, target):
@@ -1744,7 +1744,7 @@ class Emitter:
                 return self.core_call("unbox", [value], true)
         return value
 
-    def member_test(self, value: str, member: types.Type) -> str:
+    def member_test(value: str, member: types.Type) -> str:
         if is_none(member):
             result = self.temp()
             self.line(f"{result} =l ceql {value}, 0")
@@ -1777,7 +1777,7 @@ class Emitter:
             library = member.decl.library
         return self.instance_test(value, name, library)
 
-    def instance_test(self, value: str, name: str, library: bool) -> str:
+    def instance_test(value: str, name: str, library: bool) -> str:
         if name != "Exception":
             return self.core_call("is_instance", [value, self.descriptor(name, library)], true)
         result = self.temp()
@@ -1797,7 +1797,7 @@ class Emitter:
         self.label(done)
         return result
 
-    def convert_union(self, value: str, source: types.UnionType, target: types.Type) -> str:
+    def convert_union(value: str, source: types.UnionType, target: types.Type) -> str:
         result = self.temp()
         done = self.new_label()
         for member in source.members:
@@ -1817,7 +1817,7 @@ class Emitter:
         self.label(done)
         return result
 
-    def convert_tuple(self, value: str, source: types.TupleType, target: types.TupleType) -> str:
+    def convert_tuple(value: str, source: types.TupleType, target: types.TupleType) -> str:
         values: list[str] = []
         for i in range(len(source.elements)):
             element = self.core_call("tuple_get", [value, str(i)], true)
@@ -1825,7 +1825,7 @@ class Emitter:
         return self.tuple_value(target, values)
 
     # The descriptor of a scalar type that is boxed in a union, or "".
-    def box_descriptor(self, t: types.Type) -> str:
+    def box_descriptor(t: types.Type) -> str:
         t = types.expand(t)
         if isinstance(t, types.EnumType):
             return self.descriptor(t.decl.type_name, t.decl.library)
@@ -1835,14 +1835,14 @@ class Emitter:
 
     # The descriptor symbol of the built-in type, class, or enum `type_name`,
     # which `library` marks as core's or the standard library's.
-    def descriptor(self, type_name: str, library: bool) -> str:
+    def descriptor(type_name: str, library: bool) -> str:
         if library or type_name in builtin_types() or type_name in self.exceptions:
             return f"$W.{type_name}.type"
         if "." in type_name:
             return f"$P.{type_name}.type"
         return f"$P.{self.entry}.{type_name}.type"
 
-    def node_value(self, expr: ast.Expr) -> str:
+    def node_value(expr: ast.Expr) -> str:
         node = expr.node
         if isinstance(node, ast.Int):
             return node.text
@@ -1943,7 +1943,7 @@ class Emitter:
             return f"%p.{node.index}"
         return self.unchecked("expression")
 
-    def binary(self, node: ast.Binary) -> str:
+    def binary(node: ast.Binary) -> str:
         op = node.op
         if op == "and" or op == "or":
             return self.logic(node)
@@ -2000,7 +2000,7 @@ class Emitter:
         return t
 
     # The checker gives both operands a common type before comparing slots.
-    def union_equality(self, node: ast.Binary) -> str:
+    def union_equality(node: ast.Binary) -> str:
         left = self.expr(node.left)
         right = self.expr(node.right)
         equal = self.core_call("union_eq", [left, right], true)
@@ -2010,7 +2010,7 @@ class Emitter:
         self.line(f"{t} =l ceql {equal}, 0")
         return t
 
-    def tuple_order(self, op: str, left: str, right: str, ty: types.TupleType) -> str:
+    def tuple_order(op: str, left: str, right: str, ty: types.TupleType) -> str:
         result = self.temp()
         equal_result = "0"
         if op == "<=" or op == ">=":
@@ -2042,7 +2042,7 @@ class Emitter:
         self.label(done)
         return result
 
-    def emit_is(self, node: ast.Is) -> str:
+    def emit_is(node: ast.Is) -> str:
         operand = self.expr(node.operand)
         t = self.temp()
         if node.negated:
@@ -2053,7 +2053,7 @@ class Emitter:
 
     # The checker has made sure the type is a member of the operand's, so
     # only a union needs a test.
-    def emit_isinstance(self, node: ast.IsInstance) -> str:
+    def emit_isinstance(node: ast.IsInstance) -> str:
         operand = self.expr(node.operand)
         ty = self.concrete_type(node.operand.ty)
         if not is_union(ty):
@@ -2070,7 +2070,7 @@ class Emitter:
             library = record.library
         return self.instance_test(operand, type_name, library)
 
-    def unary(self, node: ast.Unary) -> str:
+    def unary(node: ast.Unary) -> str:
         value = self.expr(node.operand)
         ty = self.concrete_type(node.operand.ty)
         if node.op == "+":
@@ -2086,7 +2086,7 @@ class Emitter:
             return self.float_bits(t)
         return self.checked("sub", "0", value)
 
-    def logic(self, node: ast.Binary) -> str:
+    def logic(node: ast.Binary) -> str:
         left = self.expr(node.left)
         result = self.temp()
         self.line(f"{result} =l copy {left}")
@@ -2102,17 +2102,17 @@ class Emitter:
         self.label(end)
         return result
 
-    def as_float(self, value: str) -> str:
+    def as_float(value: str) -> str:
         d = self.temp()
         self.line(f"{d} =d cast {value}")
         return d
 
-    def float_bits(self, value: str) -> str:
+    def float_bits(value: str) -> str:
         t = self.temp()
         self.line(f"{t} =l cast {value}")
         return t
 
-    def float_binary(self, op: str, left: str, right: str) -> str:
+    def float_binary(op: str, left: str, right: str) -> str:
         if op == "//":
             return self.core_call("float_floordiv", [left, right], true)
         if op == "%":
@@ -2131,12 +2131,12 @@ class Emitter:
         self.line(f"{t} =l {float_comparison_instruction(op)} {a}, {b}")
         return t
 
-    def check_divisor(self, right: str):
+    def check_divisor(right: str):
         zero = self.temp()
         self.line(f"{zero} =l ceql {right}, 0")
         self.guard(zero, "ZeroDivisionError", "division by zero")
 
-    def floor_divide(self, op: str, left: str, right: str) -> str:
+    def floor_divide(op: str, left: str, right: str) -> str:
         self.check_divisor(right)
         q = self.temp()
         product = self.temp()
@@ -2165,7 +2165,7 @@ class Emitter:
 
     # `left instr right` on ints, failing with an OverflowError when the
     # result leaves the symmetric int range.
-    def checked(self, instr: str, left: str, right: str) -> str:
+    def checked(instr: str, left: str, right: str) -> str:
         if instr == "mul":
             return self.checked_multiply(left, right)
         t = self.temp()
@@ -2190,7 +2190,7 @@ class Emitter:
         self.guard(wrapped, "OverflowError", "integer overflow")
         return t
 
-    def checked_multiply(self, left: str, right: str) -> str:
+    def checked_multiply(left: str, right: str) -> str:
         t = self.temp()
         wide = self.temp()
         ext = self.temp()
@@ -2240,7 +2240,7 @@ class Emitter:
     # Above 2^53, converting both operands before division would round
     # twice. Long division keeps 56 bits with a sticky low bit, then one
     # conversion rounds the quotient. Scaling by powers of two is exact.
-    def int_quotient(self, left: str, right: str) -> str:
+    def int_quotient(left: str, right: str) -> str:
         fast = self.new_label()
         slow = self.new_label()
         shr_test = self.new_label()
@@ -2343,7 +2343,7 @@ class Emitter:
         return result
 
     # Raises `class_name` with `message` when `condition` is nonzero.
-    def guard(self, condition: str, class_name: str, message: str):
+    def guard(condition: str, class_name: str, message: str):
         failed = self.new_label()
         ok = self.new_label()
         self.jump(f"jnz {condition}, {failed}, {ok}")
@@ -2356,7 +2356,7 @@ class Emitter:
 
     # Save written arguments before evaluating omitted defaults, then pass
     # the saved values in parameter order.
-    def arg_values(self, args: list[ast.Expr], order: list[int] | none) -> list[str]:
+    def arg_values(args: list[ast.Expr], order: list[int] | none) -> list[str]:
         assert order is not none, "unbound call arguments"
         values: list[str] = []
         for arg in args:
@@ -2365,7 +2365,7 @@ class Emitter:
             values[i] = self.expr(args[i])
         return values
 
-    def call(self, node: ast.Call) -> str:
+    def call(node: ast.Call) -> str:
         target = node.target
         if isinstance(target, ast.FunctionDecl):
             if target.external:
@@ -2384,7 +2384,7 @@ class Emitter:
         assert isinstance(target, types.Class), "unchecked constructor"
         return self.construct(node, target)
 
-    def construct(self, node: ast.Call, target: types.Class) -> str:
+    def construct(node: ast.Call, target: types.Class) -> str:
         values = self.arg_values(node.args, node.order)
         base = field_base(target)
         size = len(values) + (base - 8) // 8
@@ -2395,7 +2395,7 @@ class Emitter:
             self.line(f"storel {values[i]}, {address}")
         return object
 
-    def field_address(self, expr: ast.Expr, name: str, object: str) -> str:
+    def field_address(expr: ast.Expr, name: str, object: str) -> str:
         ty = self.concrete_type(expr.ty)
         ty = types.expand(ty)
         assert isinstance(ty, types.ClassType), "unchecked field receiver"
@@ -2406,13 +2406,13 @@ class Emitter:
                 return address
         return self.unchecked("field")
 
-    def field_assign(self, node: ast.FieldAssign):
+    def field_assign(node: ast.FieldAssign):
         value = self.expr(node.value)
         object = self.expr(node.object)
         address = self.field_address(node.object, node.name, object)
         self.line(f"storel {value}, {address}")
 
-    def class_method(self, node: ast.MethodCall, ty: types.ClassType | types.ProtocolType) -> str:
+    def class_method(node: ast.MethodCall, ty: types.ClassType | types.ProtocolType) -> str:
         object = self.expr(node.object)
         args = self.arg_values(node.args, node.order)
         own = node.type_args
@@ -2421,7 +2421,7 @@ class Emitter:
         return self.dispatch_method(object, ty, node.name, args, own, written_mask(node))
 
     # `written` is as protocol_call takes it.
-    def dispatch_method(self, object: str, ty: types.Type, name: str, args: list[str], own: list[types.Type], written: str) -> str:
+    def dispatch_method(object: str, ty: types.Type, name: str, args: list[str], own: list[types.Type], written: str) -> str:
         if isinstance(ty, types.ProtocolType):
             return self.protocol_call(object, ty, name, args, written)
         if name == "iter" and types.iteration_item(ty) is not none:
@@ -2447,7 +2447,7 @@ class Emitter:
                 return self.willow_call(symbol, typed(passed), not is_none(self.concrete_type(result)))
         return self.unchecked("class method")
 
-    def fstring(self, node: ast.FString) -> str:
+    def fstring(node: ast.FString) -> str:
         text = self.string("")
         for i in range(len(node.parts)):
             part = node.parts[i]
@@ -2476,7 +2476,7 @@ class Emitter:
 
     # A call of a built-in function, a host module's function, or an
     # intrinsic, by the name it is written with.
-    def builtin(self, node: ast.Call, target: stdlib.Builtin) -> str:
+    def builtin(node: ast.Call, target: stdlib.Builtin) -> str:
         name = node.name
         if name.startswith("__"):
             return self.intrinsic(node, target)
@@ -2537,7 +2537,7 @@ class Emitter:
             return self.host(node, target)
         return self.unchecked(f"'{name}'")
 
-    def saved_method(self, expr: ast.Expr, object: str, supplied: list[str]) -> str:
+    def saved_method(expr: ast.Expr, object: str, supplied: list[str]) -> str:
         line = self.at_line
         col = self.at_col
         self.at_line = expr.line
@@ -2572,12 +2572,12 @@ class Emitter:
         self.at_col = col
         return value
 
-    def protocol_value(self, descriptor: str, receiver: str) -> str:
+    def protocol_value(descriptor: str, receiver: str) -> str:
         object = self.core_call("object_new", [descriptor, "1"], true)
         self.store_field(object, 8, receiver)
         return object
 
-    def native_adapter(self, source: types.Type, item: types.Type, part: str) -> NativeIterator:
+    def native_adapter(source: types.Type, item: types.Type, part: str) -> NativeIterator:
         for later in self.later:
             if isinstance(later, NativeIterator) and later.part == part and types.same(later.source, source) and types.same(later.item, item):
                 return later
@@ -2585,7 +2585,7 @@ class Emitter:
         self.later.append(adapter)
         return adapter
 
-    def native_iter(self, source: str, ty: types.Type, part: str) -> str:
+    def native_iter(source: str, ty: types.Type, part: str) -> str:
         item = types.iteration_item(ty)
         assert item is not none, "unchecked native iteration"
         version = "0"
@@ -2600,13 +2600,13 @@ class Emitter:
         adapter = self.native_adapter(ty, item, part)
         return self.protocol_value(adapter.symbol + ".type", state)
 
-    def iterator_descriptor(self, symbol: str, item: types.Type):
+    def iterator_descriptor(symbol: str, item: types.Type):
         marker = self.protocol_marker(types.iterator(item))
         self.write(f"data {symbol}.type = " + "{ l " + marker + f", l {symbol}.iter, l {symbol}.next" + " }")
         self.begin(symbol + ".iter", ["l %state", "l %written"], true)
         self.end(self.protocol_value(symbol + ".type", "%state"))
 
-    def emit_native_iterator(self, adapter: NativeIterator):
+    def emit_native_iterator(adapter: NativeIterator):
         self.bindings = {}
         self.iterator_descriptor(adapter.symbol, adapter.item)
         if adapter.part == "range":
@@ -2640,7 +2640,7 @@ class Emitter:
             value = self.tuple_item(value, index, source_type, adapter.item)
         self.end(value)
 
-    def tuple_item(self, raw: str, index: str, source: types.TupleType, item: types.Type) -> str:
+    def tuple_item(raw: str, index: str, source: types.TupleType, item: types.Type) -> str:
         value = self.temp()
         self.line(f"{value} =l copy 0")
         done = self.new_label()
@@ -2659,7 +2659,7 @@ class Emitter:
         self.label(done)
         return value
 
-    def collect(self, source: str, iteration: ast.Iteration, element: types.Type) -> str:
+    def collect(source: str, iteration: ast.Iteration, element: types.Type) -> str:
         iterator = self.saved_method(iteration.iter_call, source, [])
         result = self.core_call("list_new", ["0"], true)
         test = self.new_label()
@@ -2672,7 +2672,7 @@ class Emitter:
         self.label(end)
         return result
 
-    def emit_sorted(self, node: ast.Call) -> str:
+    def emit_sorted(node: ast.Call) -> str:
         values = self.arg_values(node.args, node.order)
         iterations = node.iterables
         assert iterations is not none, "unchecked sorted"
@@ -2685,7 +2685,7 @@ class Emitter:
     # value is `key_value`. Each key is computed once, in order, before
     # anything moves. When `checked`, the key function must leave `xs` as it
     # was.
-    def sort(self, xs: str, item: types.Type, key: ast.Expr, key_value: str, reverse: str, checked: bool):
+    def sort(xs: str, item: types.Type, key: ast.Expr, key_value: str, reverse: str, checked: bool):
         expected = key.expected
         if expected is none:
             self.core_call("list_sort", [xs, xs, equality_kind(item), reverse], false)
@@ -2719,7 +2719,7 @@ class Emitter:
             self.guard(changed, "RuntimeError", "list changed during sort")
         self.core_call("list_sort", [xs, keys, equality_kind(callable.result), reverse], false)
 
-    def validate_nan(self, value: str, ty: types.Type):
+    def validate_nan(value: str, ty: types.Type):
         if isinstance(ty, types.TupleType):
             for i in range(len(ty.elements)):
                 item = self.core_call("tuple_get", [value, str(i)], true)
@@ -2730,7 +2730,7 @@ class Emitter:
             self.line(f"{nan} =l cned {d}, {d}")
             self.guard(nan, "ValueError", "cannot compare NaN")
 
-    def ordered(self, left: str, right: str, ty: types.Type, op: str) -> str:
+    def ordered(left: str, right: str, ty: types.Type, op: str) -> str:
         if isinstance(ty, types.TupleType):
             return self.tuple_order(op, left, right, ty)
         if types.kind(ty) == "float":
@@ -2742,7 +2742,7 @@ class Emitter:
         self.line(f"{result} =l {comparison_instruction(op)} {left}, {right}")
         return result
 
-    def select_extreme(self, name: str, left: str, right: str, ty: types.Type) -> str:
+    def select_extreme(name: str, left: str, right: str, ty: types.Type) -> str:
         op = "<"
         if name == "max":
             op = ">"
@@ -2755,7 +2755,7 @@ class Emitter:
         self.label(done)
         return left
 
-    def iterable_builtin(self, node: ast.Call) -> str:
+    def iterable_builtin(node: ast.Call) -> str:
         values = self.arg_values(node.args, node.order)
         name = node.name
         ty = self.concrete_type(node.args[0].ty)
@@ -2849,7 +2849,7 @@ class Emitter:
             self.guard(empty, "ValueError", name + "() of an empty iterable")
         return result
 
-    def emit_lazy_iterator(self, adapter: LazyIterator):
+    def emit_lazy_iterator(adapter: LazyIterator):
         self.bindings = adapter.bindings
         self.iterator_descriptor(adapter.symbol, adapter.item)
         self.begin(adapter.symbol + ".next", ["l %state", "l %written"], true)
@@ -2875,7 +2875,7 @@ class Emitter:
     # A C function's `cint` travels as QBE `w` and a float as `d`; a C int
     # result is sign-extended to fill its slot, and a float result becomes its
     # bits. Arguments past the declared ones follow a `...` marker.
-    def extern_call(self, node: ast.Call, target: ast.FunctionDecl, address: str) -> str:
+    def extern_call(node: ast.Call, target: ast.FunctionDecl, address: str) -> str:
         args: list[str] = []
         for i in range(len(node.args)):
             arg = node.args[i]
@@ -2918,7 +2918,7 @@ class Emitter:
     # A function of sys or fs, which core implements as `sys_exit`,
     # `fs_read_file`, and so on. sys.args reads the argc and argv the entry
     # saved.
-    def host(self, node: ast.Call, target: stdlib.Builtin) -> str:
+    def host(node: ast.Call, target: stdlib.Builtin) -> str:
         args: list[str] = []
         if node.name == "sys.args":
             for word in ["$W.argc", "$W.argv"]:
@@ -2930,10 +2930,10 @@ class Emitter:
         assert result is not none, f"{node.name} has no result"
         return self.core_call(node.name.replace(".", "_"), args, not is_none(result))
 
-    def emit_print(self, node: ast.Call) -> str:
+    def emit_print(node: ast.Call) -> str:
         return self.core_call("print_str", [self.to_str(node.args[0])], false)
 
-    def conversion(self, node: ast.Call) -> str:
+    def conversion(node: ast.Call) -> str:
         arg = node.args[0]
         if node.name == "str":
             return self.to_str(arg)
@@ -2950,7 +2950,7 @@ class Emitter:
         self.line(f"{d} =d sltof {value}")
         return self.float_bits(d)
 
-    def to_str(self, arg: ast.Expr) -> str:
+    def to_str(arg: ast.Expr) -> str:
         value = self.expr(arg)
         ty = self.concrete_type(arg.ty)
         kind = types.kind(ty)
@@ -2969,7 +2969,7 @@ class Emitter:
         assert kind == "str", "unchecked scalar conversion"
         return value
 
-    def intrinsic(self, node: ast.Call, target: stdlib.Builtin) -> str:
+    def intrinsic(node: ast.Call, target: stdlib.Builtin) -> str:
         if target.name == "__ccall":
             signature = node.args[0].node
             assert isinstance(signature, ast.FunctionValue), "unchecked C call signature"
@@ -3018,7 +3018,7 @@ class Emitter:
 
     # The address of the value of local `symbol`, named `name`: its stack
     # slot, or the slot of its cell when a nested function captures it.
-    def local_address(self, symbol: ast.Symbol | none, name: str) -> str:
+    def local_address(symbol: ast.Symbol | none, name: str) -> str:
         if symbol is none or not symbol.captured:
             return f"%v.{name}"
         cell = self.temp()
@@ -3028,25 +3028,25 @@ class Emitter:
         return address
 
     # Stores a new cell in the stack slot of local `name`.
-    def new_cell(self, name: str):
+    def new_cell(name: str):
         cell = self.call_text("$W.core.object_new", ["l 0", "l 1"], true)
         self.line(f"storel {cell}, %v.{name}")
 
-    def load_field(self, object: str, offset: int) -> str:
+    def load_field(object: str, offset: int) -> str:
         address = self.temp()
         self.line(f"{address} =l add {object}, {offset}")
         value = self.temp()
         self.line(f"{value} =l loadl {address}")
         return value
 
-    def store_field(self, object: str, offset: int, value: str):
+    def store_field(object: str, offset: int, value: str):
         address = self.temp()
         self.line(f"{address} =l add {object}, {offset}")
         self.line(f"storel {value}, {address}")
 
     # A closure: the function descriptor, the code, and `values`, which the
     # code reads from its first parameter.
-    def new_closure(self, code: str, values: list[str]) -> str:
+    def new_closure(code: str, values: list[str]) -> str:
         closure = self.call_text("$W.core.object_new", ["l $W.function.type", f"l {len(values) + 1}"], true)
         self.store_field(closure, 8, code)
         for i in range(len(values)):
@@ -3055,7 +3055,7 @@ class Emitter:
 
     # A closure of nested function or lambda `function` over the cells of
     # the variables it captures.
-    def closure(self, function: ast.FunctionDecl) -> str:
+    def closure(function: ast.FunctionDecl) -> str:
         symbol = "$" + self.module_of(function) + "." + frame_name(function).replace("<lambda>", "lambda") + "." + str(function.id)
         if len(self.bindings) > 0:
             symbol = symbol + f".inst.{len(self.later)}"
@@ -3063,7 +3063,7 @@ class Emitter:
         return self.new_closure(symbol, self.cells(function))
 
     # The cells of the variables nested function `function` captures.
-    def cells(self, function: ast.FunctionDecl) -> list[str]:
+    def cells(function: ast.FunctionDecl) -> list[str]:
         cells: list[str] = []
         for capture in function.captures:
             cell = self.temp()
@@ -3074,7 +3074,7 @@ class Emitter:
     # A generic function's specialization as a value of its callable type,
     # whose code supplies the defaults of the parameters the callable leaves
     # out. A nested one's closure holds the closure with its cells.
-    def specialized_value(self, expr: ast.Expr, node: ast.FunctionValue) -> str:
+    def specialized_value(expr: ast.Expr, node: ast.FunctionValue) -> str:
         ty = self.concrete_type(expr.ty)
         assert isinstance(ty, types.CallableType), "unchecked generic function value"
         symbol = node.symbol
@@ -3094,7 +3094,7 @@ class Emitter:
 
     # A closure of `method` that keeps the receiver `object`, of the type of
     # `receiver`.
-    def bound_method(self, receiver: ast.Expr, method: types.Function, object: str) -> str:
+    def bound_method(receiver: ast.Expr, method: types.Function, object: str) -> str:
         ty = self.concrete_type(receiver.ty)
         assert isinstance(ty, types.ClassType), "unchecked receiver"
         symbol = self.specialization(method, ty.args, [])
@@ -3102,14 +3102,14 @@ class Emitter:
         return self.new_closure(symbol + ".bound", [object])
 
     # Emits `wrapper`, whose symbol is `symbol`, unless it already is.
-    def wrap(self, symbol: str, wrapper: Later):
+    def wrap(symbol: str, wrapper: Later):
         if symbol not in self.wrappers:
             self.wrappers[symbol] = true
             self.later.append(wrapper)
 
     # A call through a closure passes the closure first. The callee is
     # evaluated before the arguments.
-    def call_value(self, node: ast.CallValue) -> str:
+    def call_value(node: ast.CallValue) -> str:
         callee = self.expr(node.callee)
         args = [callee]
         args.extend(self.arg_values(node.args, node.order))
@@ -3130,7 +3130,7 @@ class Emitter:
 
     # `value`, a function value of `source`, wrapped to serve the callable
     # member of `target`. A union holds a function only some of the time.
-    def adapt(self, value: str, source: types.Type, target: types.Type) -> str:
+    def adapt(value: str, source: types.Type, target: types.Type) -> str:
         member = function_member(source)
         callable = types.callable_member(target)
         assert member is not none and callable is not none, "unchecked adapter"
@@ -3150,7 +3150,7 @@ class Emitter:
         self.label(done)
         return result
 
-    def emit_later(self, later: Later):
+    def emit_later(later: Later):
         if isinstance(later, Lifted):
             bindings = self.bindings
             self.emit_function(later.function, later.symbol, ["l %env"], later.bindings)
@@ -3181,7 +3181,7 @@ class Emitter:
             self.bindings = bindings
 
     # The wrappers pass on a pending exception with the dummy result.
-    def emit_value_wrapper(self, wrapper: ValueWrapper):
+    def emit_value_wrapper(wrapper: ValueWrapper):
         record = wrapper.function.record
         assert record is not none, "function value without a signature"
         args = wrapper_args(len(record.params))
@@ -3191,7 +3191,7 @@ class Emitter:
         else:
             self.end(self.call_text(self.symbol(wrapper.function), args, self.returns))
 
-    def emit_bound_wrapper(self, wrapper: BoundWrapper):
+    def emit_bound_wrapper(wrapper: BoundWrapper):
         signature = types.method(wrapper.receiver, wrapper.method.name)
         assert signature is not none, "bound method without a signature"
         args = wrapper_args(len(signature.params))
@@ -3200,7 +3200,7 @@ class Emitter:
         receiver.extend(args)
         self.end(self.call_text(wrapper.method_symbol, receiver, self.returns))
 
-    def emit_specialized_value(self, value: SpecializedValue):
+    def emit_specialized_value(value: SpecializedValue):
         instance = value.instance
         record = instance.function.record
         assert record is not none, "function value without a signature"
@@ -3217,7 +3217,7 @@ class Emitter:
             passed.append("l " + self.expr(default))
         self.end(self.call_text(instance.symbol, passed, self.returns))
 
-    def emit_builtin_wrapper(self, wrapper: BuiltinWrapper):
+    def emit_builtin_wrapper(wrapper: BuiltinWrapper):
         expected = wrapper.call.expected
         assert expected is not none, "unchecked built-in value"
         self.begin(wrapper.symbol, with_env(wrapper_args(wrapper.params)), not is_none(expected))
@@ -3225,7 +3225,7 @@ class Emitter:
 
     # Converts each argument, supplies the omitted defaults, and converts
     # the result once no exception is pending.
-    def emit_adapter(self, adapter: Adapter):
+    def emit_adapter(adapter: Adapter):
         target = adapter.target
         params = value_params(adapter.source)
         result = value_result(adapter.source)

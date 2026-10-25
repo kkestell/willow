@@ -2,11 +2,11 @@ class Manager:
     name: str
     log: list[str]
 
-    def enter(self) -> str:
+    def enter() -> str:
         self.log.append("enter " + self.name)
         return self.name
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         assert error is none
         self.log.append("exit " + self.name)
 

@@ -1,8 +1,8 @@
 protocol Reader:
-    def read(self, size: int) -> str
+    def read(size: int) -> str
 
 class Source:
-    def read(self, count: int) -> str:
+    def read(count: int) -> str:
         return "text"
 
 def main():

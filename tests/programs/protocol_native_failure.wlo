@@ -1,7 +1,7 @@
 import io
 
 protocol Writer:
-    def write_text(self, text: str)
+    def write_text(text: str)
 
 def main():
     w: Writer = io.stdin()

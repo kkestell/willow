@@ -5,11 +5,11 @@ class Transaction:
     name: str
     log: list[str]
 
-    def enter(self) -> Transaction:
+    def enter() -> Transaction:
         self.log.append(f"begin {self.name}")
         return self
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         if error is none:
             self.log.append(f"commit {self.name}")
         else:

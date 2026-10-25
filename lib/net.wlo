@@ -20,13 +20,13 @@ class Connection:
     _fd: int
     _broken: bool
 
-    def _usable(self):
+    def _usable():
         if self._fd < 0:
             raise ValueError("I/O operation on closed connection")
         if self._broken:
             raise ValueError("connection is unusable after a failed send")
 
-    def recv(self, size: int, timeout: float | none = none) -> bytes:
+    def recv(size: int, timeout: float | none = none) -> bytes:
         self._usable()
         if size < 1:
             raise ValueError("size must be positive")
@@ -40,7 +40,7 @@ class Connection:
             count = core.net_try_recv(self._fd, buffer, size)
         return __bytes(core.net_received(buffer))
 
-    def sendall(self, data: bytes, timeout: float | none = none):
+    def sendall(data: bytes, timeout: float | none = none):
         self._usable()
         core.net_check_timeout(timeout)
         deadline = core.net_deadline(timeout)
@@ -56,26 +56,26 @@ class Connection:
             self._broken = true
             raise
 
-    def close(self):
+    def close():
         if self._fd >= 0:
             core.close(self._fd)
             self._fd = -1
 
-    def enter(self) -> Connection:
+    def enter() -> Connection:
         self._usable()
         return self
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         self.close()
 
 class Listener:
     _fd: int
 
-    def _usable(self):
+    def _usable():
         if self._fd < 0:
             raise ValueError("I/O operation on closed listener")
 
-    def accept(self, timeout: float | none = none) -> Connection:
+    def accept(timeout: float | none = none) -> Connection:
         self._usable()
         core.net_check_timeout(timeout)
         deadline = core.net_deadline(timeout)
@@ -86,20 +86,20 @@ class Listener:
             fd = core.net_try_accept(self._fd)
         return Connection(fd, false)
 
-    def local_port(self) -> int:
+    def local_port() -> int:
         self._usable()
         return core.net_local_port(self._fd)
 
-    def close(self):
+    def close():
         if self._fd >= 0:
             core.close(self._fd)
             self._fd = -1
 
-    def enter(self) -> Listener:
+    def enter() -> Listener:
         self._usable()
         return self
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         self.close()
 
 def connect(host: str, port: int, timeout: float | none = 30.0) -> Connection:
@@ -127,11 +127,11 @@ class Reader:
     _buffer: bytes
     _closed: bool
 
-    def _usable(self):
+    def _usable():
         if self._closed:
             raise ValueError("I/O operation on closed reader")
 
-    def _fill(self, what: str, timeout: float | none, deadline: float | none) -> bool:
+    def _fill(what: str, timeout: float | none, deadline: float | none) -> bool:
         remaining: float | none = none
         if deadline is not none:
             remaining = deadline - time.monotonic()
@@ -145,12 +145,12 @@ class Reader:
         self._buffer = self._buffer + chunk
         return len(chunk) > 0
 
-    def _take(self, count: int) -> bytes:
+    def _take(count: int) -> bytes:
         data = self._buffer[:count]
         self._buffer = self._buffer[count:]
         return data
 
-    def read_exactly(self, size: int, timeout: float | none = none) -> bytes:
+    def read_exactly(size: int, timeout: float | none = none) -> bytes:
         self._usable()
         if size < 0:
             raise ValueError("size must not be negative")
@@ -161,7 +161,7 @@ class Reader:
                 raise OSError(f"unexpected end of stream: expected {size} bytes, received {len(self._buffer)}")
         return self._take(size)
 
-    def read_until(self, separator: bytes, max_bytes: int = 1048576, timeout: float | none = none) -> bytes:
+    def read_until(separator: bytes, max_bytes: int = 1048576, timeout: float | none = none) -> bytes:
         self._usable()
         if len(separator) == 0:
             raise ValueError("separator must not be empty")
@@ -178,17 +178,17 @@ class Reader:
             at = self._buffer.find(separator)
         return self._take(at + len(separator))
 
-    def close(self):
+    def close():
         if not self._closed:
             self._closed = true
             self._buffer = bytes([])
             self._connection.close()
 
-    def enter(self) -> Reader:
+    def enter() -> Reader:
         self._usable()
         return self
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         self.close()
 
 def reader(connection: Connection) -> Reader:

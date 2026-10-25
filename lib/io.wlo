@@ -8,7 +8,7 @@ class File:
     _buffer: ptr
     _closed: bool = false
 
-    def _usable(self, reading: bool):
+    def _usable(reading: bool):
         if self._closed:
             raise ValueError("I/O operation on closed file")
         if reading and self._mode != "r":
@@ -16,39 +16,39 @@ class File:
         if not reading and self._mode == "r":
             raise ValueError("file is not open for writing")
 
-    def read(self, size: int) -> bytes:
+    def read(size: int) -> bytes:
         self._usable(true)
         if size < 1:
             raise ValueError("read size must be positive")
         return __bytes(__word(core.file_read(self._fd, self._buffer, size, self._path)))
 
-    def readline(self) -> str | none:
+    def readline() -> str | none:
         self._usable(true)
         return core.file_readline(self._fd, self._buffer, self._path, false)
 
-    def write(self, data: bytes):
+    def write(data: bytes):
         self._usable(false)
         if not core.write_bytes(self._fd, __offset(__ptr(__word(data)), 24), len(data)):
             core.fail_os("write", self._path)
 
-    def write_text(self, text: str):
+    def write_text(text: str):
         self._usable(false)
         if not core.write_bytes(self._fd, core.str_bytes(text), core.str_size(text)):
             core.fail_os("write", self._path)
 
-    def iter(self) -> Iterator[str]:
+    def iter() -> Iterator[str]:
         return _Lines(self)
 
-    def flush(self):
+    def flush():
         if self._closed:
             raise ValueError("I/O operation on closed file")
 
-    def _isatty(self) -> bool:
+    def _isatty() -> bool:
         if self._closed:
             raise ValueError("I/O operation on closed file")
         return core.isatty(self._fd) == 1
 
-    def close(self):
+    def close():
         if self._borrowed:
             raise ValueError("cannot close a standard stream")
         if self._closed:
@@ -57,7 +57,7 @@ class File:
         if core.close(self._fd) < 0:
             core.fail_os("close", self._path)
 
-    def _child_fd(self, name: str, reading: bool) -> int:
+    def _child_fd(name: str, reading: bool) -> int:
         if self._closed:
             raise ValueError("I/O operation on closed file")
         if reading != (self._mode == "r"):
@@ -72,23 +72,23 @@ class File:
             self.flush()
         return self._fd
 
-    def enter(self) -> File:
+    def enter() -> File:
         if self._borrowed:
             raise ValueError("cannot close a standard stream")
         if self._closed:
             raise ValueError("I/O operation on closed file")
         return self
 
-    def exit(self, error: Exception | none):
+    def exit(error: Exception | none):
         self.close()
 
 class _Lines:
     _file: File
 
-    def iter(self) -> _Lines:
+    def iter() -> _Lines:
         return self
 
-    def next(self) -> str:
+    def next() -> str:
         line = self._file.readline()
         if line is none:
             raise StopIteration("")

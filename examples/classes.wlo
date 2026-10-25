@@ -5,21 +5,21 @@ class Point:
     x: float
     y: float
 
-    def moved(self, dx: float, dy: float) -> Point:
+    def moved(dx: float, dy: float) -> Point:
         return Point(self.x + dx, self.y + dy)
 
-    def text(self) -> str:
+    def text() -> str:
         return f"({self.x}, {self.y})"
 
 class Account:
     owner: str
     balance: int = 0
 
-    def deposit(self, amount: int) -> int:
+    def deposit(amount: int) -> int:
         self.balance = self.balance + amount
         return self.balance
 
-    def withdraw(self, amount: int) -> bool:
+    def withdraw(amount: int) -> bool:
         if amount > self.balance:
             return false
         self.balance = self.balance - amount

@@ -1,8 +1,8 @@
 protocol Reader:
-    def read(self) -> int
+    def read() -> int
 
 class Src:
-    def read(self) -> int:
+    def read() -> int:
         return 1
 
 class Trouble(Exception):
