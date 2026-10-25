@@ -385,8 +385,6 @@ class Binder:
             if name == "dict":
                 return "dict[" + self.type_texts(node.args, module, scope) + "]"
             if name == "tuple":
-                if len(node.args) == 0:
-                    return "tuple[()]"
                 return "tuple[" + self.type_texts(node.args, module, scope) + "]"
             if is_scalar(name):
                 return name

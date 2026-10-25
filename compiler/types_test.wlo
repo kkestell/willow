@@ -74,7 +74,7 @@ def json_type() -> types.Type:
 def display(r: Results):
     int_or_none = types.optional(prim("int"))
     r.shows("nested collections", types.ListType(types.DictType(prim("str"), int_or_none)), "list[dict[str, int | none]]")
-    r.shows("empty tuple", types.TupleType([]), "tuple[()]")
+    r.shows("empty tuple", types.TupleType([]), "tuple[]")
     r.shows("tuple", types.TupleType([prim("int"), prim("str"), prim("int")]), "tuple[int, str, int]")
     takes = types.CallableType([prim("int"), prim("str")], prim("bool"))
     r.shows("callable", takes, "(int, str) -> bool")

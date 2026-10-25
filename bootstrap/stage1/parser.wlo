@@ -134,14 +134,11 @@ class Parser:
             node.has_args = true
             self.expect(tokens.Kind.RBRACKET, "']'")
         else if kind == tokens.Kind.TUPLE:
-            # `tuple[()]` is the empty tuple type; `()` before `->` starts a
-            # callable.
+            # `tuple[]` is the empty tuple type; a `(` starts a grouped or
+            # callable element type.
             self.expect(tokens.Kind.LBRACKET, "'['")
             node.has_args = true
-            if self.peek().kind == tokens.Kind.LPAREN and self.ahead(1).kind == tokens.Kind.RPAREN and self.ahead(2).kind == tokens.Kind.RBRACKET:
-                self.advance()
-                self.advance()
-            else:
+            if self.peek().kind != tokens.Kind.RBRACKET:
                 node.args.append(self.parse_type())
                 while self.accept(tokens.Kind.COMMA):
                     node.args.append(self.parse_type())

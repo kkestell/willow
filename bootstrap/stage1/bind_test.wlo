@@ -272,7 +272,7 @@ def main():
         ["main: def main() -> Coroutine[none]", "async def main():\n    pass\n"],
         ["main: def f(b: Box[list[int]], s: list[list[int]], u: Box[list[int | float]]) -> Box[list[int]]\nmain: def main() -> none\nmain: field Box.item: T", "class Box[T: Iterable[int | float]]:\n    item: T\ntype SBox[T: Iterable[int]] = list[T]\ndef f(b: Box[list[int]], s: SBox[list[int]], u: Box[list[int | float]]) -> Box[list[int]]:\n    return b\ndef main():\n    pass\n"],
         ["main: def f(b: Box[L]) -> none\nmain: def main() -> none\nmain: def L.items() -> list[int]\nmain: field Box.item: T", "protocol HasList:\n    def items() -> list[int]\nclass L:\n    def items() -> list[int]:\n        return [1]\nclass Box[T: HasList]:\n    item: T\ndef f(b: Box[L]):\n    pass\ndef main():\n    pass\n"],
-        ["main: def f(a: tuple[int, str], b: tuple[()], c: tuple[int]) -> none\nmain: def main() -> none", "def f(a: tuple[int, str], b: tuple[()], c: tuple[int]):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(a: tuple[int, str], b: tuple[], c: tuple[int]) -> none\nmain: def main() -> none", "def f(a: tuple[int, str], b: tuple[], c: tuple[int]):\n    pass\ndef main():\n    pass\n"],
     ]
     for program in signature_cases:
         actual = signatures(program, false)

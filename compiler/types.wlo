@@ -223,7 +223,7 @@ def display(t: Type) -> str:
         return f"dict[{display(t.key)}, {display(t.value)}]"
     if isinstance(t, TupleType):
         if len(t.elements) == 0:
-            return "tuple[()]"
+            return "tuple[]"
         return "tuple[" + join(t.elements, ", ") + "]"
     if isinstance(t, ClassType):
         return specialized(t.decl.type_name, t.args)

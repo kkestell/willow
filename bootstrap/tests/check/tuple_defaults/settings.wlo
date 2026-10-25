@@ -2,7 +2,7 @@ enum Mode:
     OFF
     ON
 
-type Value = tuple[Mode | none, tuple[int | float, str | none], tuple[()], bool]
+type Value = tuple[Mode | none, tuple[int | float, str | none], tuple[], bool]
 
 class Options:
     value: Value = (Mode.ON, (-2.5, none), (), true)

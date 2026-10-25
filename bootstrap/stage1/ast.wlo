@@ -149,7 +149,7 @@ type TypeExpr = TypeName | UnionType | CallableType
 
 # A reserved type name or a possibly module-qualified name, with the type
 # arguments in its brackets: a list's element, a dict's key and value, a
-# tuple's positions, or a named type's arguments. `tuple[()]` has no
+# tuple's positions, or a named type's arguments. `tuple[]` has no
 # arguments; `has_args` tells `Box[]` from `Box`. `isinstance` and `except`
 # name their class with a TypeName too.
 class TypeName:
