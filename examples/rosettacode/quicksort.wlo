@@ -10,7 +10,7 @@ def quicksort(items: list[int]) -> list[int]:
     for item in items:
         if item < pivot:
             less.append(item)
-        elif item > pivot:
+        else if item > pivot:
             greater.append(item)
         else:
             equal.append(item)

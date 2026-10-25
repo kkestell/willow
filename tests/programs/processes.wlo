@@ -59,9 +59,9 @@ def main():
         try:
             if kind == "empty":
                 subprocess.run([])
-            elif kind == "nul":
+            else if kind == "nul":
                 subprocess.run(["printf", "a\x00b"])
-            elif kind == "timeout":
+            else if kind == "timeout":
                 subprocess.run(["true"], timeout=-1.0)
             else:
                 subprocess.run(["/nonexistent/program"])

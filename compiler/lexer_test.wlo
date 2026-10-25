@@ -18,7 +18,7 @@ def describe(source: str) -> str:
         name = str(token.kind).removeprefix("Kind.")
         if token.text != "" and name != "NAME" and name != "STRING_LITERAL" and name != "FSTRING_TEXT" and name != "FIELD_END" and name != "INT_LITERAL" and name != "FLOAT_LITERAL":
             words.append(token.text)
-        elif token.text != "" and name != "NAME":
+        else if token.text != "" and name != "NAME":
             words.append(f"{name}:{token.text}")
         else:
             words.append(name)
@@ -60,6 +60,7 @@ def main():
         ["def f():\n        pass\n", "2:9: unexpected indent"],
         ["while true and not x_1 int Iterable none lambda print _\n", "while true and not NAME int Iterable none lambda NAME NAME NEWLINE EOF"],
         ["True False None\n", "NAME NAME NAME NEWLINE EOF"],
+        ["elif else if\n", "NAME else if NEWLINE EOF"],
         ["9223372036854775807", "INT_LITERAL:9223372036854775807 NEWLINE EOF"],
         ["x = 9223372036854775808\n", "1:5: integer literal out of range"],
         ["x = 12345678901234567890\n", "1:5: integer literal out of range"],

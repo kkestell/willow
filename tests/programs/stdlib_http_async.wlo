@@ -19,13 +19,13 @@ async def serve(connection: aio.Connection, log: list[str]):
         if path == "/delay":
             await aio.sleep(0.4)
             await respond(connection, "200 OK", "", "late")
-        elif path == "/redirect":
+        else if path == "/redirect":
             await respond(connection, "302 Found", "Location: /delay\r\n", "")
-        elif path == "/echo":
+        else if path == "/echo":
             await respond(connection, "200 OK", "", head.split("\r\n")[0])
-        elif path == "/file":
+        else if path == "/file":
             await respond(connection, "200 OK", "", "file body")
-        elif path == "/missing":
+        else if path == "/missing":
             await respond(connection, "404 Not Found", "", "nope")
         else:
             # Sends the start of a response, then waits for the client to leave.

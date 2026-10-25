@@ -91,13 +91,13 @@ def main():
         try:
             if kind == "host":
                 net.connect("bad host", 80)
-            elif kind == "port":
+            else if kind == "port":
                 net.connect("127.0.0.1", 0)
-            elif kind == "listen port":
+            else if kind == "listen port":
                 net.listen("127.0.0.1", 70000)
-            elif kind == "size":
+            else if kind == "size":
                 fresh.recv(0)
-            elif kind == "backlog":
+            else if kind == "backlog":
                 net.listen("127.0.0.1", 0, backlog=0)
             else:
                 net.connect("127.0.0.1", 80, timeout=-1.0)

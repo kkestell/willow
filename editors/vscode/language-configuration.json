@@ -11,7 +11,7 @@
   "surroundingPairs": [["(", ")"], ["[", "]"], ["{", "}"], ["\"", "\""], ["'", "'"]],
   "indentationRules": {
     "increaseIndentPattern": "^\\s*[^#]*:\\s*(#.*)?$",
-    "decreaseIndentPattern": "^\\s*(elif|else|except|finally)\\b.*:\\s*(#.*)?$"
+    "decreaseIndentPattern": "^\\s*(else|except|finally)\\b.*:\\s*(#.*)?$"
   },
   "onEnterRules": [
     {

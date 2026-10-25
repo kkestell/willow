@@ -300,7 +300,7 @@ def comparable(t: Type) -> bool:
             for element in m.elements:
                 if not comparable(element):
                     return false
-        elif kind(m) not in ["int", "float", "bool", "str", "none", "bytes", "enum"]:
+        else if kind(m) not in ["int", "float", "bool", "str", "none", "bytes", "enum"]:
             return false
     return true
 
@@ -459,7 +459,7 @@ def method(t: Type, name: str) -> Method | none:
     if isinstance(t, ClassType):
         fns = t.decl.methods
         native = t.decl.native and t.decl.prefix != ""
-    elif isinstance(t, ProtocolType):
+    else if isinstance(t, ProtocolType):
         fns = t.decl.methods
         native = false
     else:
@@ -546,7 +546,7 @@ def converts(source: Type, target: Type) -> bool:
         for i in range(len(from_tuple.elements)):
             if converts(from_tuple.elements[i], to_tuple.elements[i]):
                 return true
-    elif from_tuple is not none and has(target, "protocol") or to_tuple is not none and has(source, "protocol"):
+    else if from_tuple is not none and has(target, "protocol") or to_tuple is not none and has(source, "protocol"):
         # A tuple serving a protocol holds its items in the item type's
         # representation.
         held = from_tuple
@@ -575,9 +575,9 @@ def has_float(t: Type) -> bool:
     parts: list[Type] = []
     if isinstance(t, UnionType):
         parts = t.members
-    elif isinstance(t, TupleType):
+    else if isinstance(t, TupleType):
         parts = t.elements
-    elif isinstance(t, CallableType):
+    else if isinstance(t, CallableType):
         if has_float(t.result):
             return true
         parts = t.params
@@ -688,7 +688,7 @@ def serves(target: CallableType, source: Type, assuming: list[str]) -> bool:
             if i >= len(target.params) and param.default is none:
                 return false
             params.append(param.ty)
-    elif isinstance(source, CallableType):
+    else if isinstance(source, CallableType):
         if len(source.params) != len(target.params):
             return false
         result = source.result
@@ -861,20 +861,20 @@ def parts_of(t: Type) -> list[Type]:
     if isinstance(t, FunctionType):
         if t.receiver is not none:
             parts.append(function_result(t))
-    elif isinstance(t, ListType):
+    else if isinstance(t, ListType):
         parts.append(t.element)
-    elif isinstance(t, DictType):
+    else if isinstance(t, DictType):
         parts.append(t.value)
-    elif isinstance(t, TupleType):
+    else if isinstance(t, TupleType):
         parts.extend(t.elements)
-    elif isinstance(t, CallableType):
+    else if isinstance(t, CallableType):
         parts.extend(t.params)
         parts.append(t.result)
-    elif isinstance(t, ClassType):
+    else if isinstance(t, ClassType):
         parts.extend(t.args)
-    elif isinstance(t, ProtocolType):
+    else if isinstance(t, ProtocolType):
         parts.extend(t.args)
-    elif isinstance(t, UnionType):
+    else if isinstance(t, UnionType):
         parts.extend(t.members)
     return parts
 

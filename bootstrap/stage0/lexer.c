@@ -8,7 +8,7 @@
 
 static const char *const RESERVED[] = {
     "and", "as", "assert", "async", "await", "break", "case", "class", "continue",
-    "def", "del", "elif", "else", "enum", "except", "false", "finally", "for",
+    "def", "del", "else", "enum", "except", "false", "finally", "for",
     "from", "global", "if", "import", "in", "is", "lambda", "match", "none",
     "nonlocal", "not", "or", "pass", "protocol", "raise", "return", "true", "try",
     "type", "while", "with", "yield", "int", "float", "bool", "str", "bytes",

@@ -1,10 +1,10 @@
-# Control flow: `if`/`elif`/`else`, `while`, `for` over ranges and lists,
+# Control flow: `if`/`else if`/`else`, `while`, `for` over ranges and lists,
 # `break`, `continue`, and `assert`.
 
 def classify(n: int) -> str:
     if n < 0:
         return "negative"
-    elif n == 0:
+    else if n == 0:
         return "zero"
     else:
         return "positive"

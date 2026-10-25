@@ -46,7 +46,7 @@ def tokenize(line: str) -> list[Token]:
             number = ""
         if ch in "+-*/()":
             tokens.append(Token(ch, column))
-        elif ch != " ":
+        else if ch != " ":
             raise ParseError(f"unexpected '{ch}'", column)
     tokens.append(Token("", column))
     return tokens
@@ -54,9 +54,9 @@ def tokenize(line: str) -> list[Token]:
 def operator(text: str) -> Operator:
     if text == "+":
         return Operator.ADD
-    elif text == "-":
+    else if text == "-":
         return Operator.SUBTRACT
-    elif text == "*":
+    else if text == "*":
         return Operator.MULTIPLY
     return Operator.DIVIDE
 
@@ -117,9 +117,9 @@ def evaluate(expr: Expr) -> float:
     right = evaluate(expr.right)
     if expr.operator == Operator.ADD:
         return left + right
-    elif expr.operator == Operator.SUBTRACT:
+    else if expr.operator == Operator.SUBTRACT:
         return left - right
-    elif expr.operator == Operator.MULTIPLY:
+    else if expr.operator == Operator.MULTIPLY:
         return left * right
     return left / right
 

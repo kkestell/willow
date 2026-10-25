@@ -12,9 +12,6 @@
 - `subprocess`'s async methods check child status every 10 ms rather than
   waiting on pipe readiness.
 - The checker reports the first error in a program.
-- Replace `elif` with `else if` in the compiler and editor support; migrate
-  sources and examples, and add regression coverage for branch chains and
-  narrowing. Validate on macOS and Linux.
 - Replace the empty tuple type spelling `tuple[()]` with `tuple[]` in the
   compiler, diagnostics, and editor support; migrate sources and tests and
   add regression coverage. Validate on macOS and Linux.

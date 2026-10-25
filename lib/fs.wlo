@@ -197,7 +197,7 @@ def normpath(path: str) -> str:
             continue
         if part != ".." or (slashes == "" and len(parts) == 0) or (len(parts) > 0 and parts[-1] == ".."):
             parts.append(part)
-        elif len(parts) > 0:
+        else if len(parts) > 0:
             parts.pop()
     result = slashes + "/".join(parts)
     if result == "":
@@ -259,7 +259,7 @@ def _match(pattern: str, name: str) -> bool:
         if matched:
             at = after
             pos = pos + 1
-        elif star >= 0:
+        else if star >= 0:
             retry = retry + 1
             pos = retry
             at = star + 1
@@ -280,7 +280,7 @@ def _glob(pattern: str) -> list[str]:
         if tail == "":
             if _is_directory(directory):
                 paths.append(join(directory, ""))
-        elif _has_magic(tail):
+        else if _has_magic(tail):
             scan = directory
             if scan == "":
                 scan = "."
@@ -331,7 +331,7 @@ def _temp(prefix: str, directory: str | none, file: bool) -> str:
             core.fail_os("create temporary file in", directory)
         if core.close(fd) != 0:
             core.fail_os("create temporary file in", directory)
-    elif __addr_is_null(mkdtemp(template)):
+    else if __addr_is_null(mkdtemp(template)):
         core.fail_os("create temporary directory in", directory)
     return core.str_from_bytes(template, core.strlen(template))
 

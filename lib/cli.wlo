@@ -135,7 +135,7 @@ class Parser:
         for entry in self._entries:
             if entry.kind == "positional":
                 parts.append(entry.name)
-            elif entry.kind == "rest":
+            else if entry.kind == "rest":
                 parts.append(f"[{entry.name} ...]")
         return " ".join(parts)
 
@@ -149,7 +149,7 @@ class Parser:
         for entry in self._entries:
             if entry.kind == "positional":
                 arguments.append((entry.name, entry.help))
-            elif entry.kind == "rest":
+            else if entry.kind == "rest":
                 arguments.append((entry.name + " ...", entry.help))
             else:
                 left = ""
@@ -164,15 +164,15 @@ class Parser:
                     value = entry.default
                     if isinstance(value, str):
                         default = value
-                    elif isinstance(value, int):
+                    else if isinstance(value, int):
                         default = str(value)
-                    elif isinstance(value, float):
+                    else if isinstance(value, float):
                         default = str(value)
                     else:
                         default = str(value)
                     if entry.required:
                         note = "(required)"
-                    elif default != "":
+                    else if default != "":
                         note = f"(default: {default})"
                     if note != "":
                         if help != "":
@@ -214,9 +214,9 @@ class Parser:
             i = i + 1
             if options_done or arg == "-" or not arg.startswith("-"):
                 positionals.append(arg)
-            elif arg == "--":
+            else if arg == "--":
                 options_done = true
-            elif arg == "--help" or arg == "-h":
+            else if arg == "--help" or arg == "-h":
                 raise HelpRequested(self.help())
             else:
                 entry: _Entry | none = none
@@ -228,7 +228,7 @@ class Parser:
                         value = name[equal + 1:]
                         name = name[:equal]
                     entry = self._by_name.get(name)
-                elif len(arg) == 2:
+                else if len(arg) == 2:
                     entry = self._by_short.get(arg[1:])
                 if entry is none:
                     raise self._error(f"unknown option '{arg}'")
@@ -254,7 +254,7 @@ class Parser:
                 values[entry.name] = positionals[next_positional]
                 next_positional = next_positional + 1
                 kind = "str"
-            elif kind == "rest":
+            else if kind == "rest":
                 values[entry.name] = positionals[next_positional:]
                 next_positional = len(positionals)
                 kind = "list"

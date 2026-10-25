@@ -66,9 +66,9 @@ def main():
         try:
             if kind == "size":
                 reader.read_exactly(-1)
-            elif kind == "separator":
+            else if kind == "separator":
                 reader.read_until(bytes([]))
-            elif kind == "max_bytes":
+            else if kind == "max_bytes":
                 reader.read_until("x".encode(), max_bytes=0)
             else:
                 reader.read_exactly(1, timeout=0.0)

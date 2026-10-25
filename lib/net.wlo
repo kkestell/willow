@@ -50,7 +50,7 @@ class Connection:
                 count = core.net_try_send(self._fd, __ptr(__word(data)), sent, len(data))
                 if count >= 0:
                     sent = sent + count
-                elif not _wait(self._fd, 4, deadline):
+                else if not _wait(self._fd, 4, deadline):
                     core.net_timed_out("send", timeout)
         except Exception:
             self._broken = true

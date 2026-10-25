@@ -420,7 +420,7 @@ class FieldAssign:
 class CallStmt:
     call: Expr
 
-# `elif` is an If, at the `elif`, that is the whole `else_body`.
+# `else if` is an If, at the `if`, that is the whole `else_body`.
 class If:
     condition: Expr
     body: list[Stmt]

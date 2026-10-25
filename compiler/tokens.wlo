@@ -31,7 +31,6 @@ enum Kind:
     CONTINUE
     DEF
     DEL
-    ELIF
     ELSE
     ENUM
     EXCEPT
@@ -121,7 +120,6 @@ def keywords() -> dict[str, Kind]:
         "continue": Kind.CONTINUE,
         "def": Kind.DEF,
         "del": Kind.DEL,
-        "elif": Kind.ELIF,
         "else": Kind.ELSE,
         "enum": Kind.ENUM,
         "except": Kind.EXCEPT,

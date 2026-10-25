@@ -85,7 +85,7 @@ class Checker:
             args = node.args
             keywords = node.keywords
             name = node.name
-        elif isinstance(node, ast.MethodCall):
+        else if isinstance(node, ast.MethodCall):
             args = node.args
             keywords = node.keywords
             name = node.name
@@ -125,7 +125,7 @@ class Checker:
         count = len(args) + len(keywords)
         if required == len(params):
             self.check_arity(expr, name, required, count)
-        elif count < required or count > len(params):
+        else if count < required or count > len(params):
             self.fail(expr.line, expr.col, f"'{name}' expects {required} to {len(params)} arguments, received {count}")
         if self.failed():
             return
@@ -142,7 +142,7 @@ class Checker:
         if isinstance(node, ast.Call):
             node.args = result
             node.order = order
-        elif isinstance(node, ast.MethodCall):
+        else if isinstance(node, ast.MethodCall):
             node.args = result
             node.order = order
             node.written = count
@@ -172,9 +172,9 @@ class Checker:
         col = statement.col
         if isinstance(node, ast.Assign):
             self.check_assign(statement, node, state)
-        elif isinstance(node, ast.Unpack):
+        else if isinstance(node, ast.Unpack):
             self.check_pattern(node.target, self.check_expr(node.value, state), state)
-        elif isinstance(node, ast.CallStmt):
+        else if isinstance(node, ast.CallStmt):
             ty = self.check_expr(node.call, state)
             if stdlib.has_coroutine(ty):
                 self.fail(line, col, f"cannot discard a value of type {types.display(ty)}; a discarded coroutine never runs")
@@ -183,17 +183,17 @@ class Checker:
             if isinstance(call, ast.Call):
                 target = call.target
                 return isinstance(target, stdlib.Builtin) and target.name == "exit"
-        elif isinstance(node, ast.If):
+        else if isinstance(node, ast.If):
             return self.check_if(node, state)
-        elif isinstance(node, ast.While):
+        else if isinstance(node, ast.While):
             self.check_while(node, state)
-        elif isinstance(node, ast.Return):
+        else if isinstance(node, ast.Return):
             if self.finally_depth > 0:
                 self.fail(line, col, "'return' cannot leave a 'finally' clause")
             self.check_return(statement, node, state)
             self.departure(state, true)
             return true
-        elif isinstance(node, ast.Yield):
+        else if isinstance(node, ast.Yield):
             if self.finally_depth > 0:
                 self.fail(line, col, "'yield' cannot be used in a 'finally' clause")
             yielded = self.yield_type
@@ -201,32 +201,32 @@ class Checker:
             self.check_against(node.value, state, yielded)
             self.calls = self.calls + 1
             self.forget_captured(state)
-        elif isinstance(node, ast.IndexAssign):
+        else if isinstance(node, ast.IndexAssign):
             self.check_index_assign(statement, node, state)
-        elif isinstance(node, ast.FieldAssign):
+        else if isinstance(node, ast.FieldAssign):
             self.check_field_assign(statement, node, state)
-        elif isinstance(node, ast.For):
+        else if isinstance(node, ast.For):
             self.check_for(statement, node, state)
-        elif isinstance(node, ast.Assert):
+        else if isinstance(node, ast.Assert):
             self.check_assert(node, state)
-        elif isinstance(node, ast.Raise):
+        else if isinstance(node, ast.Raise):
             self.check_raise(node, state)
             return true
-        elif isinstance(node, ast.Try):
+        else if isinstance(node, ast.Try):
             return self.check_try(node, state)
-        elif isinstance(node, ast.With):
+        else if isinstance(node, ast.With):
             return self.check_with(statement, node, state)
-        elif isinstance(node, ast.AsyncWith):
+        else if isinstance(node, ast.AsyncWith):
             return self.check_async_with(node, state)
-        elif isinstance(node, ast.FunctionDef):
+        else if isinstance(node, ast.FunctionDef):
             self.check_nested(statement, node, state)
-        elif isinstance(node, ast.Nonlocal):
+        else if isinstance(node, ast.Nonlocal):
             # The binder has made later assignments rebind the outer variables.
             pass
-        elif isinstance(node, ast.SimpleStatement):
+        else if isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
                 return self.check_transfer(statement, "break", state)
-            elif node == ast.SimpleStatement.CONTINUE:
+            else if node == ast.SimpleStatement.CONTINUE:
                 return self.check_transfer(statement, "continue", state)
         else:
             self.unsupported(line, col, "this statement")
@@ -296,7 +296,7 @@ class Checker:
             return true
         if body_transfers:
             replace(state, else_state)
-        elif else_transfers:
+        else if else_transfers:
             replace(state, body_state)
         else:
             replace(state, join(body_state, else_state, self.symbols))
@@ -342,7 +342,7 @@ class Checker:
     def check_transfer(self, statement: ast.Stmt, name: str, state: dict[int, types.Type]) -> bool:
         if self.loops == 0:
             self.fail(statement.line, statement.col, f"'{name}' outside of a loop")
-        elif self.loop_finally < self.finally_depth:
+        else if self.loop_finally < self.finally_depth:
             self.fail(statement.line, statement.col, f"'{name}' cannot leave a 'finally' clause")
         self.departure(state, false)
         return true
@@ -468,7 +468,7 @@ class Checker:
                 if declared is none:
                     symbol.ty = handled
                     declared = handled
-                elif not types.assignable(declared, handled):
+                else if not types.assignable(declared, handled):
                     self.fail(handler.line, handler.col, f"expected {types.display(declared)}, received {types.display(handled)}")
                 self.symbols[symbol.id] = symbol
                 handler_state[symbol.id] = assigned_type(declared, handled)
@@ -551,7 +551,7 @@ class Checker:
         if declared is none:
             symbol.ty = value
             declared = value
-        elif not types.assignable(declared, value):
+        else if not types.assignable(declared, value):
             self.fail(statement.line, statement.col, f"expected {types.display(declared)}, received {types.display(value)}")
             return
         self.symbols[symbol.id] = symbol
@@ -670,7 +670,7 @@ class Checker:
             position = -1
             if isinstance(index, ast.Int):
                 position = int(index.text)
-            elif isinstance(index, ast.Unary) and index.op == "-":
+            else if isinstance(index, ast.Unary) and index.op == "-":
                 operand = index.operand.node
                 if isinstance(operand, ast.Int):
                     position = -int(operand.text)
@@ -687,14 +687,14 @@ class Checker:
                 return none_type()
             node.position = position
             return object.elements[position]
-        elif isinstance(object, types.ListType):
+        else if isinstance(object, types.ListType):
             item = types.expand(object.element)
-        elif isinstance(object, types.DictType):
+        else if isinstance(object, types.DictType):
             self.check_against(node.index, state, object.key)
             return types.expand(object.value)
-        elif types.kind(object) == "str":
+        else if types.kind(object) == "str":
             item = object
-        elif types.kind(object) == "bytes":
+        else if types.kind(object) == "bytes":
             item = types.prim("int")
         else:
             self.fail(expr.line, expr.col, f"cannot index a value of type {types.display(object)}")
@@ -759,7 +759,7 @@ class Checker:
         params: list[stdlib.BuiltinParam] = []
         if name == "append":
             params.append(stdlib.arg("v", types.expand(object.element)))
-        elif name == "extend":
+        else if name == "extend":
             params.append(stdlib.arg("items", object))
         noun = ""
         if len(params) > 0:
@@ -769,7 +769,7 @@ class Checker:
             return none_type()
         if name == "append":
             self.check_against(node.args[0], state, types.expand(object.element))
-        elif name == "extend":
+        else if name == "extend":
             arg = node.args[0]
             target = types.ProtocolType(stdlib.protocols()["Iterable"], [types.expand(object.element)])
             arg.expected = object
@@ -779,7 +779,7 @@ class Checker:
             if not self.failed() and (not types.assignable(types.expand(object.element), iteration.item) or types.converts(iteration.item, types.expand(object.element))):
                 self.fail(arg.line, arg.col, f"expected {types.display(target)}, received {types.display(actual)}")
             arg.expected = none
-        elif name == "pop":
+        else if name == "pop":
             return types.expand(object.element)
         return none_type()
 
@@ -793,7 +793,7 @@ class Checker:
             if i == key:
                 if not isinstance(node, ast.Lambda) and not isinstance(node, ast.BuiltinValue):
                     self.check_expr(args[i], state)
-            elif i == key - 1:
+            else if i == key - 1:
                 self.check_against(args[i], state, types.prim("bool"))
             else:
                 self.check_expr(args[i], state)
@@ -818,13 +818,13 @@ class Checker:
             node.infer_result = true
             key.expected = types.CallableType([item], none_type())
             key_type = self.check_expr(key, state)
-        elif isinstance(node, ast.BuiltinValue):
+        else if isinstance(node, ast.BuiltinValue):
             # `abs` returns the type of its argument.
             returns = none_type()
             declared = node.builtin.result
             if declared is not none:
                 returns = declared
-            elif node.name == "abs":
+            else if node.name == "abs":
                 returns = item
             key.expected = types.CallableType([item], returns)
             key_type = self.check_expr(key, state)
@@ -835,7 +835,7 @@ class Checker:
         result: types.Type = none_type()
         if isinstance(expanded, types.CallableType):
             result = expanded.result
-        elif isinstance(expanded, types.FunctionType):
+        else if isinstance(expanded, types.FunctionType):
             result = types.function_result(expanded)
         else:
             self.fail(key.line, key.col, f"a sort key must be a function, received {types.display(key_type)}")
@@ -912,7 +912,7 @@ class Checker:
             item: types.Type = object.key
             if name == "values":
                 item = types.expand(object.value)
-            elif name == "items":
+            else if name == "items":
                 item = types.TupleType([object.key, types.expand(object.value)])
             return types.iterator(item)
         if name not in ["get", "pop"]:
@@ -960,7 +960,7 @@ class Checker:
             return
         if value is not none:
             self.check_against(value, state, self.result)
-        elif not types.assignable(self.result, none_type()):
+        else if not types.assignable(self.result, none_type()):
             self.fail(statement.line, statement.col, f"expected {types.display(self.result)}, received none")
 
     # Expressions
@@ -985,41 +985,41 @@ class Checker:
         col = expr.col
         if isinstance(node, ast.Int):
             return types.prim("int")
-        elif isinstance(node, ast.String):
+        else if isinstance(node, ast.String):
             return types.prim("str")
-        elif isinstance(node, ast.Constant):
+        else if isinstance(node, ast.Constant):
             if node == ast.Constant.NONE:
                 return none_type()
             return types.prim("bool")
-        elif isinstance(node, ast.Name):
+        else if isinstance(node, ast.Name):
             return self.check_name(expr, node, state)
-        elif isinstance(node, ast.Binary):
+        else if isinstance(node, ast.Binary):
             return self.check_binary(expr, node, state)
-        elif isinstance(node, ast.Call):
+        else if isinstance(node, ast.Call):
             return self.check_call(expr, node, state)
-        elif isinstance(node, ast.TypeOf):
+        else if isinstance(node, ast.TypeOf):
             return types.prim("ptr")
-        elif isinstance(node, ast.Float):
+        else if isinstance(node, ast.Float):
             return types.prim("float")
-        elif isinstance(node, ast.FString):
+        else if isinstance(node, ast.FString):
             return self.check_fstring(node, state)
-        elif isinstance(node, ast.EnumMember):
+        else if isinstance(node, ast.EnumMember):
             record = node.decl.record
             assert record is not none, "enum without a record"
             return types.EnumType(record)
-        elif isinstance(node, ast.MethodCall):
+        else if isinstance(node, ast.MethodCall):
             return self.check_method(expr, node, state)
-        elif isinstance(node, ast.Field):
+        else if isinstance(node, ast.Field):
             return self.check_field(expr, node, state)
-        elif isinstance(node, ast.FunctionValue):
+        else if isinstance(node, ast.FunctionValue):
             return self.check_function_value(expr, node, state)
-        elif isinstance(node, ast.BuiltinValue):
+        else if isinstance(node, ast.BuiltinValue):
             return self.check_builtin_value(expr, node, state)
-        elif isinstance(node, ast.Lambda):
+        else if isinstance(node, ast.Lambda):
             return self.check_lambda(expr, node, state)
-        elif isinstance(node, ast.CallValue):
+        else if isinstance(node, ast.CallValue):
             return self.check_call_value(expr, node, state)
-        elif isinstance(node, ast.Await):
+        else if isinstance(node, ast.Await):
             expected = expr.expected
             if expected is not none:
                 node.operand.expected = stdlib.coroutine_of(expected)
@@ -1028,23 +1028,23 @@ class Checker:
                 return operand.args[0]
             self.fail(line, col, f"cannot await a value of type {types.display(operand)}")
             return none_type()
-        elif isinstance(node, ast.Typed):
+        else if isinstance(node, ast.Typed):
             return node.ty
-        elif isinstance(node, ast.Index):
+        else if isinstance(node, ast.Index):
             return self.check_index(expr, node, state)
-        elif isinstance(node, ast.Slice):
+        else if isinstance(node, ast.Slice):
             return self.check_slice(expr, node, state)
-        elif isinstance(node, ast.Unary):
+        else if isinstance(node, ast.Unary):
             return self.check_unary(expr, node, state)
-        elif isinstance(node, ast.Is):
+        else if isinstance(node, ast.Is):
             return self.check_is(expr, node, state)
-        elif isinstance(node, ast.IsInstance):
+        else if isinstance(node, ast.IsInstance):
             return self.check_isinstance(node, state)
-        elif isinstance(node, ast.TupleDisplay):
+        else if isinstance(node, ast.TupleDisplay):
             return self.check_tuple(expr, node, state)
-        elif isinstance(node, ast.ListDisplay):
+        else if isinstance(node, ast.ListDisplay):
             return self.check_list(expr, node, state)
-        elif isinstance(node, ast.DictDisplay):
+        else if isinstance(node, ast.DictDisplay):
             return self.check_dict(expr, node, state)
         return self.unsupported(line, col, "this expression")
 
@@ -1085,23 +1085,23 @@ class Checker:
         if op == "==" or op == "!=":
             if types.comparable(left) and types.comparable(right) and (types.assignable(left, right) or types.assignable(right, left)):
                 ty = types.prim("bool")
-            elif pair == "ptr ptr" and self.module.privileged:
+            else if pair == "ptr ptr" and self.module.privileged:
                 ty = types.prim("bool")
             supported = pair in ["int int", "float float", "bool bool", "str str", "bytes bytes", "ptr ptr", "enum enum"]
-        elif op in ["<", "<=", ">", ">="]:
+        else if op in ["<", "<=", ">", ">="]:
             if types.ordered(left, right):
                 ty = types.prim("bool")
             supported = pair in ["int int", "float float", "str str", "tuple tuple"]
-        elif op in ["+", "-", "*", "/", "//", "%"]:
+        else if op in ["+", "-", "*", "/", "//", "%"]:
             ty = arithmetic_type(op, pair)
             supported = pair in ["int int", "float float"] or op == "+" and pair in ["str str", "bytes bytes"]
-        elif op == "in" or op == "not in":
+        else if op == "in" or op == "not in":
             container = types.expand(right)
             if isinstance(container, types.DictType):
                 if types.assignable(container.key, left):
                     ty = types.prim("bool")
                     supported = true
-            elif isinstance(container, types.ListType):
+            else if isinstance(container, types.ListType):
                 element = types.expand(container.element)
                 if types.comparable(left) and types.comparable(element) and (types.assignable(element, left) or types.assignable(left, element)):
                     ty = types.prim("bool")
@@ -1110,10 +1110,10 @@ class Checker:
                     # a union item is compared with each element converted.
                     if types.assignable(element, left):
                         self.expect(node.left, element, left)
-            elif types.kind(container) == "bytes" and types.kind(types.expand(left)) == "int":
+            else if types.kind(container) == "bytes" and types.kind(types.expand(left)) == "int":
                 ty = types.prim("bool")
                 supported = true
-            elif types.kind(container) == "str" and types.kind(types.expand(left)) == "str":
+            else if types.kind(container) == "str" and types.kind(types.expand(left)) == "str":
                 ty = types.prim("bool")
                 supported = true
         if ty is none:
@@ -1152,7 +1152,7 @@ class Checker:
         if types.comparable(left) and types.comparable(right):
             if types.assignable(right, left):
                 target = right
-            elif types.assignable(left, right):
+            else if types.assignable(left, right):
                 target = left
         if target is none:
             self.fail(expr.line, expr.col, f"operator '{node.op}' cannot be applied to {types.display(left)} and {types.display(right)}")
@@ -1316,7 +1316,7 @@ class Checker:
                 self.fail(expr.line, expr.col, f"'{name}' expects {len(vars)} {bind.plural(len(vars), 'type argument')}, received {len(node.type_args)}")
                 return none_type()
             args = node.type_args
-        elif callable is not none:
+        else if callable is not none:
             candidates: dict[str, list[types.Type]] = {}
             for var in vars:
                 candidates[types.var_key(var)] = []
@@ -1347,7 +1347,7 @@ class Checker:
             for param in declared:
                 params.append(param.ty)
             result = types.function_result(expanded)
-        elif isinstance(expanded, types.CallableType):
+        else if isinstance(expanded, types.CallableType):
             positional: list[stdlib.BuiltinParam] = []
             for param_type in expanded.params:
                 positional.append(stdlib.BuiltinParam("", param_type, none, false))
@@ -1379,7 +1379,7 @@ class Checker:
             if count > 0:
                 self.fail(expr.line, expr.col, "lambda parameters need an expected callable type")
                 return none_type()
-        elif len(target.params) != count:
+        else if len(target.params) != count:
             noun = "parameters"
             if count == 1:
                 noun = "parameter"
@@ -1506,7 +1506,7 @@ class Checker:
             name = node.name
             if node.has_type_args:
                 explicit = node.type_args
-        elif isinstance(node, ast.CallValue):
+        else if isinstance(node, ast.CallValue):
             name = callee_name(node.callee)
             if len(node.type_args) > 0:
                 explicit = node.type_args
@@ -1516,7 +1516,7 @@ class Checker:
         if explicit is not none:
             if len(vars) == 0:
                 self.fail(expr.line, expr.col, f"'{name}' is not generic")
-            elif len(explicit) != len(vars):
+            else if len(explicit) != len(vars):
                 self.fail(expr.line, expr.col, f"'{name}' expects {len(vars)} {bind.plural(len(vars), 'type argument')}, received {len(explicit)}")
         if self.failed():
             return none_type()
@@ -1528,7 +1528,7 @@ class Checker:
         if isinstance(node, ast.Call):
             call_args = node.args
             order = node.order
-        elif isinstance(node, ast.CallValue):
+        else if isinstance(node, ast.CallValue):
             call_args = node.args
             order = node.order
         else:
@@ -1590,7 +1590,7 @@ class Checker:
             bindings = types.bind_vars(vars, args)
             if isinstance(node, ast.Call):
                 node.type_args = args
-            elif isinstance(node, ast.CallValue):
+            else if isinstance(node, ast.CallValue):
                 node.type_args = args
             else:
                 node.type_args = args
@@ -1644,13 +1644,13 @@ class Checker:
             required = ""
             if kind == "s":
                 required = "str"
-            elif kind == "d":
+            else if kind == "d":
                 required = "int"
-            elif kind == "f":
+            else if kind == "f":
                 required = "float"
             if required != "" and types.kind(ty) != required:
                 self.fail(part.line, part.col, f"format type '{kind}' requires {required}, received {types.display(ty)}")
-            elif not types.printable(ty):
+            else if not types.printable(ty):
                 self.fail(part.line, part.col, f"cannot format a value of type {types.display(ty)}")
         return types.prim("str")
 
@@ -1683,37 +1683,37 @@ class Checker:
             return none_type()
         if name == "print":
             return self.check_print(expr, node, state)
-        elif name == "len":
+        else if name == "len":
             return self.check_len(expr, node, state)
-        elif name == "str":
+        else if name == "str":
             return self.check_conversion(expr, node, state)
-        elif name == "int":
+        else if name == "int":
             return self.check_conversion(expr, node, state)
-        elif name == "float":
+        else if name == "float":
             return self.check_conversion(expr, node, state)
-        elif name == "sorted":
+        else if name == "sorted":
             return self.check_sorted(node, state)
-        elif name in ["bytes", "bytes.fromhex", "input", "round"]:
+        else if name in ["bytes", "bytes.fromhex", "input", "round"]:
             return self.check_host(expr, node, target, state)
-        elif name == "ord":
+        else if name == "ord":
             return self.check_host(expr, node, target, state)
-        elif name == "chr":
+        else if name == "chr":
             return self.check_host(expr, node, target, state)
-        elif name == "sys.args":
+        else if name == "sys.args":
             return self.check_host(expr, node, target, state)
-        elif name == "sys.exit":
+        else if name == "sys.exit":
             return self.check_host(expr, node, target, state)
-        elif name == "sys.eprint":
+        else if name == "sys.eprint":
             return self.check_print(expr, node, state)
-        elif name == "fs.read_file":
+        else if name == "fs.read_file":
             return self.check_host(expr, node, target, state)
-        elif name == "fs.write_file":
+        else if name == "fs.write_file":
             return self.check_host(expr, node, target, state)
-        elif name == "fs.exists":
+        else if name == "fs.exists":
             return self.check_host(expr, node, target, state)
-        elif name == "fs.realpath":
+        else if name == "fs.realpath":
             return self.check_host(expr, node, target, state)
-        elif name in ["aio.sleep", "aio.task_group", "aio.semaphore"]:
+        else if name in ["aio.sleep", "aio.task_group", "aio.semaphore"]:
             return self.check_host(expr, node, target, state)
         # Not in L0.
         return self.unsupported(line, col, f"'{name}'")
@@ -1846,7 +1846,7 @@ class Checker:
             return none_type()
         if not types.printable(ty):
             self.fail(arg.line, arg.col, f"cannot print a value of type {types.display(ty)}")
-        elif types.kind(ty) not in ["int", "float", "bool", "str", "none", "enum", "union"]:
+        else if types.kind(ty) not in ["int", "float", "bool", "str", "none", "enum", "union"]:
             self.unsupported(arg.line, arg.col, f"printing {types.display(ty)}")
         return none_type()
 
@@ -1863,9 +1863,9 @@ class Checker:
         if name == "str":
             if not types.printable(ty):
                 self.fail(arg.line, arg.col, f"cannot convert a value of type {types.display(ty)} to str")
-            elif kind not in ["int", "float", "bool", "str", "none", "enum", "union"]:
+            else if kind not in ["int", "float", "bool", "str", "none", "enum", "union"]:
                 self.unsupported(arg.line, arg.col, f"converting {types.display(ty)} to str")
-        elif name == "int" and kind not in ["float", "str"] or name == "float" and kind not in ["int", "str"]:
+        else if name == "int" and kind not in ["float", "str"] or name == "float" and kind not in ["int", "str"]:
             self.fail(arg.line, arg.col, f"cannot convert a value of type {types.display(ty)} to {name}")
         return types.prim(name)
 
@@ -2032,27 +2032,27 @@ def assigned_symbols(body: list[ast.Stmt], result: dict[int, bool]):
             symbol = node.symbol
             if symbol is not none:
                 result[symbol.id] = true
-        elif isinstance(node, ast.FunctionDef):
+        else if isinstance(node, ast.FunctionDef):
             function_symbol = node.symbol
             if function_symbol is not none:
                 result[function_symbol.id] = true
-        elif isinstance(node, ast.Unpack):
+        else if isinstance(node, ast.Unpack):
             target_symbols(node.target, result)
-        elif isinstance(node, ast.If):
+        else if isinstance(node, ast.If):
             assigned_symbols(node.body, result)
             assigned_symbols(node.else_body, result)
-        elif isinstance(node, ast.While):
+        else if isinstance(node, ast.While):
             assigned_symbols(node.body, result)
-        elif isinstance(node, ast.For):
+        else if isinstance(node, ast.For):
             target_symbols(node.target, result)
             assigned_symbols(node.body, result)
-        elif isinstance(node, ast.With):
+        else if isinstance(node, ast.With):
             for item in node.items:
                 target = item.target
                 if target is not none:
                     target_symbols(target, result)
             assigned_symbols(node.body, result)
-        elif isinstance(node, ast.Try):
+        else if isinstance(node, ast.Try):
             assigned_symbols(node.body, result)
             for handler in node.handlers:
                 symbol = handler.symbol
@@ -2087,10 +2087,10 @@ def isinstance_member(t: types.Type, named: ast.TypeName) -> types.Type | none:
         if isinstance(record, types.Class):
             if isinstance(m, types.ClassType) and types.same_class(m.decl, record):
                 found = m
-        elif isinstance(record, types.Enum):
+        else if isinstance(record, types.Enum):
             if isinstance(m, types.EnumType) and types.same_enum(m.decl, record):
                 found = m
-        elif types.kind(m) == named.name:
+        else if types.kind(m) == named.name:
             found = m
     return found
 
@@ -2143,7 +2143,7 @@ def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types
     arg = types.expand(arg)
     if isinstance(param, types.TypeVar) and types.var_key(param) in candidates:
         candidates[types.var_key(param)].append(arg)
-    elif isinstance(param, types.UnionType):
+    else if isinstance(param, types.UnionType):
         rest: list[types.Type] = []
         for member in types.members(arg):
             if types.kind(member) != "none":
@@ -2155,20 +2155,20 @@ def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types
             else:
                 for member in rest:
                     collect(part, member, candidates, matching)
-    elif isinstance(param, types.ListType) and isinstance(arg, types.ListType):
+    else if isinstance(param, types.ListType) and isinstance(arg, types.ListType):
         collect(param.element, arg.element, candidates, matching)
-    elif isinstance(param, types.DictType) and isinstance(arg, types.DictType):
+    else if isinstance(param, types.DictType) and isinstance(arg, types.DictType):
         collect(param.key, arg.key, candidates, matching)
         collect(param.value, arg.value, candidates, matching)
-    elif isinstance(param, types.TupleType) and isinstance(arg, types.TupleType):
+    else if isinstance(param, types.TupleType) and isinstance(arg, types.TupleType):
         if len(param.elements) == len(arg.elements):
             for i in range(len(param.elements)):
                 collect(param.elements[i], arg.elements[i], candidates, matching)
-    elif isinstance(param, types.ClassType) and isinstance(arg, types.ClassType):
+    else if isinstance(param, types.ClassType) and isinstance(arg, types.ClassType):
         if types.same_class(param.decl, arg.decl):
             for i in range(len(param.args)):
                 collect(param.args[i], arg.args[i], candidates, matching)
-    elif isinstance(param, types.ProtocolType):
+    else if isinstance(param, types.ProtocolType):
         if isinstance(arg, types.ProtocolType) and types.same_protocol(param.decl, arg.decl):
             for i in range(len(param.args)):
                 collect(param.args[i], arg.args[i], candidates, matching)
@@ -2187,13 +2187,13 @@ def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types
                             collect(p.ty, h.ty, candidates, matching)
                 collect(want.result, have.result, candidates, matching)
         matching.pop()
-    elif isinstance(param, types.CallableType):
+    else if isinstance(param, types.CallableType):
         parameters: list[types.Type] = []
         result: types.Type | none = none
         if isinstance(arg, types.CallableType):
             parameters = arg.params
             result = arg.result
-        elif isinstance(arg, types.FunctionType):
+        else if isinstance(arg, types.FunctionType):
             for p in types.function_params(arg):
                 parameters.append(p.ty)
             result = types.function_result(arg)

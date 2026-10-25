@@ -16,9 +16,9 @@ def main():
         try:
             if kind == "cwd":
                 subprocess.run(["true"], cwd="bad\x00path")
-            elif kind == "name":
+            else if kind == "name":
                 subprocess.run(["true"], env={"a=b": "x"})
-            elif kind == "value":
+            else if kind == "value":
                 subprocess.run(["true"], env={"A": "x\x00y"})
             else:
                 subprocess.run(["true"], timeout=float("inf"))

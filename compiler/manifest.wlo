@@ -50,14 +50,14 @@ def read() -> Project | none:
                 if item == "":
                     raise invalid("'dependencies' cannot contain an empty path")
                 dependencies.append(item)
-        elif key in ["entry", "source", "tests"]:
+        else if key in ["entry", "source", "tests"]:
             if not isinstance(value, str):
                 raise invalid(f"'{key}' must be a string")
             if value == "":
                 raise invalid(f"'{key}' cannot be empty")
             if key == "entry":
                 entry = value
-            elif key == "source":
+            else if key == "source":
                 source = value
             else:
                 tests = value

@@ -408,9 +408,9 @@ def is_continuation(b: int) -> bool:
 def char_size(b: int) -> int:
     if b < 128:
         return 1
-    elif b < 224:
+    else if b < 224:
         return 2
-    elif b < 240:
+    else if b < 240:
         return 3
     return 4
 
@@ -834,9 +834,9 @@ def code_at(s: str, at: int) -> int:
     size = char_size(lead)
     if size == 1:
         return lead
-    elif size == 2:
+    else if size == 2:
         code = lead - 192
-    elif size == 3:
+    else if size == 3:
         code = lead - 224
     else:
         code = lead - 240
@@ -856,7 +856,7 @@ def str_chr(n: int) -> str:
     if n < 2048:
         size = 2
         lead = 192 + n // 64
-    elif n < 65536:
+    else if n < 65536:
         size = 3
         lead = 224 + n // 4096
     else:
@@ -889,7 +889,7 @@ def convert_case(s: str, lower: bool) -> str:
             b = str_byte(s, i)
             if lower and b >= 65 and b <= 90:
                 b = b + 32
-            elif not lower and b >= 97 and b <= 122:
+            else if not lower and b >= 97 and b <= 122:
                 b = b - 32
             __store1(result, 24 + i, b)
             i = i + 1
@@ -909,7 +909,7 @@ def convert_case(s: str, lower: bool) -> str:
             if final_sigma(s, at):
                 code = 962
             list_append(parts, __word(str_chr(code)))
-        elif record >= 0 and hex_at(full, record) == code:
+        else if record >= 0 and hex_at(full, record) == code:
             i = 7
             while i < 28 and hex_at(full, record + i) != 0:
                 list_append(parts, __word(str_chr(hex_at(full, record + i))))
@@ -2545,21 +2545,21 @@ def utf8_char_size(p: ptr, i: int, size: int) -> int:
     high = 191
     if lead < 128:
         return 1
-    elif lead < 194:
+    else if lead < 194:
         return 0
-    elif lead < 224:
+    else if lead < 224:
         count = 2
-    elif lead < 240:
+    else if lead < 240:
         count = 3
         if lead == 224:
             low = 160
-        elif lead == 237:
+        else if lead == 237:
             high = 159
-    elif lead < 245:
+    else if lead < 245:
         count = 4
         if lead == 240:
             low = 144
-        elif lead == 244:
+        else if lead == 244:
             high = 143
     else:
         return 0
@@ -3283,7 +3283,7 @@ def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, 
                 break
             if code == 13:
                 denied = true
-            elif code != 2 and code != 20:
+            else if code != 2 and code != 20:
                 break
         if (code == 2 or code == 20) and denied:
             code = 13
@@ -3534,7 +3534,7 @@ def dict_lookup(d: ptr, key: word, hash: int) -> int:
             if kind == 2:
                 if __int(stored) == __int(key) or str_eq(__str(stored), __str(key)):
                     return entry
-            elif __int(stored) == __int(key):
+            else if __int(stored) == __int(key):
                 return entry
         slot = slot + 1
         if slot == size:
@@ -3831,7 +3831,7 @@ def str_to_float(s: str) -> float:
     rest = s
     if str_startswith(s, "+"):
         rest = str_removeprefix(s, "+")
-    elif str_startswith(s, "-"):
+    else if str_startswith(s, "-"):
         rest = str_removeprefix(s, "-")
     word = ascii_lower(rest)
     if word == "inf" or word == "infinity" or word == "nan":
@@ -4200,12 +4200,12 @@ def aio_poll(loop: AioLoop):
     timeout = -1
     if len(loop.ready) > 0:
         timeout = 0
-    elif len(timers) > 0:
+    else if len(timers) > 0:
         milliseconds = (timers[0].at - aio_now()) * 1000.0
         timeout = 0
         if milliseconds >= 2147483647.0:
             timeout = 2147483647
-        elif milliseconds > 0.0:
+        else if milliseconds > 0.0:
             timeout = __dtosi(milliseconds)
             if float(timeout) < milliseconds:
                 timeout = timeout + 1
@@ -4382,7 +4382,7 @@ def aio_spawn(body: ptr, group: AioGroup | none, location: str) -> AioTask:
 def aio_finish(task: AioTask):
     if __addr_is_null(task.error):
         task.state = 1
-    elif task.error == aio_cancel():
+    else if task.error == aio_cancel():
         task.state = 3
     else:
         task.state = 2

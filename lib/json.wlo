@@ -77,9 +77,9 @@ class _Parser:
                         raise self.error("unpaired surrogate", start)
                     code = 65536 + (code - 55296) * 1024 + low - 56320
                 parts.append(chr(code))
-            elif escape in escapes:
+            else if escape in escapes:
                 parts.append(escapes[escape])
-            elif escape == "":
+            else if escape == "":
                 raise self.error("", self.pos - 1)
             else:
                 raise self.error("invalid escape", start)
@@ -94,7 +94,7 @@ class _Parser:
         c = self.peek()
         if c == "0":
             self.pos = self.pos + 1
-        elif c in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+        else if c in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:
             while self.peek() in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
                 self.pos = self.pos + 1
         else:
@@ -153,7 +153,7 @@ class _Parser:
                     raise self.error("expected ',' or '}'", self.pos)
                 self.pos = self.pos + 1
             return result
-        elif c == "[":
+        else if c == "[":
             items: list[Json] = []
             self.pos = self.pos + 1
             self.space()
@@ -171,15 +171,15 @@ class _Parser:
                     raise self.error("expected ',' or ']'", self.pos)
                 self.pos = self.pos + 1
             return items
-        elif c == '"':
+        else if c == '"':
             return self.string()
-        elif c == "t":
+        else if c == "t":
             return self.word("true", true)
-        elif c == "f":
+        else if c == "f":
             return self.word("false", false)
-        elif c == "n":
+        else if c == "n":
             return self.word("null", none)
-        elif c in ["-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+        else if c in ["-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
             return self.number()
         raise self.error("expected value", self.pos)
 
@@ -198,7 +198,7 @@ def _quote(text: str) -> str:
     for c in text:
         if c in escapes:
             parts.append(escapes[c])
-        elif ord(c) < 32:
+        else if ord(c) < 32:
             parts.append("\\u00" + hex[ord(c) // 16] + hex[ord(c) % 16])
         else:
             parts.append(c)
@@ -208,20 +208,20 @@ def _quote(text: str) -> str:
 def _write(value: Json, out: list[str]):
     if value is none:
         out.append("null")
-    elif isinstance(value, bool):
+    else if isinstance(value, bool):
         if value:
             out.append("true")
         else:
             out.append("false")
-    elif isinstance(value, int):
+    else if isinstance(value, int):
         out.append(str(value))
-    elif isinstance(value, float):
+    else if isinstance(value, float):
         if value - value != 0.0:
             raise JsonError("cannot encode " + str(value))
         out.append(str(value))
-    elif isinstance(value, str):
+    else if isinstance(value, str):
         out.append(_quote(value))
-    elif isinstance(value, list):
+    else if isinstance(value, list):
         out.append("[")
         first = true
         for item in value:

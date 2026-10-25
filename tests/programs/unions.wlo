@@ -18,17 +18,17 @@ def describe(value: int | str | none) -> str:
 def render(value: Json) -> str:
     if value is none:
         return "null"
-    elif isinstance(value, bool):
+    else if isinstance(value, bool):
         if value:
             return "true"
         return "false"
-    elif isinstance(value, int):
+    else if isinstance(value, int):
         return str(value)
-    elif isinstance(value, float):
+    else if isinstance(value, float):
         return f"{value}"
-    elif isinstance(value, str):
+    else if isinstance(value, str):
         return value
-    elif isinstance(value, list):
+    else if isinstance(value, list):
         parts: list[str] = []
         for item in value:
             parts.append(render(item))

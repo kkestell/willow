@@ -126,7 +126,7 @@ class Loader:
         text = lib_source.text(item.name)
         if text != "":
             self.add(item.name, "lib/" + item.name + ".wlo", text, true)
-        elif not is_stdlib(item.name):
+        else if not is_stdlib(item.name):
             self.fail(importer, item, f"cannot load module '{item.name}': {path}: No such file or directory")
 
     def add_core(self):

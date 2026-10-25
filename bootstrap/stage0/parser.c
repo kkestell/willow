@@ -424,7 +424,9 @@ static Stmt statement(Parser *self) {
     if (accept(self, "if")) {
         IfArmVec arms = {0};
         vec_push(arms, arm(self));
-        while (accept(self, "elif")) {
+        while (self->i + 1 < self->tokens.len && word_is(peek(self), "else") &&
+               word_is(&self->tokens.data[self->i + 1].kind, "if")) {
+            self->i += 2;
             vec_push(arms, arm(self));
         }
         StmtVec *otherwise = NULL;

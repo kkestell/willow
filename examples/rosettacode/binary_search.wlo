@@ -7,7 +7,7 @@ def search_iterative(items: list[int], value: int) -> int:
         middle = (low + high) // 2
         if items[middle] < value:
             low = middle + 1
-        elif items[middle] > value:
+        else if items[middle] > value:
             high = middle - 1
         else:
             return middle

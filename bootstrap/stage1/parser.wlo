@@ -121,19 +121,19 @@ class Parser:
             if self.accept(tokens.Kind.LBRACKET):
                 node.args = self.parse_type_list()
                 node.has_args = true
-        elif kind == tokens.Kind.LIST:
+        else if kind == tokens.Kind.LIST:
             self.expect(tokens.Kind.LBRACKET, "'['")
             node.args = [self.parse_type()]
             node.has_args = true
             self.expect(tokens.Kind.RBRACKET, "']'")
-        elif kind == tokens.Kind.DICT:
+        else if kind == tokens.Kind.DICT:
             self.expect(tokens.Kind.LBRACKET, "'['")
             key = self.parse_type()
             self.expect(tokens.Kind.COMMA, "','")
             node.args = [key, self.parse_type()]
             node.has_args = true
             self.expect(tokens.Kind.RBRACKET, "']'")
-        elif kind == tokens.Kind.TUPLE:
+        else if kind == tokens.Kind.TUPLE:
             # `tuple[()]` is the empty tuple type; `()` before `->` starts a
             # callable.
             self.expect(tokens.Kind.LBRACKET, "'['")
@@ -216,7 +216,7 @@ class Parser:
         if negated_in:
             self.advance()
             node = ast.Binary("not in", left, self.parse_operand())
-        elif token.kind == tokens.Kind.IS:
+        else if token.kind == tokens.Kind.IS:
             negated = self.accept(tokens.Kind.NOT)
             self.expect(tokens.Kind.NONE, "'none'")
             self.reject_bitwise_or()
@@ -280,7 +280,7 @@ class Parser:
                     continue
             if token.kind == tokens.Kind.LBRACKET:
                 expr = self.parse_index(expr)
-            elif token.kind == tokens.Kind.DOT:
+            else if token.kind == tokens.Kind.DOT:
                 self.advance()
                 name = self.expect(tokens.Kind.NAME, "a field or method name")
                 if self.accept(tokens.Kind.LPAREN):
@@ -289,7 +289,7 @@ class Parser:
                     expr = ast.Expr(name.line, name.col, call)
                 else:
                     expr = ast.Expr(name.line, name.col, ast.Field(expr, name.text))
-            elif token.kind == tokens.Kind.LPAREN:
+            else if token.kind == tokens.Kind.LPAREN:
                 self.advance()
                 call_value = ast.CallValue(expr, [], [], [])
                 self.parse_args(call_value.args, call_value.keywords)
@@ -549,20 +549,20 @@ class Parser:
                 if not self.accept(tokens.Kind.COMMA):
                     break
             statement.node = ast.Nonlocal(names)
-        elif kind == tokens.Kind.RETURN:
+        else if kind == tokens.Kind.RETURN:
             self.advance()
             value: ast.Expr | none = none
             if self.peek().kind != tokens.Kind.NEWLINE:
                 value = self.parse_expression()
             statement.node = ast.Return(value)
-        elif kind == tokens.Kind.ASSERT:
+        else if kind == tokens.Kind.ASSERT:
             self.advance()
             condition = self.parse_expression()
             message: ast.Expr | none = none
             if self.accept(tokens.Kind.COMMA):
                 message = self.parse_expression()
             statement.node = ast.Assert(condition, message)
-        elif kind == tokens.Kind.RAISE:
+        else if kind == tokens.Kind.RAISE:
             self.advance()
             raised: ast.Expr | none = none
             if self.peek().kind != tokens.Kind.NEWLINE:
@@ -570,15 +570,15 @@ class Parser:
                 if self.peek().kind == tokens.Kind.FROM:
                     self.fail(self.peek(), "'raise ... from' is not supported")
             statement.node = ast.Raise(raised)
-        elif kind == tokens.Kind.YIELD:
+        else if kind == tokens.Kind.YIELD:
             self.advance()
             statement.node = ast.Yield(self.parse_expression())
-        elif kind == tokens.Kind.PASS:
+        else if kind == tokens.Kind.PASS:
             self.advance()
-        elif kind == tokens.Kind.BREAK:
+        else if kind == tokens.Kind.BREAK:
             self.advance()
             statement.node = ast.SimpleStatement.BREAK
-        elif kind == tokens.Kind.CONTINUE:
+        else if kind == tokens.Kind.CONTINUE:
             self.advance()
             statement.node = ast.SimpleStatement.CONTINUE
         else:
@@ -586,15 +586,16 @@ class Parser:
         self.expect(tokens.Kind.NEWLINE, "end of line")
         return statement
 
-    # The rest of an `if` or `elif` whose keyword `token` was read.
+    # The rest of an `if` or `else if` whose keyword `token` was read.
     def parse_if(self, token: tokens.Token) -> ast.Stmt:
         condition = self.parse_expression()
         body = self.parse_block()
         else_body: list[ast.Stmt] = []
-        following = self.peek()
-        if self.accept(tokens.Kind.ELIF):
+        if self.peek().kind == tokens.Kind.ELSE and self.ahead(1).kind == tokens.Kind.IF:
+            self.advance()
+            following = self.advance()
             else_body = [self.parse_if(following)]
-        elif self.accept(tokens.Kind.ELSE):
+        else if self.accept(tokens.Kind.ELSE):
             else_body = self.parse_block()
         return ast.Stmt(token.line, token.col, ast.If(condition, body, else_body))
 
@@ -620,9 +621,9 @@ class Parser:
             following = self.peek()
             if following.kind == tokens.Kind.COLON:
                 self.fail(clause, "bare 'except' is not supported")
-            elif following.kind == tokens.Kind.LPAREN:
+            else if following.kind == tokens.Kind.LPAREN:
                 self.fail(following, "exception class lists are not supported")
-            elif following.kind == tokens.Kind.STAR:
+            else if following.kind == tokens.Kind.STAR:
                 self.fail(clause, "'except*' is not supported")
             name = self.expect(tokens.Kind.NAME, "an exception class name")
             ref = ast.TypeName(name.line, name.col, name.text, "", [], false)
@@ -705,7 +706,7 @@ class Parser:
             index_error = specialized.index_error
             if index is not none:
                 expr = index
-            elif index_error is not none and self.error is none:
+            else if index_error is not none and self.error is none:
                 self.error = index_error
                 self.pos = self.last
         if token.kind == tokens.Kind.COMMA:
@@ -728,11 +729,11 @@ class Parser:
                 target = self.target_of(expr)
                 self.check_targets(target, {})
                 statement.node = ast.Unpack(target, self.parse_expression())
-            elif isinstance(node, ast.Name):
+            else if isinstance(node, ast.Name):
                 statement.node = ast.Assign(node.name, none, self.parse_expression())
-            elif isinstance(node, ast.Index):
+            else if isinstance(node, ast.Index):
                 statement.node = ast.IndexAssign(node.object, node.index, self.parse_expression())
-            elif isinstance(node, ast.Field):
+            else if isinstance(node, ast.Field):
                 statement.node = ast.FieldAssign(node.object, node.name, self.parse_expression())
             else:
                 self.fail(token, "cannot assign to this expression")
@@ -740,14 +741,14 @@ class Parser:
             return statement
         if token.kind == tokens.Kind.COLON and (isinstance(node, ast.Index) or isinstance(node, ast.Field)):
             self.fail(token, "only a name can have an annotation")
-        elif token.kind == tokens.Kind.COLON and isinstance(node, ast.Name):
+        else if token.kind == tokens.Kind.COLON and isinstance(node, ast.Name):
             self.advance()
             annotation = self.parse_type()
             if not self.accept(tokens.Kind.EQUAL):
                 self.fail(self.peek(), "annotated assignment needs an initializer")
             statement.node = ast.Assign(node.name, annotation, self.parse_expression())
             self.reject_chained_assignment()
-        elif not is_call(node):
+        else if not is_call(node):
             self.fail_at(expr.line, expr.col, "only calls and await expressions can be used as statements")
         return statement
 
@@ -993,7 +994,7 @@ class Parser:
             else:
                 if field.kind != tokens.Kind.NAME or self.ahead(1).kind != tokens.Kind.COLON:
                     self.fail(field, "class bodies hold only field and method declarations")
-                elif len(decl.methods) > 0:
+                else if len(decl.methods) > 0:
                     self.fail(field, "fields must come before methods")
                 if decl.exception and field.text == "message":
                     self.fail(field, "exception class cannot declare field 'message'")
@@ -1049,21 +1050,21 @@ class Parser:
             kind = token.kind
             if kind == tokens.Kind.IMPORT:
                 self.fail(token, "imports must come before declarations")
-            elif kind == tokens.Kind.DEF or kind == tokens.Kind.ASYNC:
+            else if kind == tokens.Kind.DEF or kind == tokens.Kind.ASYNC:
                 module.declarations.append(self.parse_function(false, false))
-            elif kind == tokens.Kind.NAME and token.text == "extern" and self.ahead(1).kind == tokens.Kind.DEF:
+            else if kind == tokens.Kind.NAME and token.text == "extern" and self.ahead(1).kind == tokens.Kind.DEF:
                 module.declarations.append(self.parse_extern())
-            elif kind == tokens.Kind.CLASS:
+            else if kind == tokens.Kind.CLASS:
                 module.declarations.append(self.parse_class())
-            elif kind == tokens.Kind.PROTOCOL:
+            else if kind == tokens.Kind.PROTOCOL:
                 module.declarations.append(self.parse_protocol())
-            elif kind == tokens.Kind.ENUM:
+            else if kind == tokens.Kind.ENUM:
                 module.declarations.append(self.parse_enum())
-            elif kind == tokens.Kind.TYPE:
+            else if kind == tokens.Kind.TYPE:
                 module.declarations.append(self.parse_alias())
-            elif kind == tokens.Kind.NAME and self.privileged and self.ahead(1).kind == tokens.Kind.COLON:
+            else if kind == tokens.Kind.NAME and self.privileged and self.ahead(1).kind == tokens.Kind.COLON:
                 self.parse_constant(module)
-            elif is_unsupported(kind):
+            else if is_unsupported(kind):
                 self.fail(token, f"'{token.text}' is not supported")
             else:
                 self.fail(token, "only function, class, protocol, enum, and type declarations are allowed at file scope")

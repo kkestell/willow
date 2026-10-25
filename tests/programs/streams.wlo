@@ -41,13 +41,13 @@ def main():
         try:
             if check == "closed":
                 alias.readline()
-            elif check == "mode":
+            else if check == "mode":
                 out.read(1)
-            elif check == "size":
+            else if check == "size":
                 stdin.read(0)
-            elif check == "borrowed":
+            else if check == "borrowed":
                 stdin.close()
-            elif check == "write":
+            else if check == "write":
                 stdin.write_text("x")
             else:
                 r.flush()

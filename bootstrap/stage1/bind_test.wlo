@@ -82,12 +82,12 @@ def nested_functions(body: list[ast.Stmt], lines: list[str]):
         node = statement.node
         if isinstance(node, ast.FunctionDef):
             describe_function(node.function, lines)
-        elif isinstance(node, ast.If):
+        else if isinstance(node, ast.If):
             nested_functions(node.body, lines)
             nested_functions(node.else_body, lines)
-        elif isinstance(node, ast.While):
+        else if isinstance(node, ast.While):
             nested_functions(node.body, lines)
-        elif isinstance(node, ast.For):
+        else if isinstance(node, ast.For):
             nested_functions(node.body, lines)
 
 # The type names of the functions of a bound program, which must all have
@@ -102,10 +102,10 @@ def function_names(program: list[str]) -> str:
         for decl in module.declarations:
             if isinstance(decl, ast.FunctionDecl):
                 collect_functions(decl, found)
-            elif isinstance(decl, ast.ClassDecl):
+            else if isinstance(decl, ast.ClassDecl):
                 for method in decl.methods:
                     collect_functions(method, found)
-            elif isinstance(decl, ast.ProtocolDecl):
+            else if isinstance(decl, ast.ProtocolDecl):
                 for method in decl.methods:
                     collect_functions(method, found)
     names: list[str] = []
@@ -126,10 +126,10 @@ def collect_in_block(body: list[ast.Stmt], found: list[ast.FunctionDecl]):
         node = statement.node
         if isinstance(node, ast.FunctionDef):
             collect_functions(node.function, found)
-        elif isinstance(node, ast.If):
+        else if isinstance(node, ast.If):
             collect_in_block(node.body, found)
             collect_in_block(node.else_body, found)
-        elif isinstance(node, ast.Assign):
+        else if isinstance(node, ast.Assign):
             value = node.value.node
             if isinstance(value, ast.Lambda):
                 function = value.function

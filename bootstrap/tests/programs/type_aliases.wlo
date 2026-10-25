@@ -8,7 +8,7 @@ def total(row: Row) -> float:
     for cell in row:
         if isinstance(cell, int):
             sum = sum + float(cell)
-        elif isinstance(cell, float):
+        else if isinstance(cell, float):
             sum = sum + cell
     return sum
 

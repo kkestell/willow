@@ -25,9 +25,9 @@ def main():
     for arg in sys.args():
         if arg == "--upper":
             options.upper = true
-        elif arg.startswith("--border="):
+        else if arg.startswith("--border="):
             options.border = arg[9:10]
-        elif arg.startswith("--width="):
+        else if arg.startswith("--width="):
             options.width = int(arg[8:])
         else:
             words.append(arg)

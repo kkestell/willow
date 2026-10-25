@@ -366,7 +366,7 @@ struct StmtKind {
         struct { Expr cond; Expr *message; } Assert;
         struct { String target; TypeExpr *annotation; Expr value; } Assign;
         Expr Expr;
-        /// `if`/`elif` arms in order, then the `else` block.
+        /// `if`/`else if` arms in order, then the `else` block.
         struct { IfArmVec arms; StmtVec *otherwise; } If;
         /// `for target in iterable:`, or `for key, value in d.items():`.
         struct {

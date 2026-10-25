@@ -58,20 +58,20 @@ def parse_args(args: list[str]) -> Command:
             # Everything after the source path belongs to the program.
             program_args.append(argument)
             i = i + 1
-        elif argument == "--" and input is none and name == "run":
+        else if argument == "--" and input is none and name == "run":
             # `run -- args` runs the project entry with `args`.
             program_args.extend(args[i + 1:])
             break
-        elif argument == "-o" and writes:
+        else if argument == "-o" and writes:
             if output is not none:
                 usage_error("-o given more than once")
             if i + 1 == len(args):
                 usage_error("-o needs a path")
             output = args[i + 1]
             i = i + 2
-        elif argument.startswith("-"):
+        else if argument.startswith("-"):
             usage_error(f"unknown option '{argument}'")
-        elif input is not none:
+        else if input is not none:
             usage_error(f"unexpected argument '{argument}'")
         else:
             input = argument
@@ -88,11 +88,11 @@ def parse_test_args(args: list[str]) -> tuple[str | none, bool]:
     for argument in args[1:]:
         if argument == "--check" and not check_only:
             check_only = true
-        elif argument == "--check":
+        else if argument == "--check":
             usage_error("--check given more than once")
-        elif argument.startswith("-"):
+        else if argument.startswith("-"):
             usage_error(f"unknown option '{argument}'")
-        elif path is not none:
+        else if path is not none:
             usage_error(f"unexpected argument '{argument}'")
         else:
             path = argument
@@ -325,7 +325,7 @@ def link(il: str, output: str) -> str:
     message = ""
     if target == "":
         message = f"error: unsupported host {core.os()} {arch}"
-    elif core.run(["qbe", "-t", target, "-o", asm, ssa]) != 0:
+    else if core.run(["qbe", "-t", target, "-o", asm, ssa]) != 0:
         message = "error: qbe failed"
     else:
         fs.write_file(asm, fs.read_file(asm) + coroutine.assembly(target))

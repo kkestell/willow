@@ -1,13 +1,13 @@
 def describe(value: int | float | str | bool | none) -> str:
     if value is none:
         return "nothing"
-    elif isinstance(value, bool):
+    else if isinstance(value, bool):
         if value:
             return "yes"
         return "no"
-    elif isinstance(value, int):
+    else if isinstance(value, int):
         return "int " + describe_int(value + 1)
-    elif isinstance(value, float):
+    else if isinstance(value, float):
         if value * 2.0 == 2.5:
             return "float 2.5"
         return "float"

@@ -662,7 +662,7 @@ class Emitter:
                 while self.emitted < len(self.later):
                     self.emitted = self.emitted + 1
                     self.emit_later(self.later[self.emitted - 1])
-            elif self.emitted < len(self.later):
+            else if self.emitted < len(self.later):
                 self.emitted = self.emitted + 1
                 self.emit_later(self.later[self.emitted - 1])
             else:
@@ -755,9 +755,9 @@ class Emitter:
             code = ""
             if isinstance(later, ValueWrapper):
                 code = later.symbol
-            elif isinstance(later, BuiltinWrapper):
+            else if isinstance(later, BuiltinWrapper):
                 code = later.symbol
-            elif isinstance(later, SpecializedValue) and later.instance.function.parent is none:
+            else if isinstance(later, SpecializedValue) and later.instance.function.parent is none:
                 code = later.symbol
             if code != "":
                 self.write(f"data {code}.closure = " + "{ l $W.function.type, l " + code + " }")
@@ -799,37 +799,37 @@ class Emitter:
         if isinstance(node, ast.Assign):
             value = self.expr(node.value)
             self.line(f"storel {value}, {self.local_address(node.symbol, node.name)}")
-        elif isinstance(node, ast.Unpack):
+        else if isinstance(node, ast.Unpack):
             value = self.expr(node.value)
             ty = self.concrete_type(node.value.ty)
             self.store_pattern(node.target, value, ty)
-        elif isinstance(node, ast.CallStmt):
+        else if isinstance(node, ast.CallStmt):
             self.expr(node.call)
-        elif isinstance(node, ast.If):
+        else if isinstance(node, ast.If):
             self.emit_if(node)
-        elif isinstance(node, ast.While):
+        else if isinstance(node, ast.While):
             self.emit_while(node)
-        elif isinstance(node, ast.Return):
+        else if isinstance(node, ast.Return):
             self.emit_return(node)
-        elif isinstance(node, ast.Yield):
+        else if isinstance(node, ast.Yield):
             self.emit_yield(node)
-        elif isinstance(node, ast.IndexAssign):
+        else if isinstance(node, ast.IndexAssign):
             self.emit_index_assign(node)
-        elif isinstance(node, ast.FieldAssign):
+        else if isinstance(node, ast.FieldAssign):
             self.field_assign(node)
-        elif isinstance(node, ast.For):
+        else if isinstance(node, ast.For):
             self.emit_for(node)
-        elif isinstance(node, ast.Assert):
+        else if isinstance(node, ast.Assert):
             self.emit_assert(node)
-        elif isinstance(node, ast.Raise):
+        else if isinstance(node, ast.Raise):
             self.emit_raise(node)
-        elif isinstance(node, ast.Try):
+        else if isinstance(node, ast.Try):
             self.emit_try(node)
-        elif isinstance(node, ast.With):
+        else if isinstance(node, ast.With):
             self.emit_with(node, 0)
-        elif isinstance(node, ast.AsyncWith):
+        else if isinstance(node, ast.AsyncWith):
             self.emit_async_with(node)
-        elif isinstance(node, ast.FunctionDef):
+        else if isinstance(node, ast.FunctionDef):
             closure = ""
             if len(node.function.type_params) > 0:
                 # Only the cells: each specialization's code is compiled
@@ -838,13 +838,13 @@ class Emitter:
             else:
                 closure = self.closure(node.function)
             self.line(f"storel {closure}, {self.local_address(node.symbol, node.function.name)}")
-        elif isinstance(node, ast.Nonlocal):
+        else if isinstance(node, ast.Nonlocal):
             pass
-        elif isinstance(node, ast.SimpleStatement):
+        else if isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
                 self.leave(self.loop_protects())
                 self.jump("jmp " + self.loop_end[-1])
-            elif node == ast.SimpleStatement.CONTINUE:
+            else if node == ast.SimpleStatement.CONTINUE:
                 self.leave(self.loop_protects())
                 self.jump("jmp " + self.loop_next[-1])
         else:
@@ -1182,7 +1182,7 @@ class Emitter:
         text = ""
         if is_os(node.left) and isinstance(right, ast.String):
             text = right.value
-        elif is_os(node.right) and isinstance(left, ast.String):
+        else if is_os(node.right) and isinstance(left, ast.String):
             text = left.value
         else:
             return ""
@@ -1219,19 +1219,19 @@ class Emitter:
         assert declared is not none, "unchecked iterable"
         if isinstance(types.expand(declared), types.TypeVar):
             self.for_protocol(node)
-        elif isinstance(call, ast.Call) and call.name == "range" and isinstance(call.target, stdlib.Builtin):
+        else if isinstance(call, ast.Call) and call.name == "range" and isinstance(call.target, stdlib.Builtin):
             self.for_range(node, call)
-        elif isinstance(call, ast.MethodCall) and call.name in ["keys", "values", "items"] and types.kind(self.concrete_type(call.object.ty)) == "dict":
+        else if isinstance(call, ast.MethodCall) and call.name in ["keys", "values", "items"] and types.kind(self.concrete_type(call.object.ty)) == "dict":
             self.for_dict(node, call.object, call.name)
         else:
             ty = self.concrete_type(node.iterable.ty)
             if types.kind(ty) == "dict":
                 self.for_dict(node, node.iterable, "keys")
-            elif types.kind(types.expand(ty)) in ["str", "bytes"]:
+            else if types.kind(types.expand(ty)) in ["str", "bytes"]:
                 self.for_sequence(node)
-            elif isinstance(types.expand(ty), types.TupleType):
+            else if isinstance(types.expand(ty), types.TupleType):
                 self.for_tuple(node)
-            elif types.kind(ty) == "list":
+            else if types.kind(ty) == "list":
                 self.for_list(node)
             else:
                 self.for_protocol(node)
@@ -1299,7 +1299,7 @@ class Emitter:
         item_type = self.concrete_type(node.item)
         if part == "values":
             item = self.core_call("dict_value_at", [object, entry], true)
-        elif part == "items":
+        else if part == "items":
             key = self.core_call("dict_key_at", [object, entry], true)
             value = self.core_call("dict_value_at", [object, entry], true)
             assert isinstance(item_type, types.TupleType), "unchecked dict items"
@@ -1599,9 +1599,9 @@ class Emitter:
         name = "list_get"
         if types.kind(ty) == "str":
             name = "str_index"
-        elif types.kind(ty) == "bytes":
+        else if types.kind(ty) == "bytes":
             name = "bytes_index"
-        elif types.kind(ty) == "dict":
+        else if types.kind(ty) == "dict":
             name = "dict_get"
         return self.core_call(name, [object, index], true)
 
@@ -1634,7 +1634,7 @@ class Emitter:
         result = "0"
         if isinstance(ty, types.DictType):
             result = self.core_call("dict_contains", [container, item], true)
-        elif isinstance(ty, types.Prim):
+        else if isinstance(ty, types.Prim):
             result = self.core_call(ty.name + "_contains", [container, item], true)
         else:
             assert isinstance(ty, types.ListType), "unchecked membership"
@@ -1739,7 +1739,7 @@ class Emitter:
             descriptor = self.box_descriptor(source)
             if descriptor != "":
                 return self.core_call("box", [descriptor, value], true)
-        elif is_union(source) and not is_union(target):
+        else if is_union(source) and not is_union(target):
             if self.box_descriptor(target) != "":
                 return self.core_call("unbox", [value], true)
         return value
@@ -1772,7 +1772,7 @@ class Emitter:
         if isinstance(member, types.ClassType):
             name = member.decl.type_name
             library = member.decl.library
-        elif isinstance(member, types.EnumType):
+        else if isinstance(member, types.EnumType):
             name = member.decl.type_name
             library = member.decl.library
         return self.instance_test(value, name, library)
@@ -1846,13 +1846,13 @@ class Emitter:
         node = expr.node
         if isinstance(node, ast.Int):
             return node.text
-        elif isinstance(node, ast.String):
+        else if isinstance(node, ast.String):
             return self.string(node.value)
-        elif isinstance(node, ast.Constant):
+        else if isinstance(node, ast.Constant):
             if node == ast.Constant.TRUE:
                 return "1"
             return "0"
-        elif isinstance(node, ast.Name):
+        else if isinstance(node, ast.Name):
             symbol = node.symbol
             if symbol is none:
                 return self.string(self.target_os)
@@ -1861,28 +1861,28 @@ class Emitter:
             declared = self.concrete_type(symbol.ty)
             ty = self.concrete_type(expr.ty)
             return self.convert(t, declared, ty)
-        elif isinstance(node, ast.Binary):
+        else if isinstance(node, ast.Binary):
             return self.binary(node)
-        elif isinstance(node, ast.Call):
+        else if isinstance(node, ast.Call):
             return self.call(node)
-        elif isinstance(node, ast.TypeOf):
+        else if isinstance(node, ast.TypeOf):
             target = node.target
             assert isinstance(target, ast.TypeName), "unchecked __type"
             return f"$W.{target.name}.type"
-        elif isinstance(node, ast.Float):
+        else if isinstance(node, ast.Float):
             return self.float_bits("d_" + str(node.value))
-        elif isinstance(node, ast.FString):
+        else if isinstance(node, ast.FString):
             return self.fstring(node)
-        elif isinstance(node, ast.EnumMember):
+        else if isinstance(node, ast.EnumMember):
             record = node.decl.record
             assert record is not none, "unchecked enum"
             for i in range(len(record.members)):
                 if record.members[i] == node.name:
                     return str(i)
             return self.unchecked("enum member")
-        elif isinstance(node, ast.MethodCall):
+        else if isinstance(node, ast.MethodCall):
             return self.method_call(expr, node)
-        elif isinstance(node, ast.Field):
+        else if isinstance(node, ast.Field):
             object = self.expr(node.object)
             method = expr.ty
             if isinstance(method, types.FunctionType):
@@ -1891,25 +1891,25 @@ class Emitter:
             value = self.temp()
             self.line(f"{value} =l loadl {address}")
             return value
-        elif isinstance(node, ast.Index):
+        else if isinstance(node, ast.Index):
             return self.index(node)
-        elif isinstance(node, ast.Slice):
+        else if isinstance(node, ast.Slice):
             return self.slice(node)
-        elif isinstance(node, ast.Unary):
+        else if isinstance(node, ast.Unary):
             return self.unary(node)
-        elif isinstance(node, ast.Is):
+        else if isinstance(node, ast.Is):
             return self.emit_is(node)
-        elif isinstance(node, ast.IsInstance):
+        else if isinstance(node, ast.IsInstance):
             return self.emit_isinstance(node)
-        elif isinstance(node, ast.ListDisplay):
+        else if isinstance(node, ast.ListDisplay):
             return self.list_display(node)
-        elif isinstance(node, ast.TupleDisplay):
+        else if isinstance(node, ast.TupleDisplay):
             return self.tuple_display(expr, node)
-        elif isinstance(node, ast.DictDisplay):
+        else if isinstance(node, ast.DictDisplay):
             return self.dict_display(expr, node)
-        elif isinstance(node, ast.CallValue):
+        else if isinstance(node, ast.CallValue):
             return self.call_value(node)
-        elif isinstance(node, ast.FunctionValue):
+        else if isinstance(node, ast.FunctionValue):
             if len(node.type_args) > 0:
                 return self.specialized_value(expr, node)
             code = self.symbol(node.target) + ".value"
@@ -1919,7 +1919,7 @@ class Emitter:
             else:
                 self.wrap(code, ValueWrapper(code, node.target))
             return code + ".closure"
-        elif isinstance(node, ast.BuiltinValue):
+        else if isinstance(node, ast.BuiltinValue):
             call = node.call
             assert call is not none, "unchecked built-in value"
             code = f"$W.builtin.{len(self.later)}"
@@ -1927,11 +1927,11 @@ class Emitter:
             assert isinstance(callable, types.CallableType), "unchecked built-in signature"
             self.later.append(BuiltinWrapper(code, call, len(callable.params)))
             return code + ".closure"
-        elif isinstance(node, ast.Lambda):
+        else if isinstance(node, ast.Lambda):
             function = node.function
             assert function is not none, "unbound lambda"
             return self.closure(function)
-        elif isinstance(node, ast.Await):
+        else if isinstance(node, ast.Await):
             name = "async_await"
             operand = self.concrete_type(node.operand.ty)
             value = self.expr(node.operand)
@@ -1939,7 +1939,7 @@ class Emitter:
                 name = "aio_await_task"
                 value = self.load_field(value, 8)
             return self.core_call(name, [value], true)
-        elif isinstance(node, ast.Typed):
+        else if isinstance(node, ast.Typed):
             return f"%p.{node.index}"
         return self.unchecked("expression")
 
@@ -2028,7 +2028,7 @@ class Emitter:
             self.label(different)
             if isinstance(element, types.TupleType):
                 ordered = self.tuple_order(op, a, b, element)
-            elif types.kind(element) == "float":
+            else if types.kind(element) == "float":
                 ordered = self.float_binary(op, a, b)
             else:
                 if types.kind(element) == "str":
@@ -2065,7 +2065,7 @@ class Emitter:
         if isinstance(record, types.Class):
             type_name = record.type_name
             library = record.library
-        elif isinstance(record, types.Enum):
+        else if isinstance(record, types.Enum):
             type_name = record.type_name
             library = record.library
         return self.instance_test(operand, type_name, library)
@@ -2480,23 +2480,23 @@ class Emitter:
         name = node.name
         if name.startswith("__"):
             return self.intrinsic(node, target)
-        elif name == "print":
+        else if name == "print":
             return self.emit_print(node)
-        elif name == "len":
+        else if name == "len":
             return self.emit_len(node)
-        elif name == "str":
+        else if name == "str":
             return self.conversion(node)
-        elif name == "int":
+        else if name == "int":
             return self.conversion(node)
-        elif name == "float":
+        else if name == "float":
             return self.conversion(node)
-        elif name == "bytes":
+        else if name == "bytes":
             return self.core_call("bytes_new", self.arg_values(node.args, node.order), true)
-        elif name == "bytes.fromhex":
+        else if name == "bytes.fromhex":
             return self.core_call("bytes_fromhex", self.arg_values(node.args, node.order), true)
-        elif name == "input":
+        else if name == "input":
             return self.core_call("input_line", [], true)
-        elif name == "range":
+        else if name == "range":
             values: list[str] = []
             for arg in node.args:
                 values.append(self.expr(arg))
@@ -2511,29 +2511,29 @@ class Emitter:
             value = self.core_call("range_new", [first, stop, step], true)
             adapter = self.native_adapter(types.prim("ptr"), types.prim("int"), "range")
             return self.protocol_value(adapter.symbol + ".range.type", value)
-        elif name == "round":
+        else if name == "round":
             return self.core_call("float_round", self.arg_values(node.args, node.order), true)
-        elif name == "sorted":
+        else if name == "sorted":
             return self.emit_sorted(node)
-        elif name in ["abs", "min", "max", "sum", "any", "all", "list", "enumerate", "zip"]:
+        else if name in ["abs", "min", "max", "sum", "any", "all", "list", "enumerate", "zip"]:
             return self.iterable_builtin(node)
-        elif name == "ord":
+        else if name == "ord":
             return self.core_call("str_ord", [self.expr(node.args[0])], true)
-        elif name == "chr":
+        else if name == "chr":
             return self.core_call("str_chr", [self.expr(node.args[0])], true)
-        elif name == "sys.args":
+        else if name == "sys.args":
             return self.host(node, target)
-        elif name == "sys.exit":
+        else if name == "sys.exit":
             return self.willow_call("$W.sys.exit", typed(self.arg_values(node.args, node.order)), false)
-        elif name == "sys.eprint":
+        else if name == "sys.eprint":
             return self.willow_call("$W.sys.eprint", typed([self.to_str(node.args[0])]), false)
-        elif name == "fs.read_file":
+        else if name == "fs.read_file":
             return self.host(node, target)
-        elif name == "fs.write_file":
+        else if name == "fs.write_file":
             return self.host(node, target)
-        elif name == "fs.exists":
+        else if name == "fs.exists":
             return self.host(node, target)
-        elif name == "fs.realpath":
+        else if name == "fs.realpath":
             return self.host(node, target)
         return self.unchecked(f"'{name}'")
 
@@ -2593,7 +2593,7 @@ class Emitter:
             version = self.core_call("dict_version", [source], true)
             if part == "values":
                 item = types.expand(ty.value)
-            elif part == "items":
+            else if part == "items":
                 item = types.TupleType([ty.key, types.expand(ty.value)])
         assert item is not none, "missing native item"
         state = self.core_call("iterator_state", [source, version], true)
@@ -2628,7 +2628,7 @@ class Emitter:
             source = self.core_call("iterator_source", ["%state"], true)
             if adapter.part == "values":
                 value = self.core_call("dict_value_at", [source, value], true)
-            elif adapter.part == "items":
+            else if adapter.part == "items":
                 key = self.core_call("dict_key_at", [source, value], true)
                 item = self.core_call("dict_value_at", [source, value], true)
                 ty = adapter.item
@@ -2636,7 +2636,7 @@ class Emitter:
                 value = self.tuple_value(ty, [key, item])
             else:
                 value = self.core_call("dict_key_at", [source, value], true)
-        elif isinstance(source_type, types.TupleType):
+        else if isinstance(source_type, types.TupleType):
             value = self.tuple_item(value, index, source_type, adapter.item)
         self.end(value)
 
@@ -2724,7 +2724,7 @@ class Emitter:
             for i in range(len(ty.elements)):
                 item = self.core_call("tuple_get", [value, str(i)], true)
                 self.validate_nan(item, ty.elements[i])
-        elif types.kind(ty) == "float":
+        else if types.kind(ty) == "float":
             d = self.as_float(value)
             nan = self.temp()
             self.line(f"{nan} =l cned {d}, {d}")
@@ -2826,7 +2826,7 @@ class Emitter:
             self.label(compare)
             self.select_extreme(name, result, value, item)
             self.label(ready)
-        elif name == "sum":
+        else if name == "sum":
             added = ""
             if types.kind(item) == "float":
                 added = self.float_binary("+", result, value)
@@ -2886,7 +2886,7 @@ class Emitter:
             abi = "l"
             if i < len(target.params):
                 abi = c_type(target.params[i].annotation, ty)
-            elif types.kind(ty) == "float":
+            else if types.kind(ty) == "float":
                 abi = "d"
             if abi == "d":
                 d = self.temp()
@@ -2956,15 +2956,15 @@ class Emitter:
         kind = types.kind(ty)
         if kind == "int":
             return self.core_call("int_to_str", [value], true)
-        elif kind == "float":
+        else if kind == "float":
             return self.core_call("float_to_str", [value], true)
-        elif kind == "bool":
+        else if kind == "bool":
             return self.core_call("bool_to_str", [value], true)
-        elif kind == "union":
+        else if kind == "union":
             return self.core_call("union_to_str", [value], true)
-        elif kind == "none":
+        else if kind == "none":
             return self.string("none")
-        elif isinstance(ty, types.EnumType):
+        else if isinstance(ty, types.EnumType):
             return self.core_call("enum_to_str", [self.descriptor(ty.decl.type_name, ty.decl.library), value], true)
         assert kind == "str", "unchecked scalar conversion"
         return value
@@ -3155,23 +3155,23 @@ class Emitter:
             bindings = self.bindings
             self.emit_function(later.function, later.symbol, ["l %env"], later.bindings)
             self.bindings = bindings
-        elif isinstance(later, GeneratorBody):
+        else if isinstance(later, GeneratorBody):
             bindings = self.bindings
             self.emit_generator_body(later)
             self.bindings = bindings
-        elif isinstance(later, ValueWrapper):
+        else if isinstance(later, ValueWrapper):
             self.emit_value_wrapper(later)
-        elif isinstance(later, BoundWrapper):
+        else if isinstance(later, BoundWrapper):
             self.emit_bound_wrapper(later)
-        elif isinstance(later, BuiltinWrapper):
+        else if isinstance(later, BuiltinWrapper):
             self.emit_builtin_wrapper(later)
-        elif isinstance(later, SpecializedValue):
+        else if isinstance(later, SpecializedValue):
             bindings = self.bindings
             self.emit_specialized_value(later)
             self.bindings = bindings
-        elif isinstance(later, Adapter):
+        else if isinstance(later, Adapter):
             self.emit_adapter(later)
-        elif isinstance(later, NativeIterator):
+        else if isinstance(later, NativeIterator):
             bindings = self.bindings
             self.emit_native_iterator(later)
             self.bindings = bindings
@@ -3325,7 +3325,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
         for decl in module.declarations:
             if isinstance(decl, ast.FunctionDecl):
                 module_names[decl.id] = root
-            elif isinstance(decl, ast.ClassDecl):
+            else if isinstance(decl, ast.ClassDecl):
                 for method in decl.methods:
                     module_names[method.id] = root
     result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, false, false, [], [], {}, functions, [], {}, {}, [], [], module_paths, privileged, stdlib.exceptions(), [], [], [], [], {})
@@ -3344,7 +3344,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
                     name = decl.type_name
                     result.exception_descriptors.append(result.descriptor(decl.type_name, module.privileged))
                 result.descriptors[result.descriptor(decl.type_name, module.privileged)] = [name]
-            elif isinstance(decl, ast.EnumDecl):
+            else if isinstance(decl, ast.EnumDecl):
                 texts = [decl.name]
                 for member in decl.members:
                     texts.append(decl.name + "." + member.name)
@@ -3609,10 +3609,10 @@ def utf8(text: str) -> list[int]:
         n = ord(c)
         if n < 128:
             result.append(n)
-        elif n < 2048:
+        else if n < 2048:
             result.append(192 + n // 64)
             result.append(128 + n % 64)
-        elif n < 65536:
+        else if n < 65536:
             result.append(224 + n // 4096)
             result.append(128 + n // 64 % 64)
             result.append(128 + n % 64)
@@ -3635,7 +3635,7 @@ def data_bytes(text: str) -> str:
         if plain and not quoted:
             parts.append("b \"")
             quoted = true
-        elif not plain and quoted:
+        else if not plain and quoted:
             parts.append("\", ")
             quoted = false
         if plain:

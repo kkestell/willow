@@ -26,7 +26,7 @@ def main():
         if isinstance(lexed, diagnostic.Diagnostic):
             sys.eprint(lexed.format())
             failed = true
-        elif mode == "--tokens":
+        else if mode == "--tokens":
             for token in lexed:
                 print(f"{path}:{token.line}:{token.col}: {token.kind} {token.text}")
         else:
@@ -34,7 +34,7 @@ def main():
             if isinstance(parsed, diagnostic.Diagnostic):
                 sys.eprint(parsed.format())
                 failed = true
-            elif mode == "--tree" or mode == "--positions":
+            else if mode == "--tree" or mode == "--positions":
                 print(f"# {path}")
                 print(show.Printer(mode == "--positions").module(parsed))
     if failed:

@@ -165,9 +165,9 @@ def _encode(text: str, query: bool) -> str:
             safe = safe + "!$&'()*+,;=:@/?"
         if ("a" <= c and c <= "z") or ("A" <= c and c <= "Z") or ("0" <= c and c <= "9") or c in safe:
             parts.append(c)
-        elif query and c == " ":
+        else if query and c == " ":
             parts.append("+")
-        elif not query and c == "%" and i + 2 < len(data) and chr(data[i + 1]) in "0123456789abcdefABCDEF" and chr(data[i + 2]) in "0123456789abcdefABCDEF":
+        else if not query and c == "%" and i + 2 < len(data) and chr(data[i + 1]) in "0123456789abcdefABCDEF" and chr(data[i + 2]) in "0123456789abcdefABCDEF":
             parts.append("%" + chr(data[i + 1]) + chr(data[i + 2]))
             i = i + 2
         else:
@@ -269,7 +269,7 @@ def _response_headers(data: str) -> list[Header]:
         line = line.removesuffix("\r")
         if line.startswith("HTTP/"):
             headers = []
-        elif (line.startswith(" ") or line.startswith("\t")) and len(headers) > 0:
+        else if (line.startswith(" ") or line.startswith("\t")) and len(headers) > 0:
             headers[len(headers) - 1].value = headers[len(headers) - 1].value + " " + _header_value(line)
         else:
             colon = line.find(":")
@@ -468,7 +468,7 @@ def _exchange(curl: _Curl, method: str, url: str, lines: list[str], body: bytes 
             curl.set_ptr(handle, "readdata", exchange._input, url)
         if method == "HEAD":
             curl.set_int(handle, "nobody", 1, url)
-        elif method == "GET" and body is none:
+        else if method == "GET" and body is none:
             curl.set_int(handle, "httpget", 1, url)
         else:
             curl.set_ptr(handle, "customrequest", core.str_bytes(method), url)

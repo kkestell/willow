@@ -135,7 +135,9 @@ def main():
     ]
     bodies = [
         ["x = 1\ny: int = x + 2\nf(x, y)\nif x == 1:\n    return\nwhile y > 0:\n    pass\n    break\n    continue\nreturn f(y)", "{ x = 1; y: int = (x + 2); f(x, y); if (x == 1) { return }; while (y > 0) { pass; break; continue }; return f(y) }"],
-        ["if a:\n    pass\nelif b:\n    pass\nelif c:\n    pass\nelse:\n    pass", "{ if a { pass } else { if b { pass } else { if c { pass } else { pass } } } }"],
+        ["if a:\n    pass\nelse if b:\n    pass\nelse if c:\n    pass\nelse:\n    pass", "{ if a { pass } else { if b { pass } else { if c { pass } else { pass } } } }"],
+        ["if a:\n    pass\nelse if b:\n    pass", "{ if a { pass } else { if b { pass } } }"],
+        ["elif = 1", "{ elif = 1 }"],
         ["if a: pass", "2:11: expected end of line, found 'pass'"],
         ["if a:\n# nothing\nx = 1", "4:5: expected an indented block, found 'x'"],
         ["x + 1", "2:7: only calls and await expressions can be used as statements"],
@@ -275,7 +277,7 @@ def main():
     positions = [
         ["def f():\n    pass\n\ndef g(a: int, b: bool,\n      c: str) -> int:\n    return a\n", "def f@1:5() -> none@1:5 { pass@2:5 }\ndef g@4:5(a@4:7: int@4:10, b@4:15: bool@4:18, c@5:7: str@5:10) -> int@5:18 { return a@6:12@6:5 }"],
         ["def f():\n    x = a + b + c\n", "def f@1:5() -> none@1:5 { x = ((a@2:9 + b@2:13)@2:11 + c@2:17)@2:15@2:5 }"],
-        ["def f():\n    if a:\n        pass\n    elif b:\n        pass\n", "def f@1:5() -> none@1:5 { if a@2:8 { pass@3:9 } else { if b@4:10 { pass@5:9 }@4:5 }@2:5 }"],
+        ["def f():\n    if a:\n        pass\n    else if b:\n        pass\n", "def f@1:5() -> none@1:5 { if a@2:8 { pass@3:9 } else { if b@4:13 { pass@5:9 }@4:10 }@2:5 }"],
     ]
     for pair in positions:
         parsed = parse(pair[0])

@@ -19,7 +19,7 @@ async def consumer(buffer: Buffer):
         if len(buffer.items) > 0:
             print(buffer.items[0])
             buffer.items = buffer.items[1:]
-        elif buffer.done:
+        else if buffer.done:
             return
         else:
             await aio.sleep(0.0)

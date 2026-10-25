@@ -106,11 +106,11 @@ class _Run:
             if written > 0:
                 self._offset = self._offset + written
                 progress = true
-            elif written < 0:
+            else if written < 0:
                 code = core.errno()
                 if code == 32:
                     self._offset = len(data)
-                elif code != 4 and not core.would_block(code):
+                else if code != 4 and not core.would_block(code):
                     raise OSError("cannot write input: " + core.os_reason())
         if self._offset == len(data):
             core.close(fd)
@@ -122,7 +122,7 @@ class _Run:
         count = core.read(fd, self._buffer, size)
         if count > 0:
             parts.append(_octets(self._buffer, count))
-        elif count < 0:
+        else if count < 0:
             code = core.errno()
             if code != 4 and not core.would_block(code):
                 raise OSError("cannot read output: " + core.os_reason())

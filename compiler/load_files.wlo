@@ -29,7 +29,7 @@ def main():
             error = diagnostic.Diagnostic(relative, result.line, result.col, message)
             sys.eprint(f"{path}: {error.format()}")
             failed = true
-        elif show_modules:
+        else if show_modules:
             for source in result:
                 print(f"{path}: {source.name} {source.tree.path}")
     if failed:

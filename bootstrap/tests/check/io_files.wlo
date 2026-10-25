@@ -45,9 +45,9 @@ def main():
             try:
                 if operation == "read":
                     alias.readline()
-                elif operation == "flush":
+                else if operation == "flush":
                     alias.flush()
-                elif operation == "enter":
+                else if operation == "enter":
                     alias.enter()
                 else:
                     next(one)
@@ -61,16 +61,16 @@ def main():
         try:
             if operation == "size":
                 io.stdin().read(0)
-            elif operation == "mode":
+            else if operation == "mode":
                 io.stdin().write(bytes([]))
-            elif operation == "close":
+            else if operation == "close":
                 io.stdout().close()
-            elif operation == "enter":
+            else if operation == "enter":
                 with io.stderr():
                     assert false
-            elif operation == "open":
+            else if operation == "open":
                 io.open(path, "x")
-            elif operation == "nul":
+            else if operation == "nul":
                 io.open("bad\x00path")
             else:
                 io.open(path)
@@ -78,11 +78,11 @@ def main():
         except ValueError as error:
             if operation == "size":
                 assert error.message == "read size must be positive"
-            elif operation == "mode":
+            else if operation == "mode":
                 assert error.message == "file is not open for writing"
-            elif operation == "close" or operation == "enter":
+            else if operation == "close" or operation == "enter":
                 assert error.message == "cannot close a standard stream"
-            elif operation == "open":
+            else if operation == "open":
                 assert error.message == "invalid mode 'x'"
             else:
                 assert error.message == "path contains a NUL character"

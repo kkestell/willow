@@ -69,7 +69,7 @@ class Lexer:
             c = self.chars[self.pos]
             if not line_has_tokens and self.depth == 0:
                 line_has_tokens = self.start_line()
-            elif c == "\n" or c == "\r":
+            else if c == "\n" or c == "\r":
                 if self.depth == 0:
                     self.add(tokens.Kind.NEWLINE, "", self.pos)
                     line_has_tokens = false
@@ -84,7 +84,7 @@ class Lexer:
                     kind = self.tokens[len(self.tokens) - 1].kind
                     if opens(kind):
                         self.depth = self.depth + 1
-                    elif closes(kind) and self.depth > 0:
+                    else if closes(kind) and self.depth > 0:
                         self.depth = self.depth - 1
         if self.error is not none:
             return
@@ -144,27 +144,27 @@ class Lexer:
         c = self.chars[p]
         if c == " ":
             self.pos = p + 1
-        elif c == "\t":
+        else if c == "\t":
             self.fail(p, "tabs are not allowed outside strings and comments")
-        elif c == "#":
+        else if c == "#":
             while self.at(p) != "" and self.at(p) != "\n" and self.at(p) != "\r":
                 p = p + 1
             self.pos = p
-        elif is_name_start(c):
+        else if is_name_start(c):
             while is_name_char(self.at(p)):
                 p = p + 1
             word = self.text(self.pos, p)
             if word == "f" and is_quote(self.at(p)):
                 self.read_string(true)
-            elif word in self.keywords:
+            else if word in self.keywords:
                 self.add(self.keywords[word], word, self.pos)
                 self.pos = p
             else:
                 self.add(tokens.Kind.NAME, word, self.pos)
                 self.pos = p
-        elif is_digit(c):
+        else if is_digit(c):
             self.read_number()
-        elif is_quote(c):
+        else if is_quote(c):
             self.read_string(false)
         else:
             self.read_operator()
@@ -273,7 +273,7 @@ class Lexer:
                 run = self.add(tokens.Kind.FSTRING_TEXT, "", p)
             if c == "\\":
                 parts.append(self.read_escape(start, triple))
-            elif c == "\n" or c == "\r":
+            else if c == "\n" or c == "\r":
                 if not triple:
                     self.fail(start, "unterminated string literal")
                     return
@@ -282,7 +282,7 @@ class Lexer:
                     parts.append("\n")
                     self.newline(p)
                 self.pos = p + 1
-            elif formatted and (c == "{" or c == "}"):
+            else if formatted and (c == "{" or c == "}"):
                 parts.append(c)
                 self.pos = p + 2
             else:
@@ -314,9 +314,9 @@ class Lexer:
         count = 0
         if e == "x":
             count = 2
-        elif e == "u":
+        else if e == "u":
             count = 4
-        elif e == "U":
+        else if e == "U":
             count = 8
         else:
             self.fail(p, f"unknown escape sequence '\\{e}'")
@@ -375,17 +375,17 @@ class Lexer:
                         return
                     i = i + 1
                 p = close
-            elif c == "(" or c == "[" or c == "{":
+            else if c == "(" or c == "[" or c == "{":
                 nesting = nesting + 1
-            elif c == ")" or c == "]":
+            else if c == ")" or c == "]":
                 nesting = nesting - 1
-            elif c == "}":
+            else if c == "}":
                 if nesting == 0:
                     break
                 nesting = nesting - 1
-            elif nesting == 0 and c == ":":
+            else if nesting == 0 and c == ":":
                 break
-            elif nesting == 0 and c == "!" and self.at(p + 1) != "=":
+            else if nesting == 0 and c == "!" and self.at(p + 1) != "=":
                 self.fail(p, "conversions are not supported")
                 return
             p = p + 1
@@ -419,7 +419,7 @@ class Lexer:
             if c == "\n":
                 self.newline(self.pos)
                 self.pos = self.pos + 1
-            elif c == "\r":
+            else if c == "\r":
                 self.pos = self.pos + 1
             else:
                 self.lex_token()

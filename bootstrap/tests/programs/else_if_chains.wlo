@@ -1,0 +1,41 @@
+def classify(n: int) -> str:
+    if n < 0:
+        return "negative"
+    else if n == 0:
+        return "zero"
+    else if n < 10:
+        return "small"
+    else:
+        return "large"
+
+def describe(value: int | str | none) -> str:
+    if value is none:
+        return "nothing"
+    else if isinstance(value, int):
+        return str(value + 1)
+    else:
+        return value
+
+def first(a: int | none, b: int | none) -> int:
+    result = 0
+    if a is not none:
+        result = a
+    else if b is not none:
+        result = b
+    else:
+        result = -1
+    return result
+
+def main():
+    print(classify(-5))
+    print(classify(0))
+    print(classify(7))
+    print(classify(70))
+    print(describe(none))
+    print(describe(41))
+    print(describe("hi"))
+    print(first(5, 7))
+    print(first(none, 7))
+    print(first(none, none))
+    elif = 42
+    print(elif)

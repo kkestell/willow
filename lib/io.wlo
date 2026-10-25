@@ -100,7 +100,7 @@ def open(path: str, mode: str = "r") -> File:
     flags = 0
     if mode == "w":
         flags = core.write_flags()
-    elif mode == "a":
+    else if mode == "a":
         flags = core.append_flags()
     fd = core.open(core.path_bytes(path), flags, 438)
     if fd < 0:

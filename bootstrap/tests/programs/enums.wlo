@@ -14,7 +14,7 @@ class Pixel:
 def name(color: Color) -> str:
     if color == Color.RED:
         return "red"
-    elif color == Color.GREEN:
+    else if color == Color.GREEN:
         return "green"
     return "blue"
 

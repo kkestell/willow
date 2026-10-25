@@ -28,19 +28,19 @@ def schema(kind: str):
     try:
         if kind == "name":
             parser.add_flag("2fast")
-        elif kind == "hyphens":
+        else if kind == "hyphens":
             parser.add_flag("a--b")
-        elif kind == "short":
+        else if kind == "short":
             parser.add_flag("fast", short="ab")
-        elif kind == "reserved":
+        else if kind == "reserved":
             parser.add_flag("help")
-        elif kind == "duplicate":
+        else if kind == "duplicate":
             parser.add_flag("fast")
             parser.add_positional("fast")
-        elif kind == "short duplicate":
+        else if kind == "short duplicate":
             parser.add_flag("fast", short="f")
             parser.add_flag("full", short="f")
-        elif kind == "rest twice":
+        else if kind == "rest twice":
             parser.add_rest("a")
             parser.add_rest("b")
         else:

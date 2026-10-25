@@ -59,9 +59,9 @@ def parse_options() -> Options:
 def level_color(level: str) -> str:
     if level == "ERROR":
         return "red"
-    elif level == "WARN":
+    else if level == "WARN":
         return "yellow"
-    elif level == "INFO":
+    else if level == "INFO":
         return "green"
     return "default"
 

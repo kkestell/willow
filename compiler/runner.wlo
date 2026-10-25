@@ -34,7 +34,7 @@ def collect(directory: str, shown: str, recursive: bool, files: list[str]):
         kind = fs.stat(directory + "/" + name, follow_symlinks=false).kind
         if kind == "directory" and recursive:
             collect(directory + "/" + name, shown + name + "/", true, files)
-        elif kind == "file" and len(name) >= 9 and name.startswith("test_") and name.endswith(".wlo"):
+        else if kind == "file" and len(name) >= 9 and name.startswith("test_") and name.endswith(".wlo"):
             files.append(shown + name)
 
 # How many tests passed and failed.

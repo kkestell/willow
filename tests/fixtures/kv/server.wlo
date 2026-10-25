@@ -23,9 +23,9 @@ def reply(store: dict[str, json.Json], request: json.Json) -> json.Json:
     if op == "set" and isinstance(key, str):
         store[key] = request.get("value")
         return {"ok": true}
-    elif op == "get" and isinstance(key, str):
+    else if op == "get" and isinstance(key, str):
         return {"value": store.get(key)}
-    elif op == "keys":
+    else if op == "keys":
         names: list[json.Json] = []
         for name in sorted(store):
             names.append(name)

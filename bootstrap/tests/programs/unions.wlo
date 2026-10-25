@@ -19,13 +19,13 @@ def area(shape: Shape) -> float:
 def describe(value: Value) -> str:
     if value is none:
         return "nothing"
-    elif isinstance(value, bool):
+    else if isinstance(value, bool):
         if value:
             return "yes"
         return "no"
-    elif isinstance(value, int):
+    else if isinstance(value, int):
         return "int " + str(value + 1)
-    elif isinstance(value, float):
+    else if isinstance(value, float):
         return "float " + str(value * 2.0)
     else:
         return "str " + value

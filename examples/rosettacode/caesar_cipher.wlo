@@ -8,7 +8,7 @@ def encode(text: str, key: int) -> str:
     for c in text:
         if "a" <= c and c <= "z":
             result = result + shift(c, key, "a")
-        elif "A" <= c and c <= "Z":
+        else if "A" <= c and c <= "Z":
             result = result + shift(c, key, "A")
         else:
             result = result + c
