@@ -12,8 +12,6 @@
 - `subprocess`'s async methods check child status every 10 ms rather than
   waiting on pipe readiness.
 - The checker reports the first error in a program.
-- A generic recursive alias applied to an outer type parameter
-  (`def f[T](n: Nested[T])`) makes substitution recurse without end.
 - Migrate library sources, examples, tests, documentation, and editor support
   to the lowercase literals. Handle the bootstrap transition while preserving
   the frozen stage 1 compiler; add regression coverage and validate the

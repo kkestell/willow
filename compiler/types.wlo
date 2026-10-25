@@ -77,12 +77,13 @@ class UnionType:
 
 # A list element or dict value, which the binder fills in once every alias
 # is resolved, so that an alias may refer to itself there. Every one is
-# lazy and `name` is its source text, which is how it displays. The binder
-# gives each an `id` to distinguish generic alias specializations.
+# lazy and `name` is its source text, which is how it displays. Its `id`
+# distinguishes generic alias specializations: the binder numbers each one,
+# and substitution derives one for each copy it makes.
 class Lazy:
     name: str
     target: Type | None
-    id: int = 0
+    id: str = ""
 
 # A class, an exception class, or a standard library native type. A native
 # type has no fields that other modules see. Its methods lower to helpers
@@ -839,7 +840,7 @@ def mentions_any(t: Type, vars: list[TypeVar]) -> bool:
 # `seen` holds the ids of the lazy types already entered, which stops at
 # recursive ones; when `only` is true, just the type parameters in `keys`
 # count.
-def has_typevar(t: Type, seen: list[int], keys: list[str], only: bool) -> bool:
+def has_typevar(t: Type, seen: list[str], keys: list[str], only: bool) -> bool:
     if isinstance(t, Lazy):
         if t.id in seen:
             return False
@@ -880,27 +881,48 @@ def parts_of(t: Type) -> list[Type]:
 # `t` with each type parameter that `bindings` names, by var_key, replaced by
 # its type argument. Unions flatten and drop members they already hold.
 def substitute(t: Type, bindings: dict[str, Type]) -> Type:
+    return substitute_in(t, bindings, {})
+
+# `entered` holds the ids of the lazy types being substituted. A recursive
+# alias that reaches one again gets a lazy copy of it, whose target is the
+# substituted type.
+def substitute_in(t: Type, bindings: dict[str, Type], entered: dict[str, Lazy | None]) -> Type:
+    if isinstance(t, Lazy) and mentions(t):
+        if t.id in entered:
+            copy = entered[t.id]
+            if copy is None:
+                copy = Lazy("", None, t.id + "[" + bindings_key(bindings) + "]")
+                entered[t.id] = copy
+            return copy
+        entered[t.id] = None
+        result = substitute_in(expand(t), bindings, entered)
+        made = entered.pop(t.id)
+        if made is None:
+            return result
+        made.name = rename(t.name, typevars(t, [], []), bindings)
+        made.target = result
+        return made
     t = expand(t)
     if not mentions(t):
         return t
     if isinstance(t, TypeVar):
         return bindings.get(var_key(t), t)
     if isinstance(t, ListType):
-        return ListType(substitute(t.element, bindings))
+        return ListType(substitute_in(t.element, bindings, entered))
     if isinstance(t, DictType):
-        return DictType(t.key, substitute(t.value, bindings))
+        return DictType(t.key, substitute_in(t.value, bindings, entered))
     if isinstance(t, TupleType):
-        return TupleType(substitute_all(t.elements, bindings))
+        return TupleType(substitute_each(t.elements, bindings, entered))
     if isinstance(t, CallableType):
-        return CallableType(substitute_all(t.params, bindings), substitute(t.result, bindings))
+        return CallableType(substitute_each(t.params, bindings, entered), substitute_in(t.result, bindings, entered))
     if isinstance(t, ClassType):
-        return ClassType(t.decl, substitute_all(t.args, bindings))
+        return ClassType(t.decl, substitute_each(t.args, bindings, entered))
     if isinstance(t, ProtocolType):
-        return ProtocolType(t.decl, substitute_all(t.args, bindings))
+        return ProtocolType(t.decl, substitute_each(t.args, bindings, entered))
     if isinstance(t, UnionType):
         kept: list[Type] = []
         for member in t.members:
-            for m in members(substitute(member, bindings)):
+            for m in members(substitute_in(member, bindings, entered)):
                 held = False
                 for other in kept:
                     if same(other, m):
@@ -911,7 +933,79 @@ def substitute(t: Type, bindings: dict[str, Type]) -> Type:
     return t
 
 def substitute_all(parts: list[Type], bindings: dict[str, Type]) -> list[Type]:
+    return substitute_each(parts, bindings, {})
+
+def substitute_each(parts: list[Type], bindings: dict[str, Type], entered: dict[str, Lazy | None]) -> list[Type]:
     result: list[Type] = []
     for part in parts:
-        result.append(substitute(part, bindings))
+        result.append(substitute_in(part, bindings, entered))
     return result
+
+# The type parameters `t` mentions; `seen` holds the ids of the lazy types
+# already entered.
+def typevars(t: Type, seen: list[str], found: list[TypeVar]) -> list[TypeVar]:
+    if isinstance(t, Lazy):
+        if t.id in seen:
+            return found
+        seen.append(t.id)
+    t = expand(t)
+    if isinstance(t, TypeVar):
+        found.append(t)
+    for part in parts_of(t):
+        typevars(part, seen, found)
+    return found
+
+# `text`, a type's source text, with the name of each of `vars` that
+# `bindings` names replaced by its type argument.
+def rename(text: str, vars: list[TypeVar], bindings: dict[str, Type]) -> str:
+    names: dict[str, str] = {}
+    for v in vars:
+        if var_key(v) in bindings:
+            names[v.name] = display(bindings[var_key(v)])
+    words: list[str] = []
+    word = ""
+    for c in text:
+        if c.isalnum() or c == "_" or c == ".":
+            word = word + c
+        else:
+            words.append(names.get(word, word))
+            words.append(c)
+            word = ""
+    words.append(names.get(word, word))
+    return "".join(words)
+
+def bindings_key(bindings: dict[str, Type]) -> str:
+    keys: list[str] = []
+    for name in bindings:
+        keys.append(name + " = " + type_key(bindings[name]))
+    return ", ".join(keys)
+
+# A text that tells types apart by structure, and lazy types by their ids.
+def type_key(t: Type) -> str:
+    if isinstance(t, Lazy):
+        return f"lazy {t.id}"
+    if isinstance(t, TypeVar):
+        return f"typevar {t.id}"
+    if isinstance(t, ListType):
+        return "list[" + type_key(t.element) + "]"
+    if isinstance(t, DictType):
+        return "dict[" + type_key(t.key) + ", " + type_key(t.value) + "]"
+    if isinstance(t, TupleType):
+        return "tuple[" + type_keys(t.elements) + "]"
+    if isinstance(t, ClassType):
+        return "class " + identity(t.decl.type_name, t.decl.library) + "[" + type_keys(t.args) + "]"
+    if isinstance(t, ProtocolType):
+        return "protocol " + identity(t.decl.type_name, t.decl.library) + "[" + type_keys(t.args) + "]"
+    if isinstance(t, CallableType):
+        return "(" + type_keys(t.params) + ") -> " + type_key(t.result)
+    if isinstance(t, UnionType):
+        return "union " + type_keys(t.members)
+    if isinstance(t, FunctionType):
+        return f"function {t.fn.id}"
+    return display(t)
+
+def type_keys(ts: list[Type]) -> str:
+    keys: list[str] = []
+    for t in ts:
+        keys.append(type_key(t))
+    return ", ".join(keys)

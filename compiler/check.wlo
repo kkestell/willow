@@ -2152,6 +2152,15 @@ def choose(candidates: list[types.Type]) -> types.Type | None:
 
 
 def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types.Type]], matching: list[str]):
+    # A recursive alias reaches the same pair of lazy types again.
+    if isinstance(param, types.Lazy) and isinstance(arg, types.Lazy):
+        pair = f"lazy {param.id} <- {arg.id}"
+        if pair in matching:
+            return
+        matching.append(pair)
+        collect(types.expand(param), types.expand(arg), candidates, matching)
+        matching.pop()
+        return
     param = types.expand(param)
     arg = types.expand(arg)
     if isinstance(param, types.TypeVar) and types.var_key(param) in candidates:

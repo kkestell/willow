@@ -407,7 +407,7 @@ class Binder:
 
     # A lazy type keeps the type scope where it was written.
     def lazy(self, node: ast.TypeExpr, module: ast.Module, scope: TypeScope) -> types.Lazy:
-        lazy = types.Lazy(self.type_text(node, module, scope), None, self.new_id())
+        lazy = types.Lazy(self.type_text(node, module, scope), None, str(self.new_id()))
         self.pending.append(PendingLazy(lazy, node, module, scope))
         return lazy
 
@@ -623,7 +623,7 @@ class Binder:
                 held = False
                 if substituted:
                     for other in overlap.members:
-                        if type_key(other) == type_key(m):
+                        if types.type_key(other) == types.type_key(m):
                             held = True
                 if not held:
                     overlap.members.append(m)
@@ -1751,36 +1751,6 @@ def same_args(a: list[types.Type], b: list[types.Type]) -> bool:
     if len(a) != len(b):
         return False
     for i in range(len(a)):
-        if type_key(a[i]) != type_key(b[i]):
+        if types.type_key(a[i]) != types.type_key(b[i]):
             return False
     return True
-
-# A text that tells types apart as same_args needs.
-def type_key(t: types.Type) -> str:
-    if isinstance(t, types.Lazy):
-        return f"lazy {t.id}"
-    if isinstance(t, types.TypeVar):
-        return f"typevar {t.id}"
-    if isinstance(t, types.ListType):
-        return "list[" + type_key(t.element) + "]"
-    if isinstance(t, types.DictType):
-        return "dict[" + type_key(t.key) + ", " + type_key(t.value) + "]"
-    if isinstance(t, types.TupleType):
-        return "tuple[" + type_keys(t.elements) + "]"
-    if isinstance(t, types.ClassType):
-        return "class " + types.identity(t.decl.type_name, t.decl.library) + "[" + type_keys(t.args) + "]"
-    if isinstance(t, types.ProtocolType):
-        return "protocol " + types.identity(t.decl.type_name, t.decl.library) + "[" + type_keys(t.args) + "]"
-    if isinstance(t, types.CallableType):
-        return "(" + type_keys(t.params) + ") -> " + type_key(t.result)
-    if isinstance(t, types.UnionType):
-        return "union " + type_keys(t.members)
-    if isinstance(t, types.FunctionType):
-        return f"function {t.fn.id}"
-    return types.display(t)
-
-def type_keys(ts: list[types.Type]) -> str:
-    keys: list[str] = []
-    for t in ts:
-        keys.append(type_key(t))
-    return ", ".join(keys)

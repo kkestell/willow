@@ -68,8 +68,9 @@ def inferred():
     print(len(wrap("s")))
 
 type Pair[K, V] = tuple[K, V]
-# A generic alias may recurse through list.
+# A generic alias may recurse through list or dict.
 type Nested[T] = list[Nested[T]] | None
+type Tree[T] = dict[str, Tree[T]] | list[T]
 
 def swap(p: Pair[int, str]) -> Pair[str, int]:
     return (p[1], p[0])
@@ -83,6 +84,25 @@ def depth(n: Nested[int]) -> int:
         if d > best:
             best = d
     return best + 1
+
+# A recursive alias may be applied to the function's own type parameter.
+def generic_depth[T](n: Nested[T]) -> int:
+    if n is None:
+        return 0
+    best = 0
+    for child in n:
+        d = generic_depth[T](child)
+        if d > best:
+            best = d
+    return best + 1
+
+def leaves[T](t: Tree[T]) -> list[T]:
+    if isinstance(t, list):
+        return t
+    found: list[T] = []
+    for k in t:
+        found.extend(leaves(t[k]))
+    return found
 
 class Named:
     name: str
@@ -107,6 +127,9 @@ def apply(f: (str) -> str, s: str) -> str:
 def aliases_bounds_values():
     print(swap((1, "a"))[0])
     print(depth([[None], [[None]]]))
+    print(generic_depth[str]([[None], [[None]]]))
+    tree: Tree[int] = {"a": [1, 2], "b": {"c": [3]}}
+    print(len(leaves(tree)))
     print(label(Named("a")))
     send(io.stdout(), "sent\n")
     # Explicit type arguments or an expected callable make generic values.
