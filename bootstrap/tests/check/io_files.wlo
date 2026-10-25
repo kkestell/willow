@@ -11,7 +11,7 @@ def main():
             target.flush()
             try:
                 target.read(1)
-                assert False
+                assert false
             except ValueError as error:
                 assert error.message == "file is not open for reading"
         target.close()
@@ -28,15 +28,15 @@ def main():
             assert next(two) == long
             try:
                 next(one)
-                assert False
+                assert false
             except ValueError as error:
                 assert error.message == "invalid UTF-8"
             assert source.readline() == "last\r"
-            assert source.readline() is None
+            assert source.readline() is none
             assert len(source.read(1)) == 0
             try:
                 next(two)
-                assert False
+                assert false
             except StopIteration:
                 pass
         finally:
@@ -51,7 +51,7 @@ def main():
                     alias.enter()
                 else:
                     next(one)
-                assert False
+                assert false
             except ValueError as error:
                 assert error.message == "I/O operation on closed file"
     finally:
@@ -67,14 +67,14 @@ def main():
                 io.stdout().close()
             elif operation == "enter":
                 with io.stderr():
-                    assert False
+                    assert false
             elif operation == "open":
                 io.open(path, "x")
             elif operation == "nul":
                 io.open("bad\x00path")
             else:
                 io.open(path)
-            assert False
+            assert false
         except ValueError as error:
             if operation == "size":
                 assert error.message == "read size must be positive"

@@ -3,24 +3,24 @@ import fs
 import subprocess
 import time
 
-def text(data: bytes | None) -> str:
-    if data is None:
+def text(data: bytes | none) -> str:
+    if data is none:
         return "None"
     return data.decode()
 
-def size(data: bytes | None) -> int:
-    if data is None:
+def size(data: bytes | none) -> int:
+    if data is none:
         return -1
     return len(data)
 
 # Counts the sleeps that complete while a command runs.
 async def ticker(counts: list[int]):
-    while True:
+    while true:
         await aio.sleep(0.01)
         counts.append(1)
 
 async def run_cancelled(path: str):
-    await subprocess.run_async(["sh", "-c", f"echo $$ > {path}; exec sleep 30"], capture_output=True)
+    await subprocess.run_async(["sh", "-c", f"echo $$ > {path}; exec sleep 30"], capture_output=true)
 
 async def wait_cancelled(p: subprocess.Process):
     await p.wait_async()
@@ -31,17 +31,17 @@ async def stop_after(group: aio.TaskGroup, delay: float):
 
 async def main():
     # Results match run's.
-    r = await subprocess.run_async(["printf", "%s|%s", "a b", "$HOME *"], capture_output=True)
+    r = await subprocess.run_async(["printf", "%s|%s", "a b", "$HOME *"], capture_output=true)
     print(f"{r.returncode} {text(r.stdout)} {size(r.stderr)}")
-    r = await subprocess.run_async(["sh", "-c", "echo out; echo err >&2; exit 3"], capture_output=True)
+    r = await subprocess.run_async(["sh", "-c", "echo out; echo err >&2; exit 3"], capture_output=true)
     print(f"{r.returncode} {text(r.stdout).strip()} {text(r.stderr).strip()}")
     r = await subprocess.run_async(["sh", "-c", "kill -TERM $$"])
     print(f"{r.returncode} {size(r.stdout)}")
-    print(text((await subprocess.run_async(["cat"], input="hello".encode(), capture_output=True)).stdout))
-    print(size((await subprocess.run_async(["cat"], input=bytes([]), capture_output=True)).stdout))
-    print(text((await subprocess.run_async(["pwd"], cwd="/", capture_output=True)).stdout).strip())
+    print(text((await subprocess.run_async(["cat"], input="hello".encode(), capture_output=true)).stdout))
+    print(size((await subprocess.run_async(["cat"], input=bytes([]), capture_output=true)).stdout))
+    print(text((await subprocess.run_async(["pwd"], cwd="/", capture_output=true)).stdout).strip())
     env = {"A": "1"}
-    print(text((await subprocess.run_async(["env"], env=env, capture_output=True)).stdout).strip())
+    print(text((await subprocess.run_async(["env"], env=env, capture_output=true)).stdout).strip())
 
     # Large input, stdout, and stderr are moved at the same time: this child
     # fills both output pipes before it reads any input.
@@ -50,16 +50,16 @@ async def main():
     while len(big) < 2097152:
         big = big + big
     script = "head -c 1048576 /dev/zero; head -c 1048576 /dev/zero >&2; cat >/dev/null"
-    r = await subprocess.run_async(["sh", "-c", script], input=big, capture_output=True)
+    r = await subprocess.run_async(["sh", "-c", script], input=big, capture_output=true)
     print(f"{r.returncode} {size(r.stdout)} {size(r.stderr)}")
-    r = await subprocess.run_async(["cat"], input=big, capture_output=True)
+    r = await subprocess.run_async(["cat"], input=big, capture_output=true)
     print(r.stdout == big)
 
     # Other tasks run while a command does.
     counts: list[int] = []
     async with aio.task_group() as group:
         group.start(ticker(counts))
-        r = await subprocess.run_async(["sh", "-c", "sleep 0.3; echo done"], capture_output=True)
+        r = await subprocess.run_async(["sh", "-c", "sleep 0.3; echo done"], capture_output=true)
         ticks = len(counts)
         print(f"{text(r.stdout).strip()} {ticks >= 5}")
         p = subprocess.spawn(["sleep", "0.3"])
@@ -81,7 +81,7 @@ async def main():
     # A timeout kills the child and reaps it.
     start = time.monotonic()
     try:
-        await subprocess.run_async(["sleep", "5"], capture_output=True, timeout=0.2)
+        await subprocess.run_async(["sleep", "5"], capture_output=true, timeout=0.2)
     except TimeoutError as t:
         print(f"{t.message} {time.monotonic() - start < 2.0}")
 
@@ -92,7 +92,7 @@ async def main():
         group.start(stop_after(group, 0.3))
     pid = fs.read_file(path).strip()
     fs.remove(path)
-    print(subprocess.run(["kill", "-0", pid], capture_output=True).returncode != 0)
+    print(subprocess.run(["kill", "-0", pid], capture_output=true).returncode != 0)
 
     # wait_async times out or is cancelled without stopping the child.
     p = subprocess.spawn(["sleep", "5"])

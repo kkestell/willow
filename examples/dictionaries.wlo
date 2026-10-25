@@ -15,7 +15,7 @@ def main():
     counts: dict[str, int] = {}
     for word in "the cat and the hat".split(" "):
         current = counts.get(word)
-        if current is None:
+        if current is none:
             counts[word] = 1
         else:
             counts[word] = current + 1

@@ -24,7 +24,7 @@ def factory() -> Generator[int]:
         yield 0
     return inner()
 
-def consume(source: Iterable[tuple[float, int | None]]) -> tuple[float, int | None]:
+def consume(source: Iterable[tuple[float, int | none]]) -> tuple[float, int | none]:
     return next(iter(source))
 
 def main():
@@ -37,8 +37,8 @@ def main():
     left.close()
     right.close()
     assert next(factory()) == 0
-    assert not next(once(False))
-    next(once(None))
+    assert not next(once(false))
+    next(once(none))
     assert consume(once((1.5, 2))) == (1.5, 2)
     assert next(Box(2.5).values()) == 2.5
     callback: (float) -> Generator[float] = once
@@ -64,12 +64,12 @@ def main():
     assert next(saved) == "saved"
     try:
         next(saved)
-        assert False
+        assert false
     except ValueError as error:
         assert error.message == "saved"
     try:
         next(saved)
-        assert False
+        assert false
     except StopIteration:
         pass
 

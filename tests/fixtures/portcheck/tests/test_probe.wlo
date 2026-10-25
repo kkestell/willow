@@ -9,7 +9,7 @@ def test_parse_target():
     for text in ["example.com", ":80", "host:", "host:http", "host:70000"]:
         try:
             portcheck.probe.parse_target(text)
-            assert False, "accepted " + text
+            assert false, "accepted " + text
         except ValueError:
             pass
 

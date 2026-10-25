@@ -11,7 +11,7 @@ class _Entry:
     kind: str
     default: str | int | float | bool
     help: str
-    short: str | None
+    short: str | none
     required: bool
 
 class Args:
@@ -20,7 +20,7 @@ class Args:
 
     def _get(self, name: str, kind: str) -> _Value:
         actual = self._kinds.get(name)
-        if actual is None:
+        if actual is none:
             raise ValueError(f"no argument named '{name}'")
         if actual != kind:
             article = "a"
@@ -59,11 +59,11 @@ def _letter(text: str) -> bool:
 
 def _valid_name(name: str) -> bool:
     if name == "" or not _letter(name[0]) or name.endswith("-") or "--" in name:
-        return False
+        return false
     for char in name:
         if not _letter(char) and char not in "0123456789-":
-            return False
-    return True
+            return false
+    return true
 
 def _rows(lines: list[str], title: str, rows: list[tuple[str, str]]):
     width = 0
@@ -91,14 +91,14 @@ class Parser:
         short = entry.short
         if not _valid_name(name):
             raise ValueError(f"invalid name '{name}'")
-        if short is not None:
+        if short is not none:
             if len(short) != 1 or not _letter(short):
                 raise ValueError(f"invalid short option '{short}'")
         if name == "help" or short == "h":
             raise ValueError("'help' and 'h' are reserved")
         if name in self._by_name:
             raise ValueError(f"duplicate name '{name}'")
-        if short is not None:
+        if short is not none:
             if short in self._by_short:
                 raise ValueError(f"duplicate short option '-{short}'")
         if entry.kind == "positional" or entry.kind == "rest":
@@ -109,26 +109,26 @@ class Parser:
             self._has_rest = entry.kind == "rest"
         self._entries.append(entry)
         self._by_name[name] = entry
-        if short is not None:
+        if short is not none:
             self._by_short[short] = entry
 
-    def add_str(self, name: str, default: str, help: str = "", short: str | None = None, required: bool = False):
+    def add_str(self, name: str, default: str, help: str = "", short: str | none = none, required: bool = false):
         self._add(_Entry(name, "str", default, help, short, required))
 
-    def add_int(self, name: str, default: int, help: str = "", short: str | None = None, required: bool = False):
+    def add_int(self, name: str, default: int, help: str = "", short: str | none = none, required: bool = false):
         self._add(_Entry(name, "int", default, help, short, required))
 
-    def add_float(self, name: str, default: float, help: str = "", short: str | None = None, required: bool = False):
+    def add_float(self, name: str, default: float, help: str = "", short: str | none = none, required: bool = false):
         self._add(_Entry(name, "float", default, help, short, required))
 
-    def add_flag(self, name: str, help: str = "", short: str | None = None):
-        self._add(_Entry(name, "flag", False, help, short, False))
+    def add_flag(self, name: str, help: str = "", short: str | none = none):
+        self._add(_Entry(name, "flag", false, help, short, false))
 
     def add_positional(self, name: str, help: str = ""):
-        self._add(_Entry(name, "positional", "", help, None, False))
+        self._add(_Entry(name, "positional", "", help, none, false))
 
     def add_rest(self, name: str, help: str = ""):
-        self._add(_Entry(name, "rest", "", help, None, False))
+        self._add(_Entry(name, "rest", "", help, none, false))
 
     def _usage(self) -> str:
         parts = [f"usage: {self._prog} [options]"]
@@ -154,7 +154,7 @@ class Parser:
             else:
                 left = ""
                 short = entry.short
-                if short is not None:
+                if short is not none:
                     left = f"-{short}, "
                 left = left + "--" + entry.name
                 help = entry.help
@@ -207,7 +207,7 @@ class Parser:
         values: dict[str, _Value] = {}
         kinds: dict[str, str] = {}
         positionals: list[str] = []
-        options_done = False
+        options_done = false
         i = 0
         while i < len(args):
             arg = args[i]
@@ -215,12 +215,12 @@ class Parser:
             if options_done or arg == "-" or not arg.startswith("-"):
                 positionals.append(arg)
             elif arg == "--":
-                options_done = True
+                options_done = true
             elif arg == "--help" or arg == "-h":
                 raise HelpRequested(self.help())
             else:
-                entry: _Entry | None = None
-                value: str | None = None
+                entry: _Entry | none = none
+                value: str | none = none
                 if arg.startswith("--"):
                     name = arg[2:]
                     equal = name.find("=")
@@ -230,16 +230,16 @@ class Parser:
                     entry = self._by_name.get(name)
                 elif len(arg) == 2:
                     entry = self._by_short.get(arg[1:])
-                if entry is None:
+                if entry is none:
                     raise self._error(f"unknown option '{arg}'")
                 if entry.kind == "positional" or entry.kind == "rest":
                     raise self._error(f"unknown option '{arg}'")
                 if entry.kind == "flag":
-                    if value is not None:
+                    if value is not none:
                         raise self._error(f"option '--{entry.name}' takes no value")
-                    values[entry.name] = True
+                    values[entry.name] = true
                 else:
-                    if value is None:
+                    if value is none:
                         if i == len(args):
                             raise self._error(f"option '--{entry.name}' needs a value")
                         value = args[i]
@@ -271,4 +271,4 @@ class Parser:
         return Args(values, kinds)
 
 def parser(prog: str, description: str = "") -> Parser:
-    return Parser(prog, description, [], {}, {}, False)
+    return Parser(prog, description, [], {}, {}, false)

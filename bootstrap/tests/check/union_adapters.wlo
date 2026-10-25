@@ -1,6 +1,6 @@
 # A union whose callable and tuple members both convert.
 type Narrow = ((int) -> int) | tuple[(int) -> int, int]
-type Wide = ((int) -> int | None) | tuple[(int) -> int | None, int | None]
+type Wide = ((int) -> int | none) | tuple[(int) -> int | none, int | none]
 
 def double(x: int) -> int:
     return x * 2

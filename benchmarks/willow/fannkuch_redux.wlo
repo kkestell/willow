@@ -17,7 +17,7 @@ def main():
     checksum = 0
     permutations = 0
     r = n
-    while True:
+    while true:
         while r != 1:
             count[r - 1] = r
             r = r - 1
@@ -45,7 +45,7 @@ def main():
             checksum = checksum - flips
 
         # Advance to the next permutation in the order the benchmark requires.
-        while True:
+        while true:
             if r == n:
                 print(checksum)
                 print(f"Pfannkuchen({n}) = {max_flips}")

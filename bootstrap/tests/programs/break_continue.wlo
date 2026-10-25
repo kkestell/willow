@@ -1,6 +1,6 @@
 def first_multiple(step: int, limit: int) -> int:
     n = 1
-    while True:
+    while true:
         if n * step > limit:
             break
         n = n + 1
@@ -19,7 +19,7 @@ def main():
     while outer < 3:
         outer = outer + 1
         inner = 0
-        while True:
+        while true:
             inner = inner + 1
             if inner == outer:
                 break

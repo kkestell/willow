@@ -7,13 +7,13 @@ class Stock:
         if quantity <= 0:
             raise ValueError("quantity must be positive")
         current = self.counts.get(item)
-        if current is None:
+        if current is none:
             current = 0
         self.counts[item] = current + quantity
 
     def count(self, item: str) -> int:
         current = self.counts.get(item)
-        if current is None:
+        if current is none:
             return 0
         return current
 

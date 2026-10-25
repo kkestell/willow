@@ -12,7 +12,7 @@ def main():
     for _ in range(n):
         for key in first:
             current = second.get(key)
-            if current is None:
+            if current is none:
                 second[key] = first[key]
             else:
                 second[key] = current + first[key]

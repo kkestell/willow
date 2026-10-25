@@ -4,8 +4,8 @@ def add(a: int, b: int = 10) -> int:
 def scaled(a: int, *, by: int = 3) -> int:
     return a * by
 
-def maybe(x: int | None) -> int:
-    if x is None:
+def maybe(x: int | none) -> int:
+    if x is none:
         return 0
     return x + 1
 
@@ -32,8 +32,8 @@ def run(g: ((int) -> int) -> int) -> int:
 def use(f: (int) -> int) -> int:
     return f(5)
 
-def call_optional(o: ((int) -> int) | None) -> int:
-    if o is not None:
+def call_optional(o: ((int) -> int) | none) -> int:
+    if o is not none:
         return o(21)
     return -1
 
@@ -56,7 +56,7 @@ def main():
     for f in fs:
         print(f(1))
     print(call_optional(double))
-    print(call_optional(None))
+    print(call_optional(none))
     # A callable whose parameter is a callable.
     print(run(use))
     print(twice(add)(7))

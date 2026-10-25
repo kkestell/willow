@@ -24,15 +24,15 @@ b'''
     print("\x41é\U0001F600")
     print(len("é\U0001F600"))
 
-    maybe: int | None = None
-    ratio: float | None = 0.25
+    maybe: int | none = none
+    ratio: float | none = 0.25
     p = Point(3, 4)
-    print(f"{1}|{-2.5}|{True}|{None}|{maybe}|{ratio}|{'s'}|{p.x + p.y}")
+    print(f"{1}|{-2.5}|{true}|{none}|{maybe}|{ratio}|{'s'}|{p.x + p.y}")
     print(f"{trace('first')}{trace('second')}")
     print(f"{ {'k': 1}['k'] } {f'{name}!'} {[1, 2][1]}")
     print(f"")
     print(f"{{}}")
-    print(str(1) + str(2.0) + str(False) + str(None) + str(maybe) + str("x"))
+    print(str(1) + str(2.0) + str(false) + str(none) + str(maybe) + str("x"))
     print(str(0.1 + 0.2))
 
     text = "héllo wörld"

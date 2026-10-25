@@ -23,7 +23,7 @@ class Checker:
     module: ast.Module
     function: ast.FunctionDecl
     result: types.Type
-    error: diagnostic.Diagnostic | None
+    error: diagnostic.Diagnostic | none
     # The parameters and the locals assigned so far, by id.
     symbols: dict[int, ast.Symbol]
     groups: list[GroupFlow]
@@ -34,17 +34,17 @@ class Checker:
     loop_finally: int = 0
     # The number of calls checked so far.
     calls: int = 0
-    yield_type: types.Type | None = None
+    yield_type: types.Type | none = none
 
     def fail(self, line: int, col: int, message: str):
-        if self.error is None:
+        if self.error is none:
             self.error = diagnostic.Diagnostic(self.module.path, line, col, message)
 
     def failed(self) -> bool:
-        return self.error is not None
+        return self.error is not none
 
     # Reports a construct that stage 1 does not compile yet, and gives it the
-    # type None so checking can unwind.
+    # type none so checking can unwind.
     def unsupported(self, line: int, col: int, what: str) -> types.Type:
         self.fail(line, col, f"stage 1 does not support {what} yet")
         return none_type()
@@ -118,7 +118,7 @@ class Checker:
             order.append(index)
         required = 0
         for i in range(len(params)):
-            if params[i].default is None and not params[i].keyword_only:
+            if params[i].default is none and not params[i].keyword_only:
                 required = i + 1
         count = len(args) + len(keywords)
         if required == len(params):
@@ -131,7 +131,7 @@ class Checker:
         for i in range(len(params)):
             if i not in bound:
                 default = params[i].default
-                if default is None:
+                if default is none:
                     self.fail(expr.line, expr.col, f"'{name}' is missing argument '{params[i].name}'")
                     return
                 bound[i] = copy_default(default, expr.line, expr.col)
@@ -154,7 +154,7 @@ class Checker:
     # symbol by id. Returns whether the block transfers control, so that what
     # follows it cannot run.
     def check_block(self, body: list[ast.Stmt], state: dict[int, types.Type]) -> bool:
-        transfers = False
+        transfers = false
         for statement in body:
             if self.failed():
                 return transfers
@@ -189,13 +189,13 @@ class Checker:
             if self.finally_depth > 0:
                 self.fail(line, col, "'return' cannot leave a 'finally' clause")
             self.check_return(statement, node, state)
-            self.departure(state, True)
-            return True
+            self.departure(state, true)
+            return true
         elif isinstance(node, ast.Yield):
             if self.finally_depth > 0:
                 self.fail(line, col, "'yield' cannot be used in a 'finally' clause")
             yielded = self.yield_type
-            assert yielded is not None, "yield outside a generator"
+            assert yielded is not none, "yield outside a generator"
             self.check_against(node.value, state, yielded)
             self.calls = self.calls + 1
             self.forget_captured(state)
@@ -209,7 +209,7 @@ class Checker:
             self.check_assert(node, state)
         elif isinstance(node, ast.Raise):
             self.check_raise(node, state)
-            return True
+            return true
         elif isinstance(node, ast.Try):
             return self.check_try(node, state)
         elif isinstance(node, ast.With):
@@ -228,28 +228,28 @@ class Checker:
                 return self.check_transfer(statement, "continue", state)
         else:
             self.unsupported(line, col, "this statement")
-        return False
+        return false
 
     def check_assign(self, statement: ast.Stmt, node: ast.Assign, state: dict[int, types.Type]):
         symbol = node.symbol
-        assert symbol is not None, "assignment without a symbol"
+        assert symbol is not none, "assignment without a symbol"
         declared = node.declared
         expected = symbol.ty
-        if declared is not None:
+        if declared is not none:
             expected = declared
         node.value.expected = expected
         value_type = self.check_expr(node.value, state)
-        if declared is not None:
+        if declared is not none:
             if symbol.is_param:
                 self.fail(statement.line, statement.col, f"cannot annotate parameter '{node.name}'")
             # Statements are checked in source order, so a type means an
             # earlier assignment.
-            if symbol.ty is not None:
+            if symbol.ty is not none:
                 self.fail(statement.line, statement.col, f"only the first assignment to '{node.name}' can have an annotation")
             symbol.ty = declared
         self.symbols[symbol.id] = symbol
         ty = symbol.ty
-        if ty is not None:
+        if ty is not none:
             self.expect(node.value, ty, value_type)
             state[symbol.id] = assigned_type(ty, value_type)
         else:
@@ -258,9 +258,9 @@ class Checker:
 
     def check_target(self, target: ast.Target, item: types.Type, state: dict[int, types.Type], line: int, col: int):
         symbol = target.symbol
-        assert symbol is not None, "target without a symbol"
+        assert symbol is not none, "target without a symbol"
         declared = symbol.ty
-        if declared is not None:
+        if declared is not none:
             if not types.assignable(declared, item):
                 self.fail(line, col, f"expected {types.display(declared)}, received {types.display(item)}")
             state[symbol.id] = assigned_type(declared, item)
@@ -291,14 +291,14 @@ class Checker:
         else_state = narrow(state, facts.when_false)
         else_transfers = self.check_block(node.else_body, else_state)
         if body_transfers and else_transfers:
-            return True
+            return true
         if body_transfers:
             replace(state, else_state)
         elif else_transfers:
             replace(state, body_state)
         else:
             replace(state, join(body_state, else_state, self.symbols))
-        return False
+        return false
 
     def check_while(self, node: ast.While, state: dict[int, types.Type]):
         # Narrowing before the loop holds in it and after it only for the
@@ -328,13 +328,13 @@ class Checker:
     def check_assert(self, node: ast.Assert, state: dict[int, types.Type]):
         facts = self.check_condition(node.condition, state)
         message = node.message
-        if message is not None:
+        if message is not none:
             self.check_against(message, narrow(state, facts.when_false), types.prim("str"))
         replace(state, narrow(state, facts.when_true))
 
     def declared(self, id: int) -> types.Type:
         ty = self.symbols[id].ty
-        assert ty is not None, "a symbol in the state has no type"
+        assert ty is not none, "a symbol in the state has no type"
         return ty
 
     def check_transfer(self, statement: ast.Stmt, name: str, state: dict[int, types.Type]) -> bool:
@@ -342,8 +342,8 @@ class Checker:
             self.fail(statement.line, statement.col, f"'{name}' outside of a loop")
         elif self.loop_finally < self.finally_depth:
             self.fail(statement.line, statement.col, f"'{name}' cannot leave a 'finally' clause")
-        self.departure(state, False)
-        return True
+        self.departure(state, false)
+        return true
 
     def graceful_exit(self, state: dict[int, types.Type]):
         i = len(self.groups) - 1
@@ -393,9 +393,9 @@ class Checker:
         group_type = self.check_expr(node.manager, state)
         if not isinstance(group_type, types.ClassType) or not group_type.decl.library or group_type.decl.type_name != "aio.TaskGroup":
             self.fail(node.manager.line, node.manager.col, f"expected aio.TaskGroup, received {types.display(group_type)}")
-            return False
+            return false
         pattern = node.target
-        if pattern is not None:
+        if pattern is not none:
             self.check_pattern(pattern, group_type, state)
         marks = self.group_mark()
         frame = GroupFlow(self.finally_depth, self.loops, [], [])
@@ -418,15 +418,15 @@ class Checker:
             self.forget_captured(boundary)
             self.graceful_exit(boundary)
         if len(ends) == 0:
-            return True
+            return true
         after = self.join_states(ends)
         self.forget_captured(after)
         replace(state, after)
-        return False
+        return false
 
     def check_raise(self, node: ast.Raise, state: dict[int, types.Type]):
         value = node.value
-        if value is None:
+        if value is none:
             return
         ty = self.check_expr(value, state)
         if not self.failed() and not types.is_exception(types.expand(ty)):
@@ -463,9 +463,9 @@ class Checker:
             handled = types.ClassType(record, [])
             handler_state = copy(handler_entry)
             symbol = handler.symbol
-            if symbol is not None:
+            if symbol is not none:
                 declared = symbol.ty
-                if declared is None:
+                if declared is none:
                     symbol.ty = handled
                     declared = handled
                 elif not types.assignable(declared, handled):
@@ -480,7 +480,7 @@ class Checker:
                 exits.append(handler_state)
             transfers = transfers and handler_transfers
             self.forget_narrowing(finally_entry, handler.body)
-            if symbol is not None and symbol.id in finally_entry:
+            if symbol is not none and symbol.id in finally_entry:
                 finally_entry[symbol.id] = self.declared(symbol.id)
         result: dict[int, types.Type] = {}
         if len(exits) > 0:
@@ -495,7 +495,7 @@ class Checker:
             self.finally_depth = self.finally_depth - 1
             if finally_transfers:
                 self.drop_group_states(marks)
-                return True
+                return true
             finally_calls = self.calls != before
             # The finally clause runs after whichever part completed. A local
             # it assigns on some paths only may no longer be narrowed.
@@ -513,9 +513,9 @@ class Checker:
                     if id in assigned or not types.same(finally_state[id], self.declared(id)):
                         exit[id] = finally_state[id]
         if transfers:
-            return True
+            return true
         replace(state, result)
-        return False
+        return false
 
     # Any call may rebind a captured variable, so captured variables lose
     # their narrowing after every call.
@@ -538,7 +538,7 @@ class Checker:
         nested = node.function
         symbol = node.symbol
         record = nested.record
-        assert symbol is not None and record is not None, "unbound nested function"
+        assert symbol is not none and record is not none, "unbound nested function"
         entry: dict[int, ast.Symbol] = {}
         for capture in nested.captures:
             captured = capture.symbol
@@ -546,9 +546,9 @@ class Checker:
                 self.fail(capture.line, capture.col, f"variable '{captured.name}' may be used before assignment")
                 return
             entry[captured.id] = captured
-        value = types.FunctionType(record, False, None)
+        value = types.FunctionType(record, false, none)
         declared = symbol.ty
-        if declared is None:
+        if declared is none:
             symbol.ty = value
             declared = value
         elif not types.assignable(declared, value):
@@ -558,8 +558,8 @@ class Checker:
         state[symbol.id] = assigned_type(declared, value)
         self.adopt(check_function(self.module, nested, entry))
 
-    def adopt(self, error: diagnostic.Diagnostic | None):
-        if error is not None and self.error is None:
+    def adopt(self, error: diagnostic.Diagnostic | none):
+        if error is not none and self.error is none:
             self.error = error
 
     # Forgets the narrowing in `state` of the locals `body` assigns.
@@ -579,7 +579,7 @@ class Checker:
     def check_iterable(self, expr: ast.Expr, source: types.Type, state: dict[int, types.Type]) -> ast.Iteration:
         source = types.expand(source)
         item = iterable_item(bound_type(source))
-        if item is None:
+        if item is none:
             message = ""
             if isinstance(source, types.TupleType):
                 result = types.items(source)
@@ -590,10 +590,10 @@ class Checker:
         creation = self.checked_method(expr, source, "iter", [], state)
         iterator: types.Type = none_type()
         created = creation.ty
-        if created is not None:
+        if created is not none:
             iterator = created
         advance = self.checked_method(expr, iterator, "next", [], state)
-        assert item is not None, "missing iterable item"
+        assert item is not none, "missing iterable item"
         return ast.Iteration(item, creation, advance)
 
     def check_for(self, statement: ast.Stmt, node: ast.For, state: dict[int, types.Type]):
@@ -606,13 +606,13 @@ class Checker:
         for item in node.items:
             manager = self.check_expr(item.manager, state)
             enter = types.method(bound_type(types.expand(manager)), "enter")
-            if enter is None:
+            if enter is none:
                 self.fail(item.manager.line, item.manager.col, f"type {types.display(manager)} is not a context manager")
-                return False
+                return false
             target = types.ProtocolType(stdlib.protocols()["ContextManager"], [enter.result])
             if not types.assignable(target, bound_type(types.expand(manager))):
                 self.fail(item.manager.line, item.manager.col, f"type {types.display(manager)} is not a context manager")
-                return False
+                return false
             item.enter_call = self.checked_method(item.manager, manager, "enter", [], state)
             pending = ast.Expr(item.manager.line, item.manager.col, ast.Typed(0, stdlib.optional_exception()))
             exit_call = self.checked_method(item.manager, manager, "exit", [pending], state)
@@ -621,7 +621,7 @@ class Checker:
             item.exit_call = exit_call
             self.forget_captured(state)
             pattern = item.target
-            if pattern is not None:
+            if pattern is not none:
                 self.check_pattern(pattern, enter.result, state)
         marks = self.group_mark()
         transfers = self.check_block(node.body, state)
@@ -707,18 +707,18 @@ class Checker:
             self.fail(expr.line, expr.col, f"cannot slice a value of type {types.display(object)}")
         start = node.start
         stop = node.stop
-        if start is not None:
+        if start is not none:
             self.check_against(start, state, types.prim("int"))
-        if stop is not None:
+        if stop is not none:
             self.check_against(stop, state, types.prim("int"))
         return object
 
     def check_tuple(self, expr: ast.Expr, node: ast.TupleDisplay, state: dict[int, types.Type]) -> types.Type:
-        target: types.TupleType | None = None
+        target: types.TupleType | none = none
         expected = expr.expected
-        if expected is not None:
+        if expected is not none:
             target = types.tuple_member(expected)
-        if target is not None and len(target.elements) == len(node.elements):
+        if target is not none and len(target.elements) == len(node.elements):
             for i in range(len(node.elements)):
                 self.check_against(node.elements[i], state, target.elements[i])
             return target
@@ -729,7 +729,7 @@ class Checker:
 
     def check_list(self, expr: ast.Expr, node: ast.ListDisplay, state: dict[int, types.Type]) -> types.Type:
         expected = expr.expected
-        if expected is not None:
+        if expected is not none:
             for member in types.members(expected):
                 if isinstance(member, types.ListType):
                     for entry in node.elements:
@@ -778,7 +778,7 @@ class Checker:
             node.iterables = [iteration]
             if not self.failed() and (not types.assignable(types.expand(object.element), iteration.item) or types.converts(iteration.item, types.expand(object.element))):
                 self.fail(arg.line, arg.col, f"expected {types.display(target)}, received {types.display(actual)}")
-            arg.expected = None
+            arg.expected = none
         elif name == "pop":
             return types.expand(object.element)
         return none_type()
@@ -786,8 +786,8 @@ class Checker:
     # Checks the arguments of a sort whose key is at `key`, except a lambda or
     # built-in function value key, which takes its parameter type from the
     # items and is checked last. Creating either calls nothing.
-    def check_sort_args(self, args: list[ast.Expr], order: list[int] | None, key: int, state: dict[int, types.Type]):
-        assert order is not None, "unbound sort"
+    def check_sort_args(self, args: list[ast.Expr], order: list[int] | none, key: int, state: dict[int, types.Type]):
+        assert order is not none, "unbound sort"
         for i in order:
             node = args[i].node
             if i == key:
@@ -799,7 +799,7 @@ class Checker:
                 self.check_expr(args[i], state)
 
     # Checks that the items of `container`, of type `item`, sort by `key`,
-    # which is None when there is none. A key takes one item and returns an orderable
+    # which is none when there is none. A key takes one item and returns an orderable
     # value; a lambda's body or a built-in's result gives that value's type.
     def check_sort_key(self, expr: ast.Expr, container: types.Type, item: types.Type, key: ast.Expr, state: dict[int, types.Type]):
         node = key.node
@@ -810,19 +810,19 @@ class Checker:
         key_type = key.ty
         if isinstance(node, ast.Lambda):
             function = node.function
-            assert function is not None, "unbound lambda"
+            assert function is not none, "unbound lambda"
             count = len(function.params)
             if count != 1:
                 self.fail(key.line, key.col, f"a sort key takes 1 parameter, received a lambda with {count} parameters")
                 return
-            node.infer_result = True
+            node.infer_result = true
             key.expected = types.CallableType([item], none_type())
             key_type = self.check_expr(key, state)
         elif isinstance(node, ast.BuiltinValue):
             # `abs` returns the type of its argument.
             returns = none_type()
             declared = node.builtin.result
-            if declared is not None:
+            if declared is not none:
                 returns = declared
             elif node.name == "abs":
                 returns = item
@@ -830,7 +830,7 @@ class Checker:
             key_type = self.check_expr(key, state)
         if self.failed():
             return
-        assert key_type is not None, "unchecked sort key"
+        assert key_type is not none, "unchecked sort key"
         expanded = types.expand(key_type)
         result: types.Type = none_type()
         if isinstance(expanded, types.CallableType):
@@ -851,7 +851,7 @@ class Checker:
             return none_type()
         items = node.args[0]
         source = items.ty
-        assert source is not None, "unchecked sort items"
+        assert source is not none, "unchecked sort items"
         iteration = self.check_iterable(items, source, state)
         node.iterables = [iteration]
         self.check_sort_key(items, source, iteration.item, node.args[2], state)
@@ -874,18 +874,18 @@ class Checker:
         if self.failed():
             return none_type()
         order = node.order
-        assert order is not None, "unbound sequence method"
+        assert order is not none, "unbound sequence method"
         for i in order:
             param = params[i].ty
-            assert param is not None, f"{types.kind(object)}.{name} has an untyped parameter"
+            assert param is not none, f"{types.kind(object)}.{name} has an untyped parameter"
             self.check_against(node.args[i], state, param)
         result = method.result
-        assert result is not None, f"{types.kind(object)}.{name} has no result"
+        assert result is not none, f"{types.kind(object)}.{name} has no result"
         return result
 
     def check_dict(self, expr: ast.Expr, node: ast.DictDisplay, state: dict[int, types.Type]) -> types.Type:
         expected = expr.expected
-        if expected is not None:
+        if expected is not none:
             for member in types.members(expected):
                 if isinstance(member, types.DictType):
                     for i in range(len(node.keys)):
@@ -929,15 +929,15 @@ class Checker:
         if self.failed():
             return none_type()
         order = node.order
-        assert order is not None, "unbound dict method"
+        assert order is not none, "unbound dict method"
         for i in order:
             param = params[i].ty
-            assert param is not None, "untyped dict method parameter"
+            assert param is not none, "untyped dict method parameter"
             self.check_against(node.args[i], state, param)
         if name == "pop":
             return value
         default = node.args[1].ty
-        assert default is not None, "unchecked dict default"
+        assert default is not none, "unchecked dict default"
         result = optional
         if types.assignable(value, default):
             result = value
@@ -954,11 +954,11 @@ class Checker:
 
     def check_return(self, statement: ast.Stmt, node: ast.Return, state: dict[int, types.Type]):
         value = node.value
-        if self.yield_type is not None:
-            if value is not None:
+        if self.yield_type is not none:
+            if value is not none:
                 self.fail(statement.line, statement.col, "a generator cannot return a value")
             return
-        if value is not None:
+        if value is not none:
             self.check_against(value, state, self.result)
         elif not types.assignable(self.result, none_type()):
             self.fail(statement.line, statement.col, f"expected {types.display(self.result)}, received none")
@@ -1005,7 +1005,7 @@ class Checker:
             return self.check_fstring(node, state)
         elif isinstance(node, ast.EnumMember):
             record = node.decl.record
-            assert record is not None, "enum without a record"
+            assert record is not none, "enum without a record"
             return types.EnumType(record)
         elif isinstance(node, ast.MethodCall):
             return self.check_method(expr, node, state)
@@ -1021,7 +1021,7 @@ class Checker:
             return self.check_call_value(expr, node, state)
         elif isinstance(node, ast.Await):
             expected = expr.expected
-            if expected is not None:
+            if expected is not none:
                 node.operand.expected = stdlib.coroutine_of(expected)
             operand = self.check_expr(node.operand, state)
             if isinstance(operand, types.ClassType) and (operand.decl.type_name == "Coroutine" or operand.decl.library and operand.decl.type_name == "aio.Task"):
@@ -1050,11 +1050,11 @@ class Checker:
 
     def check_name(self, expr: ast.Expr, node: ast.Name, state: dict[int, types.Type]) -> types.Type:
         symbol = node.symbol
-        if symbol is None:
+        if symbol is none:
             # `__os` in a privileged module, the only name the binder leaves without one.
             return types.prim("str")
         ty = state.get(symbol.id)
-        if ty is None:
+        if ty is none:
             self.fail(expr.line, expr.col, f"variable '{node.name}' may be used before assignment")
             return none_type()
         return ty
@@ -1080,8 +1080,8 @@ class Checker:
         if (op == "==" or op == "!=") and (may_be_none(left) or may_be_none(right) or isinstance(left, types.TupleType)):
             return self.check_union_equality(expr, node, left, right)
         pair = types.kind(left) + " " + types.kind(right)
-        ty: types.Type | None = None
-        supported = False
+        ty: types.Type | none = none
+        supported = false
         if op == "==" or op == "!=":
             if types.comparable(left) and types.comparable(right) and (types.assignable(left, right) or types.assignable(right, left)):
                 ty = types.prim("bool")
@@ -1100,23 +1100,23 @@ class Checker:
             if isinstance(container, types.DictType):
                 if types.assignable(container.key, left):
                     ty = types.prim("bool")
-                    supported = True
+                    supported = true
             elif isinstance(container, types.ListType):
                 element = types.expand(container.element)
                 if types.comparable(left) and types.comparable(element) and (types.assignable(element, left) or types.assignable(left, element)):
                     ty = types.prim("bool")
-                    supported = True
+                    supported = true
                     # The item is boxed to compare with a union element;
                     # a union item is compared with each element converted.
                     if types.assignable(element, left):
                         self.expect(node.left, element, left)
             elif types.kind(container) == "bytes" and types.kind(types.expand(left)) == "int":
                 ty = types.prim("bool")
-                supported = True
+                supported = true
             elif types.kind(container) == "str" and types.kind(types.expand(left)) == "str":
                 ty = types.prim("bool")
-                supported = True
-        if ty is None:
+                supported = true
+        if ty is none:
             self.fail(expr.line, expr.col, f"operator '{op}' cannot be applied to {types.display(left)} and {types.display(right)}")
             return none_type()
         if not supported:
@@ -1140,7 +1140,7 @@ class Checker:
         # A call in the right operand ends what the left proved about
         # captured variables.
         if self.calls != before:
-            node.calls = True
+            node.calls = true
             self.forget_captured(state)
         if types.kind(left) != "bool" or types.kind(right) != "bool":
             self.fail(expr.line, expr.col, f"operator '{node.op}' cannot be applied to {types.display(left)} and {types.display(right)}")
@@ -1148,13 +1148,13 @@ class Checker:
 
     # Union and tuple equality use the same representation on both sides.
     def check_union_equality(self, expr: ast.Expr, node: ast.Binary, left: types.Type, right: types.Type) -> types.Type:
-        target: types.Type | None = None
+        target: types.Type | none = none
         if types.comparable(left) and types.comparable(right):
             if types.assignable(right, left):
                 target = right
             elif types.assignable(left, right):
                 target = left
-        if target is None:
+        if target is none:
             self.fail(expr.line, expr.col, f"operator '{node.op}' cannot be applied to {types.display(left)} and {types.display(right)}")
             return none_type()
         self.expect(node.left, target, left)
@@ -1174,7 +1174,7 @@ class Checker:
         operand = self.check_expr(node.operand, state)
         if self.failed():
             return none_type()
-        if isinstance_member(operand, node.type_name) is None:
+        if isinstance_member(operand, node.type_name) is none:
             named = node.type_name
             self.fail(named.line, named.col, f"type {types.display(operand)} has no member {type_name_text(named)}")
         return types.prim("bool")
@@ -1186,13 +1186,13 @@ class Checker:
         if isinstance(node, ast.Is):
             symbol = local(node.operand)
             ty = node.operand.ty
-            if symbol is None or ty is None:
+            if symbol is none or ty is none:
                 return Facts({}, {})
             kept: list[types.Type] = []
             for m in types.members(ty):
                 if types.kind(m) != "none":
                     kept.append(m)
-            # Only the outcome that rules out None narrows.
+            # Only the outcome that rules out none narrows.
             some = {symbol.id: types.subset(ty, kept)}
             if node.negated:
                 return Facts(some, {})
@@ -1200,10 +1200,10 @@ class Checker:
         if isinstance(node, ast.IsInstance):
             symbol = local(node.operand)
             ty = node.operand.ty
-            if symbol is None or ty is None or not is_union(ty):
+            if symbol is none or ty is none or not is_union(ty):
                 return Facts({}, {})
             member = isinstance_member(ty, node.type_name)
-            if member is None:
+            if member is none:
                 return Facts({}, {})
             others: list[types.Type] = []
             for m in types.members(ty):
@@ -1245,7 +1245,7 @@ class Checker:
     # that module.
     def opaque(self, decl: types.Class) -> bool:
         if not decl.native:
-            return False
+            return false
         return not self.module.privileged or decl.type_name != self.module.name + "." + decl.name
 
     def check_constructor(self, expr: ast.Expr, node: ast.Call, target: types.Class, state: dict[int, types.Type]) -> types.Type:
@@ -1254,7 +1254,7 @@ class Checker:
             return none_type()
         params: list[types.Param] = []
         for field in target.fields:
-            params.append(types.Param(field.name, field.ty, field.default, False))
+            params.append(types.Param(field.name, field.ty, field.default, false))
         result: types.Type = types.class_self(target)
         return self.check_generic_call(expr, node, params, result, target.typevars, state, "field")
 
@@ -1282,33 +1282,33 @@ class Checker:
                         self.fail(expr.line, expr.col, f"generic method '{node.name}' cannot be used as a value")
                         return none_type()
                     if len(expanded.args) > 0:
-                        return types.FunctionType(method, True, expanded)
-                    return types.FunctionType(method, True, None)
+                        return types.FunctionType(method, true, expanded)
+                    return types.FunctionType(method, true, none)
         return self.field_type(expr.line, expr.col, node.name, object)
 
     # Explicit type arguments or an expected callable specialize a generic
     # function, whose value takes its positional contract.
     def check_function_value(self, expr: ast.Expr, node: ast.FunctionValue, state: dict[int, types.Type]) -> types.Type:
         signature = node.target.record
-        assert signature is not None, "function value without a signature"
+        assert signature is not none, "function value without a signature"
         symbol = node.symbol
-        if symbol is not None and symbol.id not in state:
+        if symbol is not none and symbol.id not in state:
             self.fail(expr.line, expr.col, f"variable '{symbol.name}' may be used before assignment")
             return none_type()
         vars = signature.typevars
         if len(vars) == 0:
-            return types.FunctionType(signature, False, None)
+            return types.FunctionType(signature, false, none)
         name = signature.name
-        callable: types.CallableType | None = None
+        callable: types.CallableType | none = none
         expected = expr.expected
-        if len(node.type_args) == 0 and expected is not None:
+        if len(node.type_args) == 0 and expected is not none:
             callable = types.callable_member(expected)
         positional: list[types.Type] = []
         for param in signature.params:
-            if param.keyword_only and param.default is None:
+            if param.keyword_only and param.default is none:
                 self.fail(expr.line, expr.col, f"generic function '{name}' has required keyword-only parameters")
                 return none_type()
-            if not param.keyword_only and (param.default is None or callable is not None and len(positional) < len(callable.params)):
+            if not param.keyword_only and (param.default is none or callable is not none and len(positional) < len(callable.params)):
                 positional.append(param.ty)
         args: list[types.Type] = []
         if len(node.type_args) > 0:
@@ -1316,7 +1316,7 @@ class Checker:
                 self.fail(expr.line, expr.col, f"'{name}' expects {len(vars)} {bind.plural(len(vars), 'type argument')}, received {len(node.type_args)}")
                 return none_type()
             args = node.type_args
-        elif callable is not None:
+        elif callable is not none:
             candidates: dict[str, list[types.Type]] = {}
             for var in vars:
                 candidates[types.var_key(var)] = []
@@ -1350,7 +1350,7 @@ class Checker:
         elif isinstance(expanded, types.CallableType):
             positional: list[stdlib.BuiltinParam] = []
             for param_type in expanded.params:
-                positional.append(stdlib.BuiltinParam("", param_type, None, False))
+                positional.append(stdlib.BuiltinParam("", param_type, none, false))
             self.bind_args(expr, node, positional, "")
             params = expanded.params
             result = expanded.result
@@ -1360,7 +1360,7 @@ class Checker:
         if self.failed():
             return none_type()
         order = node.order
-        assert order is not None, "unbound call of a value"
+        assert order is not none, "unbound call of a value"
         for i in order:
             self.check_against(node.args[i], state, params[i])
         return result
@@ -1369,13 +1369,13 @@ class Checker:
     # result. Creating the lambda calls nothing.
     def check_lambda(self, expr: ast.Expr, node: ast.Lambda, state: dict[int, types.Type]) -> types.Type:
         function = node.function
-        assert function is not None, "unbound lambda"
-        target: types.CallableType | None = None
+        assert function is not none, "unbound lambda"
+        target: types.CallableType | none = none
         expected = expr.expected
-        if expected is not None:
+        if expected is not none:
             target = types.callable_member(expected)
         count = len(function.params)
-        if target is None:
+        if target is none:
             if count > 0:
                 self.fail(expr.line, expr.col, "lambda parameters need an expected callable type")
                 return none_type()
@@ -1385,7 +1385,7 @@ class Checker:
                 noun = "parameter"
             self.fail(expr.line, expr.col, f"expected {types.display(target)}, received a lambda with {count} {noun}")
             return none_type()
-        checker = Checker(self.module, function, none_type(), None, {}, [])
+        checker = Checker(self.module, function, none_type(), none, {}, [])
         entry: dict[int, types.Type] = {}
         for capture in function.captures:
             captured = capture.symbol
@@ -1397,17 +1397,17 @@ class Checker:
         params: list[types.Param] = []
         for i in range(count):
             symbol = function.params[i].symbol
-            assert symbol is not None and target is not None, "lambda parameter without a symbol"
+            assert symbol is not none and target is not none, "lambda parameter without a symbol"
             symbol.ty = target.params[i]
             checker.symbols[symbol.id] = symbol
             entry[symbol.id] = target.params[i]
-            params.append(types.Param(symbol.name, target.params[i], None, False))
+            params.append(types.Param(symbol.name, target.params[i], none, false))
         returned = function.body[0].node
         assert isinstance(returned, ast.Return), "lambda without a return"
         body = returned.value
-        assert body is not None, "lambda without a body"
+        assert body is not none, "lambda without a body"
         result: types.Type = none_type()
-        if target is not None and not node.infer_result:
+        if target is not none and not node.infer_result:
             checker.check_against(body, entry, target.result)
             result = target.result
         else:
@@ -1423,11 +1423,11 @@ class Checker:
     # built-in with arguments of the callable's parameter types. Taking the
     # value calls nothing.
     def check_builtin_value(self, expr: ast.Expr, node: ast.BuiltinValue, state: dict[int, types.Type]) -> types.Type:
-        target: types.CallableType | None = None
+        target: types.CallableType | none = none
         expected = expr.expected
-        if expected is not None:
+        if expected is not none:
             target = types.callable_member(expected)
-        if target is None:
+        if target is none:
             self.fail(expr.line, expr.col, f"function '{node.name}' needs an expected callable type")
             return none_type()
         args: list[ast.Expr] = []
@@ -1448,16 +1448,16 @@ class Checker:
         object = bound_type(types.expand(self.check_expr(node.object, state)))
         if isinstance(object, types.ClassType):
             return self.check_class_method(expr, node, object, state)
-        if node.type_args is not None:
+        if node.type_args is not none:
             return self.field_type(expr.line, expr.col, node.name, object)
-        if node.name == "iter" and types.iteration_item(object) is not None:
+        if node.name == "iter" and types.iteration_item(object) is not none:
             self.bind_args(expr, node, [], "")
             item = types.iteration_item(object)
-            assert item is not None, "missing native item"
+            assert item is not none, "missing native item"
             return types.iterator(item)
         if isinstance(object, types.ProtocolType):
             signature = types.method(object, node.name)
-            if signature is not None:
+            if signature is not none:
                 return self.check_generic_call(expr, node, signature.params, signature.result, [], state, "parameter")
         if isinstance(object, types.ListType):
             return self.check_list_method(expr, node, state, object)
@@ -1474,16 +1474,16 @@ class Checker:
         bindings = types.record_map(object)
         for method in object.decl.methods:
             if method.name == node.name:
-                if node.type_args is not None and len(method.typevars) == 0:
+                if node.type_args is not none and len(method.typevars) == 0:
                     if self.opaque(object.decl):
                         return self.field_type(expr.line, expr.col, node.name, object)
                     index = node.index
-                    if index is None:
+                    if index is none:
                         error = node.index_error
-                        assert error is not None, "specialized method without an index"
+                        assert error is not none, "specialized method without an index"
                         self.error = error
                     else:
-                        fn = types.FunctionType(method, True, object)
+                        fn = types.FunctionType(method, true, object)
                         self.fail(index.line, index.col, f"cannot index a value of type {types.display(fn)}")
                     return none_type()
                 params: list[types.Param] = []
@@ -1492,7 +1492,7 @@ class Checker:
                 vars: list[types.TypeVar] = []
                 for var in method.typevars:
                     bound = var.bound
-                    if bound is not None:
+                    if bound is not none:
                         bound = types.substitute(bound, bindings)
                     vars.append(types.TypeVar(var.id, var.name, bound))
                 return self.check_generic_call(expr, node, params, types.substitute(method.result, bindings), vars, state, "parameter")
@@ -1501,7 +1501,7 @@ class Checker:
 
     def check_generic_call(self, expr: ast.Expr, node: ast.Call | ast.MethodCall | ast.CallValue, params: list[types.Param], result: types.Type, vars: list[types.TypeVar], state: dict[int, types.Type], noun: str) -> types.Type:
         name = ""
-        explicit: list[types.Type] | None = None
+        explicit: list[types.Type] | none = none
         if isinstance(node, ast.Call):
             name = node.name
             if node.has_type_args:
@@ -1513,7 +1513,7 @@ class Checker:
         else:
             name = node.name
             explicit = node.type_args
-        if explicit is not None:
+        if explicit is not none:
             if len(vars) == 0:
                 self.fail(expr.line, expr.col, f"'{name}' is not generic")
             elif len(explicit) != len(vars):
@@ -1524,7 +1524,7 @@ class Checker:
         if self.failed():
             return none_type()
         call_args: list[ast.Expr] = []
-        order: list[int] | None = None
+        order: list[int] | none = none
         if isinstance(node, ast.Call):
             call_args = node.args
             order = node.order
@@ -1534,11 +1534,11 @@ class Checker:
         else:
             call_args = node.args
             order = node.order
-        assert order is not None, "unbound generic call"
+        assert order is not none, "unbound generic call"
         bindings: dict[str, types.Type] = {}
         if len(vars) > 0:
             args: list[types.Type] = []
-            if explicit is not None:
+            if explicit is not none:
                 args = explicit
             else:
                 candidates: dict[str, list[types.Type]] = {}
@@ -1550,7 +1550,7 @@ class Checker:
                     if isinstance(call_args[i].node, ast.Lambda) and types.mentions_any(param, vars):
                         lambdas.append(i)
                     else:
-                        known: types.Type | None = None
+                        known: types.Type | none = none
                         if not types.mentions_any(param, vars):
                             known = param
                         call_args[i].expected = known
@@ -1562,11 +1562,11 @@ class Checker:
                     partial: dict[str, types.Type] = {}
                     for var in vars:
                         chosen = choose(candidates[types.var_key(var)])
-                        if chosen is not None:
+                        if chosen is not none:
                             partial[types.var_key(var)] = chosen
                     expected_lambda = types.substitute(params[i].ty, partial)
                     target = types.callable_member(expected_lambda)
-                    if target is None or types.mentions_any(types.CallableType(target.params, none_type()), vars):
+                    if target is none or types.mentions_any(types.CallableType(target.params, none_type()), vars):
                         self.fail(call_args[i].line, call_args[i].col, "cannot infer the parameter types of this lambda")
                         return none_type()
                     lambda_node = call_args[i].node
@@ -1580,7 +1580,7 @@ class Checker:
                 expected = expr.expected
                 for var in vars:
                     key = types.var_key(var)
-                    if len(candidates[key]) == 0 and expected is not None:
+                    if len(candidates[key]) == 0 and expected is not none:
                         collect(result, expected, {key: candidates[key]}, [])
                 args = self.choose_args(expr, name, vars, candidates)
                 if self.failed():
@@ -1596,9 +1596,9 @@ class Checker:
                 node.type_args = args
         for i in order:
             param = types.substitute(params[i].ty, bindings)
-            if len(vars) > 0 and explicit is None:
+            if len(vars) > 0 and explicit is none:
                 checked = call_args[i].ty
-                assert checked is not None, "unchecked inferred argument"
+                assert checked is not none, "unchecked inferred argument"
                 self.expect(call_args[i], param, checked)
             else:
                 self.check_against(call_args[i], state, param)
@@ -1611,7 +1611,7 @@ class Checker:
         for var in vars:
             choices = candidates[types.var_key(var)]
             chosen = choose(choices)
-            if chosen is None:
+            if chosen is none:
                 message = f"cannot infer type parameter '{var.name}' of '{name}'"
                 if len(choices) > 0:
                     other = choices[0]
@@ -1631,8 +1631,8 @@ class Checker:
             message = types.unsatisfied(vars[i], args[i])
             if message != "":
                 self.fail(expr.line, expr.col, message)
-                return False
-        return True
+                return false
+        return true
 
     def check_fstring(self, node: ast.FString, state: dict[int, types.Type]) -> types.Type:
         for i in range(len(node.parts)):
@@ -1736,22 +1736,22 @@ class Checker:
         if self.failed():
             return none_type()
         order = node.order
-        assert order is not None, "unbound built-in"
+        assert order is not none, "unbound built-in"
         for i in order:
             param = params[i].ty
-            if param is None:
+            if param is none:
                 self.check_expr(node.args[i], state)
             else:
                 self.check_against(node.args[i], state, param)
         if self.failed():
             return none_type()
         first = node.args[0].ty
-        assert first is not None, "unchecked built-in argument"
+        assert first is not none, "unchecked built-in argument"
         if name in ["iter", "next"]:
             protocol_item = iterable_item(bound_type(types.expand(first)))
             if name == "next":
                 protocol_item = advancement(bound_type(types.expand(first)))
-            if protocol_item is None:
+            if protocol_item is none:
                 self.fail(expr.line, expr.col, f"'{name}' cannot be applied to {types.display(first)}")
                 return none_type()
             method = ast.MethodCall(node.args[0], name, [], [])
@@ -1763,7 +1763,7 @@ class Checker:
             return first
         if name in ["min", "max"] and len(node.args) == 2:
             second = node.args[1].ty
-            assert second is not None, "unchecked operand"
+            assert second is not none, "unchecked operand"
             if not types.ordered(first, second):
                 self.fail(expr.line, expr.col, f"'{name}' cannot be applied to {types.display(first)} and {types.display(second)}")
             return first
@@ -1787,7 +1787,7 @@ class Checker:
         if name == "enumerate":
             return types.iterator(types.TupleType([types.prim("int"), item]))
         second = node.args[1].ty
-        assert second is not None, "unchecked zip argument"
+        assert second is not none, "unchecked zip argument"
         other = self.check_iterable(node.args[1], second, state)
         node.iterables = [iteration, other]
         return types.iterator(types.TupleType([item, other.item]))
@@ -1796,7 +1796,7 @@ class Checker:
     # whose variadic arguments are ints, floats, or ptrs.
     def check_function_call(self, expr: ast.Expr, node: ast.Call, target: ast.FunctionDecl, state: dict[int, types.Type]) -> types.Type:
         record = target.record
-        assert record is not None, f"function {target.name} has no signature"
+        assert record is not none, f"function {target.name} has no signature"
         params = record.params
         if not target.external:
             return self.check_generic_call(expr, node, params, record.result, record.typevars, state, "parameter")
@@ -1824,13 +1824,13 @@ class Checker:
         if self.failed():
             return none_type()
         order = node.order
-        assert order is not None, "unbound host call"
+        assert order is not none, "unbound host call"
         for i in order:
             param = target.params[i].ty
-            assert param is not None, f"{node.name} has an untyped parameter"
+            assert param is not none, f"{node.name} has an untyped parameter"
             self.check_against(node.args[i], state, param)
         result = target.result
-        assert result is not None, f"{node.name} has no result"
+        assert result is not none, f"{node.name} has no result"
         return result
 
     # `print`, and `sys.eprint`, which writes to stderr.
@@ -1889,27 +1889,27 @@ class Checker:
         for i in range(len(node.args)):
             arg = node.args[i]
             param = target.params[i].ty
-            if param is not None:
+            if param is not none:
                 self.check_against(arg, state, param)
             else:
                 ty = self.check_expr(arg, state)
                 if not self.failed() and types.kind(ty) in ["word", "none"]:
                     self.fail(arg.line, arg.col, f"cannot convert a value of type {types.display(ty)} to word")
         result = target.result
-        assert result is not None, f"intrinsic {target.name} has no result"
+        assert result is not none, f"intrinsic {target.name} has no result"
         return result
 
 # Checks the body of `function`, of `module`, and returns the first error.
 # A nested function starts with the variables it captures, `entry`. Its
 # defaults are checked too, for the adapters that supply them.
-def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[int, ast.Symbol]) -> diagnostic.Diagnostic | None:
+def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[int, ast.Symbol]) -> diagnostic.Diagnostic | none:
     record = function.record
-    assert record is not None, f"function {function.name} has no signature"
+    assert record is not none, f"function {function.name} has no signature"
     result = record.result
     if function.is_async:
         assert isinstance(result, types.ClassType), "async function without a coroutine result"
         result = result.args[0]
-    checker = Checker(module, function, result, None, {}, [])
+    checker = Checker(module, function, result, none, {}, [])
     if function.generator:
         result = types.expand(result)
         if not isinstance(result, types.ProtocolType):
@@ -1925,12 +1925,12 @@ def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[i
         state[id] = checker.declared(id)
     for i in range(len(function.params)):
         symbol = function.params[i].symbol
-        assert symbol is not None, "parameter without a symbol"
+        assert symbol is not none, "parameter without a symbol"
         symbol.ty = record.params[i].ty
         checker.symbols[symbol.id] = symbol
         state[symbol.id] = record.params[i].ty
         default = function.params[i].default
-        if default is not None:
+        if default is not none:
             checker.check_against(default, {}, record.params[i].ty)
     transfers = checker.check_block(function.body, state)
     if not checker.failed() and not function.generator and not transfers and not types.assignable(result, none_type()):
@@ -1942,13 +1942,13 @@ def check_function(module: ast.Module, function: ast.FunctionDecl, entry: dict[i
     return checker.error
 
 # Checks every function of every module, in order, and returns the first error.
-def check_program(modules: list[ast.Module]) -> diagnostic.Diagnostic | None:
+def check_program(modules: list[ast.Module]) -> diagnostic.Diagnostic | none:
     for module in modules:
         for function in bind.functions(module):
             error = check_function(module, function, {})
-            if error is not None:
+            if error is not none:
                 return error
-    return None
+    return none
 
 def none_type() -> types.Type:
     return types.prim("none")
@@ -1962,8 +1962,8 @@ def arguments(count: int) -> str:
     return f"{count} arguments"
 
 # The result of arithmetic operator `op` on operands whose kinds are `pair`,
-# as "int int", or None when it does not apply.
-def arithmetic_type(op: str, pair: str) -> types.Type | None:
+# as "int int", or none when it does not apply.
+def arithmetic_type(op: str, pair: str) -> types.Type | none:
     if pair == "int int":
         if op == "/":
             return types.prim("float")
@@ -1974,7 +1974,7 @@ def arithmetic_type(op: str, pair: str) -> types.Type | None:
         return types.prim("str")
     if op == "+" and pair == "bytes bytes":
         return types.prim("bytes")
-    return None
+    return none
 
 def copy(state: dict[int, types.Type]) -> dict[int, types.Type]:
     result: dict[int, types.Type] = {}
@@ -1998,7 +1998,7 @@ def join(a: dict[int, types.Type], b: dict[int, types.Type], symbols: dict[int, 
                 result[id] = a[id]
             else:
                 declared = symbols[id].ty
-                assert declared is not None, "a symbol in the state has no type"
+                assert declared is not none, "a symbol in the state has no type"
                 kept: list[types.Type] = []
                 for m in types.members(declared):
                     if has_member(a[id], m) or has_member(b[id], m):
@@ -2022,11 +2022,11 @@ def narrow(state: dict[int, types.Type], facts: dict[int, types.Type]) -> dict[i
 def has_member(t: types.Type, member: types.Type) -> bool:
     for m in types.members(t):
         if types.same(m, member):
-            return True
-    return False
+            return true
+    return false
 
 # The type a local declared `declared` has after a value of `value` is
-# assigned to it: a value of one type other than None narrows a union to the
+# assigned to it: a value of one type other than none narrows a union to the
 # member it is assignable to.
 def assigned_type(declared: types.Type, value: types.Type) -> types.Type:
     result = declared
@@ -2043,12 +2043,12 @@ def assigned_symbols(body: list[ast.Stmt], result: dict[int, bool]):
         node = statement.node
         if isinstance(node, ast.Assign):
             symbol = node.symbol
-            if symbol is not None:
-                result[symbol.id] = True
+            if symbol is not none:
+                result[symbol.id] = true
         elif isinstance(node, ast.FunctionDef):
             function_symbol = node.symbol
-            if function_symbol is not None:
-                result[function_symbol.id] = True
+            if function_symbol is not none:
+                result[function_symbol.id] = true
         elif isinstance(node, ast.Unpack):
             target_symbols(node.target, result)
         elif isinstance(node, ast.If):
@@ -2062,40 +2062,40 @@ def assigned_symbols(body: list[ast.Stmt], result: dict[int, bool]):
         elif isinstance(node, ast.With):
             for item in node.items:
                 target = item.target
-                if target is not None:
+                if target is not none:
                     target_symbols(target, result)
             assigned_symbols(node.body, result)
         elif isinstance(node, ast.Try):
             assigned_symbols(node.body, result)
             for handler in node.handlers:
                 symbol = handler.symbol
-                if symbol is not None:
-                    result[symbol.id] = True
+                if symbol is not none:
+                    result[symbol.id] = true
                 assigned_symbols(handler.body, result)
             assigned_symbols(node.finally_body, result)
 
 def target_symbols(target: ast.Target, result: dict[int, bool]):
     symbol = target.symbol
-    if symbol is not None:
-        result[symbol.id] = True
+    if symbol is not none:
+        result[symbol.id] = true
     for element in target.elements:
         target_symbols(element, result)
 
 def may_be_none(t: types.Type) -> bool:
     return is_union(t) or types.kind(t) == "none"
 
-# The local that `expr` names, or None.
-def local(expr: ast.Expr) -> ast.Symbol | None:
+# The local that `expr` names, or none.
+def local(expr: ast.Expr) -> ast.Symbol | none:
     node = expr.node
     if isinstance(node, ast.Name):
         return node.symbol
-    return None
+    return none
 
-# The member of `t` that `isinstance` with `named` tests for, or None: a
+# The member of `t` that `isinstance` with `named` tests for, or none: a
 # class or enum by declaration, and a built-in type by kind.
-def isinstance_member(t: types.Type, named: ast.TypeName) -> types.Type | None:
+def isinstance_member(t: types.Type, named: ast.TypeName) -> types.Type | none:
     record = named.record
-    found: types.Type | None = None
+    found: types.Type | none = none
     for m in types.members(t):
         if isinstance(record, types.Class):
             if isinstance(m, types.ClassType) and types.same_class(m.decl, record):
@@ -2135,20 +2135,20 @@ def call_params(params: list[types.Param]) -> list[stdlib.BuiltinParam]:
 def bound_type(t: types.Type) -> types.Type:
     if isinstance(t, types.TypeVar):
         bound = t.bound
-        if bound is not None:
+        if bound is not none:
             return bound
     return t
 
 
-def choose(candidates: list[types.Type]) -> types.Type | None:
+def choose(candidates: list[types.Type]) -> types.Type | none:
     for candidate in candidates:
-        fits = True
+        fits = true
         for other in candidates:
             if not types.assignable(candidate, other):
-                fits = False
+                fits = false
         if fits:
             return candidate
-    return None
+    return none
 
 
 def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types.Type]], matching: list[str]):
@@ -2202,7 +2202,7 @@ def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types
         for method in param.decl.methods:
             want = types.method(param, method.name)
             have = types.method(bound_type(arg), method.name)
-            if want is not None and have is not None:
+            if want is not none and have is not none:
                 for p in want.params:
                     for h in have.params:
                         if p.name == h.name:
@@ -2211,7 +2211,7 @@ def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types
         matching.pop()
     elif isinstance(param, types.CallableType):
         parameters: list[types.Type] = []
-        result: types.Type | None = None
+        result: types.Type | none = none
         if isinstance(arg, types.CallableType):
             parameters = arg.params
             result = arg.result
@@ -2219,7 +2219,7 @@ def collect(param: types.Type, arg: types.Type, candidates: dict[str, list[types
             for p in types.function_params(arg):
                 parameters.append(p.ty)
             result = types.function_result(arg)
-        if result is not None:
+        if result is not none:
             for i in range(len(param.params)):
                 if i < len(parameters):
                     collect(param.params[i], parameters[i], candidates, matching)
@@ -2233,27 +2233,27 @@ def callee_name(callee: ast.Expr) -> str:
     if isinstance(node, ast.Name):
         return node.name
     ty = callee.ty
-    if ty is not None:
+    if ty is not none:
         ty = types.expand(ty)
         if isinstance(ty, types.FunctionType):
             return ty.fn.name
     return "callable"
 
-def advancement(t: types.Type) -> types.Type | None:
+def advancement(t: types.Type) -> types.Type | none:
     method = types.method(t, "next")
-    if method is not None and types.assignable(types.iterator(method.result), t):
+    if method is not none and types.assignable(types.iterator(method.result), t):
         return method.result
-    return None
+    return none
 
-def iterable_item(t: types.Type) -> types.Type | None:
+def iterable_item(t: types.Type) -> types.Type | none:
     item = types.iteration_item(t)
-    if item is not None:
+    if item is not none:
         return item
     method = types.method(t, "iter")
-    if method is not None:
+    if method is not none:
         item = advancement(bound_type(types.expand(method.result)))
-        if item is not None:
+        if item is not none:
             target = types.ProtocolType(stdlib.protocols()["Iterable"], [item])
             if types.assignable(target, t):
                 return item
-    return None
+    return none

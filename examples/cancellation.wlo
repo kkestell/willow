@@ -35,15 +35,15 @@ async def watchdog(group: aio.TaskGroup, seconds: float):
     await aio.sleep(seconds)
     group.cancel()
 
-# Returns the result of `work`, or None if it takes longer than `seconds`.
-async def with_deadline(seconds: float, work: Coroutine[str]) -> str | None:
+# Returns the result of `work`, or none if it takes longer than `seconds`.
+async def with_deadline(seconds: float, work: Coroutine[str]) -> str | none:
     async with aio.task_group() as group:
         task = group.start(finish(group, work))
         group.start(watchdog(group, seconds))
     try:
         return task.result()
     except RuntimeError:
-        return None
+        return none
 
 async def main():
     print("first of three:")

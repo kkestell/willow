@@ -1,14 +1,14 @@
 import aio
 
-def optional() -> int | None:
+def optional() -> int | none:
     return 1
 
 async def main():
     value = optional()
     def clear():
         nonlocal value
-        value = None
-    if value is not None:
+        value = none
+    if value is not none:
         async with aio.task_group():
             pass
         print(value + 1)

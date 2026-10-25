@@ -1,7 +1,7 @@
 import json
 
 def kind(value: json.Json) -> str:
-    if value is None:
+    if value is none:
         return "null"
     if isinstance(value, bool):
         return "bool"
@@ -90,7 +90,7 @@ def main():
     round_trip("{\n  \"a\": [\n    1,\n    x\n  ]\n}")
 
     # Encoding
-    encode({"é": "🌳", "list": [1, 2.0, -0.0, 1e-05, None, True]})
+    encode({"é": "🌳", "list": [1, 2.0, -0.0, 1e-05, none, true]})
     encode(float("inf"))
     encode(float("-inf"))
     encode(float("nan"))

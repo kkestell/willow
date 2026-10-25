@@ -8,7 +8,7 @@ def main():
     directory = sys.args()[1]
     try:
         http.request("GET", "http://[abc]/")
-        assert False, "invalid IPv6 host accepted"
+        assert false, "invalid IPv6 host accepted"
     except ValueError as invalid:
         assert invalid.message == "invalid URL 'http://[abc]/'"
     binary = bytes([0, 1, 128, 255])
@@ -32,7 +32,7 @@ def main():
     assert fs.read_file(target) == "done"
     try:
         http.download(base + "/stall", target, timeout=0.1)
-        assert False, "stalled download completed"
+        assert false, "stalled download completed"
     except TimeoutError as error:
         assert error.message == "request timed out after 0.1 seconds"
     assert fs.read_file(target) == "done"

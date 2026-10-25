@@ -14,16 +14,16 @@ class Box[T]:
 # A generic class may refer to its own specialization.
 class Node[T]:
     value: T
-    next: Node[T] | None = None
+    next: Node[T] | none = none
 
-def length[T](node: Node[T] | None) -> int:
+def length[T](node: Node[T] | none) -> int:
     count = 0
-    while node is not None:
+    while node is not none:
         count = count + 1
         node = node.next
     return count
 
-def describe(x: Box[int] | None) -> str:
+def describe(x: Box[int] | none) -> str:
     if isinstance(x, Box):
         return "box " + str(x.get())
     return "none"
@@ -41,7 +41,7 @@ def main():
     chain = Node(1, Node(2, Node(3)))
     print(length(chain))
     print(describe(b))
-    print(describe(None))
+    print(describe(none))
     # A float in an int | float specialization stays a float.
     f = Box[int | float](2.5)
     v = f.get()

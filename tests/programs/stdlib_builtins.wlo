@@ -32,7 +32,7 @@ def main():
     print(f"{min(pairs)[1]} {max(pairs)[1]}")
 
     print(f"{sum(nums)} {sum([0.5, 0.25])} {sum([1.5][:0])} {sum(numbers(3))}")
-    print(f"{any([False, True])} {all([True, False])} {all([True][:0])} {any([True][:0])}")
+    print(f"{any([false, true])} {all([true, false])} {all([true][:0])} {any([true][:0])}")
 
     copy = list(nums)
     copy.append(9)
@@ -63,11 +63,11 @@ def main():
     for name, score in scores.items():
         print(f"{name}={score}")
     print(f"{scores.get('ada', 0)} {scores.get('zoe', 0)} {scores.get('zoe')}")
-    missing: int | None = scores.get("zoe", None)
-    print(missing is None)
+    missing: int | none = scores.get("zoe", none)
+    print(missing is none)
 
-    stored: dict[str, int | None] = {"a": None}
-    print(f"{stored.get('a', 5) is None} {stored.get('b', 5)}")
+    stored: dict[str, int | none] = {"a": none}
+    print(f"{stored.get('a', 5) is none} {stored.get('b', 5)}")
 
     scores_iter = scores.items()
     scores["new"] = 3

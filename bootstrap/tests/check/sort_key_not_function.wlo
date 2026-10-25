@@ -1,2 +1,2 @@
 def main():
-    x = sorted([1], key=True)
+    x = sorted([1], key=true)

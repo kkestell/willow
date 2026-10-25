@@ -52,10 +52,10 @@ def main():
     assert core.list_len(core.str_split("", ",", -1)) == 1
     # Without a separator, runs of ASCII whitespace split and the ends are
     # ignored; U+00A0 is not whitespace here.
-    assert core.str_join("|", core.str_split(" \t a  b\nc d ", None, -1)) == "a|b|c d"
-    assert core.str_join("|", core.str_split(" a b  c ", None, 1)) == "a|b  c "
-    assert core.str_join("|", core.str_split(" a b ", None, -9223372036854775807)) == "a|b"
-    assert core.list_len(core.str_split(" \t\n", None, -1)) == 0
+    assert core.str_join("|", core.str_split(" \t a  b\nc d ", none, -1)) == "a|b|c d"
+    assert core.str_join("|", core.str_split(" a b  c ", none, 1)) == "a|b  c "
+    assert core.str_join("|", core.str_split(" a b ", none, -9223372036854775807)) == "a|b"
+    assert core.list_len(core.str_split(" \t\n", none, -1)) == 0
 
     # Case mapping through the generated tables: a 4-byte code point, the
     # code points a step-2 run skips, both ends of a table, and a full

@@ -3,10 +3,10 @@ import io
 
 def main():
     core.close(1)
-    caught = False
+    caught = false
     try:
         io.stdout().write_text("hello")
     except OSError as error:
         assert error.message == "cannot write <stdout>: Bad file descriptor"
-        caught = True
+        caught = true
     assert caught

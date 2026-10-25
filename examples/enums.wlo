@@ -13,11 +13,11 @@ def next_light(light: Light) -> Light:
         return Light.YELLOW
     return Light.RED
 
-def parse(text: str) -> Light | None:
+def parse(text: str) -> Light | none:
     for light in [Light.RED, Light.YELLOW, Light.GREEN]:
         if str(light) == "Light." + text.upper():
             return light
-    return None
+    return none
 
 def is_stop(light: Light = Light.RED) -> bool:
     return light == Light.RED

@@ -1,11 +1,11 @@
 def is_even(n: int) -> bool:
     if n == 0:
-        return True
+        return true
     return is_odd(n - 1)
 
 def is_odd(n: int) -> bool:
     if n == 0:
-        return False
+        return false
     return is_even(n - 1)
 
 def factorial(n: int) -> int:
@@ -28,7 +28,7 @@ def next_value(n: int) -> int:
 
 def find(target: int) -> int:
     n = 0
-    while True:
+    while true:
         n = n + 1
         if n < target:
             continue
@@ -49,7 +49,7 @@ def main():
     row = 0
     while row < 3:
         col = 0
-        while True:
+        while true:
             if col == row:
                 break
             col = col + 1

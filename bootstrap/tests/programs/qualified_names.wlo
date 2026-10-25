@@ -11,7 +11,7 @@ def main():
     for point in points:
         print(point.label())
     print(lib.geometry.Unit.INCH)
-    found: lib.geometry.Point | None = points[1]
+    found: lib.geometry.Point | none = points[1]
     if isinstance(found, lib.geometry.Point):
         print(found.x)
     counts: dict[lib.geometry.Unit, int] = {lib.geometry.Unit.CM: 1}

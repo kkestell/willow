@@ -1,14 +1,14 @@
-def num(flag: int) -> int | float | bool | str | None:
+def num(flag: int) -> int | float | bool | str | none:
     if flag == 0:
         return 1
     if flag == 1:
         return 1.0
     if flag == 2:
-        return True
+        return true
     if flag == 3:
         return "1"
     if flag == 4:
-        return None
+        return none
     if flag == 5:
         return 0.0
     if flag == 6:
@@ -16,7 +16,7 @@ def num(flag: int) -> int | float | bool | str | None:
     if flag == 7:
         return 1e308 * 10.0 - 1e308 * 10.0
     if flag == 8:
-        return False
+        return false
     if flag == 9:
         return 0
     if flag == 10:
@@ -37,12 +37,12 @@ def main():
             j = j + 1
         print(line)
         i = i + 1
-    maybe: int | None = None
-    print(maybe == None)
-    print(maybe != None)
+    maybe: int | none = none
+    print(maybe == none)
+    print(maybe != none)
     maybe = 7
     print(maybe == 7)
     print(7 != maybe)
-    text: str | None = "a"
+    text: str | none = "a"
     print(text == "a")
     print(text)

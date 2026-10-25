@@ -97,7 +97,7 @@ def summarize(readings: list[Reading]) -> dict[str, float]:
     totals: dict[str, float] = {}
     for reading in readings:
         previous = totals.get(reading.name)
-        if previous is None:
+        if previous is none:
             previous = 0.0
         totals[reading.name] = previous + reading.value
     return totals
@@ -119,19 +119,19 @@ def main():
 
 Rules that differ from Python:
 
-- Every parameter is annotated. A function without `-> T` returns `None`.
+- Every parameter is annotated. A function without `-> T` returns `none`.
   Types are `int`, `float`,
-  `bool`, `str`, `bytes`, `None`, `list[T]`, `dict[K, V]`, `tuple[A, B]`,
-  unions such as `int | None`, function types such as `(int) -> str`, classes,
+  `bool`, `str`, `bytes`, `none`, `list[T]`, `dict[K, V]`, `tuple[A, B]`,
+  unions such as `int | none`, function types such as `(int) -> str`, classes,
   enums, and protocols. Generic functions and classes take type parameters:
-  `def first[T](items: list[T]) -> T | None:`.
+  `def first[T](items: list[T]) -> T | none:`.
 - A local variable takes the type of its first assignment. Annotate it when
   the value does not determine the type: `rows: list[str] = []`,
-  `best: str | None = None`.
+  `best: str | none = none`.
 - Conditions must be `bool`. `if count:` and `if name:` are type errors.
 - `==` and `!=` compare scalars only. Lists, dictionaries, and class values
   cannot be compared with `==`.
-- `is None` and `is not None` narrow optional locals. Fields are not narrowed,
+- `is none` and `is not none` narrow optional locals. Fields are not narrowed,
   so copy a field to a local before testing it.
 - Integers are 64-bit, from `-(2^63 - 1)` through `2^63 - 1`. `/` always gives a
   `float`; `//` and `%` keep the operand type. Both operands of an arithmetic
@@ -175,7 +175,7 @@ Rules that differ from Python:
 | `io` | `open(path, mode)` returning a `File` with `read`, `readline`, `write`, `write_text`, `close`; `stdin()`, `stdout()`, `stderr()` |
 | `json` | `parse(text)` and `dump(value)` over the `json.Json` type |
 | `cli` | `parser(prog)` with `add_str`, `add_int`, `add_flag`, `add_positional`, `add_rest`, and `parse(args)` |
-| `subprocess` | `run(args, capture_output=True)` returning a `Result` with `stdout`, `stderr`, and the exit status |
+| `subprocess` | `run(args, capture_output=true)` returning a `Result` with `stdout`, `stderr`, and the exit status |
 | `http` | `request(method, url, headers=..., body=...)` returning a `Response` with `status`, `headers`, and `body` |
 | `net` | TCP `listen`, `connect`, and `accept` |
 | `aio` | `sleep`, `task_group`, `semaphore`, and async TCP |
@@ -189,7 +189,7 @@ Library functions raise `OSError`, `ValueError`, or `TimeoutError` with a
 ## Testing
 
 Test files are named `tests/test_*.wlo`. Their functions whose names begin with
-`test_` take no parameters, return `None`, and pass when they return. Use
+`test_` take no parameters, return `none`, and pass when they return. Use
 `assert condition, "message"` to check results. Imports in tests resolve from
 `src/`, so `import main` loads `src/main.wlo`.
 
@@ -220,7 +220,7 @@ def init():
         name = "app"
     for directory in ["src", "tests"]:
         try:
-            fs.mkdir(directory, parents=True, exist_ok=True)
+            fs.mkdir(directory, parents=true, exist_ok=true)
         except OSError:
             fail("error: cannot create directory " + directory)
     create("willow.json", manifest_text())

@@ -4,8 +4,8 @@
 import sys
 
 class Node:
-    left: Node | None = None
-    right: Node | None = None
+    left: Node | none = none
+    right: Node | none = none
 
 def make(depth: int) -> Node:
     if depth == 0:
@@ -16,7 +16,7 @@ def make(depth: int) -> Node:
 def check(node: Node) -> int:
     left = node.left
     right = node.right
-    if left is None or right is None:
+    if left is none or right is none:
         return 1
     return 1 + check(left) + check(right)
 

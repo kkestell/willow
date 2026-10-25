@@ -14,8 +14,8 @@ def add3(a: int, b: int, c: int) -> int:
 
 def main():
     print(add3(say(1), say(2), say(3)))
-    print(flag("left", False) and flag("skipped", True))
-    print(flag("left", True) or flag("skipped", False))
-    print(flag("left", True) and flag("right", False))
+    print(flag("left", false) and flag("skipped", true))
+    print(flag("left", true) or flag("skipped", false))
+    print(flag("left", true) and flag("right", false))
     print(log("a") == log("b"))
     print(say(10) - say(4) * say(2))

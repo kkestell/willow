@@ -63,9 +63,9 @@ def main():
     print(len(grid))
     show(grid[1])
 
-    maybe: list[int | None] = [1, None, 3]
+    maybe: list[int | none] = [1, none, 3]
     print(maybe[1])
-    print(None in maybe)
+    print(none in maybe)
 
     counted: list[int] = []
     i = -1

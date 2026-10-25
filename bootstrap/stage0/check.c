@@ -601,7 +601,7 @@ static Type resolve_name(
     if (eq(ty->name, "str")) {
         return TY(Str);
     }
-    if (eq(ty->name, "None")) {
+    if (eq(ty->name, "None") || eq(ty->name, "none")) {
         return TY(None);
     }
     if (eq(ty->name, "ptr") && eq(module->name, "core")) {
@@ -750,7 +750,7 @@ static Map declare_funcs(const Names *names, const Module *module) {
                 const Param *param = &func->params.data[j];
                 ExternType t = resolve_extern(names, module, &param->ty);
                 if (!t.ctype) {
-                    fail(module->path, param->ty.pos, STR("an extern parameter cannot be None"));
+                    fail(module->path, param->ty.pos, STR("an extern parameter cannot be none"));
                 }
                 vec_push(sig.params, t.ty);
                 vec_push(sig.target.as.Extern.cparams, t.ctype);
@@ -2505,10 +2505,10 @@ static TypedValue isinstance(Checker *self, Pos pos, ExprVec arguments, const St
             fail(self->module->path, class->pos,
                 str_format("unknown type '" FMT "'", S(class->kind.as.Name)));
         case EXPR_None:
-            found = "'None'";
+            found = "'none'";
             break;
         case EXPR_Bool:
-            found = class->kind.as.Bool ? "'True'" : "'False'";
+            found = class->kind.as.Bool ? "'true'" : "'false'";
             break;
         case EXPR_Int:
             found = "integer";
@@ -2821,7 +2821,7 @@ Program check(ModuleVec modules) {
     const Namespace *entry_namespace = map_get(&names.modules, entry->name);
     const Sig *main_sig = map_get(&entry_namespace->funcs, STR("main"));
     if (main->params.len || main_sig->ret.tag != TYPE_None) {
-        fail(entry->path, main->pos, STR("main must take no parameters and return None"));
+        fail(entry->path, main->pos, STR("main must take no parameters and return none"));
     }
     Strings strings = {0};
     DescriptorVec descriptors = {0};

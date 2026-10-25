@@ -1,10 +1,10 @@
-def f(v: list[int] | None) -> int:
+def f(v: list[int] | none) -> int:
     if isinstance(v, list):
         return len(v)
     return -1
 def main():
     print(f([1, 2, 3]))
-    print(f(None))
+    print(f(none))
     xs: list[int | str] = [1, "a", 2]
     print("a" in xs)
     print(3 in xs)

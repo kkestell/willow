@@ -118,10 +118,10 @@ async def main():
     print(", ".join(log.lines))
 
     log = Log([])
-    await precedence(log, True)
+    await precedence(log, true)
     print(", ".join(log.lines))
     try:
-        await precedence(Log([]), False)
+        await precedence(Log([]), false)
     except ValueError as error:
         print("propagated " + error.message)
 

@@ -35,7 +35,7 @@ def main():
     show("a,b,c".split(",", 1))
     show("a,b,c".split(",", -1))
     show("a,b,c".split(",", 0))
-    show(" a b  c ".split(None, 1))
+    show(" a b  c ".split(none, 1))
     print(", ".join(["x", "y", "z"]))
     print("-".join([]))
     print("test_main".removeprefix("test_"))

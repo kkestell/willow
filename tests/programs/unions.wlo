@@ -1,4 +1,4 @@
-type Json = None | bool | int | float | str | list[Json] | dict[str, Json]
+type Json = none | bool | int | float | str | list[Json] | dict[str, Json]
 type Number = int | float
 
 class Cat:
@@ -8,15 +8,15 @@ class Dog:
     name: str
     tricks: int
 
-def describe(value: int | str | None) -> str:
-    if value is None:
+def describe(value: int | str | none) -> str:
+    if value is none:
         return "nothing"
     if isinstance(value, int):
         return f"number {value + 1}"
     return "text " + value
 
 def render(value: Json) -> str:
-    if value is None:
+    if value is none:
         return "null"
     elif isinstance(value, bool):
         if value:
@@ -52,7 +52,7 @@ def contains(value: Number, items: list[float]) -> bool:
 def main():
     print(describe(41))
     print(describe("x"))
-    print(describe(None))
+    print(describe(none))
 
     one: Number = 1
     one_float: Number = 1.0
@@ -76,14 +76,14 @@ def main():
         print(greet(pet))
 
     data: Json = {"name": "willow", "tags": ["small", "typed"], "version": 1, "ratio": 0.5,
-                  "nested": {"ok": True, "none": None, "empty": []}}
+                  "nested": {"ok": true, "none": none, "empty": []}}
     print(render(data))
     if isinstance(data, dict):
         data["version"] = 2.0
     print(render(data))
 
-    maybe: int | str | None = None
-    if maybe is not None:
+    maybe: int | str | none = none
+    if maybe is not none:
         print("unreachable")
     maybe = "text"
     print(maybe + "!")

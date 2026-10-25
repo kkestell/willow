@@ -20,20 +20,20 @@ def main():
     if len(args) > 0 and args[0].startswith("--"):
         mode = args[0]
         args = args[1:]
-    failed = False
+    failed = false
     for path in args:
         lexed = lexer.lex(path, fs.read_file(path))
         if isinstance(lexed, diagnostic.Diagnostic):
             sys.eprint(lexed.format())
-            failed = True
+            failed = true
         elif mode == "--tokens":
             for token in lexed:
                 print(f"{path}:{token.line}:{token.col}: {token.kind} {token.text}")
         else:
-            parsed = parser.parse(path, lexed, False)
+            parsed = parser.parse(path, lexed, false)
             if isinstance(parsed, diagnostic.Diagnostic):
                 sys.eprint(parsed.format())
-                failed = True
+                failed = true
             elif mode == "--tree" or mode == "--positions":
                 print(f"# {path}")
                 print(show.Printer(mode == "--positions").module(parsed))

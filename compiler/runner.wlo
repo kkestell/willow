@@ -25,15 +25,15 @@ def is_directory(path: str) -> bool:
     try:
         return fs.stat(path).kind == "directory"
     except OSError:
-        return False
+        return false
 
 # Adds the test files in `directory`, written as `shown` and a name, to
 # `files`.
 def collect(directory: str, shown: str, recursive: bool, files: list[str]):
     for name in fs.listdir(directory):
-        kind = fs.stat(directory + "/" + name, follow_symlinks=False).kind
+        kind = fs.stat(directory + "/" + name, follow_symlinks=false).kind
         if kind == "directory" and recursive:
-            collect(directory + "/" + name, shown + name + "/", True, files)
+            collect(directory + "/" + name, shown + name + "/", true, files)
         elif kind == "file" and len(name) >= 9 and name.startswith("test_") and name.endswith(".wlo"):
             files.append(shown + name)
 

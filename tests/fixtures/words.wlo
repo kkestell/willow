@@ -11,11 +11,11 @@ def main():
     counts: dict[str, int] = {}
     total = 0
     line = input()
-    while line is not None:
+    while line is not none:
         for word in line.lower().split(" "):
             if word != "":
                 seen = counts.get(word)
-                if seen is None:
+                if seen is none:
                     counts[word] = 1
                 else:
                     counts[word] = seen + 1
@@ -30,7 +30,7 @@ def main():
         by_count[count].append(word)
 
     print(f"{'word':<12}{'count':>6}{'share':>9}")
-    for count in sorted(keys(by_count), reverse=True):
+    for count in sorted(keys(by_count), reverse=true):
         for word in sorted(by_count[count]):
             share = count / total * 100.0
             print(f"{word:<12}{count:>6d}{share:>8.1f}%")

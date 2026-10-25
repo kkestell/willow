@@ -1,4 +1,4 @@
-racecar                         exact: True  inexact: True
-rotor                           exact: True  inexact: True
-willow                          exact: False inexact: False
-A man, a plan, a canal: Panama! exact: False inexact: True
+racecar                         exact: true  inexact: true
+rotor                           exact: true  inexact: true
+willow                          exact: false inexact: false
+A man, a plan, a canal: Panama! exact: false inexact: true

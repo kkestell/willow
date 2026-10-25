@@ -2,8 +2,8 @@ import net
 import time
 
 # Keep the old fixture's JSON escaping so client.out remains the oracle.
-def quoted(text: str | None) -> str:
-    if text is None:
+def quoted(text: str | none) -> str:
+    if text is none:
         return "null"
     parts = ["\""]
     digits = "0123456789abcdef"
@@ -85,7 +85,7 @@ def handle(connection: net.Connection, port: int):
 def main():
     with net.listen("127.0.0.1", 0) as listener:
         print(listener.local_port())
-        while True:
+        while true:
             with listener.accept() as connection:
                 try:
                     handle(connection, listener.local_port())

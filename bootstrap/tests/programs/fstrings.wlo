@@ -10,8 +10,8 @@ def main():
     name = "Ada"
     count = 3
     ratio = 0.5
-    flag = False
-    missing: str | None = None
+    flag = false
+    missing: str | none = none
     level = Level.HIGH
     print(f"{name} has {len(name)} letters")
     print(f"{count} {ratio} {flag} {missing} {level}")

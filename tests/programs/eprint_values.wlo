@@ -4,6 +4,6 @@ def main():
     sys.eprint(1)
     sys.eprint(2.5)
     sys.eprint("text")
-    sys.eprint(None)
+    sys.eprint(none)
     sys.eprint(value="named")
     raise ValueError("done")

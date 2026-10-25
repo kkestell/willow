@@ -1,7 +1,7 @@
 def main():
-    while True:
+    while true:
         try:
             pass
         finally:
-            if True:
+            if true:
                 continue

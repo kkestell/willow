@@ -2,9 +2,9 @@ async def value():
     pass
 
 def main():
-    item: int | None = 1
+    item: int | none = 1
     async def read() -> int:
-        if item is not None:
+        if item is not none:
             await value()
             return item + 1
         return 0

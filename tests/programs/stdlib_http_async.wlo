@@ -40,11 +40,11 @@ async def respond(connection: aio.Connection, status: str, extra: str, body: str
 
 async def accept_loop(listener: aio.Listener, log: list[str]):
     async with aio.task_group() as connections:
-        while True:
+        while true:
             connections.start(serve(await listener.accept(), log))
 
 async def tick(counter: list[int]):
-    while True:
+    while true:
         await aio.sleep(0.02)
         counter[0] = counter[0] + 1
 
@@ -83,7 +83,7 @@ async def main():
             headers = [http.Header("X-Test", "yes")]
             echoed = await http.request_async("POST", base + "/echo", headers=headers, body="x".encode())
             print(echoed.body.decode())
-            redirected = await http.request_async("GET", base + "/redirect", follow_redirects=False)
+            redirected = await http.request_async("GET", base + "/redirect", follow_redirects=false)
             print(f"{redirected.status} {http.header(redirected.headers, 'location')}")
             for bad in ["ftp://example.com/", "http://example.com:x/"]:
                 try:

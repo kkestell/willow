@@ -44,5 +44,5 @@ def main():
     managed = nested(log)
     entered = managed.enter()
     print(next(entered))
-    managed.exit(None)
+    managed.exit(none)
     print(log[len(log) - 1])

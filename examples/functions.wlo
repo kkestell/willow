@@ -5,7 +5,7 @@ def greet(name: str, greeting: str = "Hello") -> str:
     return f"{greeting}, {name}!"
 
 # Parameters after `*` must be passed by name.
-def describe(path: str, *, size: int, hidden: bool = False) -> str:
+def describe(path: str, *, size: int, hidden: bool = false) -> str:
     text = f"{path} ({size} bytes)"
     if hidden:
         text = text + ", hidden"
@@ -28,12 +28,12 @@ def sum_of_squares(numbers: list[int]) -> int:
 # A function may call one declared later in the file.
 def is_even(n: int) -> bool:
     if n == 0:
-        return True
+        return true
     return is_odd(n - 1)
 
 def is_odd(n: int) -> bool:
     if n == 0:
-        return False
+        return false
     return is_even(n - 1)
 
 def main():
@@ -41,7 +41,7 @@ def main():
     print(greet("Alan", greeting="Welcome"))
     print(greet(greeting="Hi", name="Grace"))
     print(describe("notes.txt", size=120))
-    print(describe(".profile", hidden=True, size=64))
+    print(describe(".profile", hidden=true, size=64))
     print(factorial(10))
     print(sum_of_squares([1, 2, 3]))
     print(is_even(10))

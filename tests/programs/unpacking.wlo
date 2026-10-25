@@ -15,7 +15,7 @@ def main():
     v, other = v
     print(f"{v} {other}")
     # An int position narrows an optional target.
-    x: int | None = None
+    x: int | none = none
     x, y = (3, 4)
     print(x + y)
     # A float position stays a float in an int | float target.

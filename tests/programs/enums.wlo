@@ -15,8 +15,8 @@ class Settings:
 def use_color(mode: ColorMode = ColorMode.AUTO) -> bool:
     return mode == ColorMode.ALWAYS
 
-def describe(value: ColorMode | Keyword | str | None) -> str:
-    if value is None:
+def describe(value: ColorMode | Keyword | str | none) -> str:
+    if value is none:
         return "nothing"
     if isinstance(value, ColorMode):
         return "mode " + str(value)
@@ -40,7 +40,7 @@ def main():
     print(describe(ColorMode.NEVER))
     print(describe(Keyword.end))
     print(describe("AUTO"))
-    print(describe(None))
+    print(describe(none))
     print(same(Keyword.AUTO, ColorMode.AUTO))
     print(same(Keyword.AUTO, "Keyword.AUTO"))
     print(same(Keyword.AUTO, Keyword.AUTO))

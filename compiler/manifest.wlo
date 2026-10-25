@@ -20,10 +20,10 @@ class Project:
 class ManifestError(Exception):
     pass
 
-# The project in the current directory, or None when it has no willow.json.
-def read() -> Project | None:
+# The project in the current directory, or none when it has no willow.json.
+def read() -> Project | none:
     if not fs.exists("willow.json"):
-        return None
+        return none
     try:
         text = fs.read_file("willow.json")
     except OSError as error:
@@ -67,7 +67,7 @@ def read() -> Project | None:
     valid = entry.endswith(".wlo") and not entry.startswith("/")
     for component in stem.split("/"):
         if not loader.is_identifier(component):
-            valid = False
+            valid = false
     if not valid:
         raise invalid("'entry' must be a .wlo path inside the source root with identifier components")
     prefixes: list[str] = []

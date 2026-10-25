@@ -4,7 +4,7 @@ import http
 import sys
 
 async def tick(count: list[int]):
-    while True:
+    while true:
         await aio.sleep(0.01)
         count[0] = count[0] + 1
 
@@ -22,7 +22,7 @@ async def main():
         group.cancel()
     try:
         await http.request_async("BAD METHOD", base)
-        assert False, "invalid request completed"
+        assert false, "invalid request completed"
     except ValueError as error:
         assert error.message == "invalid method 'BAD METHOD'"
     result = await http.download_async(base + "/bytes", target)

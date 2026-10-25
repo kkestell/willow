@@ -9,7 +9,7 @@ enum Mode:
 
 class Pixel:
     color: Color
-    bright: bool = False
+    bright: bool = false
 
 def name(color: Color) -> str:
     if color == Color.RED:
@@ -18,8 +18,8 @@ def name(color: Color) -> str:
         return "green"
     return "blue"
 
-def describe(value: Color | Mode | str | None) -> str:
-    if value is None:
+def describe(value: Color | Mode | str | none) -> str:
+    if value is none:
         return "nothing"
     if isinstance(value, Color):
         return "color " + name(value)
@@ -41,7 +41,7 @@ def main():
     print(describe(Color.RED))
     print(describe(Mode.RED))
     print(describe("Color.RED"))
-    print(describe(None))
+    print(describe(none))
     print(same(Color.RED, Mode.RED))
     print(same(Mode.QUIET, Mode.QUIET))
     pixel = Pixel(Color.BLUE)

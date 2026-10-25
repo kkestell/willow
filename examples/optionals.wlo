@@ -1,14 +1,14 @@
-# Optional types: `T | None` holds a value or `None`, and an `is None` check
+# Optional types: `T | none` holds a value or `none`, and an `is none` check
 # narrows it to `T`.
 
-def find(names: list[str], prefix: str) -> str | None:
+def find(names: list[str], prefix: str) -> str | none:
     for name in names:
         if name.startswith(prefix):
             return name
-    return None
+    return none
 
-def greeting(name: str | None) -> str:
-    if name is None:
+def greeting(name: str | none) -> str:
+    if name is none:
         return "Hello, stranger"
     return "Hello, " + name
 
@@ -20,11 +20,11 @@ def main():
     ages = {"ada": 36}
     age = ages.get("alan")
     print(age)
-    if age is None:
+    if age is none:
         age = 0
     print(age + 1)
 
     # An assert also narrows the value after it.
     first = find(names, "a")
-    assert first is not None
+    assert first is not none
     print(first.upper())

@@ -13,7 +13,7 @@ def main():
     names = ["grace", "ada", "alan"]
     names.sort()
     print(", ".join(names))
-    names.sort(reverse=True)
+    names.sort(reverse=true)
     print(", ".join(names))
     print(", ".join(sorted(names, key=lambda name: len(name))))
 

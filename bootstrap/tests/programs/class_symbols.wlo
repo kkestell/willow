@@ -23,4 +23,4 @@ def main():
     print(lib.class_symbols.Value(7, lib.class_symbols.Kind.IMPORTED).label())
     print(value.kind == Kind.ENTRY)
     print(lib.class_symbols.Kind.IMPORTED != lib.class_symbols.Kind.OTHER)
-    print(f"{0.5} {True} {None}")
+    print(f"{0.5} {true} {none}")

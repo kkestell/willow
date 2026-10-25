@@ -5,7 +5,7 @@ def build() -> cli.Parser:
     parser.add_str("output", "out.txt", help="Where to write", short="o")
     parser.add_int("count", 3, help="How many")
     parser.add_float("ratio", 0.5)
-    parser.add_str("name", "", help="Your name", required=True)
+    parser.add_str("name", "", help="Your name", required=true)
     parser.add_flag("verbose", help="Say more", short="v")
     parser.add_positional("source", help="Input file")
     parser.add_rest("extra", help="More inputs")

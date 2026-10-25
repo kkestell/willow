@@ -1,5 +1,5 @@
 type Number = int | float
-type Maybe = Number | None
+type Maybe = Number | none
 type Table = dict[str, Row]
 type Row = list[Maybe]
 
@@ -13,7 +13,7 @@ def total(row: Row) -> float:
     return sum
 
 def main():
-    table: Table = {"a": [1, 2.5, None], "b": []}
+    table: Table = {"a": [1, 2.5, none], "b": []}
     for name, row in table.items():
         print(name + " " + str(total(row)))
     first: Maybe = table["a"][0]

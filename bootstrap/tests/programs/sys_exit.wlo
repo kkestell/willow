@@ -11,7 +11,7 @@ def main():
     print(len(args))
     sys.eprint("starting")
     sys.eprint(42)
-    sys.eprint(None)
+    sys.eprint(none)
     check(3)
     check(len(args))
     print("unreachable")

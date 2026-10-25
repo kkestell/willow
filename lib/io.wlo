@@ -6,7 +6,7 @@ class File:
     _mode: str
     _borrowed: bool
     _buffer: ptr
-    _closed: bool = False
+    _closed: bool = false
 
     def _usable(self, reading: bool):
         if self._closed:
@@ -17,22 +17,22 @@ class File:
             raise ValueError("file is not open for writing")
 
     def read(self, size: int) -> bytes:
-        self._usable(True)
+        self._usable(true)
         if size < 1:
             raise ValueError("read size must be positive")
         return __bytes(__word(core.file_read(self._fd, self._buffer, size, self._path)))
 
-    def readline(self) -> str | None:
-        self._usable(True)
-        return core.file_readline(self._fd, self._buffer, self._path, False)
+    def readline(self) -> str | none:
+        self._usable(true)
+        return core.file_readline(self._fd, self._buffer, self._path, false)
 
     def write(self, data: bytes):
-        self._usable(False)
+        self._usable(false)
         if not core.write_bytes(self._fd, __offset(__ptr(__word(data)), 24), len(data)):
             core.fail_os("write", self._path)
 
     def write_text(self, text: str):
-        self._usable(False)
+        self._usable(false)
         if not core.write_bytes(self._fd, core.str_bytes(text), core.str_size(text)):
             core.fail_os("write", self._path)
 
@@ -53,7 +53,7 @@ class File:
             raise ValueError("cannot close a standard stream")
         if self._closed:
             return
-        self._closed = True
+        self._closed = true
         if core.close(self._fd) < 0:
             core.fail_os("close", self._path)
 
@@ -79,7 +79,7 @@ class File:
             raise ValueError("I/O operation on closed file")
         return self
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         self.close()
 
 class _Lines:
@@ -90,7 +90,7 @@ class _Lines:
 
     def next(self) -> str:
         line = self._file.readline()
-        if line is None:
+        if line is none:
             raise StopIteration("")
         return line
 
@@ -109,13 +109,13 @@ def open(path: str, mode: str = "r") -> File:
         reason = core.os_reason()
         core.close(fd)
         raise OSError("cannot open " + path + ": " + reason)
-    return File(fd, path, mode, False, core.file_buffer())
+    return File(fd, path, mode, false, core.file_buffer())
 
 def stdin() -> File:
-    return File(0, "<stdin>", "r", True, core.stdin_buffer())
+    return File(0, "<stdin>", "r", true, core.stdin_buffer())
 
 def stdout() -> File:
-    return File(1, "<stdout>", "w", True, core.file_buffer())
+    return File(1, "<stdout>", "w", true, core.file_buffer())
 
 def stderr() -> File:
-    return File(2, "<stderr>", "w", True, core.file_buffer())
+    return File(2, "<stderr>", "w", true, core.file_buffer())

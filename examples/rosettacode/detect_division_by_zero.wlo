@@ -4,8 +4,8 @@ def divides(a: int, b: int) -> bool:
     try:
         quotient = a // b
     except ZeroDivisionError:
-        return False
-    return True
+        return false
+    return true
 
 def main():
     print(divides(10, 2))

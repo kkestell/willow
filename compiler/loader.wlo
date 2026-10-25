@@ -18,7 +18,7 @@ import parser
 # Whether `name` is a standard library module with no source in lib/, which
 # stdlib.wlo declares instead.
 def is_stdlib(name: str) -> bool:
-    return False
+    return false
 
 # A module read from source: its full name, as in "app.util", and its syntax
 # tree, whose path is the file it was read from.
@@ -47,14 +47,14 @@ class Loader:
     libraries: dict[str, bool]
     # The module name each loaded file has, by the file's real path.
     names_by_file: dict[str, str]
-    error: diagnostic.Diagnostic | None
+    error: diagnostic.Diagnostic | none
 
     # Loads module `name` from the file at `path`, which the import
     # `importing` in the module at `importer` names.
     def visit(self, name: str, path: str, importer: str, importing: ast.Import):
         file = fs.realpath(path)
         other = self.names_by_file.get(file)
-        if other is not None:
+        if other is not none:
             self.fail(importer, importing, f"module '{name}' is the same file as module '{other}'")
             return
         self.names_by_file[file] = name
@@ -66,15 +66,15 @@ class Loader:
         if isinstance(text, diagnostic.Diagnostic):
             self.error = text
             return
-        self.add(name, path, text, False)
+        self.add(name, path, text, false)
 
     # Loads module `name` from `text`, read from `path`, and, depth first,
     # every module it imports that is not loaded yet.
     def add(self, name: str, path: str, text: str, privileged: bool):
         if privileged:
-            self.libraries[name] = True
+            self.libraries[name] = true
         else:
-            self.loaded[name] = True
+            self.loaded[name] = true
         lexed = lexer.lex(path, text)
         if isinstance(lexed, diagnostic.Diagnostic):
             self.error = lexed
@@ -85,7 +85,7 @@ class Loader:
             return
         self.sources.append(Source(name, tree))
         for item in tree.imports:
-            if self.error is not None:
+            if self.error is not none:
                 return
             self.load_import(path, item, privileged)
 
@@ -101,7 +101,7 @@ class Loader:
     def load_import(self, importer: str, item: ast.Import, privileged: bool):
         path = "lib/" + item.name + ".wlo"
         if not privileged and item.name != "core":
-            if self.loaded.get(item.name) is not None:
+            if self.loaded.get(item.name) is not none:
                 return
             relative = item.name.replace(".", "/") + ".wlo"
             path = self.roots.primary + relative
@@ -118,19 +118,19 @@ class Loader:
             if len(found) == 1:
                 self.visit(item.name, found[0], importer, item)
                 return
-        if self.libraries.get(item.name) is not None:
+        if self.libraries.get(item.name) is not none:
             return
         if item.name == "core":
             self.add_core()
             return
         text = lib_source.text(item.name)
         if text != "":
-            self.add(item.name, "lib/" + item.name + ".wlo", text, True)
+            self.add(item.name, "lib/" + item.name + ".wlo", text, true)
         elif not is_stdlib(item.name):
             self.fail(importer, item, f"cannot load module '{item.name}': {path}: No such file or directory")
 
     def add_core(self):
-        self.add("core", "bootstrap/core/core.wlo", core_source.text(), True)
+        self.add("core", "bootstrap/core/core.wlo", core_source.text(), true)
 
     def fail(self, path: str, item: ast.Import, message: str):
         self.error = diagnostic.Diagnostic(path, item.line, item.col, message)
@@ -152,11 +152,11 @@ def entry_name(path: str) -> str:
 # Whether `name` is an identifier, as each component of a module name is.
 def is_identifier(name: str) -> bool:
     if name == "" or not (name[0].isalpha() or name[0] == "_"):
-        return False
+        return false
     for c in name:
         if not (c.isalnum() or c == "_") or ord(c) > 127:
-            return False
-    return True
+            return false
+    return true
 
 # The roots of the entry file at `path` outside a project: its own directory.
 def file_roots(path: str) -> Roots:
@@ -208,12 +208,12 @@ def char_size(data: bytes, i: int) -> int:
 # lexed, or parsed. Clashes between imports are the binder's to report, in
 # its order.
 def load(path: str, text: str, roots: Roots, with_core: bool) -> list[Source] | diagnostic.Diagnostic:
-    loader = Loader(roots, [], {}, {}, {}, None)
+    loader = Loader(roots, [], {}, {}, {}, none)
     loader.names_by_file[fs.realpath(path)] = roots.entry
-    loader.add(roots.entry, path, text, False)
-    if with_core and loader.error is None and loader.libraries.get("core") is None:
+    loader.add(roots.entry, path, text, false)
+    if with_core and loader.error is none and loader.libraries.get("core") is none:
         loader.add_core()
     error = loader.error
-    if error is not None:
+    if error is not none:
         return error
     return loader.sources

@@ -20,7 +20,7 @@ def main():
     print(app.models.describe(app.deep.leaf.first(items)))
     print(check(items[1]))
     print(check(3))
-    count: app.models.Count = None
+    count: app.models.Count = none
     print(count)
     try:
         app.util.make("cake", -1)

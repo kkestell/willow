@@ -8,7 +8,7 @@ class Flags:
         self.calls = self.calls + 1
         if self.calls > 1:
             raise ValueError("too far")
-        return True
+        return true
 
 def main():
     assert abs(-7) == 7
@@ -38,27 +38,27 @@ def main():
     for value in [float("nan"), float("inf"), -float("inf")]:
         try:
             round(value)
-            assert False
+            assert false
         except ValueError as error:
             assert error.message == "cannot round float to int"
     try:
         min(empty)
-        assert False
+        assert false
     except ValueError as error:
         assert error.message == "min() of an empty iterable"
     try:
         max(empty)
-        assert False
+        assert false
     except ValueError as error:
         assert error.message == "max() of an empty iterable"
     try:
         min((0, (float("nan"),)), (1, (0.0,)))
-        assert False
+        assert false
     except ValueError as error:
         assert error.message == "cannot compare NaN"
     try:
         max([float("nan")])
-        assert False
+        assert false
     except ValueError as error:
         assert error.message == "cannot compare NaN"
     total: (list[int]) -> int = sum
@@ -68,7 +68,7 @@ def main():
     for attempt in range(2):
         try:
             next(numbered)
-            assert False
+            assert false
         except StopIteration as stop:
             assert stop.message == ""
     left = iter([1, 2])
@@ -78,6 +78,6 @@ def main():
     for attempt in range(2):
         try:
             next(joined)
-            assert False
+            assert false
         except StopIteration as stop:
             assert stop.message == ""

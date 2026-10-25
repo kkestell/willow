@@ -9,9 +9,9 @@ class Account:
 
     def withdraw(self, amount: int) -> bool:
         if amount > self.balance:
-            return False
+            return false
         self.balance = self.balance - amount
-        return True
+        return true
 
     def describe(self) -> str:
         return f"{self.owner} has {self.balance}"

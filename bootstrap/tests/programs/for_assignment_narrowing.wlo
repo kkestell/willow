@@ -1,5 +1,5 @@
 def main():
-    x: int | None = 1
+    x: int | none = 1
     for i in range(2):
         print(x + 1)
-        x = None
+        x = none

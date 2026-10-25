@@ -18,7 +18,7 @@ def main():
     if len(names) > 0:
         original = env.pop(names[0])
         assert sys.getenv(names[0]) == original
-    assert sys.getenv("WILLOW_MISSING_SYS_TIME_VARIABLE") is None
+    assert sys.getenv("WILLOW_MISSING_SYS_TIME_VARIABLE") is none
     for seconds in [-1.0, float("nan"), float("inf")]:
         try:
             time.sleep(seconds)

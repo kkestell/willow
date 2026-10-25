@@ -10,9 +10,9 @@ def first[T](items: list[T]) -> Iterator[T]:
         yield item
         return
 
-def maybe() -> Iterator[int | None]:
+def maybe() -> Iterator[int | none]:
     yield 1
-    yield None
+    yield none
 
 def failing() -> Iterator[int]:
     yield 1
@@ -53,7 +53,7 @@ def main():
     for item in first(["a", "b"]):
         print(item)
     for value in maybe():
-        print(value is None)
+        print(value is none)
     for word in Words("x y").words():
         print(word)
 

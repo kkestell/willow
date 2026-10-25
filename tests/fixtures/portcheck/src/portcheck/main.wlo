@@ -40,12 +40,12 @@ async def main():
         for target in targets:
             probes.append(group.start(portcheck.probe.check(target, args.get_float("timeout"))))
 
-    all_open = True
+    all_open = true
     rows: list[list[str]] = []
     for probe in probes:
         result = probe.result()
         if not result.open:
-            all_open = False
+            all_open = false
         name = f"{result.target.host}:{result.target.port}"
         if args.get_bool("json"):
             print(json.dump({"target": name, "open": result.open, "detail": result.detail}))

@@ -1,4 +1,4 @@
-type Shape = Square | None
+type Shape = Square | none
 type Square = int | Shape
 
 def main():

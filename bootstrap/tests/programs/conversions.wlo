@@ -1,8 +1,8 @@
 def main():
     print(str(42))
     print(str(-7) + "!")
-    print(str(True))
-    print(str(None))
+    print(str(true))
+    print(str(none))
     print(str(2.5))
     print(int("123"))
     print(int("-0042"))

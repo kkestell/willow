@@ -29,21 +29,21 @@ def report(shapes: list[Shape]):
 
 # A protocol can take type parameters.
 protocol Source[T]:
-    def read(self) -> T | None
+    def read(self) -> T | none
 
 class Countdown:
     current: int
 
-    def read(self) -> int | None:
+    def read(self) -> int | none:
         if self.current == 0:
-            return None
+            return none
         self.current = self.current - 1
         return self.current + 1
 
 def drain[T](source: Source[T]) -> list[T]:
     items: list[T] = []
     item = source.read()
-    while item is not None:
+    while item is not none:
         items.append(item)
         item = source.read()
     return items

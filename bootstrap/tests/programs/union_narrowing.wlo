@@ -1,5 +1,5 @@
-def describe(value: int | float | str | bool | None) -> str:
-    if value is None:
+def describe(value: int | float | str | bool | none) -> str:
+    if value is none:
         return "nothing"
     elif isinstance(value, bool):
         if value:
@@ -19,57 +19,57 @@ def describe_int(n: int) -> str:
         return "42"
     return "other"
 
-def length(text: str | None) -> int:
-    if text is not None and text != "":
+def length(text: str | none) -> int:
+    if text is not none and text != "":
         return 1
-    if text is None or text == "":
+    if text is none or text == "":
         return 0
     return -1
 
-def positive(value: int | None) -> bool:
-    if not (value is None or value <= 0):
+def positive(value: int | none) -> bool:
+    if not (value is none or value <= 0):
         return value > 0
-    return False
+    return false
 
-def first(a: int | None, b: int | None) -> int:
-    if a is not None:
+def first(a: int | none, b: int | none) -> int:
+    if a is not none:
         return a
-    assert b is not None, "both None"
+    assert b is not none, "both None"
     return b
 
-def maybe(flag: bool) -> str | None:
+def maybe(flag: bool) -> str | none:
     if flag:
         return "some"
-    return None
+    return none
 
 def main():
-    print(describe(None))
-    print(describe(True))
+    print(describe(none))
+    print(describe(true))
     print(describe(41))
     print(describe(1.25))
     print(describe("hi"))
     print(length("abcd"))
-    print(length(None))
+    print(length(none))
     print(positive(3))
     print(positive(-3))
-    print(positive(None))
-    print(first(None, 7))
-    print(first(5, None))
+    print(positive(none))
+    print(first(none, 7))
+    print(first(5, none))
     value: int | str = 5
     value = value + 1
     print(value)
     value = "six"
     print(value + "!")
-    found = maybe(True)
-    if found is not None:
+    found = maybe(true)
+    if found is not none:
         print(found)
-    print(maybe(False) is None)
-    count: int | None = None
+    print(maybe(false) is none)
+    count: int | none = none
     i = 0
     while i < 3:
-        if count is None:
+        if count is none:
             count = 0
         count = count + i
         i = i + 1
-    if count is not None:
+    if count is not none:
         print(count)

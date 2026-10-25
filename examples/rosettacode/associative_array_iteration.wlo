@@ -5,7 +5,7 @@ def main():
     for name in ages:
         print(f"{name}: {ages[name]}")
     print("")
-    for name in sorted(ages, reverse=True):
+    for name in sorted(ages, reverse=true):
         print(name)
     print("")
     for name in ages:

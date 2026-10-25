@@ -1,18 +1,18 @@
-# Unions without floats: boxing at each assignability point, `is None`,
+# Unions without floats: boxing at each assignability point, `is none`,
 # `isinstance`, the `and`, `or`, and `not` facts, `elif`, `while`, and
 # assignment narrowing, and `assert` narrowing.
 
-def pick(n: int) -> int | str | bool | None:
+def pick(n: int) -> int | str | bool | none:
     if n == 0:
-        return None
+        return none
     if n == 1:
         return 41
     if n == 2:
         return "two"
     return n > 3
 
-def describe(value: int | str | bool | None) -> str:
-    if value is None:
+def describe(value: int | str | bool | none) -> str:
+    if value is none:
         return "nothing"
     elif isinstance(value, bool):
         if value:
@@ -28,21 +28,21 @@ def twice(n: int) -> str:
         return "42"
     return "other"
 
-def positive(value: int | None) -> bool:
-    if not (value is None or value <= 0):
+def positive(value: int | none) -> bool:
+    if not (value is none or value <= 0):
         return value > 0
-    return False
+    return false
 
-def both(a: int | None, b: int | None) -> bool:
-    return a is not None and b is not None and a < b
+def both(a: int | none, b: int | none) -> bool:
+    return a is not none and b is not none and a < b
 
-def first(a: int | None, b: int | None) -> int:
-    if a is not None:
+def first(a: int | none, b: int | none) -> int:
+    if a is not none:
         return a
-    assert b is not None, "both None"
+    assert b is not none, "both None"
     return b
 
-def relay(value: int | bool | None) -> int | bool | None:
+def relay(value: int | bool | none) -> int | bool | none:
     return value
 
 def main():
@@ -52,15 +52,15 @@ def main():
         i = i + 1
     print(positive(3))
     print(positive(0))
-    print(positive(None))
+    print(positive(none))
     print(both(1, 2))
-    print(both(None, 2))
-    print(first(None, 7))
-    print(first(5, None))
-    kept = relay(True)
+    print(both(none, 2))
+    print(first(none, 7))
+    print(first(5, none))
+    kept = relay(true)
     if isinstance(kept, bool):
         print(kept)
-    print(relay(None) is None)
+    print(relay(none) is none)
     value: int | str = 5
     value = value + 1
     if isinstance(value, int):
@@ -68,12 +68,12 @@ def main():
     value = "six"
     print(value + "!")
     total = 0
-    n: int | None = 0
-    while n is not None:
+    n: int | none = 0
+    while n is not none:
         total = total + n
         if n == 4:
-            n = None
+            n = none
         else:
             n = n + 1
     print(total)
-    print(first(None, None))
+    print(first(none, none))

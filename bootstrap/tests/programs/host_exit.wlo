@@ -15,9 +15,9 @@ def main():
     sys.eprint("starting")
     sys.eprint(42)
     sys.eprint(2.5)
-    sys.eprint(False)
-    sys.eprint(None)
-    maybe: int | None = None
+    sys.eprint(false)
+    sys.eprint(none)
+    maybe: int | none = none
     sys.eprint(maybe)
     print(check(3))
     print(check(0))

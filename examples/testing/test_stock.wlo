@@ -16,7 +16,7 @@ def test_rejects_zero_quantity():
     shelf = stock.Stock({})
     try:
         shelf.add("tea", 0)
-        assert False, "accepted a zero quantity"
+        assert false, "accepted a zero quantity"
     except ValueError as error:
         assert error.message == "quantity must be positive"
 

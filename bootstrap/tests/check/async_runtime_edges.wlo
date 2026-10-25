@@ -8,7 +8,7 @@ async def worker(name: str, log: list[str]):
 async def accept_closed(listener: aio.Listener, log: list[str]):
     try:
         with await listener.accept():
-            assert False
+            assert false
     except ValueError as error:
         assert error.message == "I/O operation on closed listener"
         log.append("closed")

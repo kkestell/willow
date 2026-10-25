@@ -11,7 +11,7 @@ class Entry:
     host: str
     level: Level
     text: str
-    millis: int | None = None
+    millis: int | none = none
 
 class ParseError(Exception):
     line: int
@@ -20,25 +20,25 @@ type Timing = tuple[int, str]
 
 # Any class with a matching `check` method is a Rule; no declaration needed.
 protocol Rule:
-    def check(self, entry: Entry) -> str | None
+    def check(self, entry: Entry) -> str | none
 
 class SlowerThan:
     limit: int
 
-    def check(self, entry: Entry) -> str | None:
-        # Fields are not narrowed, so copy to a local before testing for None.
+    def check(self, entry: Entry) -> str | none:
+        # Fields are not narrowed, so copy to a local before testing for none.
         millis = entry.millis
-        if millis is not None and millis > self.limit:
+        if millis is not none and millis > self.limit:
             return f"took {millis}ms"
-        return None
+        return none
 
 class Mentions:
     word: str
 
-    def check(self, entry: Entry) -> str | None:
+    def check(self, entry: Entry) -> str | none:
         if self.word in entry.text:
             return f"mentions {self.word}"
-        return None
+        return none
 
 # A context manager is any value with `enter` and `exit` methods.
 class Section:
@@ -47,7 +47,7 @@ class Section:
     def enter(self):
         print(f"== {self.title} ==")
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         print("")
 
 def sample_logs() -> dict[str, str]:
@@ -70,9 +70,9 @@ async def fetch_log(host: str) -> str:
     return sample_logs()[host]
 
 # "slow query [1200ms]" -> ("slow query", 1200)
-def split_millis(text: str) -> tuple[str, int | None]:
+def split_millis(text: str) -> tuple[str, int | none]:
     if not text.endswith("ms]"):
-        return (text, None)
+        return (text, none)
     start = text.find(" [")
     return (text[:start], int(text[start + 2:-3]))
 
@@ -80,7 +80,7 @@ def parse_line(host: str, line: str, number: int) -> Entry:
     levels = {"INFO": Level.INFO, "WARN": Level.WARN, "ERROR": Level.ERROR}
     word = line.split(" ")[0]
     level = levels.get(word)
-    if level is None:
+    if level is none:
         raise ParseError(f"unknown level '{word}'", number)
     text, millis = split_millis(line[len(word) + 1:])
     return Entry(host, level, text, millis=millis)
@@ -97,11 +97,11 @@ def parse(host: str, text: str) -> Iterator[Entry]:
             continue
         yield entry
 
-def first[T](items: list[T], *, where: (T) -> bool) -> T | None:
+def first[T](items: list[T], *, where: (T) -> bool) -> T | none:
     for item in items:
         if where(item):
             return item
-    return None
+    return none
 
 def counter(prefix: str = "#") -> () -> str:
     count = 0
@@ -137,9 +137,9 @@ async def main():
         timings: list[Timing] = []
         for entry in entries:
             millis = entry.millis
-            if millis is not None:
+            if millis is not none:
                 timings.append((millis, f"{entry.host} {entry.text}"))
-        for millis, text in sorted(timings, reverse=True)[:2]:
+        for millis, text in sorted(timings, reverse=true)[:2]:
             print(f"{millis:>6d}ms  {text}")
 
     with Section("Alerts"):
@@ -148,9 +148,9 @@ async def main():
         for entry in entries:
             for rule in rules:
                 alert = rule.check(entry)
-                if alert is not None:
+                if alert is not none:
                     print(f"{label()} {entry.host}: {entry.text} ({alert})")
 
     error = first(entries, where=lambda entry: entry.level == Level.ERROR)
-    if error is not None:
+    if error is not none:
         print(f"First error: {error.text} on {error.host}")

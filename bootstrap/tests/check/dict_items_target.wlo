@@ -7,7 +7,7 @@ def main():
         assert key == "two"
         assert n == 2
         assert f == 2.5
-    held: tuple[str, int | None] | None = None
+    held: tuple[str, int | none] | none = none
     for held in d.items():
         assert held[0] == "one"
         assert held[1] == 1

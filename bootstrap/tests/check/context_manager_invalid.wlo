@@ -2,7 +2,7 @@ class Manager:
     def enter(self) -> int:
         return 1
 
-    def exit(self, failure: Exception | None):
+    def exit(self, failure: Exception | none):
         pass
 
 def main():

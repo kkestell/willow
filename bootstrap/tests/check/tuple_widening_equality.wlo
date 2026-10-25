@@ -1,6 +1,6 @@
-type Nested = tuple[tuple[str | None] | str | None] | None
+type Nested = tuple[tuple[str | none] | str | none] | none
 
-def equal(a: tuple[str | None], b: tuple[str | None]) -> bool:
+def equal(a: tuple[str | none], b: tuple[str | none]) -> bool:
     return a == b
 
 def equal_nested(a: Nested, b: Nested) -> bool:
@@ -11,17 +11,17 @@ def contains(value: Nested, values: list[Nested]) -> bool:
 
 def main():
     raw = ("a",)
-    assert not equal(raw, (None,))
-    assert not equal((None,), raw)
+    assert not equal(raw, (none,))
+    assert not equal((none,), raw)
     assert equal(raw, ("a",))
-    nothing = (None,)
-    assert equal(nothing, (None,))
+    nothing = (none,)
+    assert equal(nothing, (none,))
     nested = (raw,)
-    assert not equal_nested(nested, (None,))
-    assert not equal_nested((None,), nested)
+    assert not equal_nested(nested, (none,))
+    assert not equal_nested((none,), nested)
     assert equal_nested(nested, (("a",),))
     assert not equal_nested(("a",), nested)
-    assert contains(nested, [(None,), nested])
+    assert contains(nested, [(none,), nested])
     assert contains((("a",),), [nested])
-    assert not contains(nested, [((None,),)])
-    assert not contains((None,), [nested])
+    assert not contains(nested, [((none,),)])
+    assert not contains((none,), [nested])

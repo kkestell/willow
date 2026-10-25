@@ -1,9 +1,9 @@
 class Node:
     value: int
-    next: Node | None
+    next: Node | none
 
 def second(node: Node) -> int:
     return node.next.value
 
 def main():
-    print(second(Node(1, Node(2, None))))
+    print(second(Node(1, Node(2, none))))

@@ -9,12 +9,12 @@ def eprint(value: str):
 def exit(status: int):
     core.sys_exit(status)
 
-def getenv(name: str) -> str | None:
+def getenv(name: str) -> str | none:
     if name == "" or "=" in name or "\x00" in name:
         raise ValueError("invalid environment variable name")
     value = core.getenv(core.str_bytes(name))
     if __addr_is_null(value):
-        return None
+        return none
     return core.str_from_bytes(value, core.strlen(value))
 
 def environ() -> dict[str, str]:

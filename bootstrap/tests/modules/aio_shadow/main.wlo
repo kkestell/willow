@@ -1,16 +1,16 @@
 import aio
 
-def task_value(value: aio.Task | None) -> int:
+def task_value(value: aio.Task | none) -> int:
     if isinstance(value, aio.Task):
         return value.value
     return 0
 
-def group_value(value: aio.TaskGroup | None) -> int:
+def group_value(value: aio.TaskGroup | none) -> int:
     if isinstance(value, aio.TaskGroup):
         return value.value
     return 0
 
-def semaphore_value(value: aio.Semaphore | None) -> int:
+def semaphore_value(value: aio.Semaphore | none) -> int:
     if isinstance(value, aio.Semaphore):
         return value.value
     return 0

@@ -8,7 +8,7 @@ def main():
     print(3 in numbers)
     print(2 not in numbers)
 
-    maybe: dict[str, int | None] = {"n": None, "s": 1}
+    maybe: dict[str, int | none] = {"n": none, "s": 1}
     print(maybe.get("n"))
     print(maybe.get("n", 5))
     print(maybe.get("q", 5))

@@ -18,7 +18,7 @@ def main():
     print(ages.get("alan"))
     print(ages.get("bob"))
     print(ages.get("bob", 0))
-    print(ages.get("bob", None))
+    print(ages.get("bob", none))
     print(ages.pop("alan"))
     show(ages)
     ages["alan"] = 42
@@ -40,7 +40,7 @@ def main():
     print(squares.get(-1, -1))
     print(len(squares))
 
-    seen: dict[str, str | None] = {"x": None}
+    seen: dict[str, str | none] = {"x": none}
     print(seen.get("x"))
     print(seen.get("x", "default"))
     print(seen.get("y", "default"))

@@ -4,7 +4,7 @@ def letters() -> Iterator[str]:
     yield "b"
 
 def numbers(xs: Iterable[int]) -> list[int]:
-    return sorted(xs, reverse=True)
+    return sorted(xs, reverse=true)
 
 def words(xs: list[str]) -> str:
     return " ".join(xs)
@@ -23,15 +23,15 @@ def main():
     print(ints(sorted(range(5, 0, -2))))
     print(words(sorted(letters())))
     print(ints(numbers([1, 3, 2])))
-    print(words(sorted(["b", "a"], reverse=True)))
+    print(words(sorted(["b", "a"], reverse=true)))
 
     pairs = [("b", 2), ("a", 9), ("b", 1), ("a", 1)]
     for name, n in sorted(pairs):
         print(f"{name} {n}")
     nested = [((2, "x"), 1), ((1, "z"), 2), ((1, "y"), 3)]
-    for key, n in sorted(nested, reverse=True):
+    for key, n in sorted(nested, reverse=true):
         print(f"{key[0]} {key[1]} {n}")
-    pairs.sort(reverse=True)
+    pairs.sort(reverse=true)
     print(f"{pairs[0][0]} {pairs[0][1]}")
 
     nan = float("nan")

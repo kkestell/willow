@@ -27,7 +27,7 @@ bootstrap/prepare.sh bootstrap/stage1 "$src" || exit 1
 
 # Builds stage 1's NAME.wlo.
 build() {
-    "$willow0" build "$src/$1.wlo" -o "$work/$1" && return 0
+    "$willow0" --legacy build "$src/$1.wlo" -o "$work/$1" && return 0
     echo "FAIL $1: does not compile"
     failed=1
     return 1
@@ -46,7 +46,7 @@ check_test() {
 }
 
 check_willow1() {
-    if ! "$willow0" build "$src/willow1.wlo" -o "$work/willow1"; then
+    if ! "$willow0" --legacy build "$src/willow1.wlo" -o "$work/willow1"; then
         echo "FAIL willow1: does not compile"
         failed=1
         return

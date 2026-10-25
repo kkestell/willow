@@ -19,7 +19,7 @@ class Server:
     def enter(self) -> Server:
         return self
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         _stop(self)
 
 def _server_path() -> str:
@@ -30,7 +30,7 @@ def _server_path() -> str:
 
 def _start() -> Server:
     willow = sys.getenv("WILLOW")
-    assert willow is not None, "WILLOW is not set"
+    assert willow is not none, "WILLOW is not set"
     port_file = fs.join("/tmp", f"kv_port_{int(time.time() * 1000000.0)}")
     process = subprocess.spawn([willow, "run", _server_path(), port_file])
     deadline = time.monotonic() + 10.0

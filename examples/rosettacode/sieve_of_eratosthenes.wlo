@@ -8,7 +8,7 @@ def primes_up_to(limit: int) -> list[int]:
     while n * n <= limit:
         if is_prime[n]:
             for multiple in range(n * n, limit + 1, n):
-                is_prime[multiple] = False
+                is_prime[multiple] = false
         n = n + 1
     primes: list[int] = []
     for n in range(limit + 1):

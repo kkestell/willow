@@ -4,7 +4,7 @@ class Options:
     name: str
     width: int = 10
     ratio: float = 0.5
-    label: str | None = None
+    label: str | none = none
     zero: float = -0.0
 
 class Problem(Exception):
@@ -72,13 +72,13 @@ def main():
     except Problem as e:
         print(f"{e.message} {e.code}")
 
-    print(json.dump(value=[3, 1]) + " " + str(len(sorted(items=[3, 1], reverse=True))))
+    print(json.dump(value=[3, 1]) + " " + str(len(sorted(items=[3, 1], reverse=true))))
     xs = [2, 3, 1]
-    xs.sort(reverse=True)
+    xs.sort(reverse=true)
     print(f"{xs[0]} {xs[1]} {xs[2]}")
 
-    print(report("a", verbose=True))
-    print(report(tag="t", verbose=False, path="b", limit=5))
+    print(report("a", verbose=true))
+    print(report(tag="t", verbose=false, path="b", limit=5))
     counter = Counter(3)
     print(f"{counter.scaled()} {counter.scaled(by=4)}")
     # Library methods take keywords by their documented names.

@@ -11,7 +11,7 @@ class Item:
 class BadItem(Exception):
     pass
 
-type Count = int | None
+type Count = int | none
 
 enum Size:
     SMALL

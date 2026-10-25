@@ -45,9 +45,12 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 failed=0
 
-# Stage 2's sources and the modules generated for them.
+# Stage 2's sources and the modules generated for them: the legacy form that
+# stage 1 builds, and the current form that stage 2 builds itself from.
 src=$work/src
 bootstrap/prepare.sh compiler "$src" bootstrap/tests/lib || exit 1
+current=$work/current
+bootstrap/prepare.sh --current compiler "$current" bootstrap/tests/lib || exit 1
 
 # Builds stage 2's NAME.wlo.
 build() {
@@ -168,8 +171,8 @@ check_bind_driver() {
 # Weak links and forced collection need callbacks outside ordinary Willow.
 check_coroutines() {
     fixture=$root/bootstrap/tests/check/coroutine_runtime
-    cp "$fixture/build.wlo" "$src/coroutine_fixture.wlo"
-    if ! "$work/willow" build "$src/coroutine_fixture.wlo" -o "$work/coroutine-fixture" ||
+    cp "$fixture/build.wlo" "$current/coroutine_fixture.wlo"
+    if ! "$work/willow" build "$current/coroutine_fixture.wlo" -o "$work/coroutine-fixture" ||
         ! "$work/coroutine-fixture" "$fixture/callbacks.wlo" "$fixture/runtime.ssa" "$work/coroutine-runtime" ||
         ! "$work/coroutine-runtime"; then
         echo "FAIL coroutine runtime"
@@ -184,13 +187,13 @@ check_willow() {
     echo "willow2:"
     "$runner" "$work/willow" bootstrap/tests/programs/*.wlo bootstrap/tests/core/*.wlo \
         bootstrap/tests/check/*.wlo bootstrap/tests/modules/*/main.wlo || failed=1
-    if ! "$work/willow" build "$src/willow.wlo" -o "$work/willow-self"; then
+    if ! "$work/willow" build "$current/willow.wlo" -o "$work/willow-self"; then
         echo "FAIL willow2-self: does not compile"
         failed=1
         return
     fi
-    if ! "$work/willow" compile "$src/willow.wlo" -o "$work/willow.ssa" ||
-        ! "$work/willow-self" compile "$src/willow.wlo" -o "$work/willow-self.ssa"; then
+    if ! "$work/willow" compile "$current/willow.wlo" -o "$work/willow.ssa" ||
+        ! "$work/willow-self" compile "$current/willow.wlo" -o "$work/willow-self.ssa"; then
         echo "FAIL fixpoint: does not compile"
         failed=1
         return

@@ -1,3 +1,3 @@
 def main():
     xs = [1]
-    xs.sort(True, True)
+    xs.sort(true, true)

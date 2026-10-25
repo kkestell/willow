@@ -1,14 +1,14 @@
-def pick(n: int) -> int | str | bool | None:
+def pick(n: int) -> int | str | bool | none:
     if n == 0:
-        return None
+        return none
     if n == 1:
         return n
     if n == 2:
         return "two"
     return n > 5
 
-def show(v: int | str | bool | None) -> str:
-    if v is None:
+def show(v: int | str | bool | none) -> str:
+    if v is none:
         return "none"
     if isinstance(v, int):
         return "int"
@@ -18,7 +18,7 @@ def show(v: int | str | bool | None) -> str:
         return "true"
     return "false"
 
-def keep(x: int | float | None) -> int | float | None:
+def keep(x: int | float | none) -> int | float | none:
     return x
 
 def main():
@@ -32,13 +32,13 @@ def main():
     y = keep(-9223372036854775807)
     if isinstance(y, int):
         print(y)
-    print(keep(None) is None)
+    print(keep(none) is none)
     total = 0
-    n: int | None = 0
-    while n is not None:
+    n: int | none = 0
+    while n is not none:
         total = total + n
         if n == 4:
-            n = None
+            n = none
         else:
             n = n + 1
     print(total)

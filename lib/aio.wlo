@@ -42,8 +42,8 @@ def semaphore(value: int = 1) -> Semaphore:
 class Connection:
     _fd: int
     _broken: bool
-    _receiving: bool = False
-    _sending: bool = False
+    _receiving: bool = false
+    _sending: bool = false
 
     def _usable(self):
         if self._fd < 0:
@@ -51,7 +51,7 @@ class Connection:
         if self._broken:
             raise ValueError("connection is unusable after a failed send")
 
-    async def recv(self, size: int, timeout: float | None = None) -> bytes:
+    async def recv(self, size: int, timeout: float | none = none) -> bytes:
         core.aio_checkpoint()
         if self._receiving:
             raise RuntimeError("recv is already in progress")
@@ -61,7 +61,7 @@ class Connection:
         core.net_check_timeout(timeout)
         deadline = core.net_deadline(timeout)
         buffer = core.str_alloc(size)
-        self._receiving = True
+        self._receiving = true
         try:
             count = core.net_try_recv(self._fd, buffer, size)
             while count < 0:
@@ -72,17 +72,17 @@ class Connection:
                 count = core.net_try_recv(self._fd, buffer, size)
             return __bytes(core.net_received(buffer))
         finally:
-            self._receiving = False
+            self._receiving = false
 
-    async def sendall(self, data: bytes, timeout: float | None = None):
+    async def sendall(self, data: bytes, timeout: float | none = none):
         core.aio_checkpoint()
         if self._sending:
             raise RuntimeError("sendall is already in progress")
         self._usable()
         core.net_check_timeout(timeout)
         deadline = core.net_deadline(timeout)
-        self._sending = True
-        complete = False
+        self._sending = true
+        complete = false
         sent = 0
         try:
             while sent < len(data):
@@ -94,11 +94,11 @@ class Connection:
                     self._usable()
                     if not ready:
                         core.net_timed_out("send", timeout)
-            complete = True
+            complete = true
         finally:
-            self._sending = False
+            self._sending = false
             if not complete:
-                self._broken = True
+                self._broken = true
 
     def close(self):
         if self._fd >= 0:
@@ -110,25 +110,25 @@ class Connection:
         self._usable()
         return self
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         self.close()
 
 class Listener:
     _fd: int
-    _accepting: bool = False
+    _accepting: bool = false
 
     def _usable(self):
         if self._fd < 0:
             raise ValueError("I/O operation on closed listener")
 
-    async def accept(self, timeout: float | None = None) -> Connection:
+    async def accept(self, timeout: float | none = none) -> Connection:
         core.aio_checkpoint()
         if self._accepting:
             raise RuntimeError("accept is already in progress")
         self._usable()
         core.net_check_timeout(timeout)
         deadline = core.net_deadline(timeout)
-        self._accepting = True
+        self._accepting = true
         try:
             fd = core.net_try_accept(self._fd)
             while fd < 0:
@@ -137,9 +137,9 @@ class Listener:
                 if not ready:
                     core.net_timed_out("accept", timeout)
                 fd = core.net_try_accept(self._fd)
-            return Connection(fd, False)
+            return Connection(fd, false)
         finally:
-            self._accepting = False
+            self._accepting = false
 
     def local_port(self) -> int:
         self._usable()
@@ -155,23 +155,23 @@ class Listener:
         self._usable()
         return self
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         self.close()
 
-async def connect(host: str, port: int, timeout: float | None = 30.0) -> Connection:
+async def connect(host: str, port: int, timeout: float | none = 30.0) -> Connection:
     core.aio_checkpoint()
     core.net_check_host(host, port, 1)
     core.net_check_timeout(timeout)
     addresses = core.net_resolve(host, port)
     deadline = core.net_deadline(timeout)
     state = core.NetConnect(host, port, addresses, 0, -1, "no addresses")
-    connected = False
+    connected = false
     try:
         while not core.net_connect_step(state):
             if not core.aio_wait_fd(state.fd, 4, deadline):
                 core.net_timed_out("connect", timeout)
-        connected = True
-        return Connection(state.fd, False)
+        connected = true
+        return Connection(state.fd, false)
     finally:
         if not connected and state.fd >= 0:
             core.aio_close_fd(state.fd, core.aio_loop())

@@ -6,9 +6,9 @@ class Options:
     name: str = "out"
     level: int = -2
     ratio: float = +0.5
-    verbose: bool = True
-    limit: int | None = 3
-    kind: Kind | None = None
+    verbose: bool = true
+    limit: int | none = 3
+    kind: Kind | none = none
 
     def describe(self) -> str:
         return self.name + " " + str(self.level) + " " + str(self.limit) + " " + str(self.kind)
@@ -18,7 +18,7 @@ def main():
     print(options.describe())
     print(options.ratio)
     print(options.verbose)
-    options.limit = None
+    options.limit = none
     options.kind = Kind.FANCY
     print(options.describe())
     kind = options.kind

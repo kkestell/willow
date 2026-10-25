@@ -3,7 +3,7 @@ import fs
 
 def main():
     root = fs.temp_dir()
-    fs.mkdir(fs.join(root, "real/sub"), parents=True)
+    fs.mkdir(fs.join(root, "real/sub"), parents=true)
     source = fs.join(root, "real/inside")
     fs.write_file(source, "original")
     assert core.run(["ln", "-s", "real", fs.join(root, "link")]) == 0
@@ -11,12 +11,12 @@ def main():
     assert core.run(["ln", "-s", "..", fs.join(root, "real/up")]) == 0
     assert core.run(["ln", source, fs.join(root, "hard")]) == 0
     assert fs.stat(fs.join(root, "link")).kind == "directory"
-    assert fs.stat(fs.join(root, "link"), follow_symlinks=False).kind == "symlink"
+    assert fs.stat(fs.join(root, "link"), follow_symlinks=false).kind == "symlink"
     assert not fs.exists(fs.join(root, "dangling"))
     assert len(fs.glob(fs.join(root, "dangling"))) == 1
     try:
         fs.copy_file(source, fs.join(root, "hard"))
-        assert False
+        assert false
     except OSError as error:
         assert error.message.endswith("they are the same file")
     assert fs.read_file(source) == "original"
@@ -35,7 +35,7 @@ def main():
     missing = fs.walk(fs.join(root, "missing"))
     try:
         next(missing)
-        assert False
+        assert false
     except OSError as error:
         assert error.message.startswith("cannot list ")
 

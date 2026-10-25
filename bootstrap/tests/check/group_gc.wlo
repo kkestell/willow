@@ -33,7 +33,7 @@ async def main():
     assert total == 8128
     for task in suspended:
         context = task.context
-        assert context is not None
+        assert context is not none
         assert core.coroutine_finished(context)
     core.GC_gcollect()
     print("collected and resumed 128 tasks")

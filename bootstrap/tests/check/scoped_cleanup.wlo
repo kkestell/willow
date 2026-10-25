@@ -1,8 +1,8 @@
 class Manager:
     name: str
     log: list[str]
-    fail_enter: bool = False
-    fail_exit: bool = False
+    fail_enter: bool = false
+    fail_exit: bool = false
 
     def enter(self, value: int = 3) -> tuple[str, int]:
         self.log.append("enter " + self.name)
@@ -10,18 +10,18 @@ class Manager:
             raise ValueError("entry")
         return (self.name, value)
 
-    def exit(self, error: Exception | None, extra: int = 0):
-        if error is None:
+    def exit(self, error: Exception | none, extra: int = 0):
+        if error is none:
             self.log.append("exit " + self.name)
         else:
             self.log.append("exit " + self.name + ": " + error.message)
         if self.fail_exit:
             raise RuntimeError("exit")
 
-def returning(manager: ContextManager[tuple[str, int | None]]) -> int:
+def returning(manager: ContextManager[tuple[str, int | none]]) -> int:
     with manager as (name, value):
         assert name == "return"
-        assert value is not None
+        assert value is not none
         return value
 
 def replaced(manager: Manager) -> int:
@@ -46,22 +46,22 @@ def main():
     assert ",".join(log) == "enter a,enter b,exit b,exit a"
     log = []
     try:
-        with Manager("a", log), Manager("b", log, True):
+        with Manager("a", log), Manager("b", log, true):
             pass
     except ValueError:
         pass
     assert ",".join(log) == "enter a,enter b,exit a: entry"
     log = []
     try:
-        with Manager("a", log), Manager("b", log, False, True):
+        with Manager("a", log), Manager("b", log, false, true):
             raise ValueError("body")
     except RuntimeError as error:
         assert error.message == "exit"
     assert ",".join(log) == "enter a,enter b,exit b: body,exit a: exit"
     log = []
     try:
-        replaced(Manager("return", log, False, True))
-        assert False
+        replaced(Manager("return", log, false, true))
+        assert false
     except RuntimeError:
         pass
     assert ",".join(log) == "enter return,exit return"

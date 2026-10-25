@@ -40,5 +40,5 @@ def main():
     print(1.25 in floats)
     for value in floats[:1]:
         print(value == 1.25)
-    for flag in [True, False]:
+    for flag in [true, false]:
         print(flag)

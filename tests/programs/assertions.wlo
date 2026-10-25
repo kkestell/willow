@@ -8,7 +8,7 @@ def check_positive(n: int):
 def main():
     assert len("ab") == 2, explode()
     try:
-        assert False
+        assert false
     except AssertionError as e:
         print(e.message)
     try:

@@ -95,7 +95,7 @@ def replaced():
 def nested() -> int:
     total = 0
     try:
-        while True:
+        while true:
             try:
                 total = total + 1
                 if total == 3:

@@ -23,7 +23,7 @@ def by_name(row: Row) -> str:
 def main():
     data = [Row("cy", 2), Row("ada", 3), Row("bob", 2), Row("dee", 1)]
     print(names(sorted(data, key=lambda row: row.score)))
-    print(names(sorted(data, reverse=True, key=lambda row: row.score)))
+    print(names(sorted(data, reverse=true, key=lambda row: row.score)))
     print(names(sorted(data, key=lambda row: (row.score, row.name))))
     print(names(sorted(data, key=by_name)))
     print(names(sorted(data, key=Row("", 10).rank)))

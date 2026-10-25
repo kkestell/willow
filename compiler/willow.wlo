@@ -33,12 +33,12 @@ def fail(message: str):
 def usage_error(reason: str):
     fail("error: " + reason + "\n" + usage_text())
 
-# A command line: the command, its source file and output, which are None
+# A command line: the command, its source file and output, which are none
 # when not given, and for `run`, the program's arguments.
 class Command:
     name: str
-    input: str | None
-    output: str | None
+    input: str | none
+    output: str | none
     program_args: list[str]
 
 def parse_args(args: list[str]) -> Command:
@@ -48,22 +48,22 @@ def parse_args(args: list[str]) -> Command:
     if name not in ["check", "run", "compile", "build"]:
         usage_error(f"unknown command '{name}'")
     writes = name in ["compile", "build"]
-    input: str | None = None
-    output: str | None = None
+    input: str | none = none
+    output: str | none = none
     program_args: list[str] = []
     i = 1
     while i < len(args):
         argument = args[i]
-        if input is not None and name == "run":
+        if input is not none and name == "run":
             # Everything after the source path belongs to the program.
             program_args.append(argument)
             i = i + 1
-        elif argument == "--" and input is None and name == "run":
+        elif argument == "--" and input is none and name == "run":
             # `run -- args` runs the project entry with `args`.
             program_args.extend(args[i + 1:])
             break
         elif argument == "-o" and writes:
-            if output is not None:
+            if output is not none:
                 usage_error("-o given more than once")
             if i + 1 == len(args):
                 usage_error("-o needs a path")
@@ -71,28 +71,28 @@ def parse_args(args: list[str]) -> Command:
             i = i + 2
         elif argument.startswith("-"):
             usage_error(f"unknown option '{argument}'")
-        elif input is not None:
+        elif input is not none:
             usage_error(f"unexpected argument '{argument}'")
         else:
             input = argument
             i = i + 1
-    if writes and output is None:
+    if writes and output is none:
         usage_error(f"{name} needs -o <output>")
     return Command(name, input, output, program_args)
 
-# `willow test [--check] [path]`: the path, or None, and whether to check
+# `willow test [--check] [path]`: the path, or none, and whether to check
 # only.
-def parse_test_args(args: list[str]) -> tuple[str | None, bool]:
-    check_only = False
-    path: str | None = None
+def parse_test_args(args: list[str]) -> tuple[str | none, bool]:
+    check_only = false
+    path: str | none = none
     for argument in args[1:]:
         if argument == "--check" and not check_only:
-            check_only = True
+            check_only = true
         elif argument == "--check":
             usage_error("--check given more than once")
         elif argument.startswith("-"):
             usage_error(f"unknown option '{argument}'")
-        elif path is not None:
+        elif path is not none:
             usage_error(f"unexpected argument '{argument}'")
         else:
             path = argument
@@ -110,9 +110,9 @@ def main():
         return
     command = parse_args(args)
     path = command.input
-    if path is None:
+    if path is none:
         project = read_project()
-        if project is None:
+        if project is none:
             fail("error: no source file given and no willow.json in the current directory")
             return
         path = project.entry
@@ -128,38 +128,38 @@ def main():
         fail(text.format())
         return
     # A project's entry name was checked with its manifest.
-    if roots.entry == "core" or command.input is not None and not loader.is_identifier(roots.entry):
+    if roots.entry == "core" or command.input is not none and not loader.is_identifier(roots.entry):
         fail(f"error: {path}: '{roots.entry}' cannot be a module name")
     output = command.output
-    if output is not None and core.fs_same_file(path, output):
+    if output is not none and core.fs_same_file(path, output):
         fail(f"error: output {output} is the input file")
     modules = translate(path, text, roots)
     if command.name == "run":
-        run(emit_il(modules, False), command.program_args)
-    if output is None:
+        run(emit_il(modules, false), command.program_args)
+    if output is none:
         return
     for module in modules[1:]:
         if not module.privileged and core.fs_same_file(module.path, output):
             fail(f"error: output {output} is the module file {module.path}")
-    il = emit_il(modules, False)
+    il = emit_il(modules, false)
     if command.name == "compile":
         write_output(output, il)
     else:
         build(il, output)
 
-# The project in the current directory, or None; a broken manifest fails.
-def read_project() -> manifest.Project | None:
+# The project in the current directory, or none; a broken manifest fails.
+def read_project() -> manifest.Project | none:
     try:
         return manifest.read()
     except manifest.ManifestError as error:
         fail("error: " + error.message)
-        return None
+        return none
 
 # The checked modules of the program whose entry file is at `path` and has
 # the text `text`, entry first and core among them. Fails with the first
 # error.
 def translate(path: str, text: str, roots: loader.Roots) -> list[ast.Module]:
-    modules = checked(path, text, roots, False)
+    modules = checked(path, text, roots, false)
     if isinstance(modules, diagnostic.Diagnostic):
         fail(modules.format())
         return []
@@ -168,17 +168,17 @@ def translate(path: str, text: str, roots: loader.Roots) -> list[ast.Module]:
 # The modules translate gives, or the first error. A test file (`test`)
 # needs no `main`.
 def checked(path: str, text: str, roots: loader.Roots, test: bool) -> list[ast.Module] | diagnostic.Diagnostic:
-    sources = loader.load(path, text, roots, True)
+    sources = loader.load(path, text, roots, true)
     if isinstance(sources, diagnostic.Diagnostic):
         return sources
     error = bind.bind(sources, test)
-    if error is not None:
+    if error is not none:
         return error
     modules: list[ast.Module] = []
     for source in sources:
         modules.append(source.tree)
     error = check.check_program(modules)
-    if error is not None:
+    if error is not none:
         return error
     return modules
 
@@ -228,37 +228,37 @@ class TestFile:
 def test(args: list[str]):
     path, check_only = parse_test_args(args)
     project = read_project()
-    if path is None:
+    if path is none:
         path = "."
-        if project is not None:
+        if project is not none:
             path = project.tests
     files: list[TestFile] = []
-    failed_checks = False
+    failed_checks = false
     count = 0
-    for file in runner.discover(path, project is not None):
+    for file in runner.discover(path, project is not none):
         roots = loader.file_roots(file)
-        if project is not None:
+        if project is not none:
             roots = loader.Roots(project.source, project.dependencies, roots.entry)
         try:
             text = loader.read_source(file)
         except OSError as error:
             sys.eprint("error: " + loader.read_reason(error))
-            failed_checks = True
+            failed_checks = true
             continue
         if isinstance(text, diagnostic.Diagnostic):
             sys.eprint(text.format())
-            failed_checks = True
+            failed_checks = true
             continue
-        modules = checked(file, text, roots, True)
+        modules = checked(file, text, roots, true)
         if isinstance(modules, diagnostic.Diagnostic):
             sys.eprint(modules.format())
-            failed_checks = True
+            failed_checks = true
             continue
         names: list[str] = []
         for function in modules[0].tests:
             names.append(function.name)
         count = count + len(names)
-        files.append(TestFile(file, emit_il(modules, True), names))
+        files.append(TestFile(file, emit_il(modules, true), names))
     if failed_checks:
         sys.exit(1)
     if count == 0:

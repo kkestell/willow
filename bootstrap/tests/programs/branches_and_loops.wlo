@@ -13,7 +13,7 @@ def sign(n: int) -> str:
 
 def first_square_above(limit: int) -> int:
     n = 0
-    while True:
+    while true:
         if n * n > limit:
             return n
         n = n + 1
@@ -38,8 +38,8 @@ def main():
     print(2 + 3 * 4 - 1)
     print(3 >= 3)
     print(3 != 3)
-    print(True == (1 < 2))
-    if False:
+    print(true == (1 < 2))
+    if false:
         label = "unused"
     else:
         label = "assigned in else"

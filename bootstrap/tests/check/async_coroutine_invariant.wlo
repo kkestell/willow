@@ -2,4 +2,4 @@ async def value() -> int:
     return 1
 
 def main():
-    pending: Coroutine[int | None] = value()
+    pending: Coroutine[int | none] = value()

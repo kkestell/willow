@@ -9,7 +9,7 @@ def power(n: int, m: int) -> int:
 # The m'th powers of 0, 1, 2, and so on.
 def powers(m: int) -> Iterator[int]:
     n = 0
-    while True:
+    while true:
         yield power(n, m)
         n = n + 1
 

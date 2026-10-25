@@ -1,4 +1,4 @@
-def optional[T](value: T) -> () -> T | None:
+def optional[T](value: T) -> () -> T | none:
     return lambda: value
 
 def apply[T, U](value: T, callback: (T) -> U) -> U:

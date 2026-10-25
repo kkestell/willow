@@ -1,5 +1,5 @@
 def main():
     line = input()
-    while line is not None:
+    while line is not none:
         print(len(line))
         line = input()

@@ -5,8 +5,8 @@ def main():
     first = random.generator(maximum)
     second = random.generator(-maximum)
     assert first.random() != second.random()
-    negative = False
-    positive = False
+    negative = false
+    positive = false
     for i in range(32):
         value = first.randint(-maximum, maximum)
         negative = negative or value < 0

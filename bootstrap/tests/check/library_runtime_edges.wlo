@@ -7,10 +7,10 @@ def main():
     with io.open(path, "w") as output:
         core.close(pipe[0])
         core.close(pipe[1])
-        caught = False
+        caught = false
         try:
             output.write_text("hello")
         except OSError as error:
             assert error.message == "cannot write " + path + ": Broken pipe"
-            caught = True
+            caught = true
         assert caught

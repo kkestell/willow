@@ -129,7 +129,7 @@
         },
         { "name": "keyword.operator.logical.willow", "match": "\\b(and|or|not|is)\\b" },
         { "name": "keyword.other.reserved.willow", "match": "\\b(async|case|del|from|global|match)\\b" },
-        { "name": "constant.language.willow", "match": "\\b(True|False|None)\\b" },
+        { "name": "constant.language.willow", "match": "\\b(true|false|none)\\b" },
         { "name": "variable.language.self.willow", "match": "\\bself\\b" }
       ]
     },

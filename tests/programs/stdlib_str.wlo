@@ -6,7 +6,7 @@ def show(items: list[str]) -> str:
 
 def main():
     print(show("  a b\t\nc  ".split()))
-    print(show("  a b  c ".split(None, 1)))
+    print(show("  a b  c ".split(none, 1)))
     print(show("  a b ".split(maxsplit=0)))
     print(show("   ".split()))
     print(show("".split()))
@@ -15,7 +15,7 @@ def main():
     print(show("a,b,c".split(",", 1)))
     print(show("a,b,c".split(sep=",", maxsplit=0)))
     print(show("a--b".split("--")))
-    print(show("  a b  c ".rsplit(None, 1)))
+    print(show("  a b  c ".rsplit(none, 1)))
     print(show("  a b ".rsplit(maxsplit=0)))
     print(show("a,b,c".rsplit(",", 1)))
     print(show("a,b,c".rsplit(",", 0)))
@@ -24,7 +24,7 @@ def main():
     print(show("aaa".split("aa")))
     print(show("é-ü".split("-")))
     print(show("a\nb\r\nc\rd\n".splitlines()))
-    print(show("a\n\nb\r\n".splitlines(True)))
+    print(show("a\n\nb\r\n".splitlines(true)))
     print(show("".splitlines()))
     print(show("\n".splitlines()))
     print("[" + " \t a b \n".lstrip() + "]")

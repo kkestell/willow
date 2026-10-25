@@ -56,21 +56,21 @@ def dirname(path: str) -> str:
         head = head[:-1]
     return head
 
-def _listdir(path: str, pattern: str | None) -> list[str]:
+def _listdir(path: str, pattern: str | none) -> list[str]:
     layout = core.fs_layout()
     directory = opendir(core.path_bytes(path))
     if __addr_is_null(directory):
-        if pattern is not None:
+        if pattern is not none:
             return []
         core.fail_os("list", path)
     names: list[str] = []
     try:
-        while True:
+        while true:
             core.clear_errno()
             entry = readdir(directory)
             if __addr_is_null(entry):
                 if core.errno() != 0:
-                    if pattern is not None:
+                    if pattern is not none:
                         return []
                     core.fail_os("list", path)
                 break
@@ -81,7 +81,7 @@ def _listdir(path: str, pattern: str | None) -> list[str]:
             if size == 2 and __load1(name, 0) == 46 and __load1(name, 1) == 46:
                 continue
             text = core.str_from_bytes(name, size)
-            if pattern is None or _match(pattern, text):
+            if pattern is none or _match(pattern, text):
                 names.append(text)
     finally:
         closedir(directory)
@@ -89,7 +89,7 @@ def _listdir(path: str, pattern: str | None) -> list[str]:
     return names
 
 def listdir(path: str) -> list[str]:
-    return _listdir(path, None)
+    return _listdir(path, none)
 
 def _kind(buf: ptr, layout: core.FsLayout) -> str:
     mode = __load4(buf, layout.mode_offset) % 65536 // 4096
@@ -101,7 +101,7 @@ def _kind(buf: ptr, layout: core.FsLayout) -> str:
         return "symlink"
     return "other"
 
-def stat(path: str, follow_symlinks: bool = True) -> Stat:
+def stat(path: str, follow_symlinks: bool = true) -> Stat:
     layout = core.fs_layout()
     buf = __alloc_atomic(layout.buffer_size)
     if core.fs_stat(core.path_bytes(path), buf, follow_symlinks) != 0:
@@ -115,9 +115,9 @@ def stat(path: str, follow_symlinks: bool = True) -> Stat:
 def _is_directory(path: str) -> bool:
     layout = core.fs_layout()
     buf = __alloc_atomic(layout.buffer_size)
-    return core.fs_stat(core.path_bytes(path), buf, True) == 0 and _kind(buf, layout) == "directory"
+    return core.fs_stat(core.path_bytes(path), buf, true) == 0 and _kind(buf, layout) == "directory"
 
-def mkdir(path: str, parents: bool = False, exist_ok: bool = False):
+def mkdir(path: str, parents: bool = false, exist_ok: bool = false):
     core.path_bytes(path)
     while len(path) > 1 and path.endswith("/"):
         path = path[:-1]
@@ -128,7 +128,7 @@ def mkdir(path: str, parents: bool = False, exist_ok: bool = False):
     if code == 2 and parents:
         parent = dirname(path)
         if parent != "" and parent != path:
-            mkdir(parent, parents=True, exist_ok=True)
+            mkdir(parent, parents=true, exist_ok=true)
             if core.mkdir(core.str_bytes(path), 511) == 0:
                 return
             code = core.errno()
@@ -224,7 +224,7 @@ def _match_set(pattern: list[str], start: int, char: str) -> tuple[bool, int]:
         end = end + 1
     if end == len(pattern):
         return (char == "[", start + 1)
-    matched = False
+    matched = false
     while at < end:
         if at + 2 < end and pattern[at + 1] == "-":
             matched = matched or (pattern[at] <= char and char <= pattern[at + 2])
@@ -236,7 +236,7 @@ def _match_set(pattern: list[str], start: int, char: str) -> tuple[bool, int]:
 
 def _match(pattern: str, name: str) -> bool:
     if name.startswith(".") and not pattern.startswith("."):
-        return False
+        return false
     chars = list(pattern)
     text = list(name)
     at = 0
@@ -249,7 +249,7 @@ def _match(pattern: str, name: str) -> bool:
             at = at + 1
             retry = pos
             continue
-        matched = False
+        matched = false
         after = at + 1
         if at < len(chars):
             if chars[at] == "[":
@@ -264,7 +264,7 @@ def _match(pattern: str, name: str) -> bool:
             pos = retry
             at = star + 1
         else:
-            return False
+            return false
     while at < len(chars) and chars[at] == "*":
         at = at + 1
     return at == len(chars)
@@ -290,7 +290,7 @@ def _glob(pattern: str) -> list[str]:
             path = join(directory, tail)
             layout = core.fs_layout()
             buf = __alloc_atomic(layout.buffer_size)
-            if core.fs_stat(core.str_bytes(path), buf, False) == 0:
+            if core.fs_stat(core.str_bytes(path), buf, false) == 0:
                 paths.append(path)
     return paths
 
@@ -307,7 +307,7 @@ def walk(path: str) -> Iterator[tuple[str, list[str], list[str]]]:
         directories: list[str] = []
         files: list[str] = []
         for name in listdir(directory):
-            if stat(join(directory, name), follow_symlinks=False).kind == "directory":
+            if stat(join(directory, name), follow_symlinks=false).kind == "directory":
                 directories.append(name)
             else:
                 files.append(name)
@@ -315,12 +315,12 @@ def walk(path: str) -> Iterator[tuple[str, list[str], list[str]]]:
             pending.append(join(directory, directories[i]))
         yield (directory, directories, files)
 
-def _temp(prefix: str, directory: str | None, file: bool) -> str:
+def _temp(prefix: str, directory: str | none, file: bool) -> str:
     if "/" in prefix or "\x00" in prefix:
         raise ValueError("prefix must be a single path component")
-    if directory is None:
+    if directory is none:
         directory = sys.getenv("TMPDIR")
-        if directory is None or directory == "":
+        if directory is none or directory == "":
             directory = "/tmp"
     text = join(directory, prefix + "XXXXXX")
     template = __alloc_atomic(core.str_size(text) + 1)
@@ -335,8 +335,8 @@ def _temp(prefix: str, directory: str | None, file: bool) -> str:
         core.fail_os("create temporary directory in", directory)
     return core.str_from_bytes(template, core.strlen(template))
 
-def temp_file(prefix: str = "willow-", directory: str | None = None) -> str:
-    return _temp(prefix, directory, True)
+def temp_file(prefix: str = "willow-", directory: str | none = none) -> str:
+    return _temp(prefix, directory, true)
 
-def temp_dir(prefix: str = "willow-", directory: str | None = None) -> str:
-    return _temp(prefix, directory, False)
+def temp_dir(prefix: str = "willow-", directory: str | none = none) -> str:
+    return _temp(prefix, directory, false)

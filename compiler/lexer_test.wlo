@@ -27,11 +27,11 @@ def describe(source: str) -> str:
 def check(source: str, expected: str) -> bool:
     actual = describe(source)
     if actual == expected:
-        return True
+        return true
     print(f"FAIL {source}")
     print(f"  expected: {expected}")
     print(f"  actual:   {actual}")
-    return False
+    return false
 
 # The line and column of the token with index `index` in `source`.
 def position(source: str, index: int) -> str:
@@ -59,6 +59,7 @@ def main():
         ["def f():\n  pass\n", "2:3: indentation must be a multiple of four spaces"],
         ["def f():\n        pass\n", "2:9: unexpected indent"],
         ["while true and not x_1 int Iterable none lambda print _\n", "while true and not NAME int Iterable none lambda NAME NAME NEWLINE EOF"],
+        ["True False None\n", "NAME NAME NAME NEWLINE EOF"],
         ["9223372036854775807", "INT_LITERAL:9223372036854775807 NEWLINE EOF"],
         ["x = 9223372036854775808\n", "1:5: integer literal out of range"],
         ["x = 12345678901234567890\n", "1:5: integer literal out of range"],
@@ -108,10 +109,10 @@ def main():
         ["x = @\n", "1:5: unexpected character '@'"],
         ["x = é\n", "1:5: unexpected character 'é'"],
     ]
-    ok = True
+    ok = true
     for pair in cases:
         if not check(pair[0], pair[1]):
-            ok = False
+            ok = false
     # Positions after a triple-quoted string and inside a multi-line field.
     positions = [
         [position("x = \"\"\"a\n    b\r\nc\\t\"\"\" + y\n", 3), "3:8"],
@@ -121,7 +122,7 @@ def main():
     for pair in positions:
         if pair[0] != pair[1]:
             print(f"FAIL position: expected {pair[1]}, actual {pair[0]}")
-            ok = False
+            ok = false
     if not ok:
         sys.exit(1)
     print("lexer tests passed")

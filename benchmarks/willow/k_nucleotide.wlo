@@ -30,7 +30,7 @@ def count(sequence: list[str], k: int) -> dict[str, int]:
     for i in range(len(sequence) - k + 1):
         kmer = "".join(sequence[i:i + k])
         current = counts.get(kmer)
-        if current is None:
+        if current is none:
             counts[kmer] = 1
         else:
             counts[kmer] = current + 1
@@ -45,7 +45,7 @@ def print_frequencies(sequence: list[str], k: int):
 
 def print_count(sequence: list[str], kmer: str):
     found = count(sequence, len(kmer)).get(kmer)
-    if found is None:
+    if found is none:
         found = 0
     print(f"{found}\t{kmer}")
 

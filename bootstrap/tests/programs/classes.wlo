@@ -15,21 +15,21 @@ class Counter:
 
 class Stack:
     items: list[int]
-    parent: Stack | None
+    parent: Stack | none
 
     def push(self, value: int):
         self.items.append(value)
 
     def depth(self) -> int:
         parent = self.parent
-        if parent is None:
+        if parent is none:
             return 1
         return parent.depth() + 1
 
 class Token:
     text: str
     line: int
-    value: float | None = None
+    value: float | none = none
 
 def reset(counter: Counter):
     counter.count = 0
@@ -52,7 +52,7 @@ def main():
     reset(fast)
     print(fast.count)
 
-    root = Stack([], None)
+    root = Stack([], none)
     child = Stack([1, 2], root)
     grandchild = Stack([], child)
     grandchild.push(7)
@@ -65,8 +65,8 @@ def main():
     print(token.value)
     token.value = 2.5
     value = token.value
-    if value is not None:
+    if value is not none:
         print(value * 2.0)
-    tokens = [token, Token("y", 2, None)]
+    tokens = [token, Token("y", 2, none)]
     tokens[1].line = 3
     print(tokens[1].line)

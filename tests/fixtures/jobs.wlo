@@ -42,7 +42,7 @@ def main():
         sys.eprint(usage.message)
         sys.exit(2)
     logs = args.get_str("logs")
-    fs.mkdir(logs, parents=True, exist_ok=True)
+    fs.mkdir(logs, parents=true, exist_ok=true)
 
     # Jobs get empty input instead of sharing this program's stdin.
     running: list[Job] = []
@@ -58,10 +58,10 @@ def main():
         waiting: list[Job] = []
         for job in running:
             status = job.process.poll()
-            if status is None and expired:
+            if status is none and expired:
                 job.process.kill()
                 status = job.process.wait()
-            if status is None:
+            if status is none:
                 waiting.append(job)
                 continue
             job.log.close()

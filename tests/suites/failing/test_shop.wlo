@@ -18,7 +18,7 @@ def test_output_of_passing_tests_is_hidden():
     print("hidden")
 
 def test_isolated_process():
-    assert input() is None
+    assert input() is none
     assert len(sys.args()) == 0
 
 async def priced(item: str) -> int:

@@ -1,15 +1,15 @@
 import aio
 
 class Holder:
-    task: aio.Task[int] | None
+    task: aio.Task[int] | none
 
 async def waiter(holder: Holder) -> int:
     task = holder.task
-    if task is not None:
+    if task is not none:
         return await task
     return 0
 
 async def main():
-    holder = Holder(None)
+    holder = Holder(none)
     async with aio.task_group() as group:
         holder.task = group.start(waiter(holder))

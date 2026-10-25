@@ -68,11 +68,11 @@ def program_case(compiler: str, path: str, build: bool, work: str) -> list[str]:
     err = work + "/err"
     if build:
         program = work + "/program"
-        status = execute([compiler, "build", name, "-o", program], directory, None, stdin, out, err)
+        status = execute([compiler, "build", name, "-o", program], directory, none, stdin, out, err)
         if status == 0:
-            status = execute([program], directory, None, stdin, out, err)
+            status = execute([program], directory, none, stdin, out, err)
     else:
-        status = execute([compiler, "run", name], directory, None, stdin, out, err)
+        status = execute([compiler, "run", name], directory, none, stdin, out, err)
     expected_err = base + ".err"
     expected_status = 0
     if fs.exists(expected_err):
@@ -113,10 +113,10 @@ def compare(path: str, stream: str, expected: str, actual: str) -> list[str]:
         expected = "/dev/null"
     if fs.read_bytes(expected) == fs.read_bytes(actual):
         return []
-    result = subprocess.run(["diff", expected, actual], capture_output=True)
+    result = subprocess.run(["diff", expected, actual], capture_output=true)
     lines = [f"FAIL {path}: {stream} differs"]
     stdout = result.stdout
-    assert stdout is not None
+    assert stdout is not none
     for line in stdout.decode().split("\n"):
         if line != "":
             lines.append("    " + line)
@@ -124,8 +124,8 @@ def compare(path: str, stream: str, expected: str, actual: str) -> list[str]:
 
 # Runs `args` in `cwd` with stdin, stdout, and stderr from and to the files
 # at those paths, which may be the same for stdout and stderr, and returns
-# its exit status. `env` replaces the environment unless it is None.
-def execute(args: list[str], cwd: str, env: dict[str, str] | None, stdin: str, stdout: str, stderr: str) -> int:
+# its exit status. `env` replaces the environment unless it is none.
+def execute(args: list[str], cwd: str, env: dict[str, str] | none, stdin: str, stdout: str, stderr: str) -> int:
     input = io.open(stdin)
     output = io.open(stdout, "w")
     error = output

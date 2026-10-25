@@ -10,9 +10,9 @@ import types
 class Builtin:
     name: str
     params: list[BuiltinParam]
-    # None when the checker works the result out from the arguments, and for
+    # none when the checker works the result out from the arguments, and for
     # range and isinstance, which have their own forms.
-    result: types.Type | None
+    result: types.Type | none
     # The runtime helper, when it is not named after the function.
     helper: str
 
@@ -20,8 +20,8 @@ class Builtin:
 # takes any value; the checker checks it by the function's name.
 class BuiltinParam:
     name: str
-    ty: types.Type | None
-    default: ast.Expr | None
+    ty: types.Type | none
+    default: ast.Expr | none
     keyword_only: bool
 
 # A compiler-provided module. It has no source; a program's own module of the
@@ -62,18 +62,18 @@ def str_default(value: str) -> ast.Expr:
     return ast.Expr(0, 0, ast.String(value))
 
 def arg(name: str, ty: types.Type) -> BuiltinParam:
-    return BuiltinParam(name, ty, None, False)
+    return BuiltinParam(name, ty, none, false)
 
 def any_arg(name: str) -> BuiltinParam:
-    return BuiltinParam(name, None, None, False)
+    return BuiltinParam(name, none, none, false)
 
 def defaulted(name: str, ty: types.Type, default: ast.Expr) -> BuiltinParam:
-    return BuiltinParam(name, ty, default, False)
+    return BuiltinParam(name, ty, default, false)
 
-def add(table: dict[str, Builtin], name: str, params: list[BuiltinParam], result: types.Type | None):
+def add(table: dict[str, Builtin], name: str, params: list[BuiltinParam], result: types.Type | none):
     table[name] = Builtin(name, params, result, "")
 
-def add_helper(table: dict[str, Builtin], name: str, params: list[BuiltinParam], result: types.Type | None, helper: str):
+def add_helper(table: dict[str, Builtin], name: str, params: list[BuiltinParam], result: types.Type | none, helper: str):
     table[name] = Builtin(name, params, result, helper)
 
 # The built-in functions. `bytes.fromhex` is listed by that name, which the
@@ -85,37 +85,37 @@ def builtins() -> dict[str, Builtin]:
     add(table, "int", [any_arg("")], prim("int"))
     add(table, "float", [any_arg("")], prim("float"))
     add(table, "len", [any_arg("")], prim("int"))
-    add(table, "iter", [any_arg("")], None)
-    add(table, "next", [any_arg("")], None)
-    add(table, "range", [], None)
+    add(table, "iter", [any_arg("")], none)
+    add(table, "next", [any_arg("")], none)
+    add(table, "range", [], none)
     add(table, "input", [], optional("str"))
     add(table, "ord", [arg("", prim("str"))], prim("int"))
     add(table, "chr", [arg("", prim("int"))], prim("str"))
-    add(table, "isinstance", [], None)
+    add(table, "isinstance", [], none)
     sorted_params = [any_arg("items")]
     sorted_params.extend(sort_params())
-    add(table, "sorted", sorted_params, None)
+    add(table, "sorted", sorted_params, none)
     add(table, "bytes", [arg("", list_of("int"))], prim("bytes"))
     add_helper(table, "bytes.fromhex", [arg("text", prim("str"))], prim("bytes"), "bytes_fromhex")
     # The checker works out these results from the arguments; min and max
     # take one or two arguments.
-    add(table, "abs", [any_arg("x")], None)
+    add(table, "abs", [any_arg("x")], none)
     add(table, "round", [arg("x", prim("float"))], prim("int"))
-    add(table, "min", [any_arg(""), any_arg("")], None)
-    add(table, "max", [any_arg(""), any_arg("")], None)
-    add(table, "sum", [any_arg("items")], None)
+    add(table, "min", [any_arg(""), any_arg("")], none)
+    add(table, "max", [any_arg(""), any_arg("")], none)
+    add(table, "sum", [any_arg("items")], none)
     add(table, "any", [any_arg("items")], prim("bool"))
     add(table, "all", [any_arg("items")], prim("bool"))
-    add(table, "list", [any_arg("items")], None)
+    add(table, "list", [any_arg("items")], none)
     start = defaulted("start", prim("int"), int_default("0"))
-    add(table, "enumerate", [any_arg("items"), start], None)
-    add(table, "zip", [any_arg("a"), any_arg("b")], None)
+    add(table, "enumerate", [any_arg("items"), start], none)
+    add(table, "zip", [any_arg("a"), any_arg("b")], none)
     return table
 
 # The parameters of `sorted` after `items`, and of `list.sort`.
 def sort_params() -> list[BuiltinParam]:
-    reverse = defaulted("reverse", prim("bool"), bool_default(False))
-    return [reverse, BuiltinParam("key", None, none_default(), True)]
+    reverse = defaulted("reverse", prim("bool"), bool_default(false))
+    return [reverse, BuiltinParam("key", none, none_default(), true)]
 
 # The string methods, with the spec's parameter names and defaults. Each
 # lowers to core's `str_<name>`.
@@ -126,7 +126,7 @@ def str_methods() -> dict[str, Builtin]:
     add(table, "find", [arg("sub", text)], prim("int"))
     add(table, "split", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
     add(table, "rsplit", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
-    add(table, "splitlines", [defaulted("keepends", flag, bool_default(False))], list_of("str"))
+    add(table, "splitlines", [defaulted("keepends", flag, bool_default(false))], list_of("str"))
     add(table, "encode", [], prim("bytes"))
     add(table, "join", [arg("items", list_of("str"))], text)
     add(table, "startswith", [arg("prefix", text)], flag)
@@ -163,7 +163,7 @@ def bytes_methods() -> dict[str, Builtin]:
 # own syntax, and `__os` is a name.
 def intrinsics() -> dict[str, Builtin]:
     table: dict[str, Builtin] = {}
-    add(table, "__ccall", [], None)
+    add(table, "__ccall", [], none)
     add(table, "__alloc", [arg("", prim("int"))], prim("ptr"))
     add(table, "__alloc_atomic", [arg("", prim("int"))], prim("ptr"))
     add(table, "__load1", [arg("", prim("ptr")), arg("", prim("int"))], prim("int"))
@@ -186,8 +186,8 @@ def intrinsics() -> dict[str, Builtin]:
 
 # An exception class: a class with only a `message` field.
 def exception(name: str, type_name: str) -> types.Class:
-    message = types.Field("message", prim("str"), None)
-    return types.Class(name, type_name, [], [message], [], True, False, "")
+    message = types.Field("message", prim("str"), none)
+    return types.Class(name, type_name, [], [message], [], true, false, "")
 
 # The built-in exception classes.
 def exceptions() -> dict[str, types.Class]:
@@ -205,17 +205,17 @@ def optional_exception() -> types.Type:
 # (types.TypeVar), so tables built twice agree; types.iterator_protocol's is
 # -1.
 def standard_protocol(name: str, id: int) -> types.Protocol:
-    return types.Protocol(name, name, [types.TypeVar(id, "T", None)], [])
+    return types.Protocol(name, name, [types.TypeVar(id, "T", none)], [])
 
 # Adds a method with the parameters `params` after `self`.
 def protocol_method(decl: types.Protocol, name: str, params: list[types.Param], result: types.Type):
-    receiver = types.Param("self", types.protocol_self(decl), None, False)
+    receiver = types.Param("self", types.protocol_self(decl), none, false)
     all_params = [receiver]
     all_params.extend(params)
     decl.methods.append(types.Function(0, name, decl.type_name + "." + name, [], all_params, result))
 
 def param(name: str, ty: types.Type) -> types.Param:
-    return types.Param(name, ty, None, False)
+    return types.Param(name, ty, none, false)
 
 # The standard protocols, each generic in `T`.
 def protocols() -> dict[str, types.Protocol]:
@@ -241,7 +241,7 @@ def protocols() -> dict[str, types.Protocol]:
 # `Coroutine[T]`, an opaque generic type with no methods. Values are created
 # only by calling async functions.
 def coroutine() -> types.Class:
-    return types.Class("Coroutine", "Coroutine", [types.TypeVar(-5, "T", None)], [], [], False, True, "")
+    return types.Class("Coroutine", "Coroutine", [types.TypeVar(-5, "T", none)], [], [], false, true, "")
 
 def coroutine_of(t: types.Type) -> types.Type:
     return types.ClassType(coroutine(), [t])
@@ -250,21 +250,21 @@ def coroutine_of(t: types.Type) -> types.Type:
 def has_coroutine(t: types.Type) -> bool:
     for m in types.members(t):
         if isinstance(m, types.ClassType) and m.decl.type_name == "Coroutine":
-            return True
-    return False
+            return true
+    return false
 
 # An ordinary class of a provided module, with `fields` names and `kinds`
 # types.
 def provided_class(module: str, name: str, names: list[str], kinds: list[types.Type]) -> types.Class:
     fields: list[types.Field] = []
     for i in range(len(names)):
-        fields.append(types.Field(names[i], kinds[i], None))
-    return types.Class(name, module + "." + name, [], fields, [], False, False, "", True)
+        fields.append(types.Field(names[i], kinds[i], none))
+    return types.Class(name, module + "." + name, [], fields, [], false, false, "", true)
 
 # A native type: a provided class with no fields that only its module's
 # functions create. Its methods lower to helpers named after `prefix`.
 def native_class(module: str, name: str, prefix: str) -> types.Class:
-    return types.Class(name, module + "." + name, [], [], [], False, True, prefix, True)
+    return types.Class(name, module + "." + name, [], [], [], false, true, prefix, true)
 
 def class_type(decl: types.Class) -> types.Type:
     return types.class_self(decl)
@@ -276,13 +276,13 @@ def native_method(decl: types.Class, name: str, params: list[types.Param], resul
 
 # A native method generic in `typevars`.
 def generic_method(decl: types.Class, name: str, typevars: list[types.TypeVar], params: list[types.Param], result: types.Type):
-    receiver = types.Param("self", types.class_self(decl), None, False)
+    receiver = types.Param("self", types.class_self(decl), none, false)
     all_params = [receiver]
     all_params.extend(params)
     decl.methods.append(types.Function(0, name, decl.type_name + "." + name, typevars, all_params, result))
 
 def default_param(name: str, ty: types.Type, default: ast.Expr) -> types.Param:
-    return types.Param(name, ty, default, False)
+    return types.Param(name, ty, default, false)
 
 # Gives a native type the context-manager methods: `enter` returns the open
 # handle and `exit` closes it.
@@ -320,13 +320,13 @@ def dispatched() -> list[types.Class]:
     result: list[types.Class] = []
     id = -10
     for name in "list dict str bytes tuple range".split(" "):
-        result.append(dispatched_class(name, name, types.TypeVar(id, "T", None)))
+        result.append(dispatched_class(name, name, types.TypeVar(id, "T", none)))
         id = id - 1
-    t = types.TypeVar(-16, "T", None)
+    t = types.TypeVar(-16, "T", none)
     iterator = dispatched_class("<iterator>", "iterator", t)
     native_method(iterator, "next", [], t)
     result.append(iterator)
-    t = types.TypeVar(-17, "T", None)
+    t = types.TypeVar(-17, "T", none)
     generator = dispatched_class("<generator>", "generator", t)
     native_method(generator, "next", [], t)
     native_method(generator, "close", [], prim("none"))
@@ -337,6 +337,6 @@ def dispatched() -> list[types.Class]:
     return result
 
 def dispatched_class(tag: str, prefix: str, t: types.TypeVar) -> types.Class:
-    decl = types.Class(tag, tag, [], [], [], False, True, prefix)
+    decl = types.Class(tag, tag, [], [], [], false, true, prefix)
     native_method(decl, "iter", [], types.iterator(t))
     return decl

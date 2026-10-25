@@ -4,7 +4,7 @@
 def main():
     total = 0
     line = input()
-    while line is not None:
+    while line is not none:
         total = total + int(line)
         line = input()
     print(total)

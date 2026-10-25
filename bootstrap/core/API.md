@@ -10,7 +10,7 @@ and stage 1 calls `os` and `run` through `import core`.
 - A list, dict, or class value is a `ptr` to its object; core never sees its
   static type. Stage 0 converts each `word` result to the static type: `copy`
   for slot types, `cast` for `float`, and unboxing where §4 requires it.
-- A union value is a `ptr`: 0 for `None`, a `str`, list, dict, or class object
+- A union value is a `ptr`: 0 for `none`, a `str`, list, dict, or class object
   as itself, and any other scalar as a box.
 - An object's header word points at its type descriptor,
   `$W.<module>.<Type>.type` or `$W.<builtin>.type`. A descriptor is
@@ -19,7 +19,7 @@ and stage 1 calls `os` and `run` through `import core`.
 - A box is a header word and a payload `word`: the `int`, the `float` bits, 0
   or 1 for `bool`, or the ordinal for an enum.
 - Equality kinds, passed as `kind: int`: 0 compares slots (`int`, `bool`,
-  enums, `None`), 1 compares as `float` (NaN unequal, `-0.0 == 0.0`), 2
+  enums, `none`), 1 compares as `float` (NaN unequal, `-0.0 == 0.0`), 2
   compares `str` by bytes, 3 compares unions with `union_eq`.
 - An omitted slice start is passed as 0 and an omitted stop as
   9223372036854775807, which clamping makes the length.
@@ -66,15 +66,15 @@ Fatal failures of L0:
 | --- | --- |
 | `int_to_str(n: int) -> str` | Decimal text |
 | `float_to_str(x: float) -> str` | Python `repr` text, including `inf`, `-inf`, `nan` |
-| `bool_to_str(b: bool) -> str` | `True` or `False` |
+| `bool_to_str(b: bool) -> str` | `true` or `false` |
 | `enum_to_str(descriptor: ptr, ordinal: int) -> str` | The member's text from the enum's descriptor |
-| `union_to_str(value: ptr) -> str` | The text of a printable union value; `None` for 0 |
+| `union_to_str(value: ptr) -> str` | The text of a printable union value; `none` for 0 |
 | `print_str(s: str)` | Writes `s` and a newline to stdout; reports a failed write and exits with status 1 |
 | `eprint_str(s: str)` | Writes `s` and a newline to stderr, for `sys.eprint`; exits with status 1 if the write fails |
 
 `print(v)`, `sys.eprint(v)`, `str(v)`, and f-string fields convert `v` with
-the function for its static type; a `str` is used as it is and `None` is the
-literal `"None"`.
+the function for its static type; a `str` is used as it is and `none` is the
+literal `"none"`.
 
 ## Numbers and conversions
 
@@ -106,7 +106,7 @@ literal `"None"`.
 | `str_endswith(s: str, suffix: str) -> bool` | `s.endswith(suffix)` |
 | `str_replace(s: str, old: str, new: str) -> str` | `s.replace(old, new)` |
 | `str_strip(s: str) -> str` | `s.strip()` |
-| `str_split(s: str, sep: str \| None, maxsplit: int) -> ptr` | `s.split(sep, maxsplit)` as a `list[str]`; stage 0 passes `None` and -1 for omitted arguments |
+| `str_split(s: str, sep: str \| none, maxsplit: int) -> ptr` | `s.split(sep, maxsplit)` as a `list[str]`; stage 0 passes `none` and -1 for omitted arguments |
 | `str_join(sep: str, items: ptr) -> str` | `sep.join(items)` for a `list[str]` |
 | `str_removeprefix(s: str, prefix: str) -> str` | `s.removeprefix(prefix)` |
 | `str_removesuffix(s: str, suffix: str) -> str` | `s.removesuffix(suffix)` |
@@ -227,7 +227,7 @@ references after switching to the caller.
 A `Coroutine[T]` is a header pointing at `$W.Coroutine.type`, a body closure
 pointer, and a consumed flag. The body closure has its code address at byte 8
 and bound arguments and environment from byte 16, as emitted function closures
-do. The code takes that closure and returns a `word`, including 0 for `None`.
+do. The code takes that closure and returns a `word`, including 0 for `none`.
 Creating the object does not allocate a stack or execute its body. Consuming it
 sets the flag and clears its body reference; aliases share the flag.
 
@@ -258,8 +258,8 @@ registrations after readiness, timeout, or cancellation.
 
 | Signature | Meaning |
 | --- | --- |
-| `aio_wait_fd(fd: int, events: int, deadline: float \| None) -> bool` | Suspend until readiness or deadline, checking cancellation before and after waiting |
-| `aio_close_fd(fd: int, loop: AioLoop \| None)` | Remove registrations and wake operations before closing; also works outside a loop |
+| `aio_wait_fd(fd: int, events: int, deadline: float \| none) -> bool` | Suspend until readiness or deadline, checking cancellation before and after waiting |
+| `aio_close_fd(fd: int, loop: AioLoop \| none)` | Remove registrations and wake operations before closing; also works outside a loop |
 | `aio_task_group() -> AioGroup` | Create an inactive group |
 | `aio_group_enter(group: AioGroup)` | Enter a single-use group and install its cancellation scope |
 | `aio_group_exit(group: AioGroup, error: ptr) -> ptr` | Join children; return the first final failure, an outer cancellation, or 0 |
@@ -291,7 +291,7 @@ return it without leaking or overtaking another waiter.
 ## Inline in stage 0
 
 Integer and float arithmetic and comparisons with their overflow and division
-checks, `and`, `or`, `not`, `range` loops, `is None`, `isinstance` on a
+checks, `and`, `or`, `not`, `range` loops, `is none`, `isinstance` on a
 non-union, field loads and stores, `float(n)` for an `int`, and `assert`.
 
 ## Intrinsics
@@ -300,7 +300,7 @@ Only core may use these.
 
 | Form | Meaning |
 | --- | --- |
-| `ptr` | A raw address; `None` is not assignable to it |
+| `ptr` | A raw address; `none` is not assignable to it |
 | `word` | An uninspected 8-byte slot |
 | `__alloc(size: int) -> ptr` | `GC_malloc`: zeroed, scanned memory |
 | `__alloc_atomic(size: int) -> ptr` | `GC_malloc_atomic`: unzeroed memory the collector does not scan |

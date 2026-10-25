@@ -39,7 +39,7 @@ def main():
     # Redirects.
     print(show(http.request("GET", base + "/redirect/3")))
     print(show(http.request("GET", base + "/relative")))
-    print(http.request("GET", base + "/redirect/2", follow_redirects=False).status)
+    print(http.request("GET", base + "/redirect/2", follow_redirects=false).status)
     print(show(http.request("POST", base + "/post-redirect")))
     moved = http.request("GET", base + "/to-host", headers=[http.Header("X-Test", "secret")])
     print(moved.body.decode())

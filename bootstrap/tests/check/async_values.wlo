@@ -24,7 +24,7 @@ async def identity[T](value: T) -> T:
 async def through(source: Source) -> float:
     return await source.read(value=1.25)
 
-def pending_value() -> Coroutine[int] | None:
+def pending_value() -> Coroutine[int] | none:
     return identity(7)
 
 async def main():
@@ -42,7 +42,7 @@ async def main():
     value, text = await pending
     print(value)
     print(text)
-    print(await identity(None))
+    print(await identity(none))
     pending_number = pending_value()
-    if pending_number is not None:
+    if pending_number is not none:
         print(await pending_number)

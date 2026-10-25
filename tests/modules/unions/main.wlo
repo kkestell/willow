@@ -1,13 +1,13 @@
 import shapes
 
-def describe(shape: shapes.Shape | None) -> str:
-    if shape is None:
+def describe(shape: shapes.Shape | none) -> str:
+    if shape is none:
         return "no shape"
     if isinstance(shape, shapes.Circle):
         return f"circle of radius {shape.radius}"
     return f"square of area {shapes.area(shape)}"
 
 def main():
-    items: list[shapes.Shape | None] = [shapes.Circle(2.0), shapes.Square(3.0), None]
+    items: list[shapes.Shape | none] = [shapes.Circle(2.0), shapes.Square(3.0), none]
     for item in items:
         print(describe(item))

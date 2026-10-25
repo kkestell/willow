@@ -9,8 +9,8 @@ def main():
     assert options.choose() == keyword_defaults.settings.Mode.OFF
     assert options.choose(mode=keyword_defaults.settings.Mode.ON) == keyword_defaults.settings.Mode.ON
     assert keyword_defaults.settings.choose() == keyword_defaults.settings.Mode.ON
-    assert keyword_defaults.settings.choose(mode=None) is None
+    assert keyword_defaults.settings.choose(mode=none) is none
     assert keyword_defaults.settings.choose(mode=keyword_defaults.settings.Mode.OFF) == keyword_defaults.settings.Mode.OFF
-    other = keyword_defaults.settings.Options(mode=None, number=-1)
-    assert other.mode is None
+    other = keyword_defaults.settings.Options(mode=none, number=-1)
+    assert other.mode is none
     assert str(other.number) == "-1"

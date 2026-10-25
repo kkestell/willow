@@ -9,8 +9,8 @@ def repeat[T](x: T, n: int) -> list[T]:
         result.append(x)
     return result
 
-def pick[T](x: T | None = None, fallback: T | None = None) -> T | None:
-    if x is not None:
+def pick[T](x: T | none = none, fallback: T | none = none) -> T | none:
+    if x is not none:
         return x
     return fallback
 
@@ -29,29 +29,29 @@ def map_list[T, U](f: (T) -> U, xs: list[T]) -> list[U]:
         result.append(f(x))
     return result
 
-def count[T](xs: list[T] | None) -> int:
-    if xs is None:
+def count[T](xs: list[T] | none) -> int:
+    if xs is none:
         return 0
     return len(xs)
 
-def apply_maybe[T](f: (T) -> list[int | None], x: T) -> list[int | None]:
+def apply_maybe[T](f: (T) -> list[int | none], x: T) -> list[int | none]:
     return f(x)
 
-def maybe() -> int | None:
-    return None
+def maybe() -> int | none:
+    return none
 
 # Calls without type arguments infer them.
 def inferred():
     print(first([3, 4]))
     print(first(["a"]))
-    # int and int | None infer int | None.
+    # int and int | none infer int | none.
     both = pair_same(1, maybe())
     print(len(both))
-    print(pick(None, 5))
+    print(pick(none, 5))
     # The expected result decides what the arguments leave open.
     xs: list[int] = empty()
     print(len(xs))
-    y: int | None = first([1])
+    y: int | none = first([1])
     print(y)
     # A lambda's parameter types come from the other arguments; its result infers U.
     doubled = map_list(lambda x: x * 2, [1, 2])
@@ -69,14 +69,14 @@ def inferred():
 
 type Pair[K, V] = tuple[K, V]
 # A generic alias may recurse through list or dict.
-type Nested[T] = list[Nested[T]] | None
+type Nested[T] = list[Nested[T]] | none
 type Tree[T] = dict[str, Tree[T]] | list[T]
 
 def swap(p: Pair[int, str]) -> Pair[str, int]:
     return (p[1], p[0])
 
 def depth(n: Nested[int]) -> int:
-    if n is None:
+    if n is none:
         return 0
     best = 0
     for child in n:
@@ -87,7 +87,7 @@ def depth(n: Nested[int]) -> int:
 
 # A recursive alias may be applied to the function's own type parameter.
 def generic_depth[T](n: Nested[T]) -> int:
-    if n is None:
+    if n is none:
         return 0
     best = 0
     for child in n:
@@ -126,8 +126,8 @@ def apply(f: (str) -> str, s: str) -> str:
 
 def aliases_bounds_values():
     print(swap((1, "a"))[0])
-    print(depth([[None], [[None]]]))
-    print(generic_depth[str]([[None], [[None]]]))
+    print(depth([[none], [[none]]]))
+    print(generic_depth[str]([[none], [[none]]]))
     tree: Tree[int] = {"a": [1, 2], "b": {"c": [3]}}
     print(len(leaves(tree)))
     print(label(Named("a")))
@@ -141,14 +141,14 @@ def main():
     print(first[int]([3, 4]))
     print(first[str](["a", "b"]))
     print(len(repeat[str]("x", 3)))
-    print(pick[int](None, fallback=5))
+    print(pick[int](none, fallback=5))
     print(pick[int]())
     # A float in an int | float type argument passes through unconverted.
     v = first[int | float]([2.5, 1])
     print(isinstance(v, float))
     print(v)
-    # T | None with T = int | None is int | None.
-    w: int | None = pick[int | None](None, 7)
+    # T | none with T = int | none is int | none.
+    w: int | none = pick[int | none](none, 7)
     print(w)
     p = pair[int, str](1, "a")
     print(p[1])

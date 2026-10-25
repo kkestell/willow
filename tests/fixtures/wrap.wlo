@@ -5,8 +5,8 @@
 import subprocess
 import sys
 
-def describe(name: str, data: bytes | None):
-    if data is None or len(data) == 0:
+def describe(name: str, data: bytes | none):
+    if data is none or len(data) == 0:
         print(f"{name}: (empty)")
         return
     try:
@@ -22,7 +22,7 @@ def main():
     env = sys.environ()
     env["LC_ALL"] = "C"
     try:
-        result = subprocess.run(args[1:], input=bytes([]), capture_output=True, env=env, timeout=float(args[0]))
+        result = subprocess.run(args[1:], input=bytes([]), capture_output=true, env=env, timeout=float(args[0]))
     except TimeoutError as timeout:
         print(f"timed out: {timeout.message}")
         sys.exit(1)

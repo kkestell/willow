@@ -12,9 +12,9 @@ def main():
     print(object(d).get(number("lookup", 1), number("default", 5)))
     print(len(d))
 
-    empty = {"n": None}
+    empty = {"n": none}
     print(empty.get("n"))
-    print(empty.get("missing", None))
+    print(empty.get("missing", none))
 
     groups: dict[int, list[int]] = {}
     group = groups.get(1, [])

@@ -9,7 +9,7 @@ def helper(n: int) -> int:
 
 def is_even(n: int) -> bool:
     if n == 0:
-        return True
+        return true
     return util.is_odd(n - 1)
 
 def main():

@@ -30,7 +30,7 @@ def main():
         sys.exit(1)
     print(f"status {response.status}")
     content_type = http.header(response.headers, "Content-Type")
-    if content_type is None or not content_type.startswith("application/json"):
+    if content_type is none or not content_type.startswith("application/json"):
         print(response.body.decode())
         sys.exit(1)
     doc = json.parse(response.body.decode())

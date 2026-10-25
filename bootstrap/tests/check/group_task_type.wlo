@@ -5,4 +5,4 @@ async def number() -> int:
 
 async def main():
     async with aio.task_group() as group:
-        task: aio.Task[int | None] = group.start(number())
+        task: aio.Task[int | none] = group.start(number())

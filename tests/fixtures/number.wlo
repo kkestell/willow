@@ -8,7 +8,7 @@ def main():
         sys.exit(2)
     numbered: list[str] = []
     line = input()
-    while line is not None:
+    while line is not none:
         numbered.append(f"{len(numbered) + 1}: {line}\n")
         line = input()
     try:

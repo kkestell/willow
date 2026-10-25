@@ -1,20 +1,20 @@
 import core
 import time
 
-def _wait(fd: int, events: int, deadline: float | None) -> bool:
+def _wait(fd: int, events: int, deadline: float | none) -> bool:
     descriptor = core.net_pollfd(fd, events)
     ready = 0
     while ready <= 0:
         milliseconds = -1
-        if deadline is not None:
+        if deadline is not none:
             remaining = (deadline - time.monotonic()) * 1000.0
             if remaining <= 0.0:
-                return False
+                return false
             milliseconds = int(min(core.ceil(remaining), 2147483647.0))
         ready = core.poll(descriptor, 1, milliseconds)
         if ready < 0 and core.errno() != 4:
             raise OSError("cannot poll socket: " + core.os_reason())
-    return True
+    return true
 
 class Connection:
     _fd: int
@@ -26,7 +26,7 @@ class Connection:
         if self._broken:
             raise ValueError("connection is unusable after a failed send")
 
-    def recv(self, size: int, timeout: float | None = None) -> bytes:
+    def recv(self, size: int, timeout: float | none = none) -> bytes:
         self._usable()
         if size < 1:
             raise ValueError("size must be positive")
@@ -40,7 +40,7 @@ class Connection:
             count = core.net_try_recv(self._fd, buffer, size)
         return __bytes(core.net_received(buffer))
 
-    def sendall(self, data: bytes, timeout: float | None = None):
+    def sendall(self, data: bytes, timeout: float | none = none):
         self._usable()
         core.net_check_timeout(timeout)
         deadline = core.net_deadline(timeout)
@@ -53,7 +53,7 @@ class Connection:
                 elif not _wait(self._fd, 4, deadline):
                     core.net_timed_out("send", timeout)
         except Exception:
-            self._broken = True
+            self._broken = true
             raise
 
     def close(self):
@@ -65,7 +65,7 @@ class Connection:
         self._usable()
         return self
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         self.close()
 
 class Listener:
@@ -75,7 +75,7 @@ class Listener:
         if self._fd < 0:
             raise ValueError("I/O operation on closed listener")
 
-    def accept(self, timeout: float | None = None) -> Connection:
+    def accept(self, timeout: float | none = none) -> Connection:
         self._usable()
         core.net_check_timeout(timeout)
         deadline = core.net_deadline(timeout)
@@ -84,7 +84,7 @@ class Listener:
             if not _wait(self._fd, 1, deadline):
                 core.net_timed_out("accept", timeout)
             fd = core.net_try_accept(self._fd)
-        return Connection(fd, False)
+        return Connection(fd, false)
 
     def local_port(self) -> int:
         self._usable()
@@ -99,22 +99,22 @@ class Listener:
         self._usable()
         return self
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         self.close()
 
-def connect(host: str, port: int, timeout: float | None = 30.0) -> Connection:
+def connect(host: str, port: int, timeout: float | none = 30.0) -> Connection:
     core.net_check_host(host, port, 1)
     core.net_check_timeout(timeout)
     addresses = core.net_resolve(host, port)
     deadline = core.net_deadline(timeout)
     state = core.NetConnect(host, port, addresses, 0, -1, "no addresses")
-    connected = False
+    connected = false
     try:
         while not core.net_connect_step(state):
             if not _wait(state.fd, 4, deadline):
                 core.net_timed_out("connect", timeout)
-        connected = True
-        return Connection(state.fd, False)
+        connected = true
+        return Connection(state.fd, false)
     finally:
         if not connected and state.fd >= 0:
             core.close(state.fd)
@@ -131,9 +131,9 @@ class Reader:
         if self._closed:
             raise ValueError("I/O operation on closed reader")
 
-    def _fill(self, what: str, timeout: float | None, deadline: float | None) -> bool:
-        remaining: float | None = None
-        if deadline is not None:
+    def _fill(self, what: str, timeout: float | none, deadline: float | none) -> bool:
+        remaining: float | none = none
+        if deadline is not none:
             remaining = deadline - time.monotonic()
             if remaining <= 0.0:
                 core.net_timed_out(what, timeout)
@@ -141,7 +141,7 @@ class Reader:
             chunk = self._connection.recv(65536, remaining)
         except TimeoutError:
             core.net_timed_out(what, timeout)
-            return False
+            return false
         self._buffer = self._buffer + chunk
         return len(chunk) > 0
 
@@ -150,7 +150,7 @@ class Reader:
         self._buffer = self._buffer[count:]
         return data
 
-    def read_exactly(self, size: int, timeout: float | None = None) -> bytes:
+    def read_exactly(self, size: int, timeout: float | none = none) -> bytes:
         self._usable()
         if size < 0:
             raise ValueError("size must not be negative")
@@ -161,7 +161,7 @@ class Reader:
                 raise OSError(f"unexpected end of stream: expected {size} bytes, received {len(self._buffer)}")
         return self._take(size)
 
-    def read_until(self, separator: bytes, max_bytes: int = 1048576, timeout: float | None = None) -> bytes:
+    def read_until(self, separator: bytes, max_bytes: int = 1048576, timeout: float | none = none) -> bytes:
         self._usable()
         if len(separator) == 0:
             raise ValueError("separator must not be empty")
@@ -180,7 +180,7 @@ class Reader:
 
     def close(self):
         if not self._closed:
-            self._closed = True
+            self._closed = true
             self._buffer = bytes([])
             self._connection.close()
 
@@ -188,9 +188,9 @@ class Reader:
         self._usable()
         return self
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         self.close()
 
 def reader(connection: Connection) -> Reader:
     connection.enter()
-    return Reader(connection, bytes([]), False)
+    return Reader(connection, bytes([]), false)

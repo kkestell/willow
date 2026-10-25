@@ -6,8 +6,8 @@ def safe(columns: list[int], column: int) -> bool:
     for r in range(row):
         c = columns[r]
         if c == column or c - column == r - row or c - column == row - r:
-            return False
-    return True
+            return false
+    return true
 
 def solve(n: int, columns: list[int], solutions: list[list[int]]):
     if len(columns) == n:

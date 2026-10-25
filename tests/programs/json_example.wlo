@@ -6,5 +6,5 @@ def main():
         ports = doc["ports"]
         if isinstance(ports, list):
             print(len(ports))       # 2
-    reply: json.Json = {"ok": True, "items": [1, 2.5, None]}
+    reply: json.Json = {"ok": true, "items": [1, 2.5, none]}
     print(json.dump(reply))         # {"ok":true,"items":[1,2.5,null]}

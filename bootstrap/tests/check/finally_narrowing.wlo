@@ -1,10 +1,10 @@
-def f(x: int | None):
-    if x is None:
+def f(x: int | none):
+    if x is none:
         return
     try:
         pass
     except Exception:
-        x = None
+        x = none
     finally:
         print(x + 1)
 

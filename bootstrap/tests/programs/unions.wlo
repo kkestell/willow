@@ -6,10 +6,10 @@ class Square:
 
 class Node:
     value: int
-    next: Node | None
+    next: Node | none
 
 type Shape = Circle | Square
-type Value = int | float | str | bool | None
+type Value = int | float | str | bool | none
 
 def area(shape: Shape) -> float:
     if isinstance(shape, Circle):
@@ -17,7 +17,7 @@ def area(shape: Shape) -> float:
     return shape.side * shape.side
 
 def describe(value: Value) -> str:
-    if value is None:
+    if value is none:
         return "nothing"
     elif isinstance(value, bool):
         if value:
@@ -30,22 +30,22 @@ def describe(value: Value) -> str:
     else:
         return "str " + value
 
-def length(text: str | None) -> int:
-    if text is not None and len(text) > 2:
+def length(text: str | none) -> int:
+    if text is not none and len(text) > 2:
         return len(text)
-    if text is None or text == "":
+    if text is none or text == "":
         return 0
     return -len(text)
 
-def positive(value: int | None) -> bool:
-    if not (value is None or value <= 0):
+def positive(value: int | none) -> bool:
+    if not (value is none or value <= 0):
         return value > 0
-    return False
+    return false
 
-def sum_nodes(head: Node | None) -> int:
+def sum_nodes(head: Node | none) -> int:
     total = 0
     node = head
-    while node is not None:
+    while node is not none:
         total = total + node.value
         node = node.next
     return total
@@ -53,27 +53,27 @@ def sum_nodes(head: Node | None) -> int:
 def same(a: int | float, b: int | float) -> bool:
     return a == b
 
-def first_word(text: str | None) -> str:
-    assert text is not None
+def first_word(text: str | none) -> str:
+    assert text is not none
     return text.split(" ")[0]
 
 def main():
     print(area(Circle(1.0)))
     print(area(Square(2.5)))
-    print(describe(None))
-    print(describe(True))
+    print(describe(none))
+    print(describe(true))
     print(describe(41))
     print(describe(1.25))
     print(describe("hi"))
     print(length("abcd"))
-    print(length(None))
+    print(length(none))
     print(length("ab"))
     print(length(""))
     print(positive(3))
     print(positive(-3))
-    print(positive(None))
-    print(sum_nodes(Node(1, Node(2, Node(3, None)))))
-    print(sum_nodes(None))
+    print(positive(none))
+    print(sum_nodes(Node(1, Node(2, Node(3, none)))))
+    print(sum_nodes(none))
     print(first_word("hello there"))
 
     value: int | str = 5
@@ -82,7 +82,7 @@ def main():
     value = "six"
     print(value + "!")
 
-    maybe: int | None = None
+    maybe: int | none = none
     print(maybe)
     maybe = 7
     print(maybe)

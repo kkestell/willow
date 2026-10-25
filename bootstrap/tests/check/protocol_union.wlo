@@ -17,21 +17,21 @@ class Source:
 class Box:
     n: int
 
-def widen(value: TaggedReader | Box | None) -> Reader | Box | None:
+def widen(value: TaggedReader | Box | none) -> Reader | Box | none:
     return value
 
-def describe(value: Reader | Box | None) -> str:
+def describe(value: Reader | Box | none) -> str:
     if isinstance(value, Box):
         return "box " + str(value.n)
-    if value is None:
+    if value is none:
         return "none"
     return "reader " + str(value.read())
 
 def main():
-    values: list[Reader | Box | None] = [Source(1), Box(2), None]
+    values: list[Reader | Box | none] = [Source(1), Box(2), none]
     for value in values:
         print(isinstance(value, Box))
         print(describe(value))
     print(describe(widen(Source(3))))
     print(describe(widen(Box(4))))
-    print(describe(widen(None)))
+    print(describe(widen(none)))

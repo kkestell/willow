@@ -6,8 +6,8 @@ class Manager:
         self.log.append("enter " + self.name)
         return self.name
 
-    def exit(self, error: Exception | None):
-        assert error is None
+    def exit(self, error: Exception | none):
+        assert error is none
         self.log.append("exit " + self.name)
 
 def guarded(log: list[str]) -> Generator[int]:
@@ -35,7 +35,7 @@ def main():
     assert ",".join(log) == "enter outer,enter inner,finally,exit inner,exit outer"
     try:
         next(source)
-        assert False
+        assert false
     except StopIteration:
         pass
 
@@ -57,7 +57,7 @@ def main():
     holder.append(reentrant())
     try:
         next(holder[0])
-        assert False
+        assert false
     except RuntimeError as error:
         assert error.message == "generator already running"
 

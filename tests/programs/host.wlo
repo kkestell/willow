@@ -7,12 +7,12 @@ def main():
     for p in ["a/b", "a/b/", "/", "a", "//a", "a//b", ""]:
         print(f"[{fs.basename(p)}] [{fs.dirname(p)}]")
     base = fs.join("/tmp", "wlo_host_" + str(int(time.time() * 1000000.0)))
-    fs.mkdir(fs.join(base, "x/y"), parents=True)
-    fs.mkdir(base, exist_ok=True)
+    fs.mkdir(fs.join(base, "x/y"), parents=true)
+    fs.mkdir(base, exist_ok=true)
     fs.write_file(fs.join(base, "é.txt"), "hi")
     fs.write_file(fs.join(base, "b.txt"), "hello")
     print(", ".join(fs.listdir(base)))
-    st: fs.Stat = fs.stat(fs.join(base, "b.txt"), follow_symlinks=False)
+    st: fs.Stat = fs.stat(fs.join(base, "b.txt"), follow_symlinks=false)
     print(f"{st.kind} {st.size} {st.modified > 0.0}")
     print(fs.stat(fs.join(base, "x")).kind)
     print(fs.exists(fs.join(base, "nope")))
@@ -24,7 +24,7 @@ def main():
     except OSError as e:
         print(e.message.replace(base, "BASE"))
     try:
-        fs.mkdir(fs.join(base, "é.txt"), exist_ok=True)
+        fs.mkdir(fs.join(base, "é.txt"), exist_ok=true)
     except OSError as e:
         print(e.message.replace(base, "BASE"))
     fs.remove(fs.join(base, "é.txt"))
@@ -45,7 +45,7 @@ def main():
     except ValueError as v:
         print(v.message)
     w = sys.getenv("WILLOW")
-    if w is not None:
+    if w is not none:
         print(w.endswith("/willow"))
     print(sys.getenv("NO_SUCH_VARIABLE_X"))
     env = sys.environ()

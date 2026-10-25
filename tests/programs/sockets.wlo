@@ -53,7 +53,7 @@ def main():
         print(v.message)
     ends = pair(listener)
     ends[1].close()
-    failed = False
+    failed = false
     try:
         for i in range(100):
             ends[0].sendall(big, timeout=5.0)

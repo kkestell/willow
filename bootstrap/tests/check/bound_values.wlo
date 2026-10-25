@@ -31,7 +31,7 @@ def main():
     print(size("hello"))
     text: (float) -> str = str
     print(text(2.5))
-    say: (str) -> None = print
+    say: (str) -> none = print
     say("hi")
     exists: (str) -> bool = fs.exists
     print(exists("/no/such/path"))

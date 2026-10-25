@@ -22,7 +22,7 @@ def reply(store: dict[str, json.Json], request: json.Json) -> json.Json:
     key = request.get("key")
     if op == "set" and isinstance(key, str):
         store[key] = request.get("value")
-        return {"ok": True}
+        return {"ok": true}
     elif op == "get" and isinstance(key, str):
         return {"value": store.get(key)}
     elif op == "keys":
@@ -32,14 +32,14 @@ def reply(store: dict[str, json.Json], request: json.Json) -> json.Json:
         return {"keys": names}
     return {"error": "unknown request"}
 
-# Serves one client; returns True when it asked the server to stop.
+# Serves one client; returns true when it asked the server to stop.
 def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:
     with channel:
-        while True:
+        while true:
             try:
                 line = channel.read_line()
-                if line is None:
-                    return False
+                if line is none:
+                    return false
                 request = json.parse(line)
             except ValueError as invalid:
                 channel.send({"error": invalid.message})
@@ -48,10 +48,10 @@ def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:
                 channel.send({"error": error.message})
                 continue
             if isinstance(request, dict) and _text(request.get("op")) == "shutdown":
-                channel.send({"ok": True})
-                return True
+                channel.send({"ok": true})
+                return true
             channel.send(reply(store, request))
-    return False
+    return false
 
 def main():
     args = sys.args()
@@ -63,7 +63,7 @@ def main():
         fs.write_file(args[0] + ".tmp", str(listener.local_port()))
         fs.rename(args[0] + ".tmp", args[0])
         store: dict[str, json.Json] = {}
-        while True:
+        while true:
             try:
                 if serve(framing.channel(listener.accept()), store):
                     break

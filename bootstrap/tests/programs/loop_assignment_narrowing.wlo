@@ -1,5 +1,5 @@
 def main():
-    x: int | None = 1
-    while True:
+    x: int | none = 1
+    while true:
         print(x + 1)
-        x = None
+        x = none

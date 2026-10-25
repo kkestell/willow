@@ -15,7 +15,7 @@ class Random:
 def heapsort(n: int, items: list[float]):
     ir = n
     l = n // 2 + 1
-    while True:
+    while true:
         if l > 1:
             l = l - 1
             rra = items[l]

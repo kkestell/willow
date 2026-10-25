@@ -81,11 +81,11 @@ class _Curl:
         self.code(__ccall(curl_easy_getinfo, self._symbols["curl_easy_getinfo"], handle, self._info[option], value), url)
         return __int(__load8(value, 0))
 
-    def text(self, handle: ptr, option: str, url: str) -> str | None:
+    def text(self, handle: ptr, option: str, url: str) -> str | none:
         value = self.info(handle, option, url)
         pointer = __ptr(__word(value))
         if __addr_is_null(pointer):
-            return None
+            return none
         return core.str_from_bytes(pointer, core.strlen(pointer))
 
 def _curl() -> _Curl:
@@ -143,11 +143,11 @@ def _curl() -> _Curl:
 
 def _token(text: str) -> bool:
     if text == "":
-        return False
+        return false
     for c in text:
         if not (("a" <= c and c <= "z") or ("A" <= c and c <= "Z") or ("0" <= c and c <= "9") or c in "!#$%&'*+-.^_`|~"):
-            return False
-    return True
+            return false
+    return true
 
 def _percent(byte: int) -> str:
     digits = "0123456789ABCDEF"
@@ -235,11 +235,11 @@ def _url(text: str) -> _URL:
     host = host.lower()
     if path == "" or path.startswith("?"):
         path = "/" + path
-    return _URL(scheme + "://" + host + port + _encode(path, False), scheme, scheme + "://" + host + ":" + str(effective))
+    return _URL(scheme + "://" + host + port + _encode(path, false), scheme, scheme + "://" + host + ":" + str(effective))
 
-def _headers(headers: list[Header] | None) -> list[str]:
+def _headers(headers: list[Header] | none) -> list[str]:
     lines: list[str] = []
-    if headers is not None:
+    if headers is not none:
         for item in headers:
             if not _token(item.name):
                 raise ValueError(f"invalid header name '{item.name}'")
@@ -320,7 +320,7 @@ def _memory(url: str) -> _Stream:
     file = open_memstream(slots, __offset(slots, 8))
     if __addr_is_null(file):
         raise OSError("cannot fetch " + url + ": " + core.os_reason())
-    return _Stream(file, slots, True)
+    return _Stream(file, slots, true)
 
 class _Exchange:
     _curl: _Curl
@@ -329,13 +329,13 @@ class _Exchange:
     _output: _Stream
     _headers: _Stream
     _input: ptr
-    _body: bytes | None
+    _body: bytes | none
     _items: ptr
     _errors: ptr
     _url: str
     _timeout: float
     _failure: str
-    _resolved: bool = False
+    _resolved: bool = false
     _last: float = 0.0
     _downloaded: int = 0
     _uploaded: int = 0
@@ -356,8 +356,8 @@ class _Exchange:
         now = time.monotonic()
         if not self._resolved:
             address = curl.text(self._handle, "primary_ip", self._url)
-            if curl.info(self._handle, "namelookup_time", self._url) > 0 or (address is not None and address != "") or head_size > 0:
-                self._resolved = True
+            if curl.info(self._handle, "namelookup_time", self._url) > 0 or (address is not none and address != "") or head_size > 0:
+                self._resolved = true
                 self._last = now
         if downloaded != self._downloaded or uploaded != self._uploaded or head_size != self._head_size:
             self._downloaded = downloaded
@@ -376,10 +376,10 @@ class _Exchange:
                 if reason == "":
                     curl.code(result, self._url)
                 raise OSError("cannot fetch " + self._url + ": " + reason)
-            return True
+            return true
         if self._resolved and now - self._last >= self._timeout:
             raise TimeoutError(f"request timed out after {self._timeout} seconds")
-        return False
+        return false
 
     def delay(self) -> float:
         milliseconds = __alloc_atomic(8)
@@ -415,17 +415,17 @@ class _Exchange:
     def status(self) -> int:
         return self._curl.info(self._handle, "status", self._url)
 
-    def redirect(self) -> str | None:
+    def redirect(self) -> str | none:
         return self._curl.text(self._handle, "redirect_url", self._url)
 
-def _exchange(curl: _Curl, method: str, url: str, lines: list[str], body: bytes | None, timeout: float, ca_file: str | None, path: str, target: str) -> _Exchange:
+def _exchange(curl: _Curl, method: str, url: str, lines: list[str], body: bytes | none, timeout: float, ca_file: str | none, path: str, target: str) -> _Exchange:
     failure = "cannot fetch " + url
     if path != "":
         failure = "cannot write " + target
         file = fopen(core.path_bytes(path), core.str_bytes("wb"))
         if __addr_is_null(file):
             raise OSError(failure + ": " + core.os_reason())
-        output = _Stream(file, _null(), False)
+        output = _Stream(file, _null(), false)
     else:
         output = _memory(url)
     try:
@@ -453,13 +453,13 @@ def _exchange(curl: _Curl, method: str, url: str, lines: list[str], body: bytes 
         curl.set_int(handle, "followlocation", 0, url)
         curl.set_int(handle, "ssl_verifypeer", 1, url)
         curl.set_int(handle, "ssl_verifyhost", 2, url)
-        if ca_file is not None:
+        if ca_file is not none:
             curl.set_ptr(handle, "cainfo", core.path_bytes(ca_file), url)
             # Secure Transport has no CA directory; CAINFO replaces its anchors.
             code = __ccall(curl_easy_setopt, symbols["curl_easy_setopt"], handle, curl._options["capath"], _null())
             if code != 4:
                 curl.code(code, url)
-        if body is not None:
+        if body is not none:
             exchange._input = fmemopen(__offset(__ptr(__word(body)), 24), max(1, len(body)), core.str_bytes("rb"))
             if __addr_is_null(exchange._input):
                 raise OSError("cannot fetch " + url + ": " + core.os_reason())
@@ -468,7 +468,7 @@ def _exchange(curl: _Curl, method: str, url: str, lines: list[str], body: bytes 
             curl.set_ptr(handle, "readdata", exchange._input, url)
         if method == "HEAD":
             curl.set_int(handle, "nobody", 1, url)
-        elif method == "GET" and body is None:
+        elif method == "GET" and body is none:
             curl.set_int(handle, "httpget", 1, url)
         else:
             curl.set_ptr(handle, "customrequest", core.str_bytes(method), url)
@@ -494,25 +494,25 @@ class _Fetch:
     _method: str
     _current: _URL
     _lines: list[str]
-    _body: bytes | None
+    _body: bytes | none
     _timeout: float
     _follow: bool
-    _ca_file: str | None
+    _ca_file: str | none
     _path: str
     _temp: str
-    _exchange: _Exchange | None = None
+    _exchange: _Exchange | none = none
     _hops: int = 0
 
     def step(self) -> bool:
         exchange = self._exchange
-        if exchange is None:
+        if exchange is none:
             exchange = _exchange(self._curl, self._method, self._current.text, self._lines, self._body, self._timeout, self._ca_file, self._temp, self._path)
             self._exchange = exchange
         if not exchange.step():
-            return False
+            return false
         status = exchange.status()
         redirect = exchange.redirect()
-        if self._follow and self._method in ["GET", "HEAD"] and status in [301, 302, 303, 307, 308] and redirect is not None:
+        if self._follow and self._method in ["GET", "HEAD"] and status in [301, 302, 303, 307, 308] and redirect is not none:
             self._hops = self._hops + 1
             if self._hops > 10:
                 raise OSError("too many redirects")
@@ -526,24 +526,24 @@ class _Fetch:
                 self._lines = []
             self._current = target
             exchange.close()
-            self._exchange = None
-            return False
-        return True
+            self._exchange = none
+            return false
+        return true
 
     def delay(self) -> float:
         exchange = self._exchange
-        if exchange is None:
+        if exchange is none:
             return 0.0
         return exchange.delay()
 
     def response(self) -> Response:
         exchange = self._exchange
-        assert exchange is not None
+        assert exchange is not none
         return Response(exchange.status(), exchange._headers.headers(), exchange._output.body(), self._current.text)
 
     def download(self) -> Download:
         exchange = self._exchange
-        assert exchange is not None
+        assert exchange is not none
         status = exchange.status()
         headers = exchange._headers.headers()
         written = exchange._downloaded
@@ -561,14 +561,14 @@ class _Fetch:
     def close(self):
         try:
             exchange = self._exchange
-            if exchange is not None:
+            if exchange is not none:
                 exchange.close()
         finally:
             if self._temp != "":
                 unlink(core.str_bytes(self._temp))
                 self._temp = ""
 
-def _fetch(method: str, url: str, headers: list[Header] | None, body: bytes | None, timeout: float, follow: bool, ca_file: str | None, path: str | None) -> _Fetch:
+def _fetch(method: str, url: str, headers: list[Header] | none, body: bytes | none, timeout: float, follow: bool, ca_file: str | none, path: str | none) -> _Fetch:
     if not _token(method):
         raise ValueError(f"invalid method '{method}'")
     current = _url(url)
@@ -578,7 +578,7 @@ def _fetch(method: str, url: str, headers: list[Header] | None, body: bytes | No
     curl = _curl()
     temp = ""
     target = ""
-    if path is not None:
+    if path is not none:
         core.path_bytes(path)
         target = path
         directory = fs.dirname(path)
@@ -609,8 +609,8 @@ def _fetch(method: str, url: str, headers: list[Header] | None, body: bytes | No
             raise OSError("cannot write " + path + ": " + reason)
     return _Fetch(curl, method, current, lines, body, timeout, follow, ca_file, target, temp)
 
-def request(method: str, url: str, headers: list[Header] | None = None, body: bytes | None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str | None = None) -> Response:
-    fetch = _fetch(method, url, headers, body, timeout, follow_redirects, ca_file, None)
+def request(method: str, url: str, headers: list[Header] | none = none, body: bytes | none = none, timeout: float = 30.0, follow_redirects: bool = true, ca_file: str | none = none) -> Response:
+    fetch = _fetch(method, url, headers, body, timeout, follow_redirects, ca_file, none)
     try:
         while not fetch.step():
             time.sleep(fetch.delay())
@@ -618,8 +618,8 @@ def request(method: str, url: str, headers: list[Header] | None = None, body: by
     finally:
         fetch.close()
 
-def download(url: str, path: str, headers: list[Header] | None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str | None = None) -> Download:
-    fetch = _fetch("GET", url, headers, None, timeout, follow_redirects, ca_file, path)
+def download(url: str, path: str, headers: list[Header] | none = none, timeout: float = 30.0, follow_redirects: bool = true, ca_file: str | none = none) -> Download:
+    fetch = _fetch("GET", url, headers, none, timeout, follow_redirects, ca_file, path)
     try:
         while not fetch.step():
             time.sleep(fetch.delay())
@@ -627,9 +627,9 @@ def download(url: str, path: str, headers: list[Header] | None = None, timeout: 
     finally:
         fetch.close()
 
-async def request_async(method: str, url: str, headers: list[Header] | None = None, body: bytes | None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str | None = None) -> Response:
+async def request_async(method: str, url: str, headers: list[Header] | none = none, body: bytes | none = none, timeout: float = 30.0, follow_redirects: bool = true, ca_file: str | none = none) -> Response:
     await aio.sleep(0.0)
-    fetch = _fetch(method, url, headers, body, timeout, follow_redirects, ca_file, None)
+    fetch = _fetch(method, url, headers, body, timeout, follow_redirects, ca_file, none)
     try:
         while not fetch.step():
             await aio.sleep(fetch.delay())
@@ -637,9 +637,9 @@ async def request_async(method: str, url: str, headers: list[Header] | None = No
     finally:
         fetch.close()
 
-async def download_async(url: str, path: str, headers: list[Header] | None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str | None = None) -> Download:
+async def download_async(url: str, path: str, headers: list[Header] | none = none, timeout: float = 30.0, follow_redirects: bool = true, ca_file: str | none = none) -> Download:
     await aio.sleep(0.0)
-    fetch = _fetch("GET", url, headers, None, timeout, follow_redirects, ca_file, path)
+    fetch = _fetch("GET", url, headers, none, timeout, follow_redirects, ca_file, path)
     try:
         while not fetch.step():
             await aio.sleep(fetch.delay())
@@ -647,15 +647,15 @@ async def download_async(url: str, path: str, headers: list[Header] | None = Non
     finally:
         fetch.close()
 
-def header(headers: list[Header], name: str) -> str | None:
+def header(headers: list[Header], name: str) -> str | none:
     wanted = name.lower()
     for item in headers:
         if item.name.lower() == wanted:
             return item.value
-    return None
+    return none
 
 def urlencode(values: dict[str, str]) -> str:
     pairs: list[str] = []
     for key in values:
-        pairs.append(_encode(key, True) + "=" + _encode(values[key], True))
+        pairs.append(_encode(key, true) + "=" + _encode(values[key], true))
     return "&".join(pairs)

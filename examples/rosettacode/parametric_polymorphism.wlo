@@ -2,22 +2,22 @@
 
 class Tree[T]:
     value: T
-    left: Tree[T] | None = None
-    right: Tree[T] | None = None
+    left: Tree[T] | none = none
+    right: Tree[T] | none = none
 
     # Builds a tree of the same shape whose values are `f` of this tree's.
     def map[U](self, f: (T) -> U) -> Tree[U]:
         result = Tree(f(self.value))
         left = self.left
-        if left is not None:
+        if left is not none:
             result.left = left.map(f)
         right = self.right
-        if right is not None:
+        if right is not none:
             result.right = right.map(f)
         return result
 
-def show(tree: Tree[str] | None) -> str:
-    if tree is None:
+def show(tree: Tree[str] | none) -> str:
+    if tree is none:
         return "."
     return "(" + show(tree.left) + " " + tree.value + " " + show(tree.right) + ")"
 

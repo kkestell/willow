@@ -18,21 +18,21 @@ def main():
     signatures = len(args) > 0 and args[0] == "--signatures"
     if signatures:
         args = args[1:]
-    failed = False
+    failed = false
     for path in args:
         root = loader.directory_of(path)
         test = path[len(root):].startswith("test_")
-        error: diagnostic.Diagnostic | None = None
-        result = loader.load(path, fs.read_file(path), loader.file_roots(path), False)
+        error: diagnostic.Diagnostic | none = none
+        result = loader.load(path, fs.read_file(path), loader.file_roots(path), false)
         if isinstance(result, diagnostic.Diagnostic):
             error = result
         else:
             error = bind.bind(result, test)
-            if error is None and signatures:
+            if error is none and signatures:
                 for source in result:
                     for line in bind.signatures(source.tree):
                         print(f"{source.name}: {line}")
-        if error is not None:
+        if error is not none:
             # Paths in messages, such as a missing module's, start with the
             # directory too.
             message = error.message
@@ -40,6 +40,6 @@ def main():
                 message = message.replace(root, "")
             relative = diagnostic.Diagnostic(error.path.removeprefix(root), error.line, error.col, message)
             sys.eprint(f"{path}: {relative.format()}")
-            failed = True
+            failed = true
     if failed:
         sys.exit(1)

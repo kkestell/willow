@@ -62,17 +62,17 @@ def main():
 
     # Sorting.
     nums = [3, -1, 2, 2, 0]
-    print(ints(sorted(nums)) + ints(sorted(nums, True)) + ints(sorted(nums, reverse=True)) + ints(nums))
+    print(ints(sorted(nums)) + ints(sorted(nums, true)) + ints(sorted(nums, reverse=true)) + ints(nums))
     nums.sort()
     print(ints(nums))
-    nums.sort(reverse=True)
+    nums.sort(reverse=true)
     print(ints(nums))
     words = ["éclair", "apple", "Zebra", "banana", "ß"]
     print(strs(sorted(words)))
     inf = float("inf")
     print(floats(sorted([2.5, -inf, inf, -0.5])))
     print(floats(sorted([0.0, -0.0])) + floats(sorted([-0.0, 0.0])))
-    print(floats(sorted([0.0, -0.0], reverse=True)) + floats(sorted([-0.0, 0.0], reverse=True)))
+    print(floats(sorted([0.0, -0.0], reverse=true)) + floats(sorted([-0.0, 0.0], reverse=true)))
     values = [1.0, float("nan"), 0.5]
     try:
         values.sort()
@@ -100,6 +100,6 @@ def main():
     print(f"[{0.5:.0f}][{1.5:.0f}][{2.5:.0f}][{2.675:.2f}][{ratio:f}][{1e20:.1f}]")
     nan = float("nan")
     print(f"[{nan:6f}][{inf:>6.1f}][{-inf:<6}][{-0.0:6}][{-0.0:.1f}]")
-    print(f"[{'longer':3}][{12345:2d}][{True:6}][{None:6}][{ratio:9}][{count:}]")
+    print(f"[{'longer':3}][{12345:2d}][{true:6}][{none:6}][{ratio:9}][{count:}]")
     print(held(42) + held("ab"))
     print(f"{'total':<12s}{12:>6d}{2.5:>10.2f}")

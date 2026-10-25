@@ -12,10 +12,10 @@ async def producer(buffer: Buffer):
         while len(buffer.items) >= 2:
             await aio.sleep(0.0)
         buffer.items.append(line)
-    buffer.done = True
+    buffer.done = true
 
 async def consumer(buffer: Buffer):
-    while True:
+    while true:
         if len(buffer.items) > 0:
             print(buffer.items[0])
             buffer.items = buffer.items[1:]
@@ -33,7 +33,7 @@ async def fetch(name: str, seconds: float) -> str:
 
 async def deadline(group: aio.TaskGroup, seconds: float, flag: Flag):
     await aio.sleep(seconds)
-    flag.fired = True
+    flag.fired = true
     group.cancel()
 
 async def flaky(attempts: list[int]) -> int:
@@ -59,13 +59,13 @@ async def retry_once[T](attempt: Coroutine[T]) -> T:
         return await attempt
 
 async def main():
-    buffer = Buffer([], False)
+    buffer = Buffer([], false)
     async with aio.task_group() as group:
         group.start(producer(buffer))
         group.start(consumer(buffer))
 
     tasks: list[aio.Task[str]] = []
-    flag = Flag(False)
+    flag = Flag(false)
     async with aio.task_group() as group:
         tasks.append(group.start(fetch("fast", 0.01)))
         tasks.append(group.start(fetch("slow", 10.0)))

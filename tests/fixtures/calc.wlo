@@ -126,12 +126,12 @@ def evaluate(expr: Expr) -> float:
 def main():
     prompt = terminal.isatty(io.stdin())
     out = io.stdout()
-    while True:
+    while true:
         if prompt:
             out.write_text("> ")
             out.flush()
         line = input()
-        if line is None:
+        if line is none:
             break
         if line.strip() == "":
             continue

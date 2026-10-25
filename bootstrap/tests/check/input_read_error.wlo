@@ -6,7 +6,7 @@ def main():
     assert core.close(0) == 0
     try:
         stdin.readline()
-        assert False
+        assert false
     except OSError as error:
         assert error.message == "cannot read <stdin>: Bad file descriptor"
     try:

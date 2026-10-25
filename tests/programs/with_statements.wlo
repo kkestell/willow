@@ -9,8 +9,8 @@ class Resource:
         print("enter " + self.name)
         return self.name
 
-    def exit(self, error: Exception | None):
-        if error is None:
+    def exit(self, error: Exception | none):
+        if error is none:
             print("exit " + self.name)
         else:
             print("exit " + self.name + " after " + error.message)
@@ -23,11 +23,11 @@ class Pair:
     def enter(self) -> tuple[str, int]:
         return ("pair", self.n)
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         print("pair done")
 
 def plain(name: str) -> Resource:
-    return Resource(name, False, False)
+    return Resource(name, false, false)
 
 def evaluated(text: str) -> str:
     print("evaluated")
@@ -39,7 +39,7 @@ def returning() -> str:
         return evaluated("returned " + name)
 
 def replaced() -> str:
-    with Resource("x", False, True):
+    with Resource("x", false, true):
         return "never"
 
 def suspended() -> Generator[int]:
@@ -75,13 +75,13 @@ def main():
             break
 
     try:
-        with plain("first"), Resource("second", True, False):
+        with plain("first"), Resource("second", true, false):
             print("unreachable")
     except ValueError as failure:
         print("caught " + failure.message)
 
     try:
-        with Resource("y", False, True):
+        with Resource("y", false, true):
             raise ValueError("original")
     except RuntimeError as replacement:
         print("caught " + replacement.message)

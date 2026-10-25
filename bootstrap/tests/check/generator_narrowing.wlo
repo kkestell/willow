@@ -1,10 +1,10 @@
-def maybe() -> int | None:
+def maybe() -> int | none:
     return 1
 
 def main():
     value = maybe()
     def values() -> Iterator[int]:
-        if value is not None:
+        if value is not none:
             yield 1
             yield value + 1
     for n in values():

@@ -6,7 +6,7 @@ protocol RandomSource:
 def draw(source: RandomSource) -> float:
     return source.random()
 
-def checked_draw(source: random.Random | None) -> float:
+def checked_draw(source: random.Random | none) -> float:
     assert isinstance(source, random.Random)
     return draw(source)
 

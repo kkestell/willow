@@ -9,7 +9,7 @@ def main():
             break
     print(key)
 
-    maybe: dict[int, int | None] = {1: 10, 2: None}
+    maybe: dict[int, int | none] = {1: 10, 2: none}
     for index, item in maybe.items():
         if index == 1:
             item = 11

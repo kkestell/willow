@@ -12,10 +12,6 @@
 - `subprocess`'s async methods check child status every 10 ms rather than
   waiting on pipe readiness.
 - The checker reports the first error in a program.
-- Migrate library sources, examples, tests, documentation, and editor support
-  to the lowercase literals. Handle the bootstrap transition while preserving
-  the frozen stage 1 compiler; add regression coverage and validate the
-  bootstrap on macOS and Linux.
 - Replace `elif` with `else if` in the compiler and editor support; migrate
   sources and examples, and add regression coverage for branch chains and
   narrowing. Preserve the frozen stage 1 syntax during the bootstrap

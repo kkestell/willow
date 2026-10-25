@@ -1,5 +1,5 @@
 import aio
 
 async def main():
-    sleep: (float) -> Coroutine[None] = aio.sleep
+    sleep: (float) -> Coroutine[none] = aio.sleep
     await sleep(-0.5)

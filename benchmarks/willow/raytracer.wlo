@@ -79,11 +79,11 @@ def shadowed(scene: Scene, origin: Vec, direction: Vec) -> bool:
     if isinstance(scene, Sphere):
         return ray_sphere(scene, origin, direction) < infinity()
     if not ray_sphere(scene.bound, origin, direction) < infinity():
-        return False
+        return false
     for child in scene.children:
         if shadowed(child, origin, direction):
-            return True
-    return False
+            return true
+    return false
 
 def ray_trace(light: Vec, origin: Vec, direction: Vec, scene: Scene) -> float:
     hit = Hit(infinity(), Vec(0.0, 0.0, 0.0))

@@ -4,7 +4,7 @@ class Box[T]:
     def get(self) -> T:
         return self.value
 
-    def replace(self, value: T, *, keep: bool = False) -> T:
+    def replace(self, value: T, *, keep: bool = false) -> T:
         previous = self.value
         if not keep:
             self.value = value
@@ -42,7 +42,7 @@ def main():
     box = Box(2.5)
     get = box.get
     replace = box.replace
-    assert replace(keep=True, value=3.5) == 2.5
+    assert replace(keep=true, value=3.5) == 2.5
     assert get() == 2.5
     assert replace(4.5) == 2.5
     assert get() == 4.5

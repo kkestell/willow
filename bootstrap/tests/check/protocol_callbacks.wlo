@@ -1,5 +1,5 @@
 protocol Reader:
-    def get(self) -> int | None
+    def get(self) -> int | none
 
 class Source:
     value: int
@@ -7,7 +7,7 @@ class Source:
     def get(self) -> int:
         return self.value
 
-def read(value: Reader) -> int | None:
+def read(value: Reader) -> int | none:
     return value.get()
 
 def source(value: int) -> Source:
@@ -16,18 +16,18 @@ def source(value: int) -> Source:
 def number(value: int) -> int:
     return value
 
-type Narrow = Source | ((int) -> int) | None
-type Wide = Reader | ((int) -> int | None) | None
+type Narrow = Source | ((int) -> int) | none
+type Wide = Reader | ((int) -> int | none) | none
 
 def widen(value: Narrow) -> Wide:
     return value
 
 def main():
-    callback: (Source) -> int | None = read
+    callback: (Source) -> int | none = read
     print(callback(Source(7)))
     factory: (int) -> Reader = source
     print(factory(8).get())
     widen(number)
     widen(Source(9))
-    widen(None)
+    widen(none)
     print("converted")

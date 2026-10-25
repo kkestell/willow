@@ -1,10 +1,10 @@
-# A function without a result can return None, or the result of a call that
+# A function without a result can return none, or the result of a call that
 # has none.
 def ping():
     print("ping")
 
 def stop():
-    return None
+    return none
 
 def relay():
     return ping()

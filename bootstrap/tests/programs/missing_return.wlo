@@ -3,4 +3,4 @@ def pick(flag: bool) -> int:
         return 1
 
 def main():
-    print(pick(True))
+    print(pick(true))

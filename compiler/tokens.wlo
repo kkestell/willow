@@ -107,13 +107,9 @@ class Token:
     line: int
     col: int
 
-# The reserved words of spec §2, including the reserved type names. The
-# capitalized literals remain reserved until the sources move to lowercase.
+# The reserved words of spec §2, including the reserved type names.
 def keywords() -> dict[str, Kind]:
     return {
-        "False": Kind.FALSE,
-        "None": Kind.NONE,
-        "True": Kind.TRUE,
         "and": Kind.AND,
         "as": Kind.AS,
         "assert": Kind.ASSERT,

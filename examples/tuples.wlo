@@ -8,7 +8,7 @@ def main():
     quotient, remainder = divide(17, 5)
     print(f"{quotient} remainder {remainder}")
 
-    record = (3, "east", True)
+    record = (3, "east", true)
     print(record[1])
     print(len(record))
 

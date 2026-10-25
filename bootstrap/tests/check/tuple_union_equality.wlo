@@ -1,28 +1,28 @@
-def same(a: tuple[tuple[int | float] | str | None] | int | None, b: tuple[tuple[int | float] | str | None] | int | None) -> bool:
+def same(a: tuple[tuple[int | float] | str | none] | int | none, b: tuple[tuple[int | float] | str | none] | int | none) -> bool:
     return a == b
 
-def widen(value: tuple[tuple[float] | str | None] | int | None) -> tuple[tuple[int | float] | str | None] | int | None:
+def widen(value: tuple[tuple[float] | str | none] | int | none) -> tuple[tuple[int | float] | str | none] | int | none:
     return value
 
-def absent(value: tuple[tuple[int | float] | str | None] | int | None) -> bool:
+def absent(value: tuple[tuple[int | float] | str | none] | int | none) -> bool:
     return value not in [((2.5,),)]
 
 def main():
     assert same(((1.0,),), ((1.0,),))
     assert not same(((1,),), ((1.0,),))
-    assert not same(((1.0,),), (None,))
+    assert not same(((1.0,),), (none,))
     assert same(("x",), ("x",))
-    assert same(None, None)
+    assert same(none, none)
     assert same(7, 7)
     assert not same(7, ((7,),))
     assert widen(((2.5,),)) == ((2.5,),)
     assert widen(("x",)) == ("x",)
-    assert widen((None,)) == (None,)
+    assert widen((none,)) == (none,)
     assert widen(7) == 7
-    assert widen(None) is None
-    values: list[tuple[tuple[int | float] | str | None] | int | None] = [((2.5,),), 7, None]
+    assert widen(none) is none
+    values: list[tuple[tuple[int | float] | str | none] | int | none] = [((2.5,),), 7, none]
     assert ((2.5,),) in values
     assert ((2,),) not in values
     assert 7 in values
-    assert None in values
+    assert none in values
     assert absent(7)

@@ -2,7 +2,7 @@ import aio
 
 # Awaiting a task that the same stop cancelled raises in cleanup.
 async def flusher():
-    while True:
+    while true:
         await aio.sleep(1.0)
 
 async def serve(group: aio.TaskGroup):

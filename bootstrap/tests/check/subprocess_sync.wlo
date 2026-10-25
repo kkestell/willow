@@ -3,14 +3,14 @@ import io
 import subprocess
 
 def main():
-    result = subprocess.run(["tool"], cwd="subprocess_path", env={"PATH": "."}, capture_output=True)
+    result = subprocess.run(["tool"], cwd="subprocess_path", env={"PATH": "."}, capture_output=true)
     assert result.stdout == "child path".encode()
     assert subprocess.run(["true"], env={}).returncode == 0
     assert subprocess.run(["sh", "-c", "kill -PIPE $$"]).returncode == -13
-    result = subprocess.run(["sh", "-c", "printf out; printf err >&2"], capture_output=True)
+    result = subprocess.run(["sh", "-c", "printf out; printf err >&2"], capture_output=true)
     assert result.stdout == "out".encode()
     assert result.stderr == "err".encode()
-    result = subprocess.run(["cat"], input=bytes([0, 255]), capture_output=True)
+    result = subprocess.run(["cat"], input=bytes([0, 255]), capture_output=true)
     assert result.stdout == bytes([0, 255])
     for kind in ["cwd", "name", "value", "timeout"]:
         try:
@@ -22,7 +22,7 @@ def main():
                 subprocess.run(["true"], env={"A": "x\x00y"})
             else:
                 subprocess.run(["true"], timeout=float("inf"))
-            assert False
+            assert false
         except ValueError:
             pass
 
@@ -34,11 +34,11 @@ def main():
             assert reader.readline() == "one"
             try:
                 subprocess.spawn(["true"], stdin=reader)
-                assert False
+                assert false
             except ValueError as error:
                 assert error.message == "stdin has buffered input"
             assert reader.readline() == "two"
-            assert reader.readline() is None
+            assert reader.readline() is none
             child = subprocess.spawn(["cat"], stdin=reader)
             assert child.wait() == 0
             assert child.poll() == 0
@@ -54,7 +54,7 @@ def main():
             assert len(pipe.read(1)) == 0
             try:
                 subprocess.spawn(["true"], stdin=pipe)
-                assert False
+                assert false
             except ValueError as buffered:
                 assert buffered.message == "stdin has buffered input"
     finally:

@@ -15,7 +15,7 @@ def outer() -> () -> int:
     return step
 
 class Holder:
-    f: ((int) -> int | float) | None
+    f: ((int) -> int | float) | none
 
 def half(x: int | float) -> float:
     if isinstance(x, int):
@@ -27,10 +27,10 @@ def main():
     print(f())
     print(f())
     # A function in an optional callable field is adapted to its types.
-    h = Holder(None)
-    print(h.f is None)
-    g: ((int) -> float) | None = half
+    h = Holder(none)
+    print(h.f is none)
+    g: ((int) -> float) | none = half
     h.f = g
     call = h.f
-    if call is not None:
+    if call is not none:
         print(call(3))

@@ -5,57 +5,57 @@ import time
 
 class Result:
     returncode: int
-    stdout: bytes | None
-    stderr: bytes | None
+    stdout: bytes | none
+    stderr: bytes | none
 
-def _check_timeout(timeout: float | None):
-    if timeout is not None:
+def _check_timeout(timeout: float | none):
+    if timeout is not none:
         if not (timeout > 0.0 and timeout - timeout == 0.0):
             raise ValueError("timeout must be finite and positive")
 
-def _deadline(timeout: float | None) -> float | None:
-    if timeout is None:
-        return None
+def _deadline(timeout: float | none) -> float | none:
+    if timeout is none:
+        return none
     return core.aio_now() + timeout
 
-def _delay(deadline: float | None) -> float:
-    if deadline is None:
+def _delay(deadline: float | none) -> float:
+    if deadline is none:
         return 0.01
     return max(0.0, min(0.01, deadline - core.aio_now()))
 
 class Process:
     _child: core.Child
 
-    def poll(self) -> int | None:
-        return core.process_poll(self._child, False)
+    def poll(self) -> int | none:
+        return core.process_poll(self._child, false)
 
-    def wait(self, timeout: float | None = None) -> int:
+    def wait(self, timeout: float | none = none) -> int:
         _check_timeout(timeout)
-        if timeout is None:
-            code = core.process_poll(self._child, True)
-            assert code is not None
+        if timeout is none:
+            code = core.process_poll(self._child, true)
+            assert code is not none
             return code
         deadline = _deadline(timeout)
         code = self.poll()
-        while code is None:
+        while code is none:
             if _delay(deadline) == 0.0:
                 raise TimeoutError(f"process did not exit within {timeout} seconds")
             time.sleep(_delay(deadline))
             code = self.poll()
-        assert code is not None
+        assert code is not none
         return code
 
-    async def wait_async(self, timeout: float | None = None) -> int:
+    async def wait_async(self, timeout: float | none = none) -> int:
         await aio.sleep(0.0)
         _check_timeout(timeout)
         deadline = _deadline(timeout)
         code = self.poll()
-        while code is None:
+        while code is none:
             if _delay(deadline) == 0.0:
                 raise TimeoutError(f"process did not exit within {timeout} seconds")
             await aio.sleep(_delay(deadline))
             code = self.poll()
-        assert code is not None
+        assert code is not none
         return code
 
     def terminate(self):
@@ -64,14 +64,14 @@ class Process:
     def kill(self):
         core.process_signal(self._child, 9)
 
-def spawn(args: list[str], cwd: str | None = None, env: dict[str, str] | None = None, stdin: io.File | None = None, stdout: io.File | None = None, stderr: io.File | None = None) -> Process:
+def spawn(args: list[str], cwd: str | none = none, env: dict[str, str] | none = none, stdin: io.File | none = none, stdout: io.File | none = none, stderr: io.File | none = none) -> Process:
     redirects = [-1, -1, -1]
-    if stdin is not None:
-        redirects[0] = stdin._child_fd("stdin", True)
-    if stdout is not None:
-        redirects[1] = stdout._child_fd("stdout", False)
-    if stderr is not None:
-        redirects[2] = stderr._child_fd("stderr", False)
+    if stdin is not none:
+        redirects[0] = stdin._child_fd("stdin", true)
+    if stdout is not none:
+        redirects[1] = stdout._child_fd("stdout", false)
+    if stderr is not none:
+        redirects[2] = stderr._child_fd("stderr", false)
     return Process(core.process_start(args, cwd, env, redirects))
 
 def _octets(buffer: ptr, count: int) -> bytes:
@@ -87,7 +87,7 @@ class _Run:
     _input_fd: int
     _output_fd: int
     _error_fd: int
-    _input: bytes | None
+    _input: bytes | none
     _capture: bool
     _output: list[bytes]
     _error: list[bytes]
@@ -97,15 +97,15 @@ class _Run:
     def _write(self) -> bool:
         fd = self._input_fd
         data = self._input
-        if fd < 0 or data is None:
-            return False
-        progress = False
+        if fd < 0 or data is none:
+            return false
+        progress = false
         if self._offset < len(data):
             count = min(65536, len(data) - self._offset)
             written = core.write(fd, __offset(__ptr(__word(data)), 24 + self._offset), count)
             if written > 0:
                 self._offset = self._offset + written
-                progress = True
+                progress = true
             elif written < 0:
                 code = core.errno()
                 if code == 32:
@@ -115,7 +115,7 @@ class _Run:
         if self._offset == len(data):
             core.close(fd)
             self._input_fd = -1
-            progress = True
+            progress = true
         return progress
 
     def _read(self, fd: int, parts: list[bytes], size: int) -> int:
@@ -139,7 +139,7 @@ class _Run:
             if fd >= 0:
                 count = self._read(fd, parts, 65536)
                 if count >= 0:
-                    progress = True
+                    progress = true
                 if count == 0:
                     core.close(fd)
                     if which == 0:
@@ -177,8 +177,8 @@ class _Run:
                     if count <= 0:
                         break
                     remaining = remaining - count
-        output: bytes | None = None
-        error: bytes | None = None
+        output: bytes | none = none
+        error: bytes | none = none
         if self._capture:
             output = _join(self._output)
             error = _join(self._error)
@@ -192,16 +192,16 @@ class _Run:
         self._output_fd = -1
         self._error_fd = -1
 
-def _start(args: list[str], input: bytes | None, capture_output: bool, cwd: str | None, env: dict[str, str] | None) -> _Run:
+def _start(args: list[str], input: bytes | none, capture_output: bool, cwd: str | none, env: dict[str, str] | none) -> _Run:
     redirects = [-1, -1, -1]
     all_fds: list[int] = []
     parent: list[int] = []
     input_fd = -1
     output_fd = -1
     error_fd = -1
-    started = False
+    started = false
     try:
-        if input is not None:
+        if input is not none:
             pipe = core.process_pipe()
             all_fds.extend(pipe)
             redirects[0] = pipe[0]
@@ -222,64 +222,64 @@ def _start(args: list[str], input: bytes | None, capture_output: bool, cwd: str 
             core.process_nonblocking(fd)
         child = core.process_start(args, cwd, env, redirects)
         result = _Run(child, input_fd, output_fd, error_fd, input, capture_output, [], [], __alloc_atomic(65536))
-        started = True
+        started = true
         return result
     finally:
         for fd in all_fds:
             if not started or fd not in parent:
                 core.close(fd)
 
-def run(args: list[str], input: bytes | None = None, capture_output: bool = False, cwd: str | None = None, env: dict[str, str] | None = None, timeout: float | None = None) -> Result:
+def run(args: list[str], input: bytes | none = none, capture_output: bool = false, cwd: str | none = none, env: dict[str, str] | none = none, timeout: float | none = none) -> Result:
     _check_timeout(timeout)
     state = _start(args, input, capture_output, cwd, env)
     deadline = _deadline(timeout)
-    code: int | None = None
+    code: int | none = none
     try:
-        while code is None:
+        while code is none:
             progress = state.step()
-            code = core.process_poll(state._child, False)
-            if code is None:
+            code = core.process_poll(state._child, false)
+            if code is none:
                 delay = _delay(deadline)
                 if delay == 0.0:
                     raise TimeoutError(f"command timed out after {timeout} seconds")
                 if not progress:
                     state.wait(delay)
-        assert code is not None
+        assert code is not none
         return state.finish(code)
     finally:
         try:
-            if state._child.code is None:
+            if state._child.code is none:
                 core.process_signal(state._child, 9)
-                core.process_poll(state._child, True)
+                core.process_poll(state._child, true)
         finally:
             state.close()
 
-async def run_async(args: list[str], input: bytes | None = None, capture_output: bool = False, cwd: str | None = None, env: dict[str, str] | None = None, timeout: float | None = None) -> Result:
+async def run_async(args: list[str], input: bytes | none = none, capture_output: bool = false, cwd: str | none = none, env: dict[str, str] | none = none, timeout: float | none = none) -> Result:
     await aio.sleep(0.0)
     _check_timeout(timeout)
     state = _start(args, input, capture_output, cwd, env)
     deadline = _deadline(timeout)
-    code: int | None = None
+    code: int | none = none
     try:
-        while code is None:
+        while code is none:
             progress = state.step()
-            code = core.process_poll(state._child, False)
-            if code is None:
+            code = core.process_poll(state._child, false)
+            if code is none:
                 delay = _delay(deadline)
                 if delay == 0.0:
                     raise TimeoutError(f"command timed out after {timeout} seconds")
                 if progress:
                     delay = 0.0
                 await aio.sleep(delay)
-        assert code is not None
+        assert code is not none
         return state.finish(code)
     finally:
         try:
-            if state._child.code is None:
+            if state._child.code is none:
                 core.process_signal(state._child, 9)
-                code = core.process_poll(state._child, False)
-                while code is None:
+                code = core.process_poll(state._child, false)
+                while code is none:
                     await aio.sleep(0.001)
-                    code = core.process_poll(state._child, False)
+                    code = core.process_poll(state._child, false)
         finally:
             state.close()

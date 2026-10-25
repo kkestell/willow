@@ -14,7 +14,7 @@ class TrashError(Exception):
     pass
 
 def move(path: str):
-    if fs.stat(path, follow_symlinks=False).kind == "directory":
+    if fs.stat(path, follow_symlinks=false).kind == "directory":
         raise TrashError(f"{path} is a directory")
     parent = fs.dirname(path)
     trash = fs.join(parent, ".trash")
@@ -22,7 +22,7 @@ def move(path: str):
     if fs.exists(target):
         raise TrashError(f"{target} already exists")
     created = not fs.exists(trash)
-    fs.mkdir(trash, exist_ok=True)
+    fs.mkdir(trash, exist_ok=true)
     try:
         fs.rename(path, target)
     except OSError:

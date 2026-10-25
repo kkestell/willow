@@ -4,7 +4,7 @@ def invalid(data: bytes):
     except ValueError as error:
         assert error.message == "invalid UTF-8"
         return
-    assert False
+    assert false
 
 def is_bytes(value: bytes | str) -> bool:
     return isinstance(value, bytes)
@@ -34,11 +34,11 @@ def main():
         assert is_bytes(part)
     try:
         bytes([-1])
-        assert False
+        assert false
     except ValueError as error:
         assert error.message == "bytes must be in range(0, 256)"
     try:
         value = data[-6]
-        assert False
+        assert false
     except IndexError as bounds:
         assert bounds.message == "index out of range"

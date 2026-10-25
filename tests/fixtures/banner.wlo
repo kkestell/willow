@@ -5,7 +5,7 @@ import sys
 class Options:
     width: int = 24
     border: str = "*"
-    upper: bool = False
+    upper: bool = false
 
 def frame(text: str, *, width: int = 0, border: str = "*") -> str:
     inner = wider(width - 4, len(text))
@@ -24,7 +24,7 @@ def main():
     words: list[str] = []
     for arg in sys.args():
         if arg == "--upper":
-            options.upper = True
+            options.upper = true
         elif arg.startswith("--border="):
             options.border = arg[9:10]
         elif arg.startswith("--width="):

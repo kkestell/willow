@@ -1,10 +1,10 @@
 import http
 import sys
 
-def rejected(url: str, ca_file: str | None):
+def rejected(url: str, ca_file: str | none):
     try:
         http.request("GET", url, ca_file=ca_file, timeout=2.0)
-        assert False, "untrusted certificate accepted"
+        assert false, "untrusted certificate accepted"
     except OSError as error:
         assert error.message.startswith("cannot fetch " + url + ": ")
 
@@ -14,7 +14,7 @@ def main():
     url = "https://localhost:" + port + "/hello.txt"
     response = http.request("GET", url, ca_file=directory + "/cert.pem", timeout=2.0)
     assert response.status == 200 and response.body.decode() == "secure hello\n"
-    rejected(url, None)
+    rejected(url, none)
     rejected("https://127.0.0.1:" + port + "/hello.txt", directory + "/cert.pem")
     rejected(url, directory + "/empty.pem")
     print("http TLS passed")

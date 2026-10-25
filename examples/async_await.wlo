@@ -16,7 +16,7 @@ class Cache:
     async def load(self, key: str) -> int:
         await aio.sleep(0.0)
         value = self.values.get(key)
-        if value is None:
+        if value is none:
             return 0
         return value
 

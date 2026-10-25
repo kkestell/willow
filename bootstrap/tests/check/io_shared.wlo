@@ -10,11 +10,11 @@ def main():
     assert input() == ""
     try:
         first.readline()
-        assert False
+        assert false
     except ValueError as error:
         assert error.message == "invalid UTF-8"
     assert input() == "end"
-    assert second.readline() is None
+    assert second.readline() is none
     assert len(first.read(1)) == 0
 
     io.stdout().write_text("a")

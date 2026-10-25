@@ -3,41 +3,41 @@ enum Side:
     RIGHT
 
 class Box:
-    value: tuple[float | None, bool | str, Side | None, tuple[int | None]]
+    value: tuple[float | none, bool | str, Side | none, tuple[int | none]]
 
 def main():
-    raw = (2.5, True, Side.RIGHT, (4,))
+    raw = (2.5, true, Side.RIGHT, (4,))
     box = Box(raw)
     assert box.value[0] == 2.5
-    assert box.value[1] == True
+    assert box.value[1] == true
     assert box.value[2] == Side.RIGHT
     assert box.value[3][0] == 4
-    box.value = (None, "x", None, (None,))
-    assert box.value[0] is None
+    box.value = (none, "x", none, (none,))
+    assert box.value[0] is none
     box.value = raw
-    xs: list[tuple[float | None, bool | str, Side | None, tuple[int | None]]] = [raw]
+    xs: list[tuple[float | none, bool | str, Side | none, tuple[int | none]]] = [raw]
     xs.append(raw)
     xs[0] = raw
     assert xs.pop() == box.value
-    d: dict[str, tuple[float | None, bool | str, Side | None, tuple[int | None]] | None] = {"x": raw}
+    d: dict[str, tuple[float | none, bool | str, Side | none, tuple[int | none]] | none] = {"x": raw}
     d["y"] = raw
     found = d.get("x")
-    assert found is not None
+    assert found is not none
     assert found == box.value
     for found in [raw]:
         assert found == box.value
     original = ([1], 2.5)
-    widened: tuple[list[int], float | None] = original
+    widened: tuple[list[int], float | none] = original
     original[0].append(3)
     assert widened[0][1] == 3
-    flag: bool | None = None
-    side: Side | None = None
-    number: float | None = None
+    flag: bool | none = none
+    side: Side | none = none
+    number: float | none = none
     number, flag, side, nested = raw
     assert number + 1.0 == 3.5
     assert flag
     assert side == Side.RIGHT
     assert nested[0] == 4
-    optional: tuple[int | None] = (None,)
+    optional: tuple[int | none] = (none,)
     for item in ((4,), optional):
-        assert item[0] == 4 or item[0] is None
+        assert item[0] == 4 or item[0] is none

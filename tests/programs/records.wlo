@@ -1,6 +1,6 @@
 class Node:
     value: int
-    next: Node | None
+    next: Node | none
 
 class Point:
     x: int
@@ -12,15 +12,15 @@ class Keywords:
 
 class Bag:
     items: list[str]
-    owner: Person | None
+    owner: Person | none
 
 class Person:
     name: str
 
-def total(head: Node | None) -> int:
+def total(head: Node | none) -> int:
     result = 0
     node = head
-    while node is not None:
+    while node is not none:
         result = result + node.value
         node = node.next
     return result
@@ -37,7 +37,7 @@ def make_point() -> Point:
     return Point(0, 0)
 
 def main():
-    print(total(Node(1, Node(2, Node(3, None)))))   # 6
+    print(total(Node(1, Node(2, Node(3, none)))))   # 6
 
     p = Point(1, 2)
     alias = p
@@ -46,15 +46,15 @@ def main():
     print(p.x)
     print(p.y)
 
-    head: Node | None = None
+    head: Node | none = none
     i = 0
     while i < 4:
         head = Node(i, head)
         i = i + 1
     print(total(head))
-    if head is not None:
+    if head is not none:
         second = head.next
-        if second is not None:
+        if second is not none:
             print(second.value)
 
     k = Keywords("done", [1, 2])
@@ -62,11 +62,11 @@ def main():
     print(k.end)
     print(len(k.local))
 
-    bag = Bag([], None)
+    bag = Bag([], none)
     bag.items.append("apple")
     bag.owner = Person("ada")
     owner = bag.owner
-    if owner is not None:
+    if owner is not none:
         print(owner.name)
     print(bag.items[0])
 

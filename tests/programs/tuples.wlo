@@ -13,10 +13,10 @@ def widen(t: tuple[int | float, float]) -> str:
         return f"float {first} {t[1]}"
     return "int"
 
-def maybe(t: tuple[float] | None) -> tuple[int | float] | None:
+def maybe(t: tuple[float] | none) -> tuple[int | float] | none:
     return t
 
-def kind(v: tuple[int, str] | list[int] | None) -> str:
+def kind(v: tuple[int, str] | list[int] | none) -> str:
     if isinstance(v, tuple):
         return "tuple " + v[1]
     if isinstance(v, list):
@@ -34,19 +34,19 @@ def greet(pair: tuple[Side, int | float] = (Side.RIGHT, 1.5)) -> str:
     second = pair[1]
     return f"{pair[0]} {second} {isinstance(second, float)}"
 
-def found(flag: bool) -> tuple[int, str] | None:
+def found(flag: bool) -> tuple[int, str] | none:
     if flag:
         return (1, "a")
-    return None
+    return none
 
 def comparisons():
     print((1, "a") == (1, "a"))
     print((1, "a") != (1, "b"))
-    print(((1, 2), None) == ((1, 2), None))
+    print(((1, 2), none) == ((1, 2), none))
     print(() == ())
-    print(found(True) == (1, "a"))
-    print(found(False) == None)
-    print(found(True) == None)
+    print(found(true) == (1, "a"))
+    print(found(false) == none)
+    print(found(true) == none)
     one: tuple[int | float] = (1,)
     floats: tuple[float] = (1.0,)
     print(one == floats)
@@ -66,7 +66,7 @@ def comparisons():
     print(one in [(1.0,)])
 
 def iteration():
-    for item in (1, 2.5, None):
+    for item in (1, 2.5, none):
         print(f"{item} {isinstance(item, float)}")
     for nothing in ():
         print(nothing)
@@ -81,7 +81,7 @@ def main():
     t = (1, "Ada")
     print(t[0])
     print(t[-1])
-    nested = ((1, 2), None, (3,))
+    nested = ((1, 2), none, (3,))
     print(nested[0][1])
     print(nested[1])
     print(nested[-1][0])
@@ -94,14 +94,14 @@ def main():
     print(widen(floats))
     print(widen((2, 3.5)))
     m = maybe((4.5,))
-    if m is not None:
+    if m is not none:
         x = m[0]
         print(isinstance(x, float))
         print(x)
-    print(maybe(None) is None)
+    print(maybe(none) is none)
     print(kind(t))
     print(kind([1]))
-    print(kind(None))
+    print(kind(none))
     grouped = (5)
     print(grouped)
     comparisons()

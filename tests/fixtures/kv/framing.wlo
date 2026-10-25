@@ -12,23 +12,23 @@ class Channel:
     def send(self, value: json.Json):
         self.connection.sendall((json.dump(value) + "\n").encode())
 
-    # The next complete line without its newline, or None when the peer closed.
-    def read_line(self, timeout: float | None = None) -> str | None:
+    # The next complete line without its newline, or none when the peer closed.
+    def read_line(self, timeout: float | none = none) -> str | none:
         index = _newline(self.pending)
         while index < 0:
             chunk = self.connection.recv(4096, timeout=timeout)
             if len(chunk) == 0:
-                return None
+                return none
             self.pending = self.pending + chunk
             index = _newline(self.pending)
         line = self.pending[:index]
         self.pending = self.pending[index + 1:]
         return line.decode()
 
-    def receive(self, timeout: float | None = None) -> json.Json:
+    def receive(self, timeout: float | none = none) -> json.Json:
         line = self.read_line(timeout=timeout)
-        if line is None:
-            return None
+        if line is none:
+            return none
         return json.parse(line)
 
     def close(self):
@@ -37,7 +37,7 @@ class Channel:
     def enter(self) -> Channel:
         return self
 
-    def exit(self, error: Exception | None):
+    def exit(self, error: Exception | none):
         self.close()
 
 def channel(connection: net.Connection) -> Channel:

@@ -14,7 +14,7 @@ protocol Source[T]:
     def get(self) -> T
 
 protocol Greeter:
-    def greet(self, name: str | None = "you", *, loud: bool = False) -> str
+    def greet(self, name: str | none = "you", *, loud: bool = false) -> str
 
 protocol Number:
     def value(self) -> int | float
@@ -35,7 +35,7 @@ class Rect:
     def area(self) -> float:
         return self.width * self.height
 
-    def scaled(self, factor: float, *, square: bool = False) -> Rect:
+    def scaled(self, factor: float, *, square: bool = false) -> Rect:
         if square:
             return Rect(self.width * factor, self.width * factor)
         return Rect(self.width * factor, self.height * factor)
@@ -63,9 +63,9 @@ class Box[T]:
 class Host:
     tag: str
 
-    def greet(self, name: str | None = "friend", *, polite: bool = True, loud: bool = True) -> str:
+    def greet(self, name: str | none = "friend", *, polite: bool = true, loud: bool = true) -> str:
         who = "nobody"
-        if name is not None:
+        if name is not none:
             who = name
         text = self.tag + " greets " + who
         if polite:
@@ -144,7 +144,7 @@ def main():
 
     greeter: Greeter = Host("Ann")
     print(greeter.greet())
-    print(greeter.greet(None, loud=False))
+    print(greeter.greet(none, loud=false))
     print(greeter.greet("Bo"))
 
     show(Half(0))

@@ -7,10 +7,10 @@ def main_result(result: subprocess.Result):
 
 async def main():
     start = core.aio_now()
-    main_result(subprocess.run(["sh", "-c", "sleep 5 & printf done"], capture_output=True))
+    main_result(subprocess.run(["sh", "-c", "sleep 5 & printf done"], capture_output=true))
     assert core.aio_now() - start < 2.0
     start = core.aio_now()
-    main_result(await subprocess.run_async(["sh", "-c", "sleep 5 & printf done"], capture_output=True))
+    main_result(await subprocess.run_async(["sh", "-c", "sleep 5 & printf done"], capture_output=true))
     assert core.aio_now() - start < 2.0
     process = subprocess.spawn(["true"])
     assert await process.wait_async() == 0

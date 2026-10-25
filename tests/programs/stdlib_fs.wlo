@@ -57,7 +57,7 @@ def main():
     except OSError as e3:
         print(f"{e3.message.startswith('cannot read ')} {fs.read_bytes(copy) == data}")
 
-    fs.mkdir(fs.join(root, "sub/deep"), parents=True)
+    fs.mkdir(fs.join(root, "sub/deep"), parents=true)
     fs.write_file(fs.join(root, "sub/a.txt"), "a")
     fs.write_file(fs.join(root, "sub/.hidden"), "h")
     fs.write_file(fs.join(root, "sub/deep/b.txt"), "b")

@@ -18,7 +18,7 @@ class Lexer:
     keywords: dict[str, tokens.Kind]
     operators: dict[str, tokens.Kind]
     unsupported: list[str]
-    error: diagnostic.Diagnostic | None
+    error: diagnostic.Diagnostic | none
 
     # The character at `pos`, or "" past the end.
     def at(self, pos: int) -> str:
@@ -32,7 +32,7 @@ class Lexer:
     # Records the first error and moves to the end of the source, which ends
     # every loop in the lexer.
     def fail(self, pos: int, message: str):
-        if self.error is None:
+        if self.error is none:
             line = 1
             line_start = 0
             i = 0
@@ -64,7 +64,7 @@ class Lexer:
                 self.fail(i, "bare carriage return; line endings must be LF or CRLF")
                 return
             i = i + 1
-        line_has_tokens = False
+        line_has_tokens = false
         while self.pos < self.size:
             c = self.chars[self.pos]
             if not line_has_tokens and self.depth == 0:
@@ -72,7 +72,7 @@ class Lexer:
             elif c == "\n" or c == "\r":
                 if self.depth == 0:
                     self.add(tokens.Kind.NEWLINE, "", self.pos)
-                    line_has_tokens = False
+                    line_has_tokens = false
                 if c == "\r":
                     self.pos = self.pos + 1
                 self.newline(self.pos)
@@ -86,7 +86,7 @@ class Lexer:
                         self.depth = self.depth + 1
                     elif closes(kind) and self.depth > 0:
                         self.depth = self.depth - 1
-        if self.error is not None:
+        if self.error is not none:
             return
         if line_has_tokens and self.depth == 0:
             self.add(tokens.Kind.NEWLINE, "", self.size)
@@ -99,8 +99,8 @@ class Lexer:
         self.add(tokens.Kind.EOF, "", self.size)
 
     # Reads the indentation of the line at `pos`. Skips a blank or
-    # comment-only line, including its newline, and returns False; otherwise
-    # adds any INDENT or DEDENT tokens and returns True.
+    # comment-only line, including its newline, and returns false; otherwise
+    # adds any INDENT or DEDENT tokens and returns true.
     def start_line(self) -> bool:
         p = self.pos
         while self.at(p) == " ":
@@ -108,7 +108,7 @@ class Lexer:
         c = self.at(p)
         if c == "\t":
             self.fail(p, "tabs are not allowed outside strings and comments")
-            return False
+            return false
         if c == "#":
             while self.at(p) != "" and self.at(p) != "\n":
                 p = p + 1
@@ -120,15 +120,15 @@ class Lexer:
                 self.newline(p)
                 p = p + 1
             self.pos = p
-            return False
+            return false
         width = p - self.pos
         if width % 4 != 0:
             self.fail(p, "indentation must be a multiple of four spaces")
-            return False
+            return false
         level = width // 4
         if level > self.level + 1:
             self.fail(p, "unexpected indent")
-            return False
+            return false
         if level > self.level:
             self.add(tokens.Kind.INDENT, "", p)
         while self.level > level:
@@ -136,7 +136,7 @@ class Lexer:
             self.level = self.level - 1
         self.level = level
         self.pos = p
-        return True
+        return true
 
     # Reads one token, a space, or a comment at `pos`, which is not a newline.
     def lex_token(self):
@@ -155,7 +155,7 @@ class Lexer:
                 p = p + 1
             word = self.text(self.pos, p)
             if word == "f" and is_quote(self.at(p)):
-                self.read_string(True)
+                self.read_string(true)
             elif word in self.keywords:
                 self.add(self.keywords[word], word, self.pos)
                 self.pos = p
@@ -165,7 +165,7 @@ class Lexer:
         elif is_digit(c):
             self.read_number()
         elif is_quote(c):
-            self.read_string(False)
+            self.read_string(false)
         else:
             self.read_operator()
 
@@ -190,12 +190,12 @@ class Lexer:
         while is_digit(self.at(p)):
             p = p + 1
         integer_digits = p - start
-        is_float = False
+        is_float = false
         if self.at(p) == "." and is_digit(self.at(p + 1)):
             p = p + 1
             while is_digit(self.at(p)):
                 p = p + 1
-            is_float = True
+            is_float = true
         if self.at(p) == "e" or self.at(p) == "E":
             q = p + 1
             if self.at(q) == "+" or self.at(q) == "-":
@@ -204,7 +204,7 @@ class Lexer:
                 while is_digit(self.at(q)):
                     q = q + 1
                 p = q
-                is_float = True
+                is_float = true
         end = p
         while is_name_char(self.at(end)) or self.at(end) == "." or (self.at(end) == "+" or self.at(end) == "-") and (self.at(end - 1) == "e" or self.at(end - 1) == "E"):
             end = end + 1
@@ -244,14 +244,14 @@ class Lexer:
         if triple:
             close = 3
         # `run` is the token that receives the text being collected in `parts`.
-        run: tokens.Token | None = None
+        run: tokens.Token | none = none
         if formatted:
             self.add(tokens.Kind.FSTRING_START, "", start)
         else:
             run = self.add(tokens.Kind.STRING_LITERAL, "", start)
         parts: list[str] = []
         self.pos = q + close
-        while True:
+        while true:
             p = self.pos
             c = self.at(p)
             if c == "":
@@ -260,16 +260,16 @@ class Lexer:
             if c == quote and (not triple or self.at(p + 1) == quote and self.at(p + 2) == quote):
                 break
             if formatted and c == "{" and self.at(p + 1) != "{":
-                if run is not None:
+                if run is not none:
                     run.text = "".join(parts)
-                    run = None
+                    run = none
                     parts = []
                 self.read_field(quote, triple)
                 continue
             if formatted and c == "}" and self.at(p + 1) != "}":
                 self.fail(p, "single '}' is not allowed in an f-string")
                 return
-            if run is None:
+            if run is none:
                 run = self.add(tokens.Kind.FSTRING_TEXT, "", p)
             if c == "\\":
                 parts.append(self.read_escape(start, triple))
@@ -288,7 +288,7 @@ class Lexer:
             else:
                 parts.append(c)
                 self.pos = p + 1
-        if run is not None:
+        if run is not none:
             run.text = "".join(parts)
         if formatted:
             self.add(tokens.Kind.FSTRING_END, "", self.pos)
@@ -344,7 +344,7 @@ class Lexer:
         brace = self.pos
         p = brace + 1
         nesting = 0
-        while True:
+        while true:
             c = self.at(p)
             if c == "" or not triple and (c == "\n" or c == "\r"):
                 self.fail(brace, "unterminated f-string field")
@@ -403,11 +403,11 @@ class Lexer:
             if message != "":
                 self.fail(stop, message)
                 return
-        empty = True
+        empty = true
         i = brace + 1
         while i < stop:
             if self.chars[i] != " " and self.chars[i] != "\n" and self.chars[i] != "\r":
-                empty = False
+                empty = false
             i = i + 1
         if empty:
             self.fail(brace, "empty f-string field")
@@ -430,10 +430,10 @@ def lex(path: str, source: str) -> list[tokens.Token] | diagnostic.Diagnostic:
     chars: list[str] = []
     for c in source:
         chars.append(c)
-    lexer = Lexer(path, chars, len(chars), 0, 1, 0, 0, 0, [], tokens.keywords(), tokens.operators(), tokens.unsupported_operators(), None)
+    lexer = Lexer(path, chars, len(chars), 0, 1, 0, 0, 0, [], tokens.keywords(), tokens.operators(), tokens.unsupported_operators(), none)
     lexer.run()
     error = lexer.error
-    if error is not None:
+    if error is not none:
         return error
     return lexer.tokens
 
@@ -479,11 +479,11 @@ def spec_error(spec: str) -> str:
     while is_digit(chars[i]):
         i = i + 1
     width_digits = i - width_start
-    has_precision = False
+    has_precision = false
     precision_start = i
     precision_digits = 0
     if chars[i] == ".":
-        has_precision = True
+        has_precision = true
         i = i + 1
         precision_start = i
         while is_digit(chars[i]):
@@ -495,7 +495,7 @@ def spec_error(spec: str) -> str:
         i = i + 1
     invalid = i != len(chars) - 1 or has_precision and precision_digits == 0
     if width_digits > 1 and chars[width_start] == "0" or precision_digits > 1 and chars[precision_start] == "0":
-        invalid = True
+        invalid = true
     if invalid:
         return f"invalid format specification '{spec}'"
     if has_precision and kind != "f":

@@ -100,17 +100,17 @@ class CoroutineContext:
     entry: ptr
     argument: word
     value: word
-    caller: CoroutineContext | None
+    caller: CoroutineContext | none
     error: ptr
     state: int
 
 def coroutine_context() -> CoroutineContext:
     current = coroutine_current()
-    if current is None:
+    if current is none:
         null = __ptr(__word(0))
         bottom = __alloc(8)
         GC_get_my_stackbottom(bottom)
-        current = CoroutineContext(null, null, bottom, null, __word(0), __word(0), None, null, 1)
+        current = CoroutineContext(null, null, bottom, null, __word(0), __word(0), none, null, 1)
         coroutine_set_current(current)
     return current
 
@@ -126,7 +126,7 @@ def coroutine_create(entry: ptr, argument: word) -> CoroutineContext:
     sp = __offset(top, -160)
     __store8(sp, 88, __word(coroutine_start_address()))
     null = __ptr(__word(0))
-    return CoroutineContext(sp, stack, bottom, entry, argument, __word(0), None, null, 0)
+    return CoroutineContext(sp, stack, bottom, entry, argument, __word(0), none, null, 0)
 
 def coroutine_finished(coroutine: CoroutineContext) -> bool:
     return coroutine.state == 3
@@ -169,7 +169,7 @@ class GeneratorContext:
 
 def generator_new(entry: ptr, environment: ptr) -> GeneratorContext:
     coroutine = coroutine_create(entry, __word(environment))
-    return GeneratorContext(coroutine, environment, False)
+    return GeneratorContext(coroutine, environment, false)
 
 def generator_closing(generator: GeneratorContext) -> bool:
     return generator.closing
@@ -198,7 +198,7 @@ def generator_close(generator: GeneratorContext):
         fail("RuntimeError", "generator already running")
     generator.environment = __ptr(__word(0))
     if coroutine.state == 2:
-        generator.closing = True
+        generator.closing = true
         coroutine_resume(coroutine)
     else:
         coroutine.state = 3
@@ -207,12 +207,12 @@ def generator_close(generator: GeneratorContext):
 def coroutine_yield(value: word):
     current = coroutine_context()
     caller = current.caller
-    if caller is None:
+    if caller is none:
         fail("RuntimeError", "cannot yield outside a coroutine")
         return
     current.value = value
     current.state = 2
-    current.caller = None
+    current.caller = none
     coroutine_switch(current, caller)
 
 # Called after the outgoing registers and SP are saved, before changing SP.
@@ -231,18 +231,18 @@ def coroutine_start():
     current.state = 3
     current.value = __word(0)
     caller = current.caller
-    assert caller is not None, "coroutine has no caller"
-    current.caller = None
+    assert caller is not none, "coroutine has no caller"
+    current.caller = none
     coroutine_switch(current, caller)
     exit(1)
 
 # Stage 1 replaces these bodies; stage 0 links core without switch assembly.
 def coroutine_available() -> bool:
-    return False
+    return false
 
-def coroutine_current() -> CoroutineContext | None:
+def coroutine_current() -> CoroutineContext | none:
     fail("RuntimeError", "coroutines require stage 1 on arm64")
-    return None
+    return none
 
 def coroutine_set_current(current: CoroutineContext):
     fail("RuntimeError", "coroutines require stage 1 on arm64")
@@ -274,9 +274,9 @@ def write_bytes(fd: int, buf: ptr, count: int) -> bool:
     while done < count:
         written = write(fd, __offset(buf, done), count - done)
         if written < 0:
-            return False
+            return false
         done = done + written
-    return True
+    return true
 
 # Failing to write stdout or stderr ends the program with status 1 (spec §10).
 # The report itself is lost when stderr is the stream that failed.
@@ -444,7 +444,7 @@ def find_bytes(s: str, sub: str, start: int) -> int:
 
 def bytes_equal_at(s: str, at: int, sub: str) -> bool:
     if at < 0 or at + str_size(sub) > str_size(s):
-        return False
+        return false
     return memcmp(__offset(str_bytes(s), at), str_bytes(sub), str_size(sub)) == 0
 
 # Space, tab, LF, VT, FF, and CR (spec §7).
@@ -478,7 +478,7 @@ def str_concat(a: str, b: str) -> str:
 
 def str_eq(a: str, b: str) -> bool:
     if str_size(a) != str_size(b):
-        return False
+        return false
     return memcmp(str_bytes(a), str_bytes(b), str_size(a)) == 0
 
 # Negative when a sorts before b, zero when they are equal, and positive
@@ -587,50 +587,50 @@ def str_isascii(s: str) -> bool:
     i = 0
     while i < str_size(s):
         if str_byte(s, i) >= 128:
-            return False
+            return false
         i = i + 1
-    return True
+    return true
 
 def str_isdigit(s: str) -> bool:
     if str_size(s) == 0:
-        return False
+        return false
     i = 0
     while i < str_size(s):
         if not is_digit(str_byte(s, i)):
-            return False
+            return false
         i = i + 1
-    return True
+    return true
 
 def str_isalpha(s: str) -> bool:
     if str_size(s) == 0:
-        return False
+        return false
     i = 0
     while i < str_size(s):
         if not is_alpha(str_byte(s, i)):
-            return False
+            return false
         i = i + 1
-    return True
+    return true
 
 def str_isalnum(s: str) -> bool:
     if str_size(s) == 0:
-        return False
+        return false
     i = 0
     while i < str_size(s):
         b = str_byte(s, i)
         if not (is_alpha(b) or is_digit(b)):
-            return False
+            return false
         i = i + 1
-    return True
+    return true
 
 def str_isspace(s: str) -> bool:
     if str_size(s) == 0:
-        return False
+        return false
     i = 0
     while i < str_size(s):
         if not is_space(str_byte(s, i)):
-            return False
+            return false
         i = i + 1
-    return True
+    return true
 
 # A string of `count` copies of the ASCII byte `b`.
 def repeat_byte(b: int, count: int) -> str:
@@ -676,10 +676,10 @@ def format_union(value: ptr, width: int, align: str) -> str:
 # most `maxsplit` splits are made, from the left, and the rest of the string
 # is the last piece. A negative `maxsplit` places no limit; there are never
 # more splits than bytes, so the byte count stands in for it.
-def str_split(s: str, sep: str | None, maxsplit: int) -> ptr:
+def str_split(s: str, sep: str | none, maxsplit: int) -> ptr:
     if maxsplit < 0:
         maxsplit = str_size(s)
-    if sep is None:
+    if sep is none:
         return split_whitespace(s, maxsplit)
     if str_size(sep) == 0:
         fail("ValueError", "empty separator")
@@ -723,10 +723,10 @@ def skip_spaces_back(s: str, i: int) -> int:
 
 # Like str_split, but the splits are made from the right: the pieces are
 # collected from the end and then reversed.
-def str_rsplit(s: str, sep: str | None, maxsplit: int) -> ptr:
+def str_rsplit(s: str, sep: str | none, maxsplit: int) -> ptr:
     if maxsplit < 0:
         maxsplit = str_size(s)
-    if sep is None:
+    if sep is none:
         parts = rsplit_whitespace(s, maxsplit)
     else:
         if str_size(sep) == 0:
@@ -873,10 +873,10 @@ def str_chr(n: int) -> str:
     return __str(__word(s))
 
 def str_lower(s: str) -> str:
-    return convert_case(s, True)
+    return convert_case(s, true)
 
 def str_upper(s: str) -> str:
-    return convert_case(s, False)
+    return convert_case(s, false)
 
 # Unicode's default full case mappings (spec §7): a full mapping when the
 # code point has one, otherwise the simple mapping, and Final_Sigma for Σ.
@@ -965,7 +965,7 @@ def case_in_ranges(ranges: str, code: int) -> bool:
 # Final_Sigma: a cased code point comes before the Σ at byte `at` and none
 # comes after it, skipping case-ignorable code points in both directions.
 def final_sigma(s: str, at: int) -> bool:
-    before = False
+    before = false
     i = at
     while i > 0:
         i = i - 1
@@ -976,14 +976,14 @@ def final_sigma(s: str, at: int) -> bool:
             before = case_in_ranges(case_cased(), code)
             break
     if not before:
-        return False
+        return false
     i = at + 2
     while i < str_size(s):
         code = code_at(s, i)
         if not case_in_ranges(case_case_ignorable(), code):
             return not case_in_ranges(case_cased(), code)
         i = i + char_size(str_byte(s, i))
-    return True
+    return true
 
 # Case tables generated by tools/unicode_case.wlo from Unicode 17.0.
 # Runs are first, last, step, and the mapping of first; full mappings are a
@@ -2254,9 +2254,9 @@ def bytes_contains(data: ptr, value: int) -> bool:
     i = 0
     while i < str_size(s):
         if str_byte(s, i) == value:
-            return True
+            return true
         i = i + 1
-    return False
+    return false
 
 def bytes_split(data: ptr, sep: ptr, maxsplit: int) -> ptr:
     parts = str_split(__str(__word(data)), __str(__word(sep)), maxsplit)
@@ -2413,9 +2413,9 @@ def list_contains(xs: ptr, value: word, kind: int) -> bool:
     i = 0
     while i < list_len(xs):
         if slots_equal(list_get(xs, i), value, kind):
-            return True
+            return true
         i = i + 1
-    return False
+    return false
 
 # The order of two sort keys of equality kind `kind`, neither holding NaN:
 # negative when a sorts before b, zero when they are equal, and positive
@@ -2456,21 +2456,21 @@ def slot_has_nan(value: word, kind: int) -> bool:
         i = 0
         while i < tuple_len(t):
             if slot_has_nan(tuple_get(t, i), __int(__load8(kinds, i * 8))):
-                return True
+                return true
             i = i + 1
-    return False
+    return false
 
 # Whether `xs` differs in length or in any slot from `snapshot`, its copy
 # from before a sort ran the key function.
 def list_changed(xs: ptr, snapshot: ptr) -> bool:
     if list_len(xs) != list_len(snapshot):
-        return True
+        return true
     i = 0
     while i < list_len(xs):
         if __int(list_get(xs, i)) != __int(list_get(snapshot, i)):
-            return True
+            return true
         i = i + 1
-    return False
+    return false
 
 # Sorts `xs` in place by `keys`, which holds a sort key of equality kind
 # `kind` for each element and may be `xs` itself. The merge sort is stable,
@@ -2580,9 +2580,9 @@ def utf8_valid(p: ptr, size: int) -> bool:
     while i < size:
         count = utf8_char_size(p, i, size)
         if count == 0:
-            return False
+            return false
         i = i + count
-    return True
+    return true
 
 # A new string holding a copy of the `size` bytes at `p`, which must be valid
 # UTF-8.
@@ -2623,7 +2623,7 @@ def file_read(fd: int, buffer: ptr, size: int, path: str) -> ptr:
     start = __int(__load8(buffer, 0))
     stop = __int(__load8(buffer, 8))
     if start == stop:
-        stop = fill_buffer(fd, buffer, path, False)
+        stop = fill_buffer(fd, buffer, path, false)
         start = 0
     count = stop - start
     if count > size:
@@ -2633,11 +2633,11 @@ def file_read(fd: int, buffer: ptr, size: int, path: str) -> ptr:
     __store8(buffer, 0, __word(start + count))
     return bytes_tag(__str(__word(data)))
 
-def file_readline(fd: int, buffer: ptr, path: str, fatal: bool) -> str | None:
+def file_readline(fd: int, buffer: ptr, path: str, fatal: bool) -> str | none:
     capacity = 128
     size = 0
     line = __alloc_atomic(capacity)
-    while True:
+    while true:
         start = __int(__load8(buffer, 0))
         stop = __int(__load8(buffer, 8))
         if start == stop:
@@ -2659,11 +2659,11 @@ def file_readline(fd: int, buffer: ptr, path: str, fatal: bool) -> str | None:
         __store1(line, size, byte)
         size = size + 1
     if size == 0:
-        return None
+        return none
     return str_from_bytes(line, size)
 
-def input_line() -> str | None:
-    return file_readline(0, stdin_buffer(), "<stdin>", True)
+def input_line() -> str | none:
+    return file_readline(0, stdin_buffer(), "<stdin>", true)
 
 # Stage 1 replaces this body to read the arguments saved by program entry.
 def sys_arguments() -> list[str]:
@@ -2781,11 +2781,11 @@ def fs_write_file(path: str, text: str):
 # fails as stat would.
 def fs_exists(path: str) -> bool:
     if access(path_bytes(path), 0) == 0:
-        return True
+        return true
     code = errno()
     if code != 2 and code != 20:
         fail_os("stat", path)
-    return False
+    return false
 
 # PATH_MAX is 4096 on Linux and 1024 on macOS, so 4096 bytes hold any result.
 def fs_realpath(path: str) -> str:
@@ -2824,18 +2824,18 @@ def net_check_host(host: str, port: int, lowest: int):
     if port < lowest or port > 65535:
         fail("ValueError", "invalid port " + str(port))
 
-def net_check_timeout(timeout: float | None):
-    if timeout is not None:
+def net_check_timeout(timeout: float | none):
+    if timeout is not none:
         if not (timeout > 0.0 and timeout - timeout == 0.0):
             fail("ValueError", "timeout must be finite and positive")
 
-def net_deadline(timeout: float | None) -> float | None:
-    if timeout is None:
-        return None
+def net_deadline(timeout: float | none) -> float | none:
+    if timeout is none:
+        return none
     return aio_now() + timeout
 
-def net_timed_out(what: str, timeout: float | None):
-    assert timeout is not None, "timeout without deadline"
+def net_timed_out(what: str, timeout: float | none):
+    assert timeout is not none, "timeout without deadline"
     fail("TimeoutError", what + " timed out after " + float_to_str(timeout) + " seconds")
 
 def net_reason(code: int) -> str:
@@ -2922,7 +2922,7 @@ def net_local_port(fd: int) -> int:
 
 # A negative count means the nonblocking operation needs readiness.
 def net_try_recv(fd: int, buffer: ptr, size: int) -> int:
-    while True:
+    while true:
         count = recv(fd, __offset(buffer, 24), size, 0)
         if count >= 0:
             __store8(buffer, 8, __word(count))
@@ -2940,7 +2940,7 @@ def net_received(buffer: ptr) -> word:
     return __word(bytes_tag(__str(__word(buffer))))
 
 def net_try_send(fd: int, data: ptr, offset: int, size: int) -> int:
-    while True:
+    while true:
         count = send(fd, __offset(data, 24 + offset), size - offset, net_layout().no_signal)
         if count >= 0:
             return count
@@ -2953,7 +2953,7 @@ def net_try_send(fd: int, data: ptr, offset: int, size: int) -> int:
     return -1
 
 def net_try_accept(fd: int) -> int:
-    while True:
+    while true:
         accepted = accept(fd, __ptr(__word(0)), __ptr(__word(0)))
         if accepted >= 0:
             code = net_configure(accepted)
@@ -2983,9 +2983,9 @@ def net_connect_step(state: NetConnect) -> bool:
     if state.fd >= 0:
         code = net_socket_error(state.fd)
         if code == 0:
-            return True
+            return true
         if code == net_layout().in_progress or code == net_layout().again:
-            return False
+            return false
         state.reason = net_reason(code)
         close(state.fd)
         state.fd = -1
@@ -2998,15 +2998,15 @@ def net_connect_step(state: NetConnect) -> bool:
         else:
             status = connect(state.fd, address.data, address.size)
             if status == 0:
-                return True
+                return true
             code = errno()
             if code == net_layout().in_progress or code == 4:
-                return False
+                return false
             state.reason = net_reason(code)
             close(state.fd)
             state.fd = -1
     fail("OSError", "cannot connect to " + state.host + ":" + str(state.port) + ": " + state.reason)
-    return False
+    return false
 
 def net_listen(host: str, port: int, backlog: int) -> int:
     net_check_host(host, port, 0)
@@ -3079,10 +3079,10 @@ def fs_same_file(source: str, destination: str) -> bool:
     layout = fs_layout()
     first = __alloc_atomic(layout.buffer_size)
     second = __alloc_atomic(layout.buffer_size)
-    if fs_stat(str_bytes(source), first, True) != 0 or fs_stat(str_bytes(destination), second, True) != 0:
-        return False
+    if fs_stat(str_bytes(source), first, true) != 0 or fs_stat(str_bytes(destination), second, true) != 0:
+        return false
     if __int(__load8(first, layout.inode_offset)) != __int(__load8(second, layout.inode_offset)):
-        return False
+        return false
     if layout.device_size == 4:
         return __load4(first, layout.device_offset) == __load4(second, layout.device_offset)
     return __int(__load8(first, layout.device_offset)) == __int(__load8(second, layout.device_offset))
@@ -3133,7 +3133,7 @@ def os() -> str:
 
 class Child:
     pid: int
-    code: int | None = None
+    code: int | none = none
 
 def process_error(program: str, code: int):
     text = strerror(code)
@@ -3197,7 +3197,7 @@ def process_available(fd: int) -> int:
         fail_os("read", "pipe")
     return __load4(count, 0)
 
-def process_start(args: list[str], cwd: str | None, env: dict[str, str] | None, redirects: list[int]) -> Child:
+def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, redirects: list[int]) -> Child:
     if len(args) == 0 or args[0] == "":
         fail("ValueError", "args must contain a nonempty executable name")
     argv = __alloc((len(args) + 1) * 8)
@@ -3208,11 +3208,11 @@ def process_start(args: list[str], cwd: str | None, env: dict[str, str] | None, 
         __store8(argv, i * 8, __word(str_bytes(arg)))
         i = i + 1
     __store8(argv, i * 8, __word(0))
-    if cwd is not None:
+    if cwd is not none:
         path_bytes(cwd)
     search = "/usr/bin:/bin"
     strings: list[str] = []
-    if env is None:
+    if env is none:
         envp = environment()
         pointer = getenv(str_bytes("PATH"))
         if not __addr_is_null(pointer):
@@ -3266,7 +3266,7 @@ def process_start(args: list[str], cwd: str | None, env: dict[str, str] | None, 
             code = posix_spawn_file_actions_adddup2(actions, source, target)
             if code != 0:
                 break
-    if code == 0 and cwd is not None:
+    if code == 0 and cwd is not none:
         code = posix_spawn_file_actions_addchdir_np(actions, str_bytes(cwd))
     if code == 0:
         sigemptyset(signals)
@@ -3276,13 +3276,13 @@ def process_start(args: list[str], cwd: str | None, env: dict[str, str] | None, 
         code = posix_spawnattr_setflags(attributes, 4)
     pid = __alloc_atomic(4)
     if code == 0:
-        denied = False
+        denied = false
         for candidate in candidates:
             code = posix_spawn(pid, str_bytes(candidate), actions, attributes, argv, envp)
             if code == 0:
                 break
             if code == 13:
-                denied = True
+                denied = true
             elif code != 2 and code != 20:
                 break
         if (code == 2 or code == 20) and denied:
@@ -3293,10 +3293,10 @@ def process_start(args: list[str], cwd: str | None, env: dict[str, str] | None, 
     posix_spawnattr_destroy(attributes)
     if code != 0:
         process_error(args[0], code)
-    return Child(__load4(pid, 0), None)
+    return Child(__load4(pid, 0), none)
 
-def process_poll(child: Child, block: bool) -> int | None:
-    if child.code is not None:
+def process_poll(child: Child, block: bool) -> int | none:
+    if child.code is not none:
         return child.code
     options = 1
     if block:
@@ -3308,7 +3308,7 @@ def process_poll(child: Child, block: bool) -> int | None:
             fail_os("wait for", int_to_str(child.pid))
         result = waitpid(child.pid, status, options)
     if result == 0:
-        return None
+        return none
     value = __load4(status, 0)
     if value % 128 == 0:
         child.code = value // 256 % 256
@@ -3317,15 +3317,15 @@ def process_poll(child: Child, block: bool) -> int | None:
     return child.code
 
 def process_signal(child: Child, sig: int):
-    if child.code is None:
+    if child.code is none:
         if kill(child.pid, sig) < 0:
             fail_os("signal", int_to_str(child.pid))
 
 # The compiler's driver keeps its original 128 + signal convention.
 def run(args: list[str]) -> int:
-    child = process_start(args, None, None, [-1, -1, -1])
-    code = process_poll(child, True)
-    assert code is not None, "blocking wait did not reap the child"
+    child = process_start(args, none, none, [-1, -1, -1])
+    code = process_poll(child, true)
+    assert code is not none, "blocking wait did not reap the child"
     if code < 0:
         return 128 - code
     return code
@@ -3401,7 +3401,7 @@ def tuple_set(value: ptr, position: int, item: word):
 
 def tuple_eq(a: ptr, b: ptr) -> bool:
     if tuple_len(a) != tuple_len(b):
-        return False
+        return false
     a_kinds = __ptr(__load8(a, 16))
     b_kinds = __ptr(__load8(b, 16))
     i = 0
@@ -3413,12 +3413,12 @@ def tuple_eq(a: ptr, b: ptr) -> bool:
         if a_kind == b_kind:
             equal = slots_equal(left, right, a_kind)
         else:
-            # Only references and None widen without changing their slots.
+            # Only references and none widen without changing their slots.
             equal = union_eq(__ptr(left), __ptr(right))
         if not equal:
-            return False
+            return false
         i = i + 1
-    return True
+    return true
 
 # A dict keeps its entries in insertion order in an array of three slots per
 # entry: the key, the value, and the key's hash, which is -1 while the entry
@@ -3812,7 +3812,7 @@ def is_decimal(s: str) -> bool:
         count = count + stop - i - 1
         i = stop
     if count == 0:
-        return False
+        return false
     b = str_byte(s, i)
     if b != 101 and b != 69:
         return i == str_size(s)
@@ -3821,7 +3821,7 @@ def is_decimal(s: str) -> bool:
     if b == 43 or b == 45:
         i = i + 1
     if not is_digit(str_byte(s, i)):
-        return False
+        return false
     return skip_digits(s, i) == str_size(s)
 
 # An optional sign and then a decimal number or `inf`, `infinity`, or `nan`
@@ -3840,7 +3840,7 @@ def str_to_float(s: str) -> float:
         fail("ValueError", "cannot convert str to float")
     return str_to_float_unchecked(s)
 
-# A union value is 0 for None, a str as itself, and any other printable scalar
+# A union value is 0 for none, a str as itself, and any other printable scalar
 # as a box, so its header tells which member it holds. Comparable tuples
 # retain their own header and position representations.
 
@@ -3851,7 +3851,7 @@ def union_eq(a: ptr, b: ptr) -> bool:
     if __addr_is_null(a) or __addr_is_null(b):
         return __addr_is_null(a) and __addr_is_null(b)
     if header(a) != header(b):
-        return False
+        return false
     if header(a) == __type(str) or header(a) == __type(bytes):
         return str_eq(__str(__word(a)), __str(__word(b)))
     if header(a) == __type(float):
@@ -3881,12 +3881,12 @@ def iterator_state(source: ptr, version: int) -> ptr:
     state = __alloc(64)
     __store8(state, 0, __word(source))
     __store8(state, 8, __word(0))
-    __store8(state, 16, __word(False))
+    __store8(state, 16, __word(false))
     __store8(state, 24, __word(version))
     __store8(state, 32, __word(0))
     __store8(state, 40, __word(0))
     __store8(state, 48, __word(0))
-    __store8(state, 56, __word(False))
+    __store8(state, 56, __word(false))
     return state
 
 def iterator_source(state: ptr) -> ptr:
@@ -3899,7 +3899,7 @@ def iterator_set_cursor(state: ptr, cursor: int):
     __store8(state, 8, __word(cursor))
 
 def iterator_exhaust(state: ptr):
-    __store8(state, 16, __word(True))
+    __store8(state, 16, __word(true))
     fail("StopIteration", "")
 
 def iterator_check(state: ptr):
@@ -3976,7 +3976,7 @@ def iterator_range_next(state: ptr) -> int:
     if (step > 0 and current >= stop) or (step < 0 and current <= stop):
         iterator_exhaust(state)
     if (step > 0 and current > 0 and step > 9223372036854775807 - current) or (step < 0 and current < 0 and step < -9223372036854775807 - current):
-        __store8(state, 16, __word(True))
+        __store8(state, 16, __word(true))
     else:
         iterator_set_cursor(state, current + step)
     return current
@@ -4000,7 +4000,7 @@ def iterator_enumerate_count(state: ptr) -> int:
         fail("OverflowError", "integer overflow")
     count = iterator_cursor(state)
     if count == 9223372036854775807:
-        __store8(state, 56, __word(True))
+        __store8(state, 56, __word(true))
     else:
         iterator_set_cursor(state, count + 1)
     return count
@@ -4033,7 +4033,7 @@ def async_consume(coroutine: ptr) -> ptr:
         fail("RuntimeError", "coroutine was already awaited or started")
         return __ptr(__word(0))
     body = __ptr(__load8(coroutine, 8))
-    __store8(coroutine, 16, __word(True))
+    __store8(coroutine, 16, __word(true))
     __store8(coroutine, 8, __word(0))
     return body
 
@@ -4041,15 +4041,15 @@ def async_await(coroutine: ptr) -> word:
     return async_invoke(async_consume(coroutine))
 
 class AioTask:
-    context: CoroutineContext | None
+    context: CoroutineContext | none
     body: ptr
     result: word
     error: ptr
     wait: int
     # 0 running, 1 done, 2 failed, 3 cancelled.
     state: int
-    scope: AioGroup | None
-    group: AioGroup | None
+    scope: AioGroup | none
+    group: AioGroup | none
     waiters: list[AioWait]
     interruptible: bool
     location: str
@@ -4057,17 +4057,17 @@ class AioTask:
 class AioGroup:
     # 0 inactive, 1 active (including joining), 2 exited.
     state: int
-    parent: AioGroup | None
+    parent: AioGroup | none
     count: int
     cancelled: bool
     failure: ptr
-    joiner: AioTask | None
+    joiner: AioTask | none
     join_wait: int
 
 class AioWait:
     task: AioTask
     id: int
-    granted: bool = False
+    granted: bool = false
 
 class AioSemaphore:
     value: int
@@ -4084,10 +4084,10 @@ class AioFdWait:
     events: int
     task: AioTask
     wait: int
-    ready: bool = False
+    ready: bool = false
 
 class AioLoop:
-    current: AioTask | None
+    current: AioTask | none
     ready: list[AioTask]
     timers: list[AioTimer]
     last_wait: int
@@ -4096,9 +4096,9 @@ class AioLoop:
 
 def aio_loop() -> AioLoop:
     fail("RuntimeError", "coroutines require stage 1 on arm64")
-    return AioLoop(None, [], [], 0, {}, [])
+    return AioLoop(none, [], [], 0, {}, [])
 
-def aio_set_loop(loop: AioLoop | None):
+def aio_set_loop(loop: AioLoop | none):
     fail("RuntimeError", "coroutines require stage 1 on arm64")
 
 def aio_task_address() -> ptr:
@@ -4115,7 +4115,7 @@ def aio_resume(task: AioTask):
 
 def aio_task_run(argument: word):
     task = aio_loop().current
-    assert task is not None, "no running task"
+    assert task is not none, "no running task"
     task.result = async_invoke(task.body)
 
 extern def clock_gettime(clock: cint, stamp: ptr) -> cint
@@ -4155,7 +4155,7 @@ def aio_pop_timer(loop: AioLoop) -> AioTimer:
     if n > 0:
         heap[0] = last
         i = 0
-        while True:
+        while true:
             child = i * 2 + 1
             if child >= n:
                 break
@@ -4219,7 +4219,7 @@ def aio_poll(loop: AioLoop):
     for entry in waits:
         revents = __load4(fds, slots[entry.fd] * 8 + 4) // 65536
         if entry.task.wait == entry.wait and (failed or revents >= 8 or revents // entry.events % 2 == 1):
-            entry.ready = True
+            entry.ready = true
             aio_wake(loop, entry.task, entry.wait)
 
     now = aio_now()
@@ -4227,22 +4227,22 @@ def aio_poll(loop: AioLoop):
         timer = aio_pop_timer(loop)
         aio_wake(loop, timer.task, timer.wait)
 
-def aio_wait_fd(fd: int, events: int, deadline: float | None) -> bool:
+def aio_wait_fd(fd: int, events: int, deadline: float | none) -> bool:
     aio_checkpoint()
     loop = aio_loop()
     task = aio_current()
-    wait = aio_wait(True)
+    wait = aio_wait(true)
     entry = AioFdWait(fd, events, task, wait)
     loop.descriptors.append(entry)
-    if deadline is not None:
+    if deadline is not none:
         aio_push_timer(loop, AioTimer(deadline, task, wait))
     coroutine_yield(__word(0))
     aio_checkpoint()
     return entry.ready
 
-def aio_close_fd(fd: int, loop: AioLoop | None):
+def aio_close_fd(fd: int, loop: AioLoop | none):
     # Remove registrations before close lets another handle reuse the number.
-    if loop is None:
+    if loop is none:
         close(fd)
         return
     kept: list[AioFdWait] = []
@@ -4255,24 +4255,24 @@ def aio_close_fd(fd: int, loop: AioLoop | None):
     close(fd)
 
 def aio_run(body: ptr) -> word:
-    loop = AioLoop(None, [], [], 0, {}, [])
+    loop = AioLoop(none, [], [], 0, {}, [])
     aio_set_loop(loop)
-    root = aio_spawn(async_consume(body), None, "")
-    while True:
+    root = aio_spawn(async_consume(body), none, "")
+    while true:
         batch = loop.ready
         loop.ready = []
         for task in batch:
             loop.current = task
             aio_resume(task)
             context = task.context
-            assert context is not None, "task without context"
+            assert context is not none, "task without context"
             if coroutine_finished(context):
                 aio_finish(task)
-        loop.current = None
+        loop.current = none
         if root.state != 0:
             break
         aio_poll(loop)
-    aio_set_loop(None)
+    aio_set_loop(none)
     coroutine_set_pending(root.error)
     return root.result
 
@@ -4291,7 +4291,7 @@ def aio_sleep_wait(seconds: float):
         return
     aio_checkpoint()
     task = aio_current()
-    wait = aio_wait(True)
+    wait = aio_wait(true)
     aio_push_timer(aio_loop(), AioTimer(aio_now() + seconds, task, wait))
     coroutine_yield(__word(0))
     aio_checkpoint()
@@ -4304,7 +4304,7 @@ def aio_sleep_body(body: ptr) -> word:
     aio_checkpoint()
     loop = aio_loop()
     task = aio_current()
-    wait = aio_wait(True)
+    wait = aio_wait(true)
     aio_push_timer(loop, AioTimer(aio_now() + seconds, task, wait))
     coroutine_yield(__word(0))
     aio_checkpoint()
@@ -4324,23 +4324,23 @@ def aio_cancel() -> ptr:
 
 def aio_current() -> AioTask:
     task = aio_loop().current
-    assert task is not None, "no running task"
+    assert task is not none, "no running task"
     return task
 
-def aio_scope() -> AioGroup | None:
+def aio_scope() -> AioGroup | none:
     return aio_current().scope
 
-def aio_set_scope(scope: AioGroup | None):
+def aio_set_scope(scope: AioGroup | none):
     task = aio_current()
     task.scope = scope
 
 def aio_pending(task: AioTask) -> bool:
     group = task.scope
-    while group is not None:
+    while group is not none:
         if group.cancelled:
-            return True
+            return true
         group = group.parent
-    return False
+    return false
 
 def aio_checkpoint():
     if aio_pending(aio_current()):
@@ -4363,7 +4363,7 @@ def aio_wait(interruptible: bool) -> int:
 def aio_request(group: AioGroup):
     if group.cancelled:
         return
-    group.cancelled = True
+    group.cancelled = true
     loop = aio_loop()
     woken: list[AioTask] = []
     for id in loop.waiting:
@@ -4373,8 +4373,8 @@ def aio_request(group: AioGroup):
     for task in woken:
         aio_wake(loop, task, task.wait)
 
-def aio_spawn(body: ptr, group: AioGroup | None, location: str) -> AioTask:
-    task = AioTask(None, body, __word(0), __ptr(__word(0)), 0, 0, group, group, [], False, location)
+def aio_spawn(body: ptr, group: AioGroup | none, location: str) -> AioTask:
+    task = AioTask(none, body, __word(0), __ptr(__word(0)), 0, 0, group, group, [], false, location)
     task.context = coroutine_create(aio_task_address(), __word(0))
     aio_loop().ready.append(task)
     return task
@@ -4396,13 +4396,13 @@ def aio_finish(task: AioTask):
     task.body = __ptr(__word(0))
     loop = aio_loop()
     group = task.group
-    if group is not None:
+    if group is not none:
         group.count = group.count - 1
         if task.state == 2 and __addr_is_null(group.failure):
             group.failure = task.error
             aio_request(group)
         joiner = group.joiner
-        if group.count == 0 and joiner is not None:
+        if group.count == 0 and joiner is not none:
             aio_wake(loop, joiner, group.join_wait)
     for waiter in task.waiters:
         aio_wake(loop, waiter.task, waiter.id)
@@ -4426,14 +4426,14 @@ def aio_task_result(task: AioTask) -> word:
 def aio_await_task(task: AioTask) -> word:
     aio_checkpoint()
     while task.state == 0:
-        id = aio_wait(True)
+        id = aio_wait(true)
         task.waiters.append(AioWait(aio_current(), id))
         coroutine_yield(__word(0))
         aio_checkpoint()
     return aio_outcome(task)
 
 def aio_task_group() -> AioGroup:
-    return AioGroup(0, None, 0, False, __ptr(__word(0)), None, 0)
+    return AioGroup(0, none, 0, false, __ptr(__word(0)), none, 0)
 
 def aio_group_enter(group: AioGroup):
     if group.state != 0:
@@ -4451,12 +4451,12 @@ def aio_group_exit(group: AioGroup, error: ptr) -> ptr:
         group.failure = error
         aio_request(group)
     while group.count > 0:
-        id = aio_wait(False)
+        id = aio_wait(false)
         group.joiner = task
         group.join_wait = id
         coroutine_yield(__word(0))
     group.state = 2
-    group.joiner = None
+    group.joiner = none
     if not __addr_is_null(group.failure):
         return group.failure
     if aio_pending(task):
@@ -4466,7 +4466,7 @@ def aio_group_exit(group: AioGroup, error: ptr) -> ptr:
 def aio_group_start(group: AioGroup, coroutine: ptr, path: str, line: int, col: int) -> AioTask:
     if group.state != 1 or group.cancelled:
         fail("RuntimeError", "task group is not accepting tasks")
-        return AioTask(None, __ptr(__word(0)), __word(0), __ptr(__word(0)), 0, 0, None, None, [], False, "")
+        return AioTask(none, __ptr(__word(0)), __word(0), __ptr(__word(0)), 0, 0, none, none, [], false, "")
     body = async_consume(coroutine)
     group.count = group.count + 1
     return aio_spawn(body, group, path + ":" + int_to_str(line) + ":" + int_to_str(col))
@@ -4487,7 +4487,7 @@ def aio_give_permit(semaphore: AioSemaphore):
         waiter = semaphore.waiters[0]
         semaphore.waiters = semaphore.waiters[1:]
         if waiter.task.wait == waiter.id:
-            waiter.granted = True
+            waiter.granted = true
             aio_wake(aio_loop(), waiter.task, waiter.id)
             return
     semaphore.value = semaphore.value + 1
@@ -4506,7 +4506,7 @@ def aio_semaphore_wait(semaphore: AioSemaphore):
         semaphore.value = semaphore.value - 1
         return
     task = aio_current()
-    waiter = AioWait(task, aio_wait(True))
+    waiter = AioWait(task, aio_wait(true))
     semaphore.waiters.append(waiter)
     coroutine_yield(__word(0))
     if waiter.granted:

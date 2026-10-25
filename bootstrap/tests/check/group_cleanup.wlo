@@ -4,8 +4,8 @@ class Resource:
     def enter(self) -> Resource:
         return self
 
-    def exit(self, error: Exception | None):
-        print(error is None)
+    def exit(self, error: Exception | none):
+        print(error is none)
 
 async def enter_then_wait():
     print("entered")

@@ -6,7 +6,7 @@ import sys
 def copy(source_path: str, target_path: str) -> int:
     total = 0
     with io.open(source_path) as source, io.open(target_path, mode="w") as target:
-        while True:
+        while true:
             chunk = source.read(65536)
             if len(chunk) == 0:
                 break

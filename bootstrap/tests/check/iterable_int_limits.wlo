@@ -7,21 +7,21 @@ def main():
     for values in [(maximum, 1), (minimum, -1)]:
         try:
             sum(values)
-            assert False
+            assert false
         except OverflowError as error:
             assert error.message == "integer overflow"
     terminal = enumerate([1], maximum)
     assert next(terminal) == (maximum, 1)
     try:
         next(terminal)
-        assert False
+        assert false
     except StopIteration as stop:
         assert stop.message == ""
     overflow = enumerate([1, 2], maximum)
     assert next(overflow) == (maximum, 1)
     try:
         next(overflow)
-        assert False
+        assert false
     except OverflowError as error:
         assert error.message == "integer overflow"
     assert list(range(maximum - 1, maximum, 2))[0] == maximum - 1
@@ -35,6 +35,6 @@ def main():
     for value in [9223372036854775808.0, -9223372036854775808.0]:
         try:
             round(value)
-            assert False
+            assert false
         except ValueError as invalid:
             assert invalid.message == "cannot round float to int"

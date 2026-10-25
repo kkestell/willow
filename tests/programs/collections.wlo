@@ -19,12 +19,12 @@ def main():
     for i in range(3, 0, -1):
         print(i)                    # 3, 2, 1
 
-    maybe: list[int | None] = [1, None, 3]
+    maybe: list[int | none] = [1, none, 3]
     print(len(maybe))
     print(maybe[1])
-    print(None in maybe)
+    print(none in maybe)
     print(2 not in maybe)
-    scores: dict[str, int | None] = {"ada": None}
+    scores: dict[str, int | none] = {"ada": none}
     print(scores.get("ada"))
     print(scores.get("alan"))
     print("ada" in scores)

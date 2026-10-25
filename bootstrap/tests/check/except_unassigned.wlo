@@ -1,4 +1,4 @@
-def f(x: int | None):
+def f(x: int | none):
     try:
         y = 1
     except Exception:

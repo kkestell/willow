@@ -36,11 +36,11 @@ async def check(target: Target, timeout: float) -> Probe:
     start = time.monotonic()
     try:
         with await aio.connect(target.host, target.port, timeout=timeout):
-            return Probe(target, True, _millis(start), "open")
+            return Probe(target, true, _millis(start), "open")
     except OSError as error:
-        return Probe(target, False, _millis(start), error.message)
+        return Probe(target, false, _millis(start), error.message)
     except TimeoutError:
-        return Probe(target, False, _millis(start), "timed out")
+        return Probe(target, false, _millis(start), "timed out")
 
 def _millis(start: float) -> float:
     return (time.monotonic() - start) * 1000.0

@@ -9,8 +9,8 @@ class Transaction:
         self.log.append(f"begin {self.name}")
         return self
 
-    def exit(self, error: Exception | None):
-        if error is None:
+    def exit(self, error: Exception | none):
+        if error is none:
             self.log.append(f"commit {self.name}")
         else:
             self.log.append(f"roll back {self.name}: {error.message}")

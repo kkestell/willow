@@ -1,12 +1,12 @@
 import aio
 
-def optional() -> int | None:
+def optional() -> int | none:
     return 1
 
 async def main():
     value = optional()
     async with aio.task_group():
-        value = None
+        value = none
         await aio.sleep(0.0)
         value = 1
     print(value + 1)

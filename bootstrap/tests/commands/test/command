@@ -1,5 +1,5 @@
 # All test files are checked before any test runs.
-printf "def test_a():\n    print('ran')\n    assert False\n" >test_a.wlo
+printf "def test_a():\n    print('ran')\n    assert false\n" >test_a.wlo
 printf "def test_b():\n    x: int = 'b'\n" >test_b.wlo
 printf 'def io():\n    pass\n\ndef test_helper():\n    pass\n' >helper.wlo
 "$WILLOW" test

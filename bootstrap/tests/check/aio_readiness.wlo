@@ -12,7 +12,7 @@ async def receive_closed(connection: aio.Connection, finished: list[bool]):
         await connection.recv(1)
     except ValueError as error:
         assert error.message == "I/O operation on closed connection"
-        finished.append(True)
+        finished.append(true)
 
 async def stalled_send(connection: aio.Connection, data: bytes):
     await connection.sendall(data)
@@ -32,12 +32,12 @@ async def main():
         async with aio.task_group() as group:
             group.start(listener.accept())
             await aio.sleep(0.0)
-            rejected = False
+            rejected = false
             try:
                 await listener.accept()
             except RuntimeError as error:
                 assert error.message == "accept is already in progress"
-                rejected = True
+                rejected = true
             assert rejected
             group.cancel()
         with await aio.connect("127.0.0.1", listener.local_port()) as client:
@@ -74,19 +74,19 @@ async def main():
                 async with aio.task_group() as group:
                     group.start(stalled_send(server, data))
                     await aio.sleep(0.01)
-                    rejected = False
+                    rejected = false
                     try:
                         await server.sendall(bytes([]))
                     except RuntimeError as error:
                         assert error.message == "sendall is already in progress"
-                        rejected = True
+                        rejected = true
                     assert rejected
                     server.enter()
                     group.cancel()
-                broken = False
+                broken = false
                 try:
                     server.enter()
                 except ValueError as failure:
                     assert failure.message == "connection is unusable after a failed send"
-                    broken = True
+                    broken = true
                 assert broken

@@ -18,8 +18,8 @@ class Session:
         print("enter " + self.name)
         return self.name
 
-    def exit(self, error: Exception | None):
-        print(error is None)
+    def exit(self, error: Exception | none):
+        print(error is none)
 
 class Rect:
     width: float
@@ -51,7 +51,7 @@ def main():
 
     manager: ContextManager[str] = Session("db")
     print(manager.enter())
-    manager.exit(None)
+    manager.exit(none)
 
     print(total([Rect(2.0, 3.0), Rect(1.0, 1.0)]))
     print(total([Circle(1.0)]))

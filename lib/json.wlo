@@ -1,4 +1,4 @@
-type Json = None | bool | int | float | str | list[Json] | dict[str, Json]
+type Json = none | bool | int | float | str | list[Json] | dict[str, Json]
 
 class JsonError(Exception):
     pass
@@ -134,7 +134,7 @@ class _Parser:
             if self.peek() == "}":
                 self.pos = self.pos + 1
                 return result
-            while True:
+            while true:
                 self.space()
                 if self.peek() != '"':
                     raise self.error("expected string", self.pos)
@@ -160,7 +160,7 @@ class _Parser:
             if self.peek() == "]":
                 self.pos = self.pos + 1
                 return items
-            while True:
+            while true:
                 items.append(self.value())
                 self.space()
                 c = self.peek()
@@ -174,11 +174,11 @@ class _Parser:
         elif c == '"':
             return self.string()
         elif c == "t":
-            return self.word("true", True)
+            return self.word("true", true)
         elif c == "f":
-            return self.word("false", False)
+            return self.word("false", false)
         elif c == "n":
-            return self.word("null", None)
+            return self.word("null", none)
         elif c in ["-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
             return self.number()
         raise self.error("expected value", self.pos)
@@ -206,7 +206,7 @@ def _quote(text: str) -> str:
     return "".join(parts)
 
 def _write(value: Json, out: list[str]):
-    if value is None:
+    if value is none:
         out.append("null")
     elif isinstance(value, bool):
         if value:
@@ -223,20 +223,20 @@ def _write(value: Json, out: list[str]):
         out.append(_quote(value))
     elif isinstance(value, list):
         out.append("[")
-        first = True
+        first = true
         for item in value:
             if not first:
                 out.append(",")
-            first = False
+            first = false
             _write(item, out)
         out.append("]")
     else:
         out.append("{")
-        first = True
+        first = true
         for key in value:
             if not first:
                 out.append(",")
-            first = False
+            first = false
             out.append(_quote(key))
             out.append(":")
             _write(value[key], out)
