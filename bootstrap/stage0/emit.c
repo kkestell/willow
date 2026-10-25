@@ -73,6 +73,25 @@ static String bytes(String text) {
     return sb_finish(&out);
 }
 
+static void emit_ascii_characters(StringBuilder *out) {
+    /* Each aligned string has an empty hash cache and a 32-byte stride. */
+    sb_append(out, STR("data $W.ascii.characters = align 8 { "));
+    for (unsigned code = 0; code < 128; code++) {
+        if (code) {
+            sb_append(out, STR(", "));
+        }
+        sb_printf(out, "l $W.str.type, l 1, l 0, b %u, b 0, z 6", code);
+    }
+    sb_append(out, STR(" }\n"));
+}
+
+static void emit_ascii_character(Emitter *self) {
+    sb_append(self->out, STR("\t%offset =l mul %p.code, 32\n"
+                             "\t%result =l add $W.ascii.characters, %offset\n"
+                             "\tret %result\n"
+                             "}\n"));
+}
+
 String emit(const Program *program) {
     StringBuilder out = {0};
     for (size_t i = 0; i < program->funcs.len; i++) {
@@ -107,6 +126,7 @@ String emit(const Program *program) {
         sb_printf(&out, "data $W.str.%zu = { l $W.str.type, l %zu, l 0, %.*sb 0 }\n",
                   n, text.len, S(data));
     }
+    emit_ascii_characters(&out);
     return sb_finish(&out);
 }
 
@@ -149,6 +169,10 @@ static void function(Emitter *self, const Function *func) {
     const char *ret = func->returns ? "l " : "";
     sb_printf(self->out, "function %s$%.*s(%.*s) {\n", ret, S(func->symbol), S(joined));
     label(self, STR("@start"));
+    if (str_equal(func->symbol, STR("W.core.ascii_character"))) {
+        emit_ascii_character(self);
+        return;
+    }
     if (str_equal(func->symbol, STR("W.core.stdin_buffer"))) {
         line(self, STR("ret $W.stdin.buffer"));
         sb_append(self->out, STR("}\n"));

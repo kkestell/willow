@@ -498,8 +498,16 @@ def str_compare(a: str, b: str) -> int:
 def str_len(s: str) -> int:
     return count_chars(s, 0, str_size(s))
 
+# All three compilers replace this body with a static lookup; code is in [0, 128).
+def ascii_character(code: int) -> str:
+    fail("RuntimeError", "ASCII character table was not emitted")
+    return ""
+
 def str_char_at(s: str, at: int) -> str:
-    return str_sub(s, at, at + char_size(str_byte(s, at)))
+    lead = str_byte(s, at)
+    if lead < 128:
+        return ascii_character(lead)
+    return str_sub(s, at, at + char_size(lead))
 
 def str_index(s: str, i: int) -> str:
     length = str_len(s)
