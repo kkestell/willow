@@ -1,10 +1,9 @@
 #!/bin/sh
-# Runs stage 1's unit tests and checks that willow1 compiles itself. Stage 1
-# is frozen: its job is to build stage 2, which bootstrap/tests/stage2.sh
-# tests along with the programs. Each test is compiled with willow0 and run
-# natively. The fixpoint check builds willow1 with itself and compares the
-# IL both compilers emit for their own source. A test exits with status 1 on
-# a failure.
+# Runs stage 1's unit tests and checks that willow1 compiles itself. Stage
+# 1 builds stage 2, which bootstrap/tests/stage2.sh tests along with the
+# programs. Each test is compiled with willow0 and run natively. The fixpoint
+# check builds willow1 with itself and compares the IL both compilers emit for
+# their own source. A test exits with status 1 on a failure.
 #
 # WILLOW0 names the compiler; it defaults to build/stage0/willow0.
 
@@ -27,7 +26,7 @@ bootstrap/prepare.sh bootstrap/stage1 "$src" || exit 1
 
 # Builds stage 1's NAME.wlo.
 build() {
-    "$willow0" --legacy build "$src/$1.wlo" -o "$work/$1" && return 0
+    "$willow0" build "$src/$1.wlo" -o "$work/$1" && return 0
     echo "FAIL $1: does not compile"
     failed=1
     return 1
@@ -46,7 +45,7 @@ check_test() {
 }
 
 check_willow1() {
-    if ! "$willow0" --legacy build "$src/willow1.wlo" -o "$work/willow1"; then
+    if ! "$willow0" build "$src/willow1.wlo" -o "$work/willow1"; then
         echo "FAIL willow1: does not compile"
         failed=1
         return

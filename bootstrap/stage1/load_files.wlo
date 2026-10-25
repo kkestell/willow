@@ -14,9 +14,9 @@ def main():
     show_modules = len(args) > 0 and args[0] == "--modules"
     if show_modules:
         args = args[1:]
-    failed = False
+    failed = false
     for path in args:
-        result = loader.load(path, False)
+        result = loader.load(path, false)
         if isinstance(result, diagnostic.Diagnostic):
             # Paths in messages, such as a missing module's, start with the
             # directory too.
@@ -27,7 +27,7 @@ def main():
                 message = message.replace(root, "")
             error = diagnostic.Diagnostic(relative, result.line, result.col, message)
             sys.eprint(f"{path}: {error.format()}")
-            failed = True
+            failed = true
         elif show_modules:
             for source in result:
                 print(f"{path}: {source.name} {source.tree.path}")

@@ -110,9 +110,9 @@ class Token:
 # The reserved words of spec §2, including the reserved type names.
 def keywords() -> dict[str, Kind]:
     return {
-        "False": Kind.FALSE,
-        "None": Kind.NONE,
-        "True": Kind.TRUE,
+        "false": Kind.FALSE,
+        "none": Kind.NONE,
+        "true": Kind.TRUE,
         "and": Kind.AND,
         "as": Kind.AS,
         "assert": Kind.ASSERT,

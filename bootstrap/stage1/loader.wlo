@@ -43,26 +43,26 @@ class Loader:
     libraries: dict[str, bool]
     # The module name each loaded file has, by the file's real path.
     names_by_file: dict[str, str]
-    error: diagnostic.Diagnostic | None
+    error: diagnostic.Diagnostic | none
 
     # Loads module `name` from the file at `path`. `importer` is the path of
     # the module whose `importing` names it, or "" for the entry.
-    def visit(self, name: str, path: str, importer: str, importing: ast.Import | None):
+    def visit(self, name: str, path: str, importer: str, importing: ast.Import | none):
         file = fs.realpath(path)
         other = self.names_by_file.get(file)
-        if other is not None and importing is not None:
+        if other is not none and importing is not none:
             self.fail(importer, importing, f"module '{name}' is the same file as module '{other}'")
             return
         self.names_by_file[file] = name
-        self.add(name, path, fs.read_file(path), False)
+        self.add(name, path, fs.read_file(path), false)
 
     # Loads module `name` from `text`, read from `path`, and, depth first,
     # every module it imports that is not loaded yet.
     def add(self, name: str, path: str, text: str, privileged: bool):
         if privileged:
-            self.libraries[name] = True
+            self.libraries[name] = true
         else:
-            self.loaded[name] = True
+            self.loaded[name] = true
         lexed = lexer.lex(path, text)
         if isinstance(lexed, diagnostic.Diagnostic):
             self.error = lexed
@@ -73,7 +73,7 @@ class Loader:
             return
         self.sources.append(Source(name, tree))
         for item in tree.imports:
-            if self.error is not None:
+            if self.error is not none:
                 return
             self.load_import(path, item, privileged)
 
@@ -91,25 +91,25 @@ class Loader:
     def load_import(self, importer: str, item: ast.Import, privileged: bool):
         path = "lib/" + item.name + ".wlo"
         if not privileged and item.name != "core":
-            if self.loaded.get(item.name) is not None:
+            if self.loaded.get(item.name) is not none:
                 return
             path = self.root + item.name.replace(".", "/") + ".wlo"
             if fs.exists(path):
                 self.visit(item.name, path, importer, item)
                 return
-        if self.libraries.get(item.name) is not None:
+        if self.libraries.get(item.name) is not none:
             return
         if item.name == "core":
             self.add_core()
             return
         text = lib_source.text(item.name)
         if text != "":
-            self.add(item.name, "lib/" + item.name + ".wlo", text, True)
+            self.add(item.name, "lib/" + item.name + ".wlo", text, true)
         elif not is_stdlib(item.name):
             self.fail(importer, item, f"cannot load module '{item.name}': {path}: No such file or directory")
 
     def add_core(self):
-        self.add("core", "bootstrap/core/core.wlo", core_source.text(), True)
+        self.add("core", "bootstrap/core/core.wlo", core_source.text(), true)
 
     def fail(self, path: str, item: ast.Import, message: str):
         self.error = diagnostic.Diagnostic(path, item.line, item.col, message)
@@ -135,11 +135,11 @@ def entry_name(path: str) -> str:
 # first error instead when a module cannot be loaded, lexed, or parsed.
 # Clashes between imports are the binder's to report, in its order.
 def load(path: str, with_core: bool) -> list[Source] | diagnostic.Diagnostic:
-    loader = Loader(directory_of(path), [], {}, {}, {}, None)
-    loader.visit(entry_name(path), path, "", None)
-    if with_core and loader.error is None and loader.libraries.get("core") is None:
+    loader = Loader(directory_of(path), [], {}, {}, {}, none)
+    loader.visit(entry_name(path), path, "", none)
+    if with_core and loader.error is none and loader.libraries.get("core") is none:
         loader.add_core()
     error = loader.error
-    if error is not None:
+    if error is not none:
         return error
     return loader.sources

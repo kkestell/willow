@@ -601,7 +601,7 @@ static Type resolve_name(
     if (eq(ty->name, "str")) {
         return TY(Str);
     }
-    if (eq(ty->name, "None") || eq(ty->name, "none")) {
+    if (eq(ty->name, "none")) {
         return TY(None);
     }
     if (eq(ty->name, "ptr") && eq(module->name, "core")) {

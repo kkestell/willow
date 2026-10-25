@@ -15,7 +15,7 @@ def parse(source: str) -> ast.Module | str:
     lexed = lexer.lex("test.wlo", source)
     if isinstance(lexed, diagnostic.Diagnostic):
         return f"{lexed.line}:{lexed.col}: {lexed.message}"
-    parsed = parser.parse("test.wlo", lexed, False)
+    parsed = parser.parse("test.wlo", lexed, false)
     if isinstance(parsed, diagnostic.Diagnostic):
         return f"{parsed.line}:{parsed.col}: {parsed.message}"
     return parsed
@@ -24,7 +24,7 @@ def module(source: str) -> str:
     parsed = parse(source)
     if isinstance(parsed, str):
         return parsed
-    return show.Printer(False).module(parsed)
+    return show.Printer(false).module(parsed)
 
 # Wraps statements in `main`, indenting each line one level.
 def in_main(statements: str) -> str:
@@ -40,7 +40,7 @@ def body(statements: str) -> str:
         return parsed
     main = parsed.declarations[0]
     if isinstance(main, ast.FunctionDecl):
-        return show.Printer(False).block(main.body)
+        return show.Printer(false).block(main.body)
     return "not a function"
 
 # The value of `x = text` in `main`.
@@ -52,20 +52,20 @@ def expr(text: str) -> str:
     if isinstance(main, ast.FunctionDecl):
         assign = main.body[0].node
         if isinstance(assign, ast.Assign):
-            return show.Printer(False).expr(assign.value)
+            return show.Printer(false).expr(assign.value)
     return "not an assignment"
 
 def check(what: str, source: str, actual: str, expected: str) -> bool:
     if actual == expected:
-        return True
+        return true
     print(f"FAIL {what} {source}")
     print(f"  expected: {expected}")
     print(f"  actual:   {actual}")
-    return False
+    return false
 
 def main():
     modules = [
-        ["def f():\n    pass\n\ndef g(a: int, b: bool,\n      c: str, d: None,) -> int:\n    return a\n", "def f() -> None { pass }\ndef g(a: int, b: bool, c: str, d: None) -> int { return a }"],
+        ["def f():\n    pass\n\ndef g(a: int, b: bool,\n      c: str, d: none,) -> int:\n    return a\n", "def f() -> none { pass }\ndef g(a: int, b: bool, c: str, d: none) -> int { return a }"],
         ["def f(x) -> int:\n    return x\n", "1:8: expected ':', found ')'"],
         ["def f(x: list):\n    pass\n", "1:14: expected '[', found ')'"],
         ["def f(x: 1):\n    pass\n", "1:10: expected a type, found integer"],
@@ -73,32 +73,32 @@ def main():
         ["from os import path\n", "1:1: 'from' is not supported"],
         ["    def f():\n        pass\n", "1:5: only function, class, protocol, enum, and type declarations are allowed at file scope"],
         ["def f():\n", "2:1: expected an indented block, found end of file"],
-        ["def f(g: (int, str) -> bool, h: () -> int):\n    pass\n", "def f(g: ((int, str) -> bool), h: (() -> int)) -> None { pass }"],
-        ["def f(g: (int) -> str | None, h: ((int) -> str) | None, i: (int), j: tuple[() -> int, int]):\n    pass\n", "def f(g: ((int) -> str | None), h: ((int) -> str) | None, i: int, j: tuple[(() -> int), int]) -> None { pass }"],
-        ["def f(g: (int) -> (str) -> bool, h: ((int) -> int) -> int):\n    pass\n", "def f(g: ((int) -> ((str) -> bool)), h: ((((int) -> int)) -> int)) -> None { pass }"],
+        ["def f(g: (int, str) -> bool, h: () -> int):\n    pass\n", "def f(g: ((int, str) -> bool), h: (() -> int)) -> none { pass }"],
+        ["def f(g: (int) -> str | none, h: ((int) -> str) | none, i: (int), j: tuple[() -> int, int]):\n    pass\n", "def f(g: ((int) -> str | none), h: ((int) -> str) | none, i: int, j: tuple[(() -> int), int]) -> none { pass }"],
+        ["def f(g: (int) -> (str) -> bool, h: ((int) -> int) -> int):\n    pass\n", "def f(g: ((int) -> ((str) -> bool)), h: ((((int) -> int)) -> int)) -> none { pass }"],
         ["def f(g: (int, str)):\n    pass\n", "1:20: expected '->', found ')'"],
         ["def f(x: Iterable[int], y: ContextManager[str]) -> Generator[Iterator[int]]:\n    pass\n", "def f(x: Iterable[int], y: ContextManager[str]) -> Generator[Iterator[int]] { pass }"],
-        ["def f(a: int, *, b: int = 1, c: str):\n    pass\n", "def f(a: int, *b: int = 1, *c: str) -> None { pass }"],
+        ["def f(a: int, *, b: int = 1, c: str):\n    pass\n", "def f(a: int, *b: int = 1, *c: str) -> none { pass }"],
         ["def f(*, a: int, *, b: int):\n    pass\n", "1:18: only one '*' is allowed in a parameter list"],
         ["def f(*args: int):\n    pass\n", "1:8: variadic parameters are not supported"],
         ["def f(a: int, *):\n    pass\n", "1:15: '*' must be followed by a keyword-only parameter"],
         ["def f(*):\n    pass\n", "1:7: '*' must be followed by a keyword-only parameter"],
         ["def f(a: int = 1, b: int, *, c: int):\n    pass\n", "1:19: parameter 'b' without a default follows one with a default"],
-        ["def f(x: int | None) -> str | None:\n    y: bool | None = None\n    return None\n", "def f(x: int | None) -> str | None { y: bool | None = None; return None }"],
+        ["def f(x: int | none) -> str | none:\n    y: bool | none = none\n    return none\n", "def f(x: int | none) -> str | none { y: bool | none = none; return none }"],
         ["def f(x: int | ):\n    pass\n", "1:16: expected a type, found ')'"],
-        ["import shapes\ntype Json = None | bool | list[Json] | dict[str, Json]\ntype S = shapes.Shape\n", "import shapes\ntype Json = None | bool | list[Json] | dict[str, Json]\ntype S = shapes.Shape"],
+        ["import shapes\ntype Json = none | bool | list[Json] | dict[str, Json]\ntype S = shapes.Shape\n", "import shapes\ntype Json = none | bool | list[Json] | dict[str, Json]\ntype S = shapes.Shape"],
         ["type T: int\n", "1:7: expected '=', found ':'"],
         ["def f():\n    type T = int\n", "2:5: expected a statement, found 'type'"],
-        ["def f(x: tuple[int, str | None], y: tuple[()]) -> tuple[int]:\n    pass\n", "def f(x: tuple[int, str | None], y: tuple[]) -> tuple[int] { pass }"],
+        ["def f(x: tuple[int, str | none], y: tuple[()]) -> tuple[int]:\n    pass\n", "def f(x: tuple[int, str | none], y: tuple[]) -> tuple[int] { pass }"],
         ["def f(x: tuple[]):\n    pass\n", "1:16: expected a type, found ']'"],
-        ["import geometry\nimport app.util.text\ndef f(p: geometry.Point) -> list[app.util.Rec] | None:\n    return None\n", "import geometry\nimport app.util.text\ndef f(p: geometry.Point) -> list[app.util.Rec] | None { return None }"],
+        ["import geometry\nimport app.util.text\ndef f(p: geometry.Point) -> list[app.util.Rec] | none:\n    return none\n", "import geometry\nimport app.util.text\ndef f(p: geometry.Point) -> list[app.util.Rec] | none { return none }"],
         ["def f():\n    pass\nimport x\n", "3:1: imports must come before declarations"],
         ["import a.\n", "1:10: expected a module name, found end of line"],
-        ["class Node:\n    value: int\n    next: Node | None\n", "class Node { value: int; next: Node | None }"],
+        ["class Node:\n    value: int\n    next: Node | none\n", "class Node { value: int; next: Node | none }"],
         ["class A:\n    pass\n", "2:5: class bodies hold only field and method declarations"],
         ["class A:\n    x = 1\n", "2:5: class bodies hold only field and method declarations"],
         ["class A:\n    x: int\n    return\n", "3:5: class bodies hold only field and method declarations"],
-        ["class C:\n    n: int\n    def get(self) -> int:\n        return self.n\n    def add(self, k: int = 1):\n        self.n = self.n + k\nclass Only:\n    def f(self,):\n        pass\n", "class C { n: int; def get(self) -> int { return self.n }; def add(self, k: int = 1) -> None { self.n = (self.n + k) } }\nclass Only { def f(self) -> None { pass } }"],
+        ["class C:\n    n: int\n    def get(self) -> int:\n        return self.n\n    def add(self, k: int = 1):\n        self.n = self.n + k\nclass Only:\n    def f(self,):\n        pass\n", "class C { n: int; def get(self) -> int { return self.n }; def add(self, k: int = 1) -> none { self.n = (self.n + k) } }\nclass Only { def f(self) -> none { pass } }"],
         ["class A:\n    def f(x: int):\n        pass\n", "2:11: method 'f' must take 'self' as its first parameter"],
         ["class A:\n    def f():\n        pass\n", "2:11: method 'f' must take 'self' as its first parameter"],
         ["class A:\n    def f(self: A):\n        pass\n", "2:15: 'self' cannot have an annotation"],
@@ -107,25 +107,25 @@ def main():
         ["class E(Base):\n    pass\n", "1:9: the base of a class must be 'Exception'"],
         ["class E(Exception):\n    message: str\n", "2:5: exception class cannot declare field 'message'"],
         ["class E(Exception):\n    x: int\n    pass\n", "3:5: class bodies hold only field and method declarations"],
-        ["protocol P[T]:\n    def read(self, size: int) -> T\n    async def close(self)\n", "protocol P[T] { def read(self, size: int) -> T; async def close(self) -> None }"],
+        ["protocol P[T]:\n    def read(self, size: int) -> T\n    async def close(self)\n", "protocol P[T] { def read(self, size: int) -> T; async def close(self) -> none }"],
         ["protocol P:\n    x: int\n", "2:5: protocols hold only method signatures"],
         ["protocol P:\n    def f(self) -> int:\n        return 1\n", "2:23: protocol methods have no bodies"],
         ["protocol P:\n    def f[T](self, x: T) -> T\n", "2:11: protocol methods cannot be generic"],
-        ["def f(a: int, b: int = -1, c: float = +2.5, d: float = -0.0, e: str = 'x', g: int | None = None, h: bool = True):\n    pass\nclass P:\n    x: int\n    y: int = 0\n", "def f(a: int, b: int = -1, c: float = 2.5, d: float = -0.0, e: str = \"x\", g: int | None = None, h: bool = True) -> None { pass }\nclass P { x: int; y: int = 0 }"],
-        ["def f(a: E = E.A, b: m.E = m.E.B):\n    pass\n", "def f(a: E = E.A, b: m.E = m.E.B) -> None { pass }"],
-        ["def f(a: tuple[()] = (), b: tuple[int] = (1,), c: tuple[E, int] = (E.A, -1)):\n    pass\n", "def f(a: tuple[] = tuple(), b: tuple[int] = tuple(1), c: tuple[E, int] = tuple(E.A, -1)) -> None { pass }"],
+        ["def f(a: int, b: int = -1, c: float = +2.5, d: float = -0.0, e: str = 'x', g: int | none = none, h: bool = true):\n    pass\nclass P:\n    x: int\n    y: int = 0\n", "def f(a: int, b: int = -1, c: float = 2.5, d: float = -0.0, e: str = \"x\", g: int | none = none, h: bool = true) -> none { pass }\nclass P { x: int; y: int = 0 }"],
+        ["def f(a: E = E.A, b: m.E = m.E.B):\n    pass\n", "def f(a: E = E.A, b: m.E = m.E.B) -> none { pass }"],
+        ["def f(a: tuple[()] = (), b: tuple[int] = (1,), c: tuple[E, int] = (E.A, -1)):\n    pass\n", "def f(a: tuple[] = tuple(), b: tuple[int] = tuple(1), c: tuple[E, int] = tuple(E.A, -1)) -> none { pass }"],
         ["def f(a: int = (1)):\n    pass\n", "1:18: expected ',', found ')'"],
         ["def f(a: int = f()):\n    pass\n", "1:16: a default must be a literal or an enum member"],
-        ["def f(a: int = -True):\n    pass\n", "1:16: a default must be a literal or an enum member"],
+        ["def f(a: int = -true):\n    pass\n", "1:16: a default must be a literal or an enum member"],
         ["def f(a: int = f'a'):\n    pass\n", "1:16: a default must be a literal or an enum member"],
         ["class P:\n    x: int = 1\n    y: int\n", "3:5: field 'y' without a default follows one with a default"],
         ["def f[T, U: io.File](x: T) -> U:\n    pass\ntype Pair[K, V] = tuple[K, V]\nclass Box[T]:\n    value: T\n\n    def map[V](self, v: V) -> V:\n        return v\n", "def f[T, U: io.File](x: T) -> U { pass }\ntype Pair[K, V] = tuple[K, V]\nclass Box[T] { value: T; def map[V](self, v: V) -> V { return v } }"],
-        ["async def f() -> int:\n    return 1\n\nclass C:\n    async def m(self):\n        pass\n", "async def f() -> int { return 1 }\nclass C { async def m(self) -> None { pass } }"],
+        ["async def f() -> int:\n    return 1\n\nclass C:\n    async def m(self):\n        pass\n", "async def f() -> int { return 1 }\nclass C { async def m(self) -> none { pass } }"],
         ["enum Mode:\n    AUTO\n    NEVER\n", "enum Mode { AUTO; NEVER }"],
         ["enum Mode:\n    AUTO = 1\n", "2:5: enum bodies hold only member names"],
         ["def f(enum: int):\n    pass\n", "1:7: expected a parameter name, found 'enum'"],
         # Core's C functions, with stage 0's syntax and diagnostics.
-        ["extern def write(fd: cint, buf: ptr, count: int) -> int\nextern def exit(status: cint)\nextern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint\n", "extern def write(fd: cint, buf: ptr, count: int) -> int\nextern def exit(status: cint) -> None\nextern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint"],
+        ["extern def write(fd: cint, buf: ptr, count: int) -> int\nextern def exit(status: cint)\nextern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint\n", "extern def write(fd: cint, buf: ptr, count: int) -> int\nextern def exit(status: cint) -> none\nextern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint"],
         ["extern def f(x: int):\n    pass\n", "1:21: expected end of line, found ':'"],
         ["extern def f(..., x: int)\n", "1:17: expected ')', found ','"],
         ["extern def f(x: int = 1)\n", "1:21: expected ',' or ')', found '='"],
@@ -156,15 +156,15 @@ def main():
         ["a, f() = t", "2:8: cannot assign to this expression"],
         ["a, b = b, a", "2:13: expected end of line, found ','"],
         ["tuple = 1", "2:5: expected a statement, found 'tuple'"],
-        ["x = isinstance(y, None)", "2:23: expected a class name, found 'None'"],
+        ["x = isinstance(y, none)", "2:23: expected a class name, found 'none'"],
         ["x = isinstance(y)", "2:21: expected ',', found ')'"],
         ["x = isinstance(y, list[int])", "2:27: expected ')', found '['"],
-        ["x = a is 3", "2:14: expected 'None', found integer"],
-        ["x = a is None == b", "2:19: comparison chains are not supported"],
-        ["x = a == b is None", "2:16: comparison chains are not supported"],
+        ["x = a is 3", "2:14: expected 'none', found integer"],
+        ["x = a is none == b", "2:19: comparison chains are not supported"],
+        ["x = a == b is none", "2:16: comparison chains are not supported"],
         ["x = a | b", "2:11: unsupported operator '|'"],
         ["x = a == b | c", "2:16: unsupported operator '|'"],
-        ["x = a is None | b", "2:19: unsupported operator '|'"],
+        ["x = a is none | b", "2:19: unsupported operator '|'"],
         ["x = [1, 2}", "2:14: expected ',' or ']', found '}'"],
         ["xs[i] = v + 1\nxs.append(2)\np.x = p.x + 1", "{ xs[i] = (v + 1); xs.append(2); p.x = (p.x + 1) }"],
         ["xs[0]: int = 1", "2:10: only a name can have an annotation"],
@@ -204,7 +204,7 @@ def main():
         ["with a as (x, x):\n    pass", "2:19: duplicate target 'x'"],
         ["yield x + 1", "{ yield (x + 1) }"],
         ["yield", "2:10: expected an expression, found end of line"],
-        ["async def g():\n    pass\nawait f()", "{ async def g() -> None { pass }; (await f()) }"],
+        ["async def g():\n    pass\nawait f()", "{ async def g() -> none { pass }; (await f()) }"],
         ["x = await -c", "2:15: expected an expression, found '-'"],
         ["x = await await c", "2:15: expected an expression, found 'await'"],
         ["async with aio.task_group() as g:\n    pass\nasync with g:\n    pass", "{ async with aio.task_group() as g { pass }; async with g { pass } }"],
@@ -214,7 +214,7 @@ def main():
     exprs = [
         ["a or b and not c == d + e * -f", "(a or (b and (not (c == (d + (e * (- f)))))))"],
         ["a - b - c", "((a - b) - c)"],
-        ["not not True", "(not (not True))"],
+        ["not not true", "(not (not true))"],
         ["a * b / c // d % e + f - g", "((((((a * b) / c) // d) % e) + f) - g)"],
         ["()", "tuple()"],
         ["(1,)", "tuple(1)"],
@@ -223,8 +223,8 @@ def main():
         ["isinstance(x, tuple)", "isinstance(x, tuple)"],
         ["isinstance(x, list) and isinstance(y, Point,)", "(isinstance(x, list) and isinstance(y, Point))"],
         ["not isinstance(f(x), a.b.C)", "(not isinstance(f(x), a.b.C))"],
-        ["not x is None", "(not (x is None))"],
-        ["x is not None and x + 1 is None", "((x is not None) and ((x + 1) is None))"],
+        ["not x is none", "(not (x is none))"],
+        ["x is not none and x + 1 is none", "((x is not none) and ((x + 1) is none))"],
         ["[1, [2, 3,], []]", "[1, [2, 3], []]"],
         ["{\n    'a': 1,\n    2: {},\n}", "{\"a\": 1, 2: {}}"],
         ["rows[0].pop()", "rows[0].pop()"],
@@ -242,9 +242,9 @@ def main():
         ["a[:]", "a[:]"],
         ["a[:-1]", "a[:(- 1)]"],
         ["a[i:j][0]", "a[i:j][0]"],
-        ["sorted(xs, reverse=True)", "sorted(xs, reverse=True)"],
+        ["sorted(xs, reverse=true)", "sorted(xs, reverse=true)"],
         ["first[int](xs)", "first[int](xs)"],
-        ["first[list[int], str | None](xs)", "first[list[int], str | None](xs)"],
+        ["first[list[int], str | none](xs)", "first[list[int], str | none](xs)"],
         ["util.first[int](xs)", "util.first[int](xs)"],
         ["xs[0](1)", "(xs[0])(1)"],
         ["first[int]", "first[int]"],
@@ -261,21 +261,21 @@ def main():
         ["__type(list[int])", "2:20: expected ')', found '['"],
         ["__type", "__type"],
     ]
-    ok = True
+    ok = true
     for pair in modules:
         if not check("module", pair[0], module(pair[0]), pair[1]):
-            ok = False
+            ok = false
     for pair in bodies:
         if not check("body", pair[0], body(pair[0]), pair[1]):
-            ok = False
+            ok = false
     for pair in exprs:
         if not check("expr", pair[0], expr(pair[0]), pair[1]):
-            ok = False
+            ok = false
     # Positions that diagnostics in later passes rely on.
     positions = [
-        ["def f():\n    pass\n\ndef g(a: int, b: bool,\n      c: str) -> int:\n    return a\n", "def f@1:5() -> None@1:5 { pass@2:5 }\ndef g@4:5(a@4:7: int@4:10, b@4:15: bool@4:18, c@5:7: str@5:10) -> int@5:18 { return a@6:12@6:5 }"],
-        ["def f():\n    x = a + b + c\n", "def f@1:5() -> None@1:5 { x = ((a@2:9 + b@2:13)@2:11 + c@2:17)@2:15@2:5 }"],
-        ["def f():\n    if a:\n        pass\n    elif b:\n        pass\n", "def f@1:5() -> None@1:5 { if a@2:8 { pass@3:9 } else { if b@4:10 { pass@5:9 }@4:5 }@2:5 }"],
+        ["def f():\n    pass\n\ndef g(a: int, b: bool,\n      c: str) -> int:\n    return a\n", "def f@1:5() -> none@1:5 { pass@2:5 }\ndef g@4:5(a@4:7: int@4:10, b@4:15: bool@4:18, c@5:7: str@5:10) -> int@5:18 { return a@6:12@6:5 }"],
+        ["def f():\n    x = a + b + c\n", "def f@1:5() -> none@1:5 { x = ((a@2:9 + b@2:13)@2:11 + c@2:17)@2:15@2:5 }"],
+        ["def f():\n    if a:\n        pass\n    elif b:\n        pass\n", "def f@1:5() -> none@1:5 { if a@2:8 { pass@3:9 } else { if b@4:10 { pass@5:9 }@4:5 }@2:5 }"],
     ]
     for pair in positions:
         parsed = parse(pair[0])
@@ -283,9 +283,9 @@ def main():
         if isinstance(parsed, str):
             actual = parsed
         else:
-            actual = show.Printer(True).module(parsed)
+            actual = show.Printer(true).module(parsed)
         if not check("positions", pair[0], actual, pair[1]):
-            ok = False
+            ok = false
     if not ok:
         sys.exit(1)
     print("parser tests passed")

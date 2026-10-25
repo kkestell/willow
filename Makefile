@@ -24,13 +24,12 @@ $(RUNNER): $(WILLOW) tests/runner.wlo
 # stage 2 builds itself, which must emit the same IL as the stage 2 that
 # stage 1 built. build/willow is that last stage 2.
 WILLOW0 := $(BUILD_DIR)/stage0/willow0
-LEGACY_LITERALS := bootstrap/legacy_literals.awk
 STAGE1_SOURCES := $(wildcard bootstrap/stage1/*.wlo) bootstrap/core/core.wlo $(wildcard lib/*.wlo)
 STAGE2_SOURCES := $(wildcard compiler/*.wlo) bootstrap/core/core.wlo $(wildcard lib/*.wlo)
 
 bootstrap: $(BUILD_DIR)/willow2b
-	$(BUILD_DIR)/willow2a compile $(BUILD_DIR)/stage2current/willow.wlo -o $(BUILD_DIR)/stage2a.ssa
-	$(BUILD_DIR)/willow2b compile $(BUILD_DIR)/stage2current/willow.wlo -o $(BUILD_DIR)/stage2b.ssa
+	$(BUILD_DIR)/willow2a compile $(BUILD_DIR)/stage2/willow.wlo -o $(BUILD_DIR)/stage2a.ssa
+	$(BUILD_DIR)/willow2b compile $(BUILD_DIR)/stage2/willow.wlo -o $(BUILD_DIR)/stage2b.ssa
 	cmp $(BUILD_DIR)/stage2a.ssa $(BUILD_DIR)/stage2b.ssa
 
 $(BUILD_DIR)/stage0/core.inc: bootstrap/core/core.wlo
@@ -40,21 +39,19 @@ $(BUILD_DIR)/stage0/core.inc: bootstrap/core/core.wlo
 $(WILLOW0): $(wildcard bootstrap/stage0/*.c) bootstrap/stage0/willow0.h $(BUILD_DIR)/stage0/core.inc
 	$(CC) -std=c11 -Wall -Wextra -O2 $(wildcard bootstrap/stage0/*.c) -o $@
 
-$(BUILD_DIR)/willow1: $(WILLOW0) bootstrap/prepare.sh $(LEGACY_LITERALS) $(STAGE1_SOURCES)
+$(BUILD_DIR)/willow1: $(WILLOW0) bootstrap/prepare.sh $(STAGE1_SOURCES)
 	mkdir -p $(BUILD_DIR)
 	rm -rf $(BUILD_DIR)/stage1
 	bootstrap/prepare.sh bootstrap/stage1 $(BUILD_DIR)/stage1
-	$(WILLOW0) --legacy build $(BUILD_DIR)/stage1/willow1.wlo -o $@
+	$(WILLOW0) build $(BUILD_DIR)/stage1/willow1.wlo -o $@
 
-$(BUILD_DIR)/willow2a: $(BUILD_DIR)/willow1 bootstrap/prepare.sh $(LEGACY_LITERALS) $(STAGE2_SOURCES)
+$(BUILD_DIR)/willow2a: $(BUILD_DIR)/willow1 bootstrap/prepare.sh $(STAGE2_SOURCES)
 	rm -rf $(BUILD_DIR)/stage2
 	bootstrap/prepare.sh compiler $(BUILD_DIR)/stage2
 	$(BUILD_DIR)/willow1 build $(BUILD_DIR)/stage2/willow.wlo -o $@
 
-$(BUILD_DIR)/willow2b: $(BUILD_DIR)/willow2a bootstrap/prepare.sh $(LEGACY_LITERALS) $(STAGE2_SOURCES)
-	rm -rf $(BUILD_DIR)/stage2current
-	bootstrap/prepare.sh --current compiler $(BUILD_DIR)/stage2current
-	$(BUILD_DIR)/willow2a build $(BUILD_DIR)/stage2current/willow.wlo -o $@
+$(BUILD_DIR)/willow2b: $(BUILD_DIR)/willow2a
+	$(BUILD_DIR)/willow2a build $(BUILD_DIR)/stage2/willow.wlo -o $@
 
 $(WILLOW): $(BUILD_DIR)/willow2b
 	cp $(BUILD_DIR)/willow2b $@

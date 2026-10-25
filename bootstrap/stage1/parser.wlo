@@ -13,7 +13,7 @@ class Parser:
     pos: int
     # The index of the EOF token.
     last: int
-    error: diagnostic.Diagnostic | None
+    error: diagnostic.Diagnostic | none
     # Whether file scope may declare constants.
     privileged: bool
 
@@ -35,11 +35,11 @@ class Parser:
     def accept(self, kind: tokens.Kind) -> bool:
         if self.tokens[self.pos].kind == kind:
             self.advance()
-            return True
-        return False
+            return true
+        return false
 
     def fail_at(self, line: int, col: int, message: str):
-        if self.error is None:
+        if self.error is none:
             self.error = diagnostic.Diagnostic(self.path, line, col, message)
         self.pos = self.last
 
@@ -66,9 +66,9 @@ class Parser:
     # accepts `,` or the close; returns whether the list ended.
     def list_end(self, close: tokens.Kind, close_text: str) -> bool:
         if self.accept(tokens.Kind.COMMA):
-            return False
+            return false
         self.expect(close, f"',' or {close_text}")
-        return True
+        return true
 
     # A placeholder for a node that failed to parse.
     def missing(self) -> ast.Expr:
@@ -109,7 +109,7 @@ class Parser:
         token = self.peek()
         if self.accept(tokens.Kind.LPAREN):
             return self.parse_parenthesized(token)
-        node = ast.TypeName(token.line, token.col, token.text, "", [], False)
+        node = ast.TypeName(token.line, token.col, token.text, "", [], false)
         kind = token.kind
         if not is_type_name(kind) and kind != tokens.Kind.NAME:
             self.unexpected("a type")
@@ -120,24 +120,24 @@ class Parser:
                 self.qualify(node, token.text, "a type name")
             if self.accept(tokens.Kind.LBRACKET):
                 node.args = self.parse_type_list()
-                node.has_args = True
+                node.has_args = true
         elif kind == tokens.Kind.LIST:
             self.expect(tokens.Kind.LBRACKET, "'['")
             node.args = [self.parse_type()]
-            node.has_args = True
+            node.has_args = true
             self.expect(tokens.Kind.RBRACKET, "']'")
         elif kind == tokens.Kind.DICT:
             self.expect(tokens.Kind.LBRACKET, "'['")
             key = self.parse_type()
             self.expect(tokens.Kind.COMMA, "','")
             node.args = [key, self.parse_type()]
-            node.has_args = True
+            node.has_args = true
             self.expect(tokens.Kind.RBRACKET, "']'")
         elif kind == tokens.Kind.TUPLE:
             # `tuple[()]` is the empty tuple type; `()` before `->` starts a
             # callable.
             self.expect(tokens.Kind.LBRACKET, "'['")
-            node.has_args = True
+            node.has_args = true
             if self.peek().kind == tokens.Kind.LPAREN and self.ahead(1).kind == tokens.Kind.RPAREN and self.ahead(2).kind == tokens.Kind.RBRACKET:
                 self.advance()
                 self.advance()
@@ -176,9 +176,9 @@ class Parser:
             return self.parse_or()
         params: list[ast.Param] = []
         if not self.accept(tokens.Kind.COLON):
-            while True:
+            while true:
                 name = self.expect(tokens.Kind.NAME, "a parameter name")
-                params.append(ast.Param(name.line, name.col, name.text, None, None, False))
+                params.append(ast.Param(name.line, name.col, name.text, none, none, false))
                 if not self.accept(tokens.Kind.COMMA) or self.peek().kind == tokens.Kind.COLON:
                     break
             self.expect(tokens.Kind.COLON, "',' or ':'")
@@ -218,7 +218,7 @@ class Parser:
             node = ast.Binary("not in", left, self.parse_operand())
         elif token.kind == tokens.Kind.IS:
             negated = self.accept(tokens.Kind.NOT)
-            self.expect(tokens.Kind.NONE, "'None'")
+            self.expect(tokens.Kind.NONE, "'none'")
             self.reject_bitwise_or()
             node = ast.Is(negated, left)
         else:
@@ -270,12 +270,12 @@ class Parser:
     # Indexing, field access, and calls chain left to right after a primary.
     def parse_postfix(self) -> ast.Expr:
         expr = self.parse_primary()
-        while True:
+        while true:
             token = self.peek()
             node = expr.node
             if token.kind == tokens.Kind.LBRACKET and (isinstance(node, ast.Name) or isinstance(node, ast.Field)):
                 specialized = self.parse_specialized(expr)
-                if specialized is not None:
+                if specialized is not none:
                     expr = specialized
                     continue
             if token.kind == tokens.Kind.LBRACKET:
@@ -299,23 +299,23 @@ class Parser:
         return expr
 
     # Parses `[...]` after `callee` as type arguments, as in `first[int](xs)`,
-    # or returns None with the position unchanged when the brackets can only
+    # or returns none with the position unchanged when the brackets can only
     # be an index.
-    def parse_specialized(self, callee: ast.Expr) -> ast.Expr | None:
+    def parse_specialized(self, callee: ast.Expr) -> ast.Expr | none:
         start = self.pos
         self.advance()
         type_args = self.parse_type_list()
-        if self.error is not None:
-            self.error = None
+        if self.error is not none:
+            self.error = none
             self.pos = start
-            return None
+            return none
         after = self.pos
         self.pos = start
-        index: ast.Expr | None = self.parse_index(callee)
+        index: ast.Expr | none = self.parse_index(callee)
         index_error = self.error
-        if index_error is not None:
-            index = None
-            self.error = None
+        if index_error is not none:
+            index = none
+            self.error = none
         self.pos = after
         if self.accept(tokens.Kind.LPAREN):
             call = ast.SpecializedCall(callee, type_args, index, index_error, [], [])
@@ -326,11 +326,11 @@ class Parser:
     # Parses `[...]` after `object` as an index or slice.
     def parse_index(self, object: ast.Expr) -> ast.Expr:
         token = self.advance()
-        start: ast.Expr | None = None
+        start: ast.Expr | none = none
         if self.peek().kind != tokens.Kind.COLON:
             start = self.parse_expression()
         if self.accept(tokens.Kind.COLON):
-            stop: ast.Expr | None = None
+            stop: ast.Expr | none = none
             if self.peek().kind != tokens.Kind.RBRACKET and self.peek().kind != tokens.Kind.COLON:
                 stop = self.parse_expression()
             if self.peek().kind == tokens.Kind.COLON:
@@ -338,13 +338,13 @@ class Parser:
             self.expect(tokens.Kind.RBRACKET, "']'")
             return ast.Expr(token.line, token.col, ast.Slice(object, start, stop))
         self.expect(tokens.Kind.RBRACKET, "']'")
-        if start is None:
+        if start is none:
             return self.missing()
         return ast.Expr(token.line, token.col, ast.Index(object, start))
 
     # Parses arguments up to `)`, after the `(`, into `args` and `keywords`.
     def parse_args(self, args: list[ast.Expr], keywords: list[ast.Keyword]):
-        misplaced: ast.Expr | None = None
+        misplaced: ast.Expr | none = none
         while not self.accept(tokens.Kind.RPAREN):
             if self.peek().kind == tokens.Kind.NAME and self.ahead(1).kind == tokens.Kind.EQUAL:
                 name = self.advance()
@@ -352,12 +352,12 @@ class Parser:
                 keywords.append(ast.Keyword(name.line, name.col, name.text, self.parse_expression()))
             else:
                 arg = self.parse_expression()
-                if len(keywords) > 0 and misplaced is None:
+                if len(keywords) > 0 and misplaced is none:
                     misplaced = arg
                 args.append(arg)
             if self.list_end(tokens.Kind.RPAREN, "')'"):
                 break
-        if misplaced is not None:
+        if misplaced is not none:
             self.fail_at(misplaced.line, misplaced.col, "positional argument follows keyword argument")
 
     def parse_expression_list(self, close: tokens.Kind, close_text: str) -> list[ast.Expr]:
@@ -440,7 +440,7 @@ class Parser:
     # parts are at `start`.
     def parse_fstring(self, start: tokens.Token) -> ast.Expr:
         fstring = ast.FString([], [])
-        while self.error is None and self.peek().kind != tokens.Kind.FSTRING_END:
+        while self.error is none and self.peek().kind != tokens.Kind.FSTRING_END:
             token = self.peek()
             if token.kind == tokens.Kind.FSTRING_TEXT:
                 self.advance()
@@ -450,7 +450,7 @@ class Parser:
             else:
                 fstring.parts.append(self.parse_expression())
                 end = self.expect(tokens.Kind.FIELD_END, "'}'")
-                if self.error is None:
+                if self.error is none:
                     fstring.specs.append(parse_format_spec(end.text))
         self.advance()
         return ast.Expr(start.line, start.col, fstring)
@@ -463,7 +463,7 @@ class Parser:
         if name.kind != tokens.Kind.NAME and (name.kind == tokens.Kind.NONE or not is_type_name(name.kind)):
             self.unexpected("a class name")
         self.advance()
-        ref = ast.TypeName(name.line, name.col, name.text, "", [], False)
+        ref = ast.TypeName(name.line, name.col, name.text, "", [], false)
         if name.kind == tokens.Kind.NAME:
             self.qualify(ref, name.text, "a class name")
         self.accept(tokens.Kind.COMMA)
@@ -475,7 +475,7 @@ class Parser:
         target = self.peek()
         if target.kind in [tokens.Kind.LIST, tokens.Kind.DICT, tokens.Kind.TUPLE]:
             self.advance()
-            node = ast.TypeName(target.line, target.col, target.text, "", [], False)
+            node = ast.TypeName(target.line, target.col, target.text, "", [], false)
             self.expect(tokens.Kind.RPAREN, "')'")
             return ast.Expr(token.line, token.col, ast.TypeOf(node))
         t = self.parse_type()
@@ -489,9 +489,9 @@ class Parser:
         self.expect(tokens.Kind.NEWLINE, "end of line")
         self.expect(tokens.Kind.INDENT, "an indented block")
         body: list[ast.Stmt] = []
-        while True:
+        while true:
             body.append(self.parse_statement())
-            if self.accept(tokens.Kind.DEDENT) or self.error is not None:
+            if self.accept(tokens.Kind.DEDENT) or self.error is not none:
                 break
         return body
 
@@ -513,8 +513,8 @@ class Parser:
             self.advance()
             items: list[ast.WithItem] = []
             seen: dict[str, bool] = {}
-            while True:
-                item = ast.WithItem(self.parse_expression(), None)
+            while true:
+                item = ast.WithItem(self.parse_expression(), none)
                 if self.accept(tokens.Kind.AS):
                     target = self.parse_target()
                     self.check_targets(target, seen)
@@ -530,20 +530,20 @@ class Parser:
             # A task-group scope enters one group and may name it.
             self.advance()
             self.advance()
-            scope = ast.AsyncWith(self.parse_expression(), None, [])
+            scope = ast.AsyncWith(self.parse_expression(), none, [])
             if self.accept(tokens.Kind.AS):
                 name = self.expect(tokens.Kind.NAME, "a name")
                 scope.target = ast.Target(name.line, name.col, name.text, [])
             scope.body = self.parse_block()
             return ast.Stmt(token.line, token.col, scope)
         if kind == tokens.Kind.DEF or kind == tokens.Kind.ASYNC:
-            function = self.parse_function(False, False)
+            function = self.parse_function(false, false)
             return ast.Stmt(function.line, function.col, ast.FunctionDef(function))
         statement = ast.Stmt(token.line, token.col, ast.SimpleStatement.PASS)
         if kind == tokens.Kind.NONLOCAL:
             self.advance()
             names: list[ast.Ident] = []
-            while True:
+            while true:
                 name = self.expect(tokens.Kind.NAME, "a variable name")
                 names.append(ast.Ident(name.line, name.col, name.text))
                 if not self.accept(tokens.Kind.COMMA):
@@ -551,20 +551,20 @@ class Parser:
             statement.node = ast.Nonlocal(names)
         elif kind == tokens.Kind.RETURN:
             self.advance()
-            value: ast.Expr | None = None
+            value: ast.Expr | none = none
             if self.peek().kind != tokens.Kind.NEWLINE:
                 value = self.parse_expression()
             statement.node = ast.Return(value)
         elif kind == tokens.Kind.ASSERT:
             self.advance()
             condition = self.parse_expression()
-            message: ast.Expr | None = None
+            message: ast.Expr | none = none
             if self.accept(tokens.Kind.COMMA):
                 message = self.parse_expression()
             statement.node = ast.Assert(condition, message)
         elif kind == tokens.Kind.RAISE:
             self.advance()
-            raised: ast.Expr | None = None
+            raised: ast.Expr | none = none
             if self.peek().kind != tokens.Kind.NEWLINE:
                 raised = self.parse_expression()
                 if self.peek().kind == tokens.Kind.FROM:
@@ -625,7 +625,7 @@ class Parser:
             elif following.kind == tokens.Kind.STAR:
                 self.fail(clause, "'except*' is not supported")
             name = self.expect(tokens.Kind.NAME, "an exception class name")
-            ref = ast.TypeName(name.line, name.col, name.text, "", [], False)
+            ref = ast.TypeName(name.line, name.col, name.text, "", [], false)
             self.qualify(ref, name.text, "an exception class name")
             bound = ""
             if self.accept(tokens.Kind.AS):
@@ -653,7 +653,7 @@ class Parser:
         if target.name != "":
             if target.name in seen:
                 self.fail_at(target.line, target.col, f"duplicate target '{target.name}'")
-            seen[target.name] = True
+            seen[target.name] = true
             return
         for element in target.elements:
             self.check_targets(element, seen)
@@ -703,9 +703,9 @@ class Parser:
             # Only an index can be assigned to.
             index = specialized.index
             index_error = specialized.index_error
-            if index is not None:
+            if index is not none:
                 expr = index
-            elif index_error is not None and self.error is None:
+            elif index_error is not none and self.error is none:
                 self.error = index_error
                 self.pos = self.last
         if token.kind == tokens.Kind.COMMA:
@@ -729,7 +729,7 @@ class Parser:
                 self.check_targets(target, {})
                 statement.node = ast.Unpack(target, self.parse_expression())
             elif isinstance(node, ast.Name):
-                statement.node = ast.Assign(node.name, None, self.parse_expression())
+                statement.node = ast.Assign(node.name, none, self.parse_expression())
             elif isinstance(node, ast.Index):
                 statement.node = ast.IndexAssign(node.object, node.index, self.parse_expression())
             elif isinstance(node, ast.Field):
@@ -753,7 +753,7 @@ class Parser:
 
     # Declarations
 
-    # A default is None, a boolean, a string, a number with an optional sign,
+    # A default is none, a boolean, a string, a number with an optional sign,
     # a dotted name for an enum member, or a tuple of defaults.
     def parse_default(self) -> ast.Expr:
         token = self.peek()
@@ -789,7 +789,7 @@ class Parser:
                 return ast.Expr(token.line, token.col, ast.Constant.NONE)
             if kind == tokens.Kind.NAME and self.ahead(1).kind == tokens.Kind.DOT:
                 self.advance()
-                expr = ast.Expr(token.line, token.col, ast.Name(literal.text, False))
+                expr = ast.Expr(token.line, token.col, ast.Name(literal.text, false))
                 while self.accept(tokens.Kind.DOT):
                     name = self.expect(tokens.Kind.NAME, "a member name")
                     expr = ast.Expr(name.line, name.col, ast.Field(expr, name.text))
@@ -810,12 +810,12 @@ class Parser:
 
     # Parses `= default` after the annotation of the parameter or field
     # `name`, which must have one when the one before it does.
-    def parse_optional_default(self, name: tokens.Token, previous_has_default: bool, noun: str) -> ast.Expr | None:
+    def parse_optional_default(self, name: tokens.Token, previous_has_default: bool, noun: str) -> ast.Expr | none:
         if self.accept(tokens.Kind.EQUAL):
             return self.parse_default()
         if previous_has_default:
             self.fail(name, f"{noun} '{name.text}' without a default follows one with a default")
-        return None
+        return none
 
     # Parses an optional `[T, U]` after a function, class, or alias name.
     def parse_type_params(self) -> list[ast.TypeParam]:
@@ -824,7 +824,7 @@ class Parser:
             return params
         while not self.accept(tokens.Kind.RBRACKET):
             name = self.expect(tokens.Kind.NAME, "a type parameter name")
-            bound: ast.TypeExpr | None = None
+            bound: ast.TypeExpr | none = none
             if self.accept(tokens.Kind.COLON):
                 bound = self.parse_type()
             params.append(ast.TypeParam(name.line, name.col, name.text, bound))
@@ -841,7 +841,7 @@ class Parser:
         type_params = self.parse_type_params()
         self.expect(tokens.Kind.LPAREN, "'('")
         params: list[ast.Param] = []
-        closed = False
+        closed = false
         if method:
             first = self.peek()
             if first.kind != tokens.Kind.NAME or first.text != "self":
@@ -849,27 +849,27 @@ class Parser:
             self.advance()
             if self.peek().kind == tokens.Kind.COLON:
                 self.fail(self.peek(), "'self' cannot have an annotation")
-            params.append(ast.Param(first.line, first.col, "self", None, None, False))
+            params.append(ast.Param(first.line, first.col, "self", none, none, false))
             closed = not self.accept(tokens.Kind.COMMA)
             if closed:
                 self.expect(tokens.Kind.RPAREN, "',' or ')'")
         # Parameters after a bare `*` are keyword-only, and their defaults may
         # come in any order.
         star = self.peek()
-        has_star = False
+        has_star = false
         while not closed and not self.accept(tokens.Kind.RPAREN):
             if self.peek().kind == tokens.Kind.STAR:
                 if has_star:
                     self.fail(self.peek(), "only one '*' is allowed in a parameter list")
                 star = self.advance()
-                has_star = True
+                has_star = true
                 if self.peek().kind == tokens.Kind.NAME:
                     self.fail(self.peek(), "variadic parameters are not supported")
             else:
                 param = self.expect(tokens.Kind.NAME, "a parameter name")
                 self.expect(tokens.Kind.COLON, "':'")
                 annotation = self.parse_type()
-                previous_has_default = not has_star and len(params) > 0 and params[len(params) - 1].default is not None
+                previous_has_default = not has_star and len(params) > 0 and params[len(params) - 1].default is not none
                 default = self.parse_optional_default(param, previous_has_default, "parameter")
                 params.append(ast.Param(param.line, param.col, param.text, annotation, default, has_star))
             if not self.accept(tokens.Kind.COMMA):
@@ -877,7 +877,7 @@ class Parser:
                 break
         if has_star and (len(params) == 0 or not params[len(params) - 1].keyword_only):
             self.fail(star, "'*' must be followed by a keyword-only parameter")
-        return_type: ast.TypeExpr = ast.TypeName(name.line, name.col, "None", "", [], False)
+        return_type: ast.TypeExpr = ast.TypeName(name.line, name.col, "none", "", [], false)
         if self.accept(tokens.Kind.ARROW):
             return_type = self.parse_type()
         body: list[ast.Stmt] = []
@@ -897,23 +897,23 @@ class Parser:
         name = self.expect(tokens.Kind.NAME, "a function name")
         self.expect(tokens.Kind.LPAREN, "'('")
         params: list[ast.Param] = []
-        variadic = False
+        variadic = false
         while not self.accept(tokens.Kind.RPAREN):
             if self.accept_ellipsis():
-                variadic = True
+                variadic = true
                 self.expect(tokens.Kind.RPAREN, "')'")
                 break
             param = self.expect(tokens.Kind.NAME, "a parameter name")
             self.expect(tokens.Kind.COLON, "':'")
-            params.append(ast.Param(param.line, param.col, param.text, self.parse_type(), None, False))
+            params.append(ast.Param(param.line, param.col, param.text, self.parse_type(), none, false))
             if self.list_end(tokens.Kind.RPAREN, "')'"):
                 break
-        return_type: ast.TypeExpr = ast.TypeName(name.line, name.col, "None", "", [], False)
+        return_type: ast.TypeExpr = ast.TypeName(name.line, name.col, "none", "", [], false)
         if self.accept(tokens.Kind.ARROW):
             return_type = self.parse_type()
         self.expect(tokens.Kind.NEWLINE, "end of line")
-        decl = ast.FunctionDecl(name.line, name.col, name.text, [], params, return_type, [], False, [], [])
-        decl.external = True
+        decl = ast.FunctionDecl(name.line, name.col, name.text, [], params, return_type, [], false, [], [])
+        decl.external = true
         decl.variadic = variadic
         return decl
 
@@ -925,22 +925,22 @@ class Parser:
         self.expect(tokens.Kind.EQUAL, "'='")
         value = self.expect(tokens.Kind.FLOAT_LITERAL, "a float literal")
         self.expect(tokens.Kind.NEWLINE, "end of line")
-        if self.error is None:
+        if self.error is none:
             module.constants[name.text] = float(value.text)
 
     # Accepts `...`, which the lexer gives as three adjacent dots.
     def accept_ellipsis(self) -> bool:
         first = self.peek()
         if first.kind != tokens.Kind.DOT:
-            return False
+            return false
         for i in range(1, 3):
             dot = self.ahead(i)
             if dot.kind != tokens.Kind.DOT or dot.line != first.line or dot.col != first.col + i:
-                return False
+                return false
         self.advance()
         self.advance()
         self.advance()
-        return True
+        return true
 
     # Reads a declaration's `:`, end of line, and indent.
     def start_body(self):
@@ -954,16 +954,16 @@ class Parser:
         name = self.expect(tokens.Kind.NAME, "a protocol name")
         decl = ast.ProtocolDecl(name.line, name.col, name.text, self.parse_type_params(), [])
         self.start_body()
-        while True:
+        while true:
             token = self.peek()
             if token.kind != tokens.Kind.DEF and token.kind != tokens.Kind.ASYNC:
                 self.fail(token, "protocols hold only method signatures")
-            method = self.parse_function(True, True)
+            method = self.parse_function(true, true)
             if len(method.type_params) > 0:
                 first = method.type_params[0]
                 self.fail_at(first.line, first.col, "protocol methods cannot be generic")
             decl.methods.append(method)
-            if self.accept(tokens.Kind.DEDENT) or self.error is not None:
+            if self.accept(tokens.Kind.DEDENT) or self.error is not none:
                 break
         return decl
 
@@ -972,24 +972,24 @@ class Parser:
     def parse_class(self) -> ast.ClassDecl:
         self.advance()
         name = self.expect(tokens.Kind.NAME, "a class name")
-        decl = ast.ClassDecl(name.line, name.col, name.text, self.parse_type_params(), [], [], False)
+        decl = ast.ClassDecl(name.line, name.col, name.text, self.parse_type_params(), [], [], false)
         if self.accept(tokens.Kind.LPAREN):
             base = self.expect(tokens.Kind.NAME, "a base class name")
             if base.text != "Exception":
                 self.fail(base, "the base of a class must be 'Exception'")
             self.expect(tokens.Kind.RPAREN, "')'")
-            decl.exception = True
-            message_type = ast.TypeName(name.line, name.col, "str", "", [], False)
-            decl.fields.append(ast.FieldDecl(name.line, name.col, "message", message_type, None))
+            decl.exception = true
+            message_type = ast.TypeName(name.line, name.col, "str", "", [], false)
+            decl.fields.append(ast.FieldDecl(name.line, name.col, "message", message_type, none))
         self.start_body()
         if decl.exception and self.accept(tokens.Kind.PASS):
             self.expect(tokens.Kind.NEWLINE, "end of line")
             self.expect(tokens.Kind.DEDENT, "the end of the class")
             return decl
-        while True:
+        while true:
             field = self.peek()
             if field.kind == tokens.Kind.DEF or field.kind == tokens.Kind.ASYNC:
-                decl.methods.append(self.parse_function(True, False))
+                decl.methods.append(self.parse_function(true, false))
             else:
                 if field.kind != tokens.Kind.NAME or self.ahead(1).kind != tokens.Kind.COLON:
                     self.fail(field, "class bodies hold only field and method declarations")
@@ -1001,11 +1001,11 @@ class Parser:
                 self.advance()
                 annotation = self.parse_type()
                 count = len(decl.fields)
-                previous_has_default = count > 0 and decl.fields[count - 1].default is not None
+                previous_has_default = count > 0 and decl.fields[count - 1].default is not none
                 default = self.parse_optional_default(field, previous_has_default, "field")
                 decl.fields.append(ast.FieldDecl(field.line, field.col, field.text, annotation, default))
                 self.expect(tokens.Kind.NEWLINE, "end of line")
-            if self.accept(tokens.Kind.DEDENT) or self.error is not None:
+            if self.accept(tokens.Kind.DEDENT) or self.error is not none:
                 break
         return decl
 
@@ -1014,14 +1014,14 @@ class Parser:
         name = self.expect(tokens.Kind.NAME, "an enum name")
         decl = ast.EnumDecl(name.line, name.col, name.text, [])
         self.start_body()
-        while True:
+        while true:
             member = self.peek()
             if member.kind != tokens.Kind.NAME or self.ahead(1).kind != tokens.Kind.NEWLINE:
                 self.fail(member, "enum bodies hold only member names")
             self.advance()
             self.advance()
             decl.members.append(ast.Ident(member.line, member.col, member.text))
-            if self.accept(tokens.Kind.DEDENT) or self.error is not None:
+            if self.accept(tokens.Kind.DEDENT) or self.error is not none:
                 break
         return decl
 
@@ -1050,7 +1050,7 @@ class Parser:
             if kind == tokens.Kind.IMPORT:
                 self.fail(token, "imports must come before declarations")
             elif kind == tokens.Kind.DEF or kind == tokens.Kind.ASYNC:
-                module.declarations.append(self.parse_function(False, False))
+                module.declarations.append(self.parse_function(false, false))
             elif kind == tokens.Kind.NAME and token.text == "extern" and self.ahead(1).kind == tokens.Kind.DEF:
                 module.declarations.append(self.parse_extern())
             elif kind == tokens.Kind.CLASS:
@@ -1072,10 +1072,10 @@ class Parser:
 # The syntax tree of the file at `path` with tokens `toks`, or its first
 # syntax error. A `privileged` module may declare constants.
 def parse(path: str, toks: list[tokens.Token], privileged: bool) -> ast.Module | diagnostic.Diagnostic:
-    parser = Parser(path, toks, 0, len(toks) - 1, None, privileged)
+    parser = Parser(path, toks, 0, len(toks) - 1, none, privileged)
     module = parser.parse_module()
     error = parser.error
-    if error is not None:
+    if error is not none:
         return error
     return module
 
@@ -1159,9 +1159,9 @@ def is_product(kind: tokens.Kind) -> bool:
 
 def starts_expression(kind: tokens.Kind) -> bool:
     if kind == tokens.Kind.NAME or kind == tokens.Kind.INT_LITERAL or kind == tokens.Kind.FLOAT_LITERAL or kind == tokens.Kind.STRING_LITERAL or kind == tokens.Kind.FSTRING_START:
-        return True
+        return true
     if kind == tokens.Kind.TRUE or kind == tokens.Kind.FALSE or kind == tokens.Kind.NONE or kind == tokens.Kind.INT or kind == tokens.Kind.FLOAT or kind == tokens.Kind.STR or kind == tokens.Kind.BYTES:
-        return True
+        return true
     return kind == tokens.Kind.LPAREN or kind == tokens.Kind.LBRACKET or kind == tokens.Kind.LBRACE or kind == tokens.Kind.MINUS or kind == tokens.Kind.PLUS or kind == tokens.Kind.NOT or kind == tokens.Kind.AWAIT
 
 # Whether a statement may consist of the expression `node` alone.

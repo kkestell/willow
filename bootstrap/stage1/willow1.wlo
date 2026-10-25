@@ -45,18 +45,18 @@ def compile(path: str) -> str:
     name = loader.entry_name(path)
     if not is_module_name(name) or name == "core":
         fail(f"willow1: {path}: '{name}' cannot be a module name")
-    sources = loader.load(path, True)
+    sources = loader.load(path, true)
     if isinstance(sources, diagnostic.Diagnostic):
         report(sources)
         return ""
-    error = bind.bind(sources, False)
-    if error is not None:
+    error = bind.bind(sources, false)
+    if error is not none:
         report(error)
     modules: list[ast.Module] = []
     for source in sources:
         modules.append(source.tree)
     error = check.check_program(modules)
-    if error is not None:
+    if error is not none:
         report(error)
     emitter = emit.emitter(modules, core.os())
     for module in modules:
@@ -66,11 +66,11 @@ def compile(path: str) -> str:
 
 def is_module_name(name: str) -> bool:
     if name == "" or not (name[0].isalpha() or name[0] == "_"):
-        return False
+        return false
     for c in name:
         if not (c.isalnum() or c == "_") or ord(c) > 127:
-            return False
-    return True
+            return false
+    return true
 
 # Assembles `il` with qbe and links it with libgc into the executable
 # `output`. The intermediate files sit next to `output`, since L0 cannot make

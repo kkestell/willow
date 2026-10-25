@@ -58,7 +58,7 @@ static bool starts_expression(const Kind *kind) {
     case KIND_Name: case KIND_Int: case KIND_Float: case KIND_Str: case KIND_FStr:
         return true;
     case KIND_Word:
-        return WORD_IN(kind, "True", "False", "None", "true", "false", "none", "int", "float", "str", "bytes",
+        return WORD_IN(kind, "true", "false", "none", "int", "float", "str", "bytes",
                        "(", "[", "{", "-", "+", "not", "await");
     default: return false;
     }
@@ -229,10 +229,10 @@ static Expr literal(Parser *self) {
         kind = (ExprKind){.tag = EXPR_Str, .as.Str = token.as.Str};
         break;
     default:
-        if (!sign && WORD_IN(&token, "None", "none")) {
+        if (!sign && word_is(&token, "none")) {
             kind = (ExprKind){.tag = EXPR_None};
-        } else if (!sign && WORD_IN(&token, "True", "False", "true", "false")) {
-            kind = (ExprKind){.tag = EXPR_Bool, .as.Bool = word_is(&token, "True") || word_is(&token, "true")};
+        } else if (!sign && WORD_IN(&token, "true", "false")) {
+            kind = (ExprKind){.tag = EXPR_Bool, .as.Bool = word_is(&token, "true")};
         } else {
             parser_fail(self, pos(self), STR("a default must be a literal"));
         }
@@ -380,7 +380,7 @@ static TypeName parser_type_name(Parser *self) {
             PosName part = name(self, "a type name");
             text = str_format("%s.%s", text.data, part.name.data);
         }
-    } else if (WORD_IN(peek(self), "int", "float", "bool", "str", "None", "none", "list", "dict")) {
+    } else if (WORD_IN(peek(self), "int", "float", "bool", "str", "none", "list", "dict")) {
         text = str_from_cstr(peek(self)->as.Word);
         self->i++;
     } else {
@@ -554,7 +554,7 @@ static Expr comparison(Parser *self) {
     ExprKind kind;
     if (BINARY_OP(self, &op_pos, "is")) {
         bool negated = accept(self, "not");
-        if (!accept(self, "None") && !accept(self, "none")) {
+        if (!accept(self, "none")) {
             parser_fail(self, pos(self), STR("'is' can only test for none"));
         }
         kind = (ExprKind){.tag = EXPR_IsNone, .as.IsNone = {boxed_expr(left), negated, op_pos}};
@@ -723,10 +723,10 @@ static Expr primary(Parser *self) {
                 }
             }
             return (Expr){at, {.tag = EXPR_List, .as.List = items}};
-        } else if (WORD_IN(&token, "None", "none")) {
+        } else if (word_is(&token, "none")) {
             kind = (ExprKind){.tag = EXPR_None};
-        } else if (WORD_IN(&token, "True", "False", "true", "false")) {
-            kind = (ExprKind){.tag = EXPR_Bool, .as.Bool = word_is(&token, "True") || word_is(&token, "true")};
+        } else if (WORD_IN(&token, "true", "false")) {
+            kind = (ExprKind){.tag = EXPR_Bool, .as.Bool = word_is(&token, "true")};
         } else if (word_is(&token, "(")) {
             self->i++;
             Expr value = expr(self);

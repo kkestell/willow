@@ -7,13 +7,13 @@
 #include <string.h>
 
 static const char *const RESERVED[] = {
-    "False", "None", "True", "and", "as", "assert", "async", "await", "break",
-    "case", "class", "continue", "def", "del", "elif", "else", "enum", "except",
-    "false", "finally", "for", "from", "global", "if", "import", "in", "is",
-    "lambda", "match", "none", "nonlocal", "not", "or", "pass", "protocol",
-    "raise", "return", "true", "try", "type", "while", "with", "yield", "int",
-    "float", "bool", "str", "bytes", "list", "dict", "tuple", "Iterable",
-    "Iterator", "ContextManager", "Generator", "Coroutine"
+    "and", "as", "assert", "async", "await", "break", "case", "class", "continue",
+    "def", "del", "elif", "else", "enum", "except", "false", "finally", "for",
+    "from", "global", "if", "import", "in", "is", "lambda", "match", "none",
+    "nonlocal", "not", "or", "pass", "protocol", "raise", "return", "true", "try",
+    "type", "while", "with", "yield", "int", "float", "bool", "str", "bytes",
+    "list", "dict", "tuple", "Iterable", "Iterator", "ContextManager", "Generator",
+    "Coroutine"
 };
 static const char *const OPERATORS[] = {
     "...", "->", "==", "!=", "<=", ">=", "//", "<", ">", "=", "+", "-", "*", "/",
@@ -28,7 +28,6 @@ static const char *const TABS = "tabs are not allowed outside strings and commen
 
 typedef struct Lexer {
     String path;
-    bool legacy;
     CharVec chars;
     size_t i;
     uint32_t line;
@@ -180,8 +179,8 @@ static void run(Lexer *self) {
     add(self, (Kind){.tag = KIND_Eof}, self->i);
 }
 
-TokenVec lex(String path, String source, bool legacy) {
-    Lexer lexer = {.path = path, .legacy = legacy, .line = 1};
+TokenVec lex(String path, String source) {
+    Lexer lexer = {.path = path, .line = 1};
     size_t at = 0;
     Pos pos = {1, 1};
     while (at < source.len) {
@@ -220,11 +219,6 @@ static void lex_word(Lexer *self) {
             kind = (Kind){.tag = KIND_Word, .as.Word = RESERVED[j]};
             break;
         }
-    }
-    /* The frozen stage 1 compiler uses `none` as an identifier. */
-    if (self->legacy && (str_equal(word, STR("true")) || str_equal(word, STR("false")) ||
-                         str_equal(word, STR("none")))) {
-        kind = (Kind){.tag = KIND_Name, .as.Name = word};
     }
     add(self, kind, start);
 }

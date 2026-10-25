@@ -706,7 +706,7 @@ struct Op {
     } as;
 };
 
-TokenVec lex(String path, String source, bool legacy);
+TokenVec lex(String path, String source);
 Module parse(String name, String path, TokenVec tokens);
 Program check(ModuleVec modules);
 String emit(const Program *program);

@@ -14,17 +14,14 @@
 - The checker reports the first error in a program.
 - Replace `elif` with `else if` in the compiler and editor support; migrate
   sources and examples, and add regression coverage for branch chains and
-  narrowing. Preserve the frozen stage 1 syntax during the bootstrap
-  transition and validate on macOS and Linux.
+  narrowing. Validate on macOS and Linux.
 - Replace the empty tuple type spelling `tuple[()]` with `tuple[]` in the
   compiler, diagnostics, and editor support; migrate sources and tests and
-  add regression coverage. Preserve the frozen stage 1 syntax during the
-  bootstrap transition and validate on macOS and Linux.
+  add regression coverage. Validate on macOS and Linux.
 - Replace `lambda parameters: expression` with `(parameters) => expression`
   in the compiler and editor support; migrate sources and examples, and add
-  regression coverage for parameter lists, precedence, and captures. Preserve
-  the frozen stage 1 syntax during the bootstrap transition and validate on
-  macOS and Linux.
+  regression coverage for parameter lists, precedence, and captures. Validate
+  on macOS and Linux.
 - Allow optional lambda parameter annotations, with expected types supplying
   unannotated parameters and the expected return type, and expression bodies
   determining return types. Update the compiler and editor support; cover
@@ -34,8 +31,8 @@
   class and protocol parameter lists. Reject `self` outside methods and as an
   assignment target. Update compiler binding, signatures, diagnostics, and editor
   support; migrate sources and examples, and cover method calls, bound methods,
-  protocol matching, receiver captures, and misuse of `self`. Preserve the frozen
-  stage 1 syntax during the bootstrap transition and validate on macOS and Linux.
+  protocol matching, receiver captures, and misuse of `self`. Validate on
+  macOS and Linux.
 - Base unions and type tests on runtime classes. Replace the union member
   restrictions with the disjoint-coverage rule, allowing open types (protocols
   and type parameters) only alongside `none`; this makes protocol-to-union
@@ -46,8 +43,7 @@
   `is none`, and point `is` with an enum member to `==`. Update compiler checks,
   diagnostics, and editor support; migrate sources and tests, including union
   tests that pair protocols with other types, and cover alias tests, open-type
-  unions, and unsupported type tests. Preserve frozen stage 1 behavior during
-  the bootstrap transition and validate on macOS and Linux.
+  unions, and unsupported type tests. Validate on macOS and Linux.
 - Stop reserving `del`, `from`, and `global` in the compiler and editor support;
   keep `match` and `case` reserved for future use. Add focused regression coverage
   for the freed identifiers and the retained reserved words.
@@ -68,11 +64,9 @@
   alive after scope exit; cover counters and captures from separate iterations.
 - Migrate sources, tests, documentation, and examples to explicit declarations
   and lexical scopes, including values assigned across branches and task-group
-  boundaries. Preserve frozen stage 1 behavior during the bootstrap transition
-  and validate on macOS and Linux with `make bootstrap-test`.
+  boundaries. Validate on macOS and Linux with `make bootstrap-test`.
 - Make `str.find` and `bytes.find` return `int | none` instead of `-1`. Migrate
   call sites in `lib/`, `compiler/`, tests, and examples, and cover found and
-  missing results. Preserve frozen stage 1 behavior during the bootstrap
-  transition and validate on macOS and Linux.
+  missing results. Validate on macOS and Linux.
 - Require the `d.get(k, default)` default to be assignable to `V`, removing the
   `none`-default form and its result-type rule. Cover the rejected default.

@@ -16,7 +16,7 @@ class Results:
     def text(self, label: str, actual: str, expected: str):
         if actual != expected:
             print(f"FAIL {label}: got {actual}, expected {expected}")
-            self.failed = True
+            self.failed = true
 
     def shows(self, label: str, t: types.Type, expected: str):
         self.text(label, types.display(t), expected)
@@ -24,13 +24,13 @@ class Results:
     def check(self, label: str, actual: bool, expected: bool):
         if actual != expected:
             print(f"FAIL {label}: got {actual}, expected {expected}")
-            self.failed = True
+            self.failed = true
 
 def prim(name: str) -> types.Type:
     return types.prim(name)
 
 def param(name: str, ty: types.Type) -> types.Param:
-    return types.Param(name, ty, None, False)
+    return types.Param(name, ty, none, false)
 
 def method(decl: types.Class, id: int, name: str, params: list[types.Param], result: types.Type) -> types.Function:
     all_params = [param("self", types.class_self(decl))]
@@ -41,8 +41,8 @@ def method(decl: types.Class, id: int, name: str, params: list[types.Param], res
 
 # `class Box[T]` with `item: T` and `def get(self) -> T`.
 def box() -> types.Class:
-    t = types.TypeVar(1, "T", None)
-    decl = types.Class("Box", "Box", [t], [types.Field("item", t, None)], [], False, False, "")
+    t = types.TypeVar(1, "T", none)
+    decl = types.Class("Box", "Box", [t], [types.Field("item", t, none)], [], false, false, "")
     method(decl, 10, "get", [], t)
     return decl
 
@@ -50,11 +50,11 @@ def box_of(arg: types.Type) -> types.ClassType:
     return types.ClassType(box(), [arg])
 
 # `class Pair[A, B]` with `def swap(self) -> Pair[B, A]` and
-# `def apply(self, f: (A) -> B) -> dict[str, B | None]`.
+# `def apply(self, f: (A) -> B) -> dict[str, B | none]`.
 def pair() -> types.Class:
-    a = types.TypeVar(2, "A", None)
-    b = types.TypeVar(3, "B", None)
-    decl = types.Class("Pair", "Pair", [a, b], [], [], False, False, "")
+    a = types.TypeVar(2, "A", none)
+    b = types.TypeVar(3, "B", none)
+    decl = types.Class("Pair", "Pair", [a, b], [], [], false, false, "")
     method(decl, 11, "swap", [], types.ClassType(decl, [b, a]))
     f = types.CallableType([a], b)
     method(decl, 12, "apply", [param("f", f)], types.DictType(prim("str"), types.optional(b)))
@@ -63,105 +63,105 @@ def pair() -> types.Class:
 def function(id: int, name: str, params: list[types.Param], result: types.Type) -> types.Function:
     return types.Function(id, name, name, [], params, result)
 
-# `type Json = None | bool | int | float | str | list[Json] | dict[str, Json]`,
+# `type Json = none | bool | int | float | str | list[Json] | dict[str, Json]`,
 # built as the binder builds a recursive alias.
 def json_type() -> types.Type:
-    element = types.Lazy("json.Json", None)
-    parts = [prim("None"), prim("bool"), prim("int"), prim("float"), prim("str"), types.ListType(element), types.DictType(prim("str"), element)]
+    element = types.Lazy("json.Json", none)
+    parts = [prim("none"), prim("bool"), prim("int"), prim("float"), prim("str"), types.ListType(element), types.DictType(prim("str"), element)]
     value = types.named_union(parts, "json.Json")
     element.target = value
     return value
 
 def display(r: Results):
     int_or_none = types.optional(prim("int"))
-    r.shows("nested collections", types.ListType(types.DictType(prim("str"), int_or_none)), "list[dict[str, int | None]]")
+    r.shows("nested collections", types.ListType(types.DictType(prim("str"), int_or_none)), "list[dict[str, int | none]]")
     r.shows("empty tuple", types.TupleType([]), "tuple[()]")
     r.shows("tuple", types.TupleType([prim("int"), prim("str"), prim("int")]), "tuple[int, str, int]")
     takes = types.CallableType([prim("int"), prim("str")], prim("bool"))
     r.shows("callable", takes, "(int, str) -> bool")
     optional_callable = types.optional(types.CallableType([prim("int")], prim("str")))
-    r.shows("optional callable", optional_callable, "((int) -> str) | None")
+    r.shows("optional callable", optional_callable, "((int) -> str) | none")
     returns_optional = types.CallableType([prim("int")], types.optional(prim("str")))
     parts: list[types.Type] = [types.ListType(prim("int")), types.DictType(prim("str"), prim("int")), returns_optional]
-    r.shows("union with a callable member", types.union(parts), "list[int] | dict[str, int] | ((int) -> str | None)")
+    r.shows("union with a callable member", types.union(parts), "list[int] | dict[str, int] | ((int) -> str | none)")
     f = function(20, "f", [param("x", prim("int")), param("y", prim("str"))], prim("bool"))
-    r.shows("function", types.FunctionType(f, False, None), "function f")
-    counter = types.Class("Counter", "Counter", [], [types.Field("n", prim("int"), None)], [], False, False, "")
+    r.shows("function", types.FunctionType(f, false, none), "function f")
+    counter = types.Class("Counter", "Counter", [], [types.Field("n", prim("int"), none)], [], false, false, "")
     add = method(counter, 13, "add", [], prim("int"))
-    r.shows("bound method", types.FunctionType(add, True, None), "function Counter.add")
+    r.shows("bound method", types.FunctionType(add, true, none), "function Counter.add")
     boxed = box_of(prim("int"))
     r.shows("specialization", boxed, "Box[int]")
     get = boxed.decl.methods[0]
-    r.shows("bound generic method", types.FunctionType(get, True, boxed), "function Box[int].get")
+    r.shows("bound generic method", types.FunctionType(get, true, boxed), "function Box[int].get")
     color = types.EnumType(types.Enum("Color", "Color", ["RED"]))
     entry = types.TupleType([prim("int"), prim("float")])
     r.shows("enum key", types.DictType(color, entry), "dict[Color, tuple[int, float]]")
-    circle = types.ClassType(types.Class("Circle", "Circle", [], [], [], False, False, ""), [])
-    square = types.ClassType(types.Class("Square", "Square", [], [], [], False, False, ""), [])
+    circle = types.ClassType(types.Class("Circle", "Circle", [], [], [], false, false, ""), [])
+    square = types.ClassType(types.Class("Square", "Square", [], [], [], false, false, ""), [])
     r.shows("alias", types.named_union([circle, square], "Shape"), "Shape")
     iterated = types.method(types.ListType(prim("int")), "iter")
-    assert iterated is not None
+    assert iterated is not none
     r.shows("list iter", iterated.result, "Iterator[int]")
 
 def equality(r: Results):
     int_str = types.union([prim("int"), prim("str")])
     str_int = types.union([prim("str"), prim("int")])
-    r.check("union order", types.same(int_str, str_int), True)
-    r.check("union members", types.same(int_str, types.optional(prim("int"))), False)
-    r.check("list elements", types.same(types.ListType(prim("int")), types.ListType(prim("str"))), False)
-    r.check("specializations", types.same(box_of(prim("int")), box_of(prim("int"))), True)
-    r.check("invariant arguments", types.same(box_of(prim("int")), box_of(int_str)), False)
+    r.check("union order", types.same(int_str, str_int), true)
+    r.check("union members", types.same(int_str, types.optional(prim("int"))), false)
+    r.check("list elements", types.same(types.ListType(prim("int")), types.ListType(prim("str"))), false)
+    r.check("specializations", types.same(box_of(prim("int")), box_of(prim("int"))), true)
+    r.check("invariant arguments", types.same(box_of(prim("int")), box_of(int_str)), false)
     to_str = types.CallableType([prim("int")], prim("str"))
-    r.check("callables", types.same(to_str, types.CallableType([prim("int")], prim("str"))), True)
-    r.check("callable params", types.same(to_str, types.CallableType([prim("str")], prim("str"))), False)
-    t = types.TypeVar(4, "T", None)
-    r.check("type parameters", types.same(t, types.TypeVar(4, "T", None)), True)
-    r.check("other declarations", types.same(t, types.TypeVar(5, "T", None)), False)
-    f = function(21, "f", [], prim("None"))
-    r.check("functions", types.same(types.FunctionType(f, False, None), types.FunctionType(f, False, None)), True)
-    r.check("bound", types.same(types.FunctionType(f, False, None), types.FunctionType(f, True, None)), False)
+    r.check("callables", types.same(to_str, types.CallableType([prim("int")], prim("str"))), true)
+    r.check("callable params", types.same(to_str, types.CallableType([prim("str")], prim("str"))), false)
+    t = types.TypeVar(4, "T", none)
+    r.check("type parameters", types.same(t, types.TypeVar(4, "T", none)), true)
+    r.check("other declarations", types.same(t, types.TypeVar(5, "T", none)), false)
+    f = function(21, "f", [], prim("none"))
+    r.check("functions", types.same(types.FunctionType(f, false, none), types.FunctionType(f, false, none)), true)
+    r.check("bound", types.same(types.FunctionType(f, false, none), types.FunctionType(f, true, none)), false)
     # A nested `def g` defined twice in `f` makes two functions named f.g, which
     # Lua reports as "expected function f.g, received function f.g".
-    first_t = types.TypeVar(6, "T", None)
-    second_t = types.TypeVar(7, "T", None)
+    first_t = types.TypeVar(6, "T", none)
+    second_t = types.TypeVar(7, "T", none)
     first = types.Function(22, "g", "f.g", [first_t], [param("x", first_t)], first_t)
     second = types.Function(23, "g", "f.g", [second_t], [param("x", second_t)], second_t)
-    first_value = types.FunctionType(first, False, None)
-    second_value = types.FunctionType(second, False, None)
-    r.check("redefined function", types.same(first_value, second_value), False)
+    first_value = types.FunctionType(first, false, none)
+    second_value = types.FunctionType(second, false, none)
+    r.check("redefined function", types.same(first_value, second_value), false)
     r.shows("redefined function display", second_value, "function f.g")
     bindings: dict[str, types.Type] = {types.var_key(first_t): prim("int")}
     r.shows("other function's type parameter", types.substitute(second_t, bindings), "T")
     # Recursive aliases terminate.
-    r.check("recursive alias", types.same(json_type(), json_type()), True)
-    r.check("recursive alias and int", types.same(json_type(), prim("int")), False)
+    r.check("recursive alias", types.same(json_type(), json_type()), true)
+    r.check("recursive alias and int", types.same(json_type(), prim("int")), false)
 
 def substitution(r: Results):
-    # `def first[T](items: list[T]) -> T | None` called with list[int | None].
-    t = types.TypeVar(8, "T", None)
+    # `def first[T](items: list[T]) -> T | none` called with list[int | none].
+    t = types.TypeVar(8, "T", none)
     bindings: dict[str, types.Type] = {types.var_key(t): types.optional(prim("int"))}
-    r.shows("flattened union", types.substitute(types.optional(t), bindings), "int | None")
-    r.check("mentions", types.mentions(types.ListType(t)), True)
-    r.check("mentions none", types.mentions(types.ListType(prim("int"))), False)
-    other = types.TypeVar(9, "T", None)
-    r.check("mentions any", types.mentions_any(types.ListType(t), [other]), False)
+    r.shows("flattened union", types.substitute(types.optional(t), bindings), "int | none")
+    r.check("mentions", types.mentions(types.ListType(t)), true)
+    r.check("mentions none", types.mentions(types.ListType(prim("int"))), false)
+    other = types.TypeVar(9, "T", none)
+    r.check("mentions any", types.mentions_any(types.ListType(t), [other]), false)
     specialized = types.ClassType(pair(), [prim("int"), prim("str")])
     swap = types.method(specialized, "swap")
-    assert swap is not None
+    assert swap is not none
     r.shows("method result", swap.result, "Pair[str, int]")
     apply = types.method(specialized, "apply")
-    assert apply is not None
+    assert apply is not none
     r.shows("method param", apply.params[0].ty, "(int) -> str")
-    r.check("generic param", apply.generic[0], True)
-    r.shows("method result union", apply.result, "dict[str, str | None]")
-    r.shows("bound specialized method", types.FunctionType(specialized.decl.methods[1], True, specialized), "function Pair[int, str].apply")
+    r.check("generic param", apply.generic[0], true)
+    r.shows("method result union", apply.result, "dict[str, str | none]")
+    r.shows("bound specialized method", types.FunctionType(specialized.decl.methods[1], true, specialized), "function Pair[int, str].apply")
     # A bound method mentions a type parameter through its receiver's
     # signature, as `function Box[T].get` does in Lua.
     generic_box = box()
     own = types.class_self(generic_box)
-    get = types.FunctionType(generic_box.methods[0], True, own)
-    r.check("bound method mentions", types.mentions(get), True)
-    r.check("specialized bound method", types.mentions(types.FunctionType(generic_box.methods[0], True, box_of(prim("int")))), False)
+    get = types.FunctionType(generic_box.methods[0], true, own)
+    r.check("bound method mentions", types.mentions(get), true)
+    r.check("specialized bound method", types.mentions(types.FunctionType(generic_box.methods[0], true, box_of(prim("int")))), false)
     boxed = box_of(prim("int"))
     field = types.substitute(boxed.decl.fields[0].ty, types.record_map(boxed))
     r.shows("field", field, "int")
@@ -170,18 +170,18 @@ def substitution(r: Results):
 
 def assignability(r: Results):
     int_or_none = types.optional(prim("int"))
-    r.check("into optional", types.assignable(int_or_none, prim("int")), True)
-    r.check("from optional", types.assignable(prim("int"), int_or_none), False)
-    r.check("lists invariant", types.assignable(types.ListType(int_or_none), types.ListType(prim("int"))), False)
+    r.check("into optional", types.assignable(int_or_none, prim("int")), true)
+    r.check("from optional", types.assignable(prim("int"), int_or_none), false)
+    r.check("lists invariant", types.assignable(types.ListType(int_or_none), types.ListType(prim("int"))), false)
     exceptions = stdlib.exceptions()
     value_error = types.ClassType(exceptions["ValueError"], [])
     exception = types.ClassType(exceptions["Exception"], [])
-    r.check("exception", types.assignable(exception, value_error), True)
-    r.check("not exception", types.assignable(prim("int"), value_error), False)
+    r.check("exception", types.assignable(exception, value_error), true)
+    r.check("not exception", types.assignable(prim("int"), value_error), false)
     # `def total(xs: Iterable[int])` accepts [1, 2] but not ["a"].
     iterable = types.ProtocolType(stdlib.protocols()["Iterable"], [prim("int")])
-    r.check("protocol", types.assignable(iterable, types.ListType(prim("int"))), True)
-    r.check("protocol items", types.assignable(iterable, types.ListType(prim("str"))), False)
+    r.check("protocol", types.assignable(iterable, types.ListType(prim("int"))), true)
+    r.check("protocol items", types.assignable(iterable, types.ListType(prim("str"))), false)
     r.text("list members", types.conflict([types.ListType(prim("int"))], types.ListType(prim("str"))), "a union can have only one list member")
     r.text("overlap", types.conflict([prim("int")], prim("int")), "union members int and int overlap")
     r.text("no conflict", types.conflict([prim("int")], prim("str")), "")
@@ -195,9 +195,9 @@ def assignability(r: Results):
     sized = types.Protocol("Sized", "Sized", [], [])
     receiver = param("self", types.protocol_self(sized))
     sized.methods.append(types.Function(14, "size", "Sized.size", [], [receiver], prim("int")))
-    right = types.Class("Right", "Right", [], [], [], False, False, "")
+    right = types.Class("Right", "Right", [], [], [], false, false, "")
     method(right, 15, "size", [], prim("int"))
-    wrong = types.Class("Wrong", "Wrong", [], [], [], False, False, "")
+    wrong = types.Class("Wrong", "Wrong", [], [], [], false, false, "")
     method(wrong, 16, "size", [], prim("str"))
     t = types.TypeVar(1, "T", types.protocol_self(sized))
     r.text("bound satisfied", types.unsatisfied(t, types.ClassType(right, [])), "")
@@ -206,16 +206,16 @@ def assignability(r: Results):
 def standard_library(r: Results):
     modules = stdlib.modules()
     sleep = modules["aio"].functions["sleep"].result
-    assert sleep is not None
-    r.shows("aio.sleep", sleep, "Coroutine[None]")
-    r.check("coroutine", stdlib.has_coroutine(sleep), True)
+    assert sleep is not none
+    r.shows("aio.sleep", sleep, "Coroutine[none]")
+    r.check("coroutine", stdlib.has_coroutine(sleep), true)
     task_group = types.ClassType(modules["aio"].classes["TaskGroup"], [])
     start = types.method(task_group, "start")
-    assert start is not None
+    assert start is not none
     r.shows("native generic method", start.result, "aio.Task[T]")
 
 def main():
-    r = Results(False)
+    r = Results(false)
     display(r)
     equality(r)
     substitution(r)

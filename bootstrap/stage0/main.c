@@ -24,17 +24,11 @@ static const char CORE[] =
 #include "../../build/stage0/core.inc"
 ;
 static const char *const CORE_PATH = "bootstrap/core/core.wlo";
-static bool legacy_syntax;
-
 static const char *const USAGE =
-    "usage: willow0 [--legacy] build FILE.wlo -o OUTPUT\n"
-    "       willow0 [--legacy] compile FILE.wlo -o OUTPUT.ssa";
+    "usage: willow0 build FILE.wlo -o OUTPUT\n       willow0 compile FILE.wlo -o OUTPUT.ssa";
 
 static Module load(String name, String path, String source) {
-    /* Core uses the current spelling; the frozen stage 1 sources use the old
-     * one, where the lowercase literals are ordinary names. */
-    bool legacy = legacy_syntax && !str_equal(name, STR("core"));
-    return parse(name, path, lex(path, source, legacy));
+    return parse(name, path, lex(path, source));
 }
 
 static int read_file(const char *path, String *source) {
@@ -458,20 +452,14 @@ static String build(String il, String output) {
 }
 
 int main(int argc, char **argv) {
-    int at = 1;
-    if (at < argc && !strcmp(argv[at], "--legacy")) {
-        legacy_syntax = true;
-        at++;
-    }
-    if (argc - at != 4 || (strcmp(argv[at], "build") && strcmp(argv[at], "compile")) ||
-        strcmp(argv[at + 2], "-o")) {
+    if (argc != 5 || (strcmp(argv[1], "build") && strcmp(argv[1], "compile")) || strcmp(argv[3], "-o")) {
         fprintf(stderr, "%s\n", USAGE);
         return 2;
     }
-    String il = compile(str_from_cstr(argv[at + 1]));
-    String output = str_from_cstr(argv[at + 3]);
+    String il = compile(str_from_cstr(argv[2]));
+    String output = str_from_cstr(argv[4]);
     String result = STR("");
-    if (!strcmp(argv[at], "compile")) {
+    if (!strcmp(argv[1], "compile")) {
         int error = write_file(output.data, il);
         if (error) {
             result = file_error(output, error);

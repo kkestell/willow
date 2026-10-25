@@ -7,7 +7,9 @@ files use `.wlo`. `docs/spec.md` specifies the language.
 
 The self-hosting native compiler is in `compiler/`, its standard library in
 `lib/`, and its core runtime in `bootstrap/core/`. Stages 0 and 1 under
-`bootstrap/` build it from source.
+`bootstrap/` build it from source. Every stage and every source uses the
+current language: a language change updates each stage that parses the changed
+construct and migrates every source that uses it.
 
 - Build the small language we need now. This is an early implementation, not a
   production-hardening exercise.
@@ -18,7 +20,7 @@ The self-hosting native compiler is in `compiler/`, its standard library in
 - Do less. Keep correct code simple, ordinary, and cheap to change. Follow KISS
   and YAGNI.
 - Write idiomatic code for each part: C in `bootstrap/stage0/`, the L0
-  subset of Willow in `bootstrap/core/` and the frozen `bootstrap/stage1/`,
+  subset of Willow in `bootstrap/core/` and `bootstrap/stage1/`,
   and Willow in `compiler/` and `lib/`. Prefer plain data, direct functions,
   and explicit control flow. Keep responsibilities clear without turning
   every step into an abstraction.
