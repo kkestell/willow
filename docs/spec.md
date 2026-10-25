@@ -7,8 +7,8 @@ to native code through QBE. Source files use the `.wlo` extension.
 
 ```python
 def sum_to(limit: int) -> int:
-    total = 0
-    current = 1
+    var total = 0
+    var current = 1
     while current <= limit:
         total = total + current
         current = current + 1
@@ -79,10 +79,12 @@ Identifiers consist of ASCII letters, digits, and underscores, and cannot begin
 with a digit. They are case-sensitive. These words are reserved:
 
 ```text
-False None True and as assert async await break case class continue def del
-elif else enum except finally for from global if import in is lambda match nonlocal
-not or pass protocol raise return try type while with yield
+and as assert async await break case class continue def else enum
+except false finally for if import in is match none not or pass protocol
+raise return self true try type var while with yield
 ```
+
+`match` and `case` are reserved for future use.
 
 The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, `dict`, `tuple`,
 `Iterable`, `Iterator`, `ContextManager`, `Generator`, and `Coroutine` are also
@@ -138,9 +140,9 @@ def function_name(parameter: Type, other: Type) -> Type:
 ```
 
 Every parameter must have a type annotation. A function without a return
-annotation returns `None`, as if annotated `-> None`. A parameter may have a
+annotation returns `none`, as if annotated `-> none`. A parameter may have a
 default value after its annotation, as in `prefix: str = "Hello"`. A
-default value must be `None`, `True`, `False`, a string literal, an enum member,
+default value must be `none`, `true`, `false`, a string literal, an enum member,
 an integer or float literal with an optional `+` or `-` sign, or a tuple of such
 defaults, and it must be assignable to the parameter's type. Among positional
 parameters, a parameter without a default cannot follow one that has a default.
@@ -148,7 +150,7 @@ A bare `*` introduces keyword-only parameters; these must be supplied by name
 and may be required or have defaults, in any order:
 
 ```python
-def report(path: str, *, limit: int = 100, verbose: bool = False):
+def report(path: str, *, limit: int = 100, verbose: bool = false):
     pass
 ```
 
@@ -174,7 +176,7 @@ contain at least one of either:
 ```python
 class Node:
     value: int
-    next: Node | None
+    next: Node | none
 ```
 
 Field names must be unique within a class. A field's type may name any class,
@@ -190,35 +192,38 @@ rules for parameter defaults. An omitted argument takes the field's default:
 ```python
 class Options:
     output: str = "-"
-    verbose: bool = False
+    verbose: bool = false
 
-options = Options(verbose=True)
+var options = Options(verbose=true)
 ```
 
 `p.x` reads the field `x`, and `p.x = v` replaces its value. The new value `v`
 must be assignable to the field's type. Referring to a field that the class does
 not have is an error.
 
-A method is a function declared in a class body. Its first parameter is `self`,
-which has no annotation and has the class's type. The other parameters and the
-return type follow the rules for functions:
+A method is a function declared in a class body. Its receiver is the reserved
+name `self`, which has the class's type and is not written in the parameter
+list. `self` is available throughout the method body, including nested
+functions and lambdas, and cannot be assigned or used outside a method. Field
+access uses an explicit receiver, as in `self.count`. Parameters and the return
+type follow the rules for functions:
 
 ```python
 class Counter:
     count: int = 0
 
-    def add(self, amount: int = 1) -> int:
+    def add(amount: int = 1) -> int:
         self.count = self.count + amount
         return self.count
 
 def main():
-    counter = Counter()
+    var counter = Counter()
     counter.add()
     print(counter.add(amount=5))    # 6
 ```
 
 `v.m(arguments)` calls the method `m` of the class of `v`, binding `v` to `self`
-and the arguments to the remaining parameters as in a function call (§5). The
+and the arguments to the declared parameters as in a function call (§5). The
 value `v` is evaluated before the arguments. Method names must be unique within
 a class and cannot be the same as a field name. Like functions, methods may be
 recursive and may refer to classes declared later.
@@ -245,7 +250,7 @@ including nested function bodies and class methods. Parameter names must be
 unique and cannot hide another type parameter in scope. A type parameter may
 have one upper bound, as in `T: ByteReader`, where the bound is a class, native
 type, or protocol. Type parameters can be used in annotations and type
-arguments, but are not runtime values and cannot be used in `isinstance`. A
+arguments, but are not runtime values. A
 value of `T` supports only operations guaranteed by its bound; without a bound
 it may be stored, passed, and returned, but does not acquire numeric, ordering,
 or member operations from particular callers. Generic bodies must type-check
@@ -261,17 +266,17 @@ argument types. A call that leaves a parameter undetermined is an error.
 A generic function can become a function value when explicit type arguments or
 an expected callable type determine its specialization. Values do not retain
 unspecialized type parameters. Generic class specializations are invariant and
-nominal: `Box[int]` is not assignable to `Box[int | None]`. Tuple and protocol
+nominal: `Box[int]` is not assignable to `Box[int | none]`. Tuple and protocol
 assignability follow their own rules (§4). Exception classes cannot be generic.
 
 ### Protocols
 
 A protocol names a structural interface. It is declared with `protocol` and
-contains method signatures, which have no bodies:
+contains method signatures, which have no bodies and omit the receiver:
 
 ```python
 protocol ByteReader:
-    def read(self, size: int) -> bytes
+    def read(size: int) -> bytes
 
 def read_prefix(source: ByteReader) -> bytes:
     return source.read(16)
@@ -287,15 +292,14 @@ methods are allowed. Method matching uses the signatures after substituting type
 arguments, including when one protocol satisfies another.
 
 A protocol method may be declared `async def`. A signature
-`async def m(self) -> T` means exactly `def m(self) -> Coroutine[T]`, so either
+`async def m() -> T` means exactly `def m() -> Coroutine[T]`, so either
 form satisfies the other (§15).
 
 Protocols may have type parameters, as in `protocol Source[T]:`, and may refer to
 themselves in signatures. Their methods have no type parameters of their own.
 Protocols declare no fields or constructors and cannot be instantiated. A
 protocol value exposes only its declared methods. Protocol membership is checked
-statically; protocols cannot be used in `isinstance`. Ordinary classes still
-have no inheritance beyond exception classes.
+statically. Ordinary classes have no inheritance beyond exception classes.
 
 ### Standard protocols
 
@@ -305,8 +309,8 @@ These protocols are built in:
 | --- | --- |
 | `Iterable[T]` | Provides `iter() -> Iterator[T]` |
 | `Iterator[T]` | Provides `iter() -> Iterator[T]` and `next() -> T` |
-| `ContextManager[T]` | Provides `enter() -> T` and `exit(error: Exception \| None) -> None` |
-| `Generator[T]` | Provides the iterator methods, `close() -> None`, `enter() -> Generator[T]`, and `exit(error: Exception \| None) -> None` |
+| `ContextManager[T]` | Provides `enter() -> T` and `exit(error: Exception \| none) -> none` |
+| `Generator[T]` | Provides the iterator methods, `close() -> none`, `enter() -> Generator[T]`, and `exit(error: Exception \| none) -> none` |
 
 `iter(value)` calls `value.iter()` and returns its iterator. An iterator's `iter`
 method returns itself, so an iterator is also iterable. `next(iterator)` calls
@@ -352,22 +356,22 @@ classes and unions.
 ### Type aliases
 
 ```python
-type Json = None | bool | int | float | str | list[Json] | dict[str, Json]
+type Json = none | bool | int | float | str | list[Json] | dict[str, Json]
 ```
 
 A `type` declaration gives a name to a type. The alias and the type it names are
 the same type, and annotations may use either one. An alias may refer to classes
 and aliases declared later, and to itself. An alias cannot expand to itself
 except inside `list[...]` or `dict[...]`, so `type Loop = int | Loop` is an
-error. An alias cannot be called and cannot be used in `isinstance`.
+error. An alias cannot be called.
 
 ### Annotations
 
 The forms of type annotations are:
 
 ```text
-int  float  bool  str  None
-list[T]  dict[K, V]  tuple[A, B, ...]  tuple[()]
+int  float  bool  str  none
+list[T]  dict[K, V]  tuple[A, B, ...]  tuple[]
 Coroutine[T]
 Class  module.Class  Class[T, ...]
 Alias  module.Alias  Alias[T, ...]
@@ -377,8 +381,8 @@ A | B | ...
 ```
 
 Here `...` indicates additional type entries, not literal ellipsis syntax.
-A callable type's return type extends as far as possible, so `(int) -> str | None`
-returns `str | None`; `((int) -> str) | None` is an optional callable.
+A callable type's return type extends as far as possible, so `(int) -> str | none`
+returns `str | none`; `((int) -> str) | none` is an optional callable.
 Otherwise, parentheses around a type group it.
 Generic declarations and applications have fixed arity.
 
@@ -388,10 +392,10 @@ Generic declarations and applications have fixed arity.
 | --- | --- |
 | `int` | Integers from `-(2^63 - 1)` through `2^63 - 1` |
 | `float` | IEEE 754 binary64 numbers |
-| `bool` | `True` and `False` |
+| `bool` | `true` and `false` |
 | `str` | Immutable UTF-8 text |
 | `bytes` | Immutable sequences of octets |
-| `None` | The single value `None` |
+| `none` | The single value `none` |
 | `A \| B \| ...` | A value of any member type |
 | `list[T]` | Ordered, mutable sequences of `T` |
 | `dict[K, V]` | Mutable maps from `K` to `V` that keep insertion order |
@@ -403,10 +407,10 @@ Generic declarations and applications have fixed arity.
 | Classes | Values of a declared class, including exception classes |
 | Native types | Library values such as `io.File` (§14) |
 
-Primitive and collection types other than `None` have lowercase names. Classes,
+Primitive and collection types have lowercase names. Classes,
 protocols, enums, and `Coroutine` have capitalized names.
 
-The scalar types are `int`, `float`, `bool`, `str`, `bytes`, enums, and `None`.
+The scalar types are `int`, `float`, `bool`, `str`, `bytes`, enums, and `none`.
 A type is printable if it is a scalar type other than `bytes`, or a union of
 such types.
 Lists, dictionaries, class values, coroutines, and task handles are reference
@@ -433,51 +437,62 @@ In addition:
 Assignability rules apply to variable initializers, assignments, function
 arguments, return values, elements of collection displays, and constructor
 arguments. Lists and dictionaries are invariant. For example, `list[int]` is not
-assignable to `list[int | None]`, and `list[ParseError]` is not assignable to
+assignable to `list[int | none]`, and `list[ParseError]` is not assignable to
 `list[Exception]`.
+
+### Runtime classes
+
+Every value has a runtime class: `int`, `float`, `bool`, `str`, `bytes`, `none`,
+`list`, `dict`, `tuple`, callable, coroutine, or its class, enum, or native
+type. Type arguments and callable signatures are not part of a runtime class,
+so `list[int]` and `list[str]` values share the runtime class `list`.
+
+A type covers the runtime classes its values can have. Most types cover one:
+`list[int]` covers `list`, `Box[str]` covers `Box`, and `(int) -> str` covers
+callable. `Exception` covers itself and every exception class. Protocols and
+type parameters are open types: their declarations do not fix the runtime
+classes they cover.
 
 ### Unions
 
 The members of a union may be written in any order, and two unions with the same
 members are the same type. When a member is itself a union, such as an alias for
-a union, its members become members of the enclosing union. No member may be
-assignable to another member, and a union may have at most one `list` member and
-at most one `dict`, tuple, and callable member. A protocol member that asks only
-for a parameterless `iter` method cannot share a union with a `list`, `dict`, or
-tuple member. A union cannot contain different specializations of the same
-generic class. A type parameter may be a union
-member only alongside `None`, as in `T | None`; substituting a type argument
-flattens the union, so `T | None` with `T = int | None` is `int | None`. So
-`int | int`, `Exception | ParseError`, `list[int] | list[str]`, and `T | int`
-are errors. A union that has `None` as a member, such as `str | None`, is called
-an optional type.
+a union, its members become members of the enclosing union. The members must
+cover disjoint sets of runtime classes, and an open type may share a union only
+with `none`. So `int | int`, `Exception | ParseError`, `list[int] | list[str]`,
+`Box[int] | Box[str]`, `Iterable[int] | list[str]`, and `T | int` are errors.
+Substituting a type argument flattens a union, so `T | none` with
+`T = int | none` is `int | none`. A union that has `none` as a member, such as
+`str | none`, is called an optional type.
 
 A value of a union type can be assigned, passed as an argument, returned,
-compared, and printed, and it can be tested with `is None`, `is not None`, and
-`isinstance`. To use it in arithmetic, as a condition, or with indexing, field
-access, or method calls, it must first be narrowed to a single member (§9).
+compared, and printed, and it can be tested with `is C` and `is not C`. To use
+it in arithmetic, as a condition, or with indexing, field access, or method
+calls, it must first be narrowed to a single member (§9).
 
-`isinstance(value, C)` is `True` when `value` holds a value of type `C`. `C` must
-be `int`, `float`, `bool`, `str`, `list`, `dict`, `tuple`, or the name of a
-class or enum, optionally qualified with a module name. `C` must name the type
-of `value` or one of its members. `list` and `dict` refer to the union's list
-member and dict member; `tuple` refers to its tuple member. A generic class test
-names the class without type arguments and identifies its single specialization
-in the tested type. Callable signatures and protocols are not runtime tests.
+`value is C` is `true` when the runtime class of `value` is one that `C`
+covers; `value is not C` negates that test. `C` is a type name without type
+arguments: `int`, `float`, `bool`, `str`, `bytes`, `none`, `list`, `dict`,
+`tuple`, `Coroutine`, or a class, enum, native type, or alias, optionally
+qualified with a module name. Open types and aliases that include them cannot
+be tested. A callable member has no type name; excluding a union's other
+members with `is not` narrows it to its callable member. `C` must cover one or more members
+of the value's type and be disjoint from the rest. These operators test types,
+not object identity.
 
 ```python
-def describe(value: int | str | None) -> str:
-    if value is None:
+def describe(value: int | str | none) -> str:
+    if value is none:
         return "nothing"
-    if isinstance(value, int):
+    if value is int:
         return f"number {value + 1}"
     return "text " + value
 ```
 
-### `None`
+### `none`
 
-Functions whose return type is `None` return `None`. A `return` statement with no
-value returns `None`, and such a body may also return by reaching its end.
+Functions whose return type is `none` return `none`. A `return` statement with no
+value returns `none`, and such a body may also return by reaching its end.
 Calling an async function still produces a coroutine (§15).
 
 ## 5. Expressions
@@ -502,11 +517,12 @@ Operator precedence, from lowest to highest:
 10. Literals, names, parenthesized expressions, and displays
 
 Lambda expressions bind less tightly than all these operations; the expression
-after their colon extends as far to the right as its enclosing expression allows.
+after `=>` extends as far to the right as its enclosing expression allows.
 
 Binary operators are left-associative. Postfix operations are applied from left
-to right, as in `text.strip().split(",")`. The operands of a level 4 operator
-must be expressions at level 5 or higher. As a result, `not a == b` means
+to right, as in `text.strip().split(",")`. The value operands of a level 4
+operator must be expressions at level 5 or higher; the right operand of `is`
+or `is not` is a type name (§4). As a result, `not a == b` means
 `not (a == b)`, and `a == not b` is a syntax error. Chained comparisons such as
 `0 <= x < 10` are errors. The operand of `await` must be an expression at
 level 9 or higher, so `await -x` is a syntax error and nested awaits are
@@ -540,7 +556,7 @@ keyword-only parameter, and too many arguments. Functions, methods, and class
 constructors, including standard-library functions and native and collection
 methods, accept keyword arguments using their declared or documented parameter
 names. The intrinsic functions `print`, `input`, `len`, `range`, `int`, `float`,
-`str`, `bytes`, `ord`, `chr`, `isinstance`, `iter`, and `next` accept only
+`str`, `bytes`, `ord`, `chr`, `iter`, and `next` accept only
 positional arguments.
 
 ### Function values and lambdas
@@ -551,7 +567,7 @@ File-level functions, nested functions, lambdas, and bound methods are values.
 any function that can accept those arguments, including one with additional
 defaulted parameters. Its return type must be assignable to the callable's
 return type. Parameter types are checked in the opposite direction: a function
-accepting `int | None` can serve a callable expecting `int`.
+accepting `int | none` can serve a callable expecting `int`.
 
 Calls through a callable type use exactly its listed positional arguments; parameter
 names and defaults are not part of that type. Direct calls and inferred aliases
@@ -565,18 +581,27 @@ values when an expected callable type determines a compatible signature.
 Evaluating a bound method such as `counter.add` evaluates and retains its receiver
 once. Later calls use that same object and see its current fields. Callable
 values can be stored in collections and class fields, passed, and returned.
-They do not support equality, printing, or `isinstance` tests.
+They do not support equality or printing.
 
-A lambda is a single-expression function, as in `lambda row: row.score`. Its
-parameter types come from an expected callable type; its expression determines
-the return type. Missing parameter type information is a compile-time error.
-A parameterless lambda can infer its return type without an expected type.
-Lambdas have no defaults or annotations; use a nested `def` when explicit
-annotations or multiple statements are needed. Captures follow §9.
+A lambda is a single-expression function written as a parenthesized parameter
+list followed by `=>` and an expression, as in `(row) => row.score`. The
+parentheses are required, including for one parameter; `() => 42` has no
+parameters. Each parameter may have a type annotation, as in `(x: int) => x + 1`.
+An unannotated parameter takes its type from an expected callable type; a
+parameter with neither an annotation nor an expected type is a compile-time
+error. The expression determines the return type, and an expected callable
+type's return type is the expected type of the expression. A lambda with all parameter
+types annotated, or with no parameters, needs no expected type. When an expected
+callable type is present, the lambda must be assignable to it under the ordinary
+callable rules.
+Lambdas have no defaults or return annotations; use a nested `def` when multiple
+statements are needed. Captures follow §9.
 
 ```python
+var increment = (x: int) => x + 1
+
 def threshold(minimum: int) -> (int) -> bool:
-    return lambda score: score >= minimum
+    return (score) => score >= minimum
 ```
 
 ### Operators
@@ -585,16 +610,16 @@ def threshold(minimum: int) -> (int) -> bool:
   `or` evaluate their right operand only when needed.
 - `==` and `!=` take two operands whose types are scalar types or unions of
   scalar types, where the type of one operand is assignable to the type of the
-  other. For example, if `count` has type `int | None`, both `count == 3` and
-  `count == None` are valid. Values of different types are never equal, so a
-  union holding `1` is not equal to a union holding `1.0`. Bytes values are equal
-  when their contents are equal. Lists, dictionaries, class values, and native
-  values cannot be compared with `==`. Tuples support equality when all their
-  corresponding positions support equality (§7).
+  other. For example, if `count` has type `int | none`, `count == 3` is valid.
+  An operand of type `none` is an error; test for `none` with `is none`. Values
+  of different runtime classes are never equal, so a union holding `1` is not
+  equal to a union holding `1.0`. Bytes values are equal when their contents are equal.
+  Lists, dictionaries, class values, and native values cannot be compared with
+  `==`. Tuples support equality when all their corresponding positions support
+  equality (§7).
 - `<`, `<=`, `>`, and `>=` take two integers, two floats, two strings, or
   comparable tuples (§7).
-- `is` may only be used as `e is None` or `e is not None`, where `e` has an
-  optional type.
+- `is` and `is not` test a value's type as described in §4.
 - `in` and `not in` test for an element in a list, a key in a dictionary, or a
   substring in a string (§7).
 - `+` adds two numbers of the same type or concatenates two strings. `-`, `*`,
@@ -627,7 +652,7 @@ no integer negative zero.
 Float arithmetic follows IEEE 754 with round-to-nearest. Results may be infinite
 or NaN. `-0.0` and `0.0` are distinct values, but they compare equal. NaN is not
 equal to any value, including itself, and every ordering comparison involving NaN
-is `False`.
+is `false`.
 
 ### Division
 
@@ -682,14 +707,14 @@ Length, ordering, indexing, slicing, iteration, and the indexes returned by
 | `sub in s` | `bool` | `sub` occurs in `s` |
 | `s.startswith(prefix)` | `bool` | `s` begins with `prefix` |
 | `s.endswith(suffix)` | `bool` | `s` ends with `suffix` |
-| `s.find(sub)` | `int` | Index of the first occurrence of `sub`, or `-1` |
+| `s.find(sub)` | `int \| none` | Index of the first occurrence of `sub`, or `none` |
 | `s.replace(old, new)` | `str` | `s` with every non-overlapping occurrence of `old`, from left to right, replaced by `new` |
 | `s.strip()` | `str` | `s` without leading and trailing ASCII whitespace |
 | `s.lstrip()` | `str` | `s` without leading ASCII whitespace |
 | `s.rstrip()` | `str` | `s` without trailing ASCII whitespace |
-| `s.split(sep=None, maxsplit=-1)` | `list[str]` | The pieces of `s` between occurrences of `sep`, or between runs of ASCII whitespace when `sep` is `None` |
-| `s.rsplit(sep=None, maxsplit=-1)` | `list[str]` | Like `split`, but `maxsplit` limits the splits made from the right |
-| `s.splitlines(keepends=False)` | `list[str]` | The lines of `s`, ended by LF, CR, or CRLF, with the line endings kept if `keepends` is true |
+| `s.split(sep=none, maxsplit=-1)` | `list[str]` | The pieces of `s` between occurrences of `sep`, or between runs of ASCII whitespace when `sep` is `none` |
+| `s.rsplit(sep=none, maxsplit=-1)` | `list[str]` | Like `split`, but `maxsplit` limits the splits made from the right |
+| `s.splitlines(keepends=false)` | `list[str]` | The lines of `s`, ended by LF, CR, or CRLF, with the line endings kept if `keepends` is true |
 | `s.removeprefix(prefix)` | `str` | `s` without a leading `prefix`, removed at most once |
 | `s.removesuffix(suffix)` | `str` | `s` without a trailing `suffix`, removed at most once |
 | `s.isascii()` | `bool` | Every code point of `s` is below 128; true for the empty string |
@@ -708,7 +733,7 @@ Length, ordering, indexing, slicing, iteration, and the indexes returned by
 
 These operations return the same results as in Python, except that `strip`
 removes only space, tab, LF, VT, FF, and CR, as do `lstrip`, `rstrip`, and the
-`sep=None` form of `split` and `rsplit`. `split` and `rsplit` with an empty
+`sep=none` form of `split` and `rsplit`. `split` and `rsplit` with an empty
 separator raise `ValueError` with the message `empty separator`. A negative
 `maxsplit` places no limit on the splits. `ord` of a string whose
 length is not 1 raises `ValueError` with the message `expected one character`.
@@ -745,12 +770,12 @@ new list of the same type that contains the same elements. Slices cannot have a
 step, and a slice cannot be the target of an assignment.
 
 ```python
-text = "café"
+var text = "café"
 print(text[-1])       # é
 print(text[1:3])      # af
-items = [10, 20, 30]
+var items = [10, 20, 30]
 items[-1] = 40
-copy = items[:]
+var copy = items[:]
 ```
 
 ### Format specifications
@@ -796,15 +821,15 @@ print(f"{'total':<12s}{12:>6d}{2.5:>10.2f}")
   decimal exponent is less than -4 or at least 16. Otherwise fixed notation is
   used, with at least one digit after the decimal point. Non-finite values are
   written as `inf`, `-inf`, and `nan`.
-- Booleans are written as `True` and `False`, and `None` is written as `None`.
+- Booleans are written as `true` and `false`, and `none` is written as `none`.
 
 ### Displays
 
 ```python
-numbers = [1, 2, 3]                     # list[int]
-ages = {"ada": 36, "alan": 41}          # dict[str, int]
-names: list[str] = []
-scores: dict[str, int | None] = {"ada": None}
+var numbers = [1, 2, 3]                     # list[int]
+var ages = {"ada": 36, "alan": 41}          # dict[str, int]
+var names: list[str] = []
+var scores: dict[str, int | none] = {"ada": none}
 ```
 
 A display can have an expected type, which comes from an annotation, an existing
@@ -824,7 +849,7 @@ with a trailing comma.
 ### Bytes
 
 ```python
-data = "café".encode()      # bytes([99, 97, 102, 195, 169])
+var data = "café".encode()      # bytes([99, 97, 102, 195, 169])
 print(len(data))            # 5
 print(data[-1])             # 169
 print(data[:3].decode())    # caf
@@ -839,7 +864,7 @@ print(data[:3].decode())    # caf
 | `data[i:j]` | `bytes` | The octets from index `i` up to `j` |
 | `s.encode()` | `bytes` | The UTF-8 encoding of the string `s` |
 | `data.decode()` | `str` | The text whose UTF-8 encoding is `data` |
-| `data.find(sub: bytes)` | `int` | The offset of the first occurrence of `sub`, or -1 |
+| `data.find(sub: bytes)` | `int \| none` | The offset of the first occurrence of `sub`, or `none` |
 | `data.startswith(prefix: bytes)` | `bool` | Whether `data` begins with `prefix` |
 | `data.endswith(suffix: bytes)` | `bool` | Whether `data` ends with `suffix` |
 | `data.split(sep: bytes, maxsplit: int = -1)` | `list[bytes]` | The fields between occurrences of `sep` |
@@ -859,9 +884,9 @@ index.
 ### Lists and dictionaries
 
 Dictionary keys must be `int`, `str`, or one enum type. List elements and
-dictionary values can have any type. A list or dictionary can store `None`.
-A stored `None` counts toward the collection's length, and a key whose value is
-`None` is different from a missing key.
+dictionary values can have any type. A list or dictionary can store `none`.
+A stored `none` counts toward the collection's length, and a key whose value is
+`none` is different from a missing key.
 
 | Expression | Type | Meaning |
 | --- | --- | --- |
@@ -869,17 +894,17 @@ A stored `None` counts toward the collection's length, and a key whose value is
 | `xs[i]` | `T` | Element at index `i` |
 | `xs[i] = v` | | Replace the element at index `i` |
 | `xs[i:j]` | `list[T]` | A new list of the elements from index `i` up to `j` |
-| `xs.append(v)` | `None` | Add `v` to the end |
+| `xs.append(v)` | `none` | Add `v` to the end |
 | `xs.pop()` | `T` | Remove and return the last element |
-| `xs.sort(reverse=False, *, key=None)` | `None` | Sort the list in place |
-| `xs.extend(items)` | `None` | Add the elements of an `Iterable[T]` to the end |
-| `xs.reverse()` | `None` | Reverse the list in place |
+| `xs.sort(reverse=false, *, key=none)` | `none` | Sort the list in place |
+| `xs.extend(items)` | `none` | Add the elements of an `Iterable[T]` to the end |
+| `xs.reverse()` | `none` | Reverse the list in place |
 | `v in xs` | `bool` | Some element equals `v` |
 | `len(d)` | `int` | Number of entries |
 | `d[k]` | `V` | Value for key `k` |
 | `d[k] = v` | | Insert or replace the entry for `k` |
-| `d.get(k)` | `V \| None` | Value for `k`, or `None` if `k` is missing |
-| `d.get(k, default)` | `V`, or `V \| None` | Value for `k`, or `default` if `k` is missing |
+| `d.get(k)` | `V \| none` | Value for `k`, or `none` if `k` is missing |
+| `d.get(k, default)` | `V` | Value for `k`, or `default` if `k` is missing |
 | `d.keys()` | `Iterator[K]` | The keys in insertion order |
 | `d.values()` | `Iterator[V]` | The values in key order |
 | `d.items()` | `Iterator[tuple[K, V]]` | The keys and values in key order |
@@ -890,15 +915,12 @@ List indexes start at zero and may be negative (see Indexes and slices above). A
 index outside the list raises `IndexError` with the message
 `list index out of range`. `pop()` on an empty list raises `IndexError` with the
 message `pop from empty list`. `d[k]` and `d.pop(k)` raise `KeyError` with the
-message `key not found` when `k` is missing. When `V` is already an optional
-type, `d.get(k)` has type `V`. `v in xs` requires an element type that supports
-`==`.
+message `key not found` when `k` is missing. `v in xs` requires an element type
+that supports `==`.
 
-`d.get(k, default)` takes a `default` of type `V` or `None`. It has type `V` when
-`default` is assignable to `V` and `V | None` otherwise, so a `None` default
-gives `V | None`. The default is used only for a missing key: a key whose stored
-value is `None` is present, and `get` returns that `None`. `get` does not accept
-other default types.
+The `default` of `d.get(k, default)` must be assignable to `V`. `get` returns
+`none` or the default only for a missing key: a key whose stored value is `none`
+is present, and `get` returns that `none`.
 
 Replacing the value of an existing key keeps the entry in its current position.
 A key that is removed and then inserted again moves to the end.
@@ -911,14 +933,14 @@ dictionary, which follow the rules for iterating a dictionary directly: adding
 or removing a key before the iterator is exhausted raises `RuntimeError` with
 the message `dictionary changed size during iteration` at its next step.
 
-`sorted(items, reverse=False, *, key=None)` returns a new sorted list from an
-`Iterable[T]` (§3), and `xs.sort(reverse=False, *, key=None)` sorts a list in
+`sorted(items, reverse=false, *, key=none)` returns a new sorted list from an
+`Iterable[T]` (§3), and `xs.sort(reverse=false, *, key=none)` sorts a list in
 place. `reverse` is a `bool`. Without `key`, the element type must be exactly
 `int`, `float`, `str`, or a comparable tuple. With `key`, its callable takes one
 `T` and returns one of those comparable types, and elements may have any type:
 
 ```python
-ordered = sorted(records, key=lambda row: (row.name, row.score))
+var ordered = sorted(records, key=(row) => (row.name, row.score))
 ```
 
 `sorted` fully consumes its iterable before evaluating keys. The key is evaluated
@@ -944,7 +966,7 @@ take no keyword arguments. No function treats a value as true or false.
 | `min(items)`, `max(items)` | The least or greatest item of an `Iterable[T]` |
 | `min(a, b)`, `max(a, b)` | The lesser or greater of two operands of type `T` |
 | `sum(items)` | The total of an `Iterable[int]` as an `int`, or of an `Iterable[float]` as a `float` |
-| `any(items)`, `all(items)` | Whether some, or every, item of an `Iterable[bool]` is `True` |
+| `any(items)`, `all(items)` | Whether some, or every, item of an `Iterable[bool]` is `true` |
 | `list(items) -> list[T]` | A new list of the items of an `Iterable[T]` |
 | `enumerate(items, start=0)` | An `Iterator[tuple[int, T]]` of positions and items |
 | `zip(a, b)` | An `Iterator[tuple[T, U]]` of pairs from an `Iterable[T]` and an `Iterable[U]` |
@@ -962,7 +984,7 @@ values the first is returned. Arguments are evaluated once, from left to right.
 
 `sum` returns `0` or `0.0` for no items, and `int` addition raises
 `OverflowError` as `+` does. `any` and `all` stop at the first item that decides
-the result; their results for no items are `False` and `True`.
+the result; their results for no items are `false` and `true`.
 
 `list` iterates its argument once. `enumerate` and `zip` are lazy: `enumerate`
 counts from `start`, which raises `OverflowError` if the count leaves the `int`
@@ -972,7 +994,7 @@ is exhausted.
 ### Tuples and unpacking
 
 Tuples have fixed arity and a type for each position. `(1, "Ada")` has type
-`tuple[int, str]`; `(1,)` has type `tuple[int]`; `()` has type `tuple[()]`.
+`tuple[int, str]`; `(1,)` has type `tuple[int]`; `()` has type `tuple[]`.
 Tuple expressions require parentheses. `(value)` is grouping, not a tuple.
 Elements are evaluated left to right. Tuple positions cannot be reassigned,
 but a contained mutable object is still shared.
@@ -981,7 +1003,7 @@ but a contained mutable object is still shared.
 negative indexes count from the end, and an invalid index is a compile-time
 error. Indexing returns the corresponding position's type. Tuple slicing is
 not supported. Iteration produces the union of the position types, removing
-duplicate and subsumed members; the element type of an empty tuple is `None`.
+duplicate and subsumed members; the element type of an empty tuple is `none`.
 Iteration is an error when the resulting union is not a valid type.
 
 Tuples of equal arity support equality when corresponding types support the
@@ -990,25 +1012,30 @@ ordered scalar type or comparable tuple type. Comparison proceeds left to right
 and stops at the first unequal position. Empty tuples compare equal. Tuples do
 not become printable or valid dictionary keys merely by being tuples.
 
-Assignment and `for` targets may unpack fixed-length tuples:
+Variable declarations, assignments, and `for` targets may unpack fixed-length
+tuples:
 
 ```python
-name, count = ("Ada", 3)
+var name, count = ("Ada", 3)
 for key, value in pairs:
     process(key, value)
 ```
 
 Targets are names or nested tuple patterns of names. The source type must have
 the same tuple shape, checked statically. The right-hand side is evaluated once,
-then its positions are assigned left to right under the ordinary local-type
-rules. Repeated target names and starred targets are errors. Unpacking lists or
+then its positions are bound or assigned left to right under the ordinary
+local-type rules. A `var` pattern declares every name; an assignment pattern
+updates existing variables. `for` patterns declare fresh iteration bindings.
+Repeated target names and starred targets are errors. Unpacking lists or
 arbitrary iterables is not supported.
 
 ## 8. Statements
 
 ```python
+var name = expression
+var name: Type = expression
+var name: Type
 name = expression
-name: Type = expression
 items[index] = expression
 point.x = expression
 function_call()
@@ -1025,7 +1052,7 @@ assert condition, message
 
 if condition:
     statements
-elif condition:
+else if condition:
     statements
 else:
     statements
@@ -1050,8 +1077,10 @@ async with expression as name:
     statements
 
 yield expression
-nonlocal name
 ```
+
+An `else if` clause continues an `if` statement at the same indentation
+as its initial `if`.
 
 A block must contain at least one statement. Use `pass` for an empty block.
 Calls and `await` expressions may be used as statements. An expression statement
@@ -1060,8 +1089,9 @@ cannot discard a value whose static type is `Coroutine[T]` or a union with a
 parameter may be discarded. An assignment
 has one target, which may be a tuple pattern (§7), and one value. Chained
 assignment, augmented assignment such as `+=`, and assignment expressions are
-not supported. Nested `def` and `async def` statements bind function values as
-described in §9.
+not supported. `var` declares local variables; assignment updates existing
+variables and never declares them (§9). Nested `def` and `async def` statements
+bind function values as described in §9.
 
 Conditions must have type `bool`. Other types cannot be used as conditions, so
 `if count:` is a type error.
@@ -1095,8 +1125,9 @@ can be resumed. Use `with` for an owned iterator that needs cleanup.
   satisfies `Iterable[int]`; each `iter` call starts a fresh traversal.
 - The iterable and the arguments to `range` are evaluated once, before the first
   iteration.
-- Assigning to the loop variable inside the body does not change the iteration.
-  After the loop ends, the loop variable keeps the last value it had.
+- Each iteration declares fresh bindings for the target names in the loop body's
+  scope. They are not visible after the loop.
+  Assigning to a loop variable inside the body does not change the iteration.
 - Iteration over a list continues as long as the current index is less than the
   list's current length, so elements appended during the loop are visited.
 - If keys are added to or removed from a dictionary while a loop iterates over
@@ -1134,16 +1165,16 @@ runs the suspended file context's cleanup and closes the file.
 
 Bare `return` or reaching the end exhausts the generator and runs pending
 cleanup. Returning a value is an error, and a generator need not return on every
-path. Yielding `None` is permitted when `T` permits it. An exhausted or closed
+path. Yielding `none` is permitted when `T` permits it. An exhausted or closed
 generator always raises `StopIteration` on `next`. A body exception closes the
 generator and propagates; a `StopIteration` escaping its body instead raises
 `RuntimeError` with the message `generator raised StopIteration`, so an accidental
 exhaustion from another iterator cannot silently end the generator.
 
-`Generator[T]` also provides `close() -> None`. Closing a suspended generator
+`Generator[T]` also provides `close() -> none`. Closing a suspended generator
 discards the rest of its ordinary execution and runs pending `finally` clauses
 and `with` cleanup, from inner to outer. It does not enter `except` handlers,
-and each pending `exit` receives `None`, as for a control transfer. Closing a
+and each pending `exit` receives `none`, as for a control transfer. Closing a
 generator whose body has not started does not start it. Closing an exhausted or
 closed generator has no effect. Cleanup errors propagate and leave the
 generator closed. Resuming or closing a generator already executing raises
@@ -1153,8 +1184,8 @@ Generators satisfy the context-manager protocol: `enter` returns the generator
 and `exit` closes it. Cleanup is guaranteed by exhaustion or explicit closing,
 including `with`, rather than by discarding the last reference. `yield` is a
 statement, not an expression, and cannot occur directly in a `finally` clause.
-`yield from`, sending values into generators, and injecting exceptions into them
-are not supported; these generators provide pull iteration, not coroutines.
+Sending values into generators and injecting exceptions into them are not
+supported; these generators provide pull iteration, not coroutines.
 
 ### Scoped cleanup
 
@@ -1162,12 +1193,12 @@ are not supported; these generators provide pull iteration, not coroutines.
 `ContextManager[T]` (§3). The expression is evaluated once; its
 `enter() -> T` method runs, and the returned value is assigned to the optional
 `as` target. A target is a name or tuple pattern. After successful entry,
-`exit(error: Exception | None) -> None` runs exactly once when control leaves
+`exit(error: Exception | none) -> none` runs exactly once when control leaves
 the body, including through `return`, `break`, `continue`, or an exception.
-`error` is the pending exception, or `None` for normal completion and control
+`error` is the pending exception, or `none` for normal completion and control
 transfers. This lets a manager distinguish successful use from failure, such as
 when committing or discarding a temporary output. Closing a suspended generator
-and async cancellation (§15) are also control transfers, so `None` can mean the
+and async cancellation (§15) are also control transfers, so `none` can mean the
 body was interrupted before it finished. If entry fails, the body does
 not run and that manager's exit is not called.
 
@@ -1179,84 +1210,106 @@ that bypass `finally` also bypass context cleanup. Suspending a generator at
 
 Several managers may be listed with commas. They enter left to right and exit
 right to left, like nested `with` statements, including when a later entry fails.
-The `as` names remain local after the statement, following normal assignment
-rules, even if their resources have closed. The statement itself adds no fresh
-variable scope.
+The statement creates a lexical scope. Its `as` targets declare new bindings
+visible to later managers in the same statement and throughout the body, but not
+after the statement. Assignment to an enclosing variable still updates that
+variable.
 
 ## 9. Names and static checking
 
 ### Scope
 
-Each function has a single local scope. Parameters, assignment targets, `for`
-loop variables, nested function names, unpacking targets, and names bound by
-`except ... as`, `with ... as`, or `async with ... as` are local to the whole
-function, except those declared `nonlocal`. Blocks do not create scopes, and
-there are no module-level variables or global variables.
+Each indented block creates a lexical scope. A local declaration is visible
+from its declaration onward through that block and its nested scopes; it does
+not affect earlier uses of the name. A `var` initializer is checked before the
+new names enter scope. Parameters and a method's `self` belong to the
+function body's scope and are available from its start. A nested function's
+name is also available inside its own body for recursion.
+
+`var` declarations, nested function declarations, and names introduced by `for`,
+`except ... as`, `with ... as`, and `async with ... as` create bindings. The
+latter names belong to their construct's body scope. Each execution of a block
+creates fresh bindings for its declarations; `for` also creates fresh target
+bindings for each iteration. Parameters of nested functions and lambdas are also
+declarations. A declaration cannot reuse the name of a visible local variable,
+parameter, or nested function, including one in an enclosing function.
+Assignment updates the visible variable or parameter with that name, including
+one in an enclosing function. Assigning to an undeclared name or to a nested
+function name is an error.
+
+There are no module-level variables or global variables.
 
 The file scope contains functions, classes, protocols, enums, aliases, and
 imports. These share a single namespace with the built-in names (§11). It is an
 error to declare the same name twice, to give two parameters the same name, or to
-declare a file-level name that is also a built-in name. A local variable with the same name as a
-function, class, alias, import, or built-in hides it throughout the function.
+declare a file-level name that is also a built-in name. A local declaration can
+hide a function, class, alias, import, or built-in from its declaration onward
+within its scope.
 A local variable can be called when its type is callable and it is definitely
-assigned. Type annotations still refer to hidden type declarations.
+assigned. Type annotations and `is` tests still refer to hidden type
+declarations.
 
-### Captures and `nonlocal`
+### Captures
 
 A nested function or lambda captures the bindings of referenced variables in
-enclosing functions. Captures remain alive after an enclosing call returns.
-They are shared bindings: rebinding a captured variable changes what every
+enclosing lexical scopes. Captures remain alive after their declaring scope
+exits. They are shared bindings: rebinding a captured variable changes what every
 closure over that binding subsequently reads. Separate calls to the enclosing
-function create separate bindings. A loop reuses its variable's binding, so
-closures created in the same loop observe its latest value.
+function create separate bindings. Closures created in different loop iterations
+capture different iteration bindings.
 
 ```python
 def counter() -> () -> int:
-    count = 0
+    var count = 0
 
     def increment() -> int:
-        nonlocal count
         count = count + 1
         return count
 
     return increment
 ```
 
-Reading an outer variable does not require a declaration. Rebinding it requires
-`nonlocal name`, or a comma-separated list of names, before any use of those
-names in that function. Each name must identify a variable or parameter in an
-enclosing function; it cannot name a module declaration or a variable local to
-the current function. Resolution selects the nearest enclosing binding, and
-assignments must preserve that binding's declared or inferred type. Mutating a
-captured object's fields or contents does not rebind the variable.
+Each loop iteration has its own bindings:
+
+```python
+var callbacks: list[() -> int] = []
+for i in range(3):
+    callbacks.append(() => i)
+print(callbacks[0]())    # 0
+print(callbacks[1]())    # 1
+print(callbacks[2]())    # 2
+```
+
+Reading or assigning to an outer variable uses that variable's binding.
+Assignments must preserve the target binding's declared or inferred type.
+Mutating a captured object's fields or contents does not rebind the variable.
 
 Nested definitions execute in statement order and bind their function name when
 the definition executes. A function may refer to its own name recursively. Other
 captured variables must be definitely assigned when the closure is created;
-reading an uninitialized outer binding is a compile-time error. Assignment
-without `nonlocal` creates a local throughout the nested function, following
-the usual whole-function scope rule.
+reading an uninitialized outer binding is a compile-time error.
 
 ### Local types
 
-The type of a local variable is set by its first assignment in the source text.
-If that assignment has an annotation, the variable has the annotated type.
-Otherwise it has the type of the assigned value. Every later assignment must be
-assignable to that type. An annotation must have a value, and it may only appear
-on a variable's first assignment. An assignment to a parameter cannot have an
-annotation.
+`var name = expression` declares a mutable local variable whose type is inferred
+from the initializer. `var name: Type = expression` gives it an explicit type,
+and the initializer must be assignable to that type. `var name: Type` declares
+a variable without assigning a value; an omitted initializer requires an
+annotation. A `var` with a tuple pattern has no annotation and requires an
+initializer. An initializer is an assignment for definite assignment and
+narrowing. Every subsequent assignment must be assignable to the declared or
+inferred type. Assignments cannot have type annotations.
 
 ```python
-count: int = 3
+var count: int = 3
 count = count + 1     # valid
 count = "four"        # type error
-best: str | None = None
+var best: str | none = none
 ```
 
-A `for` loop or an `except ... as` clause assigns to its variable. The item type
-or the handled exception type must be assignable to the variable's type. If the
-clause is the variable's first assignment in the source text, it sets the
-variable's type.
+A `for` target's type comes from the iterable's item type. An `except ... as`
+binding has the handled exception type, and a `with ... as` binding has the
+manager's entry result type.
 
 ### Definite assignment
 
@@ -1275,21 +1328,33 @@ path that reaches that point. This is determined from the structure of the code:
 - An `async with ... as` target is also assigned before its body, but graceful
   cancellation adds possible exits from that body (§15).
 
+These rules carry assignments to enclosing variables across block boundaries;
+bindings declared inside a block are not visible after it. For example:
+
+```python
+var result: int
+if condition:
+    result = 1
+else:
+    result = 2
+print(result)
+```
+
 The checker does not evaluate conditions. Both branches of every `if` are
-checked, and `if False:` and `while True:` are treated the same as any other
+checked, and `if false:` and `while true:` are treated the same as any other
 condition.
 
 ### Control transfer
 
 `return`, `break`, `continue`, `raise`, and a statement that calls the standard
 library function `sys.exit` (§14) transfer control. `assert` does not, even
-`assert False`. An `if` statement with an `else` branch transfers control if all
+`assert false`. An `if` statement with an `else` branch transfers control if all
 of its branches do. A statement that follows a control transfer in the same block
 is an unreachable-code error.
 
-A non-generator function whose return type is not `None` must return a value on
+A non-generator function whose return type is not `none` must return a value on
 every path. The checker never treats a loop as guaranteeing a return, so a final
-`return` is required even after `while True:`.
+`return` is required even after `while true:`.
 
 `yield` suspends execution and is not a terminating control transfer; statements
 after it are reachable. Generator return rules are defined in §8.
@@ -1303,10 +1368,8 @@ its members wherever a check proves that its value has one of those types. When
 only one member remains, the variable has that member's type. Each condition
 produces facts that hold when it is true and facts that hold when it is false:
 
-- `name is not None`, when true, narrows `name` to its members other than
-  `None`. `name is None` does the same when false.
-- `isinstance(name, C)`, when true, narrows `name` to the member named by `C`.
-  When false, it narrows `name` to its other members.
+- `name is C`, when true, narrows `name` to the members `C` covers. When false,
+  it narrows `name` to its other members. `name is not C` swaps these facts.
 - `not C` swaps the true and false facts of `C`.
 - `A and B`, when true, has the true facts of both `A` and `B`. `B` is checked
   with the true facts of `A`.
@@ -1317,7 +1380,7 @@ produces facts that hold when it is true and facts that hold when it is false:
 Field access and index expressions are not narrowed. To narrow such a value,
 assign it to a local variable first. Facts apply to statements as follows:
 
-- An `if` or `elif` branch starts with the true facts of its condition and the
+- An `if` or `else if` branch starts with the true facts of its condition and the
   false facts of all earlier conditions in the statement. An `else` branch, or
   the implicit empty `else` branch, starts with the false facts of every
   condition.
@@ -1326,15 +1389,15 @@ assign it to a local variable first. Facts apply to statements as follows:
 - A `while` body starts with the true facts of its condition.
 - The statements after an `assert` have the true facts of its condition, and its
   message is checked with the false facts.
-- Assigning a value whose type is a single member other than `None` narrows the
+- Assigning a value whose type is a single member other than `none` narrows the
   variable to that member. Assigning any other value removes the variable's
   narrowing.
 - At the start of a loop body and after the loop, narrowing established before
   the loop still applies only to variables that the body does not assign.
 
 ```python
-def describe(name: str | None) -> str:
-    if name is None:
+def describe(name: str | none) -> str:
+    if name is none:
         return "anonymous"
     return "user " + name
 ```
@@ -1367,8 +1430,8 @@ class ParseError(Exception):
     line: int
 
 def parse_digit(text: str, line: int) -> int:
-    index = "0123456789".find(text)
-    if len(text) != 1 or index < 0:
+    var index = "0123456789".find(text)
+    if len(text) != 1 or index is none:
         raise ParseError(f"not a digit: {text}", line)
     return index
 
@@ -1388,7 +1451,7 @@ def main():
 with `Exception` as its base is an exception class. Its fields are `message`
 followed by the fields it declares, and its constructor takes them in that order.
 The body of an exception class may be `pass` instead of field and method
-declarations. None of its declared fields or methods may be named `message`. The
+declarations. No declared field or method may be named `message`. The
 base class must be `Exception`. In all other respects, exception classes follow
 the rules for classes.
 
@@ -1419,7 +1482,7 @@ location of that operation instead.
 
 A `raise` statement with no expression may only appear inside an `except` clause.
 It raises the exception handled by that clause again, keeping the exception's
-original location and frames. `raise ... from ...` is an error.
+original location and frames.
 
 ### `try`
 
@@ -1461,9 +1524,9 @@ the program reports `deadlock: all tasks are waiting` and exits with status 1.
 
 | Function | Meaning |
 | --- | --- |
-| `print(value) -> None` | Write a printable value and `\n` to stdout |
-| `input() -> str \| None` | The next line of stdin without its line ending, or `None` at end of input |
-| `len`, `range`, `int`, `float`, `str`, `bytes`, `ord`, `chr`, `isinstance`, `sorted` | See §4, §6, §7, and §8 |
+| `print(value) -> none` | Write a printable value and `\n` to stdout |
+| `input() -> str \| none` | The next line of stdin without its line ending, or `none` at end of input |
+| `len`, `range`, `int`, `float`, `str`, `bytes`, `ord`, `chr`, `sorted` | See §6, §7, and §8 |
 | `abs`, `round`, `min`, `max`, `sum`, `any`, `all`, `list`, `enumerate`, `zip` | See §7 |
 | `iter(value)` | Obtain the iterator of an iterable (§3) |
 | `next(iterator)` | Obtain its next value, or raise `StopIteration` (§3) |
@@ -1484,8 +1547,8 @@ class Point:
     y: float
 
 def distance_squared(a: Point, b: Point) -> float:
-    dx = a.x - b.x
-    dy = a.y - b.y
+    var dx = a.x - b.x
+    var dy = a.y - b.y
     return dx * dx + dy * dy
 ```
 
@@ -1494,8 +1557,8 @@ def distance_squared(a: Point, b: Point) -> float:
 import geometry
 
 def main():
-    origin = geometry.Point(0.0, 0.0)
-    corner = geometry.Point(3.0, 4.0)
+    var origin = geometry.Point(0.0, 0.0)
+    var corner = geometry.Point(3.0, 4.0)
     print(geometry.distance_squared(origin, corner))    # 25.0
 ```
 
@@ -1508,10 +1571,11 @@ def main():
   namespace (§9). Several imports may share the same first component, but that
   name cannot also be used for a function, class, enum, protocol, or alias. A name
   cannot be both a module and a namespace, so importing both `app` and `app.util`
-  is an error. A local variable with the same name hides the whole namespace.
+  is an error. A local declaration with the same name hides the whole namespace
+  from its declaration onward within its scope.
 - `module.name`, written with the module's full name, as in `app.util.name`,
   refers to a function or type declaration in that module. It can be used
-  in calls, constructors, annotations, `except` clauses, and `isinstance`.
+  in calls, constructors, annotations, `except` clauses, and `is` type tests.
   Modules and namespaces are not values. Names that begin with `_` are private to
   the module that declares them.
 - Imports may form cycles. Modules contain only declarations, so the order in
@@ -1604,7 +1668,7 @@ shared by tests must be placed under the source root or a dependency root.
 
 A test file does not need a `main` function. Its functions whose names begin
 with `test_` are its tests. Each test function must take no parameters and
-return `None`.
+return `none`.
 
 A test function may be declared `async def`. It runs as the root task, as
 an async `main` does (§15), and it passes when its body completes.
@@ -1691,9 +1755,9 @@ async def main():
 
 | Declaration | Meaning |
 | --- | --- |
-| `sleep(seconds: float) -> Coroutine[None]` | Wait for at least `seconds` seconds |
+| `sleep(seconds: float) -> Coroutine[none]` | Wait for at least `seconds` seconds |
 | `task_group() -> TaskGroup` | Create an inactive, single-use task group |
-| `connect(host: str, port: int, timeout: float \| None = 30.0) -> Coroutine[Connection]` | Open a TCP connection |
+| `connect(host: str, port: int, timeout: float \| none = 30.0) -> Coroutine[Connection]` | Open a TCP connection |
 | `listen(host: str, port: int, backlog: int = 16) -> Listener` | Listen for TCP connections on `host` |
 | `semaphore(value: int = 1) -> Semaphore` | Create a semaphore with `value` permits |
 | `class Task[T]` | A handle to a scheduled task (§15) |
@@ -1704,18 +1768,18 @@ async def main():
 
 | Method | Meaning |
 | --- | --- |
-| `Connection.recv(size: int, timeout: float \| None = None) -> Coroutine[bytes]` | Return up to `size` bytes as soon as any arrive, or empty bytes when the peer has closed its side |
-| `Connection.sendall(data: bytes, timeout: float \| None = None) -> Coroutine[None]` | Send all of `data` |
-| `Connection.close() -> None` | Close the connection |
-| `Listener.accept(timeout: float \| None = None) -> Coroutine[Connection]` | Wait for the next connection |
+| `Connection.recv(size: int, timeout: float \| none = none) -> Coroutine[bytes]` | Return up to `size` bytes as soon as any arrive, or empty bytes when the peer has closed its side |
+| `Connection.sendall(data: bytes, timeout: float \| none = none) -> Coroutine[none]` | Send all of `data` |
+| `Connection.close() -> none` | Close the connection |
+| `Listener.accept(timeout: float \| none = none) -> Coroutine[Connection]` | Wait for the next connection |
 | `Listener.local_port() -> int` | The port the listener is bound to |
-| `Listener.close() -> None` | Stop listening |
+| `Listener.close() -> none` | Stop listening |
 | `Connection.enter() -> Connection` | Return this open connection for scoped use |
-| `Connection.exit(error: Exception \| None) -> None` | Close the connection |
+| `Connection.exit(error: Exception \| none) -> none` | Close the connection |
 | `Listener.enter() -> Listener` | Return this open listener for scoped use |
-| `Listener.exit(error: Exception \| None) -> None` | Close the listener |
-| `Semaphore.acquire() -> Coroutine[None]` | Take a permit, waiting until one is available |
-| `Semaphore.release() -> None` | Return a permit |
+| `Listener.exit(error: Exception \| none) -> none` | Close the listener |
+| `Semaphore.acquire() -> Coroutine[none]` | Take a permit, waiting until one is available |
+| `Semaphore.release() -> none` | Return a permit |
 
 `sleep` validates its argument as `time.sleep` does. `await aio.sleep(0.0)`
 always suspends the current task, so other ready tasks run before it continues.
@@ -1767,9 +1831,10 @@ import io
 import sys
 
 def main():
-    parser = cli.parser("report", description="Summarize a log file")
+    var parser = cli.parser("report", description="Summarize a log file")
     parser.add_int("limit", 10, help="Maximum rows", short="n")
     parser.add_positional("file")
+    var args: cli.Args
     try:
         args = parser.parse(sys.args())
     except cli.HelpRequested as help:
@@ -1792,12 +1857,12 @@ def main():
 
 | `Parser` method | Meaning |
 | --- | --- |
-| `add_str(name: str, default: str, help: str = "", short: str \| None = None, required: bool = False) -> None` | Declare a text option `--name VALUE` |
-| `add_int(name: str, default: int, help: str = "", short: str \| None = None, required: bool = False) -> None` | Declare an integer option |
-| `add_float(name: str, default: float, help: str = "", short: str \| None = None, required: bool = False) -> None` | Declare a number option |
-| `add_flag(name: str, help: str = "", short: str \| None = None) -> None` | Declare an option that takes no value and is false unless given |
-| `add_positional(name: str, help: str = "") -> None` | Declare a required positional argument |
-| `add_rest(name: str, help: str = "") -> None` | Declare zero or more remaining positional arguments |
+| `add_str(name: str, default: str, help: str = "", short: str \| none = none, required: bool = false) -> none` | Declare a text option `--name VALUE` |
+| `add_int(name: str, default: int, help: str = "", short: str \| none = none, required: bool = false) -> none` | Declare an integer option |
+| `add_float(name: str, default: float, help: str = "", short: str \| none = none, required: bool = false) -> none` | Declare a number option |
+| `add_flag(name: str, help: str = "", short: str \| none = none) -> none` | Declare an option that takes no value and is false unless given |
+| `add_positional(name: str, help: str = "") -> none` | Declare a required positional argument |
+| `add_rest(name: str, help: str = "") -> none` | Declare zero or more remaining positional arguments |
 | `parse(args: list[str]) -> Args` | Parse `args` |
 | `help() -> str` | The help text |
 
@@ -1861,27 +1926,27 @@ kind (`'<name>' is not an int argument`). Each call to `parse` returns a separat
 | Declaration | Meaning |
 | --- | --- |
 | `read_file(path: str) -> str` | The contents of the file |
-| `write_file(path: str, text: str) -> None` | Create the file, or replace its contents, with `text` |
+| `write_file(path: str, text: str) -> none` | Create the file, or replace its contents, with `text` |
 | `join(a: str, b: str) -> str` | `a` and `b` joined with `/`; if `b` is absolute, the result is `b` |
 | `basename(path: str) -> str` | The text after the last `/`, or empty if the path ends with `/` |
 | `dirname(path: str) -> str` | The text before the last `/`, or empty if there is no `/` |
 | `listdir(path: str) -> list[str]` | The names of the entries in the directory, excluding `.` and `..`, sorted by code point |
-| `stat(path: str, follow_symlinks: bool = True) -> Stat` | Metadata for the file |
+| `stat(path: str, follow_symlinks: bool = true) -> Stat` | Metadata for the file |
 | `exists(path: str) -> bool` | Whether the path exists, following symlinks |
-| `mkdir(path: str, parents: bool = False, exist_ok: bool = False) -> None` | Create a directory |
-| `remove(path: str) -> None` | Remove a file or symlink |
-| `rmdir(path: str) -> None` | Remove an empty directory |
-| `rename(source: str, destination: str) -> None` | Rename a file or directory, replacing the destination where POSIX allows it |
+| `mkdir(path: str, parents: bool = false, exist_ok: bool = false) -> none` | Create a directory |
+| `remove(path: str) -> none` | Remove a file or symlink |
+| `rmdir(path: str) -> none` | Remove an empty directory |
+| `rename(source: str, destination: str) -> none` | Rename a file or directory, replacing the destination where POSIX allows it |
 | `read_bytes(path: str) -> bytes` | The contents of the file, without decoding |
-| `write_bytes(path: str, data: bytes) -> None` | Create the file, or replace its contents, with `data` |
-| `copy_file(source: str, destination: str) -> None` | Copy the contents of a file, creating or replacing the destination |
+| `write_bytes(path: str, data: bytes) -> none` | Create the file, or replace its contents, with `data` |
+| `copy_file(source: str, destination: str) -> none` | Copy the contents of a file, creating or replacing the destination |
 | `normpath(path: str) -> str` | `path` with redundant separators and `.` and `..` components removed |
 | `abspath(path: str) -> str` | `path` made absolute against the working directory and normalized |
 | `realpath(path: str) -> str` | The absolute path of an existing file with symlinks resolved |
 | `glob(pattern: str) -> list[str]` | The paths that match `pattern`, sorted by code point |
 | `walk(path: str) -> Iterator[tuple[str, list[str], list[str]]]` | The directory tree below `path`, one tuple of directory path, directory names, and other names per directory, top down |
-| `temp_file(prefix: str = "willow-", directory: str \| None = None) -> str` | Create a new empty file with a unique name and return its path |
-| `temp_dir(prefix: str = "willow-", directory: str \| None = None) -> str` | Create a new empty directory with a unique name and return its path |
+| `temp_file(prefix: str = "willow-", directory: str \| none = none) -> str` | Create a new empty file with a unique name and return its path |
+| `temp_dir(prefix: str = "willow-", directory: str \| none = none) -> str` | Create a new empty directory with a unique name and return its path |
 | `class Stat` | A class with the fields `kind: str`, `size: int`, and `modified: float` |
 
 Paths are strings. A relative path is relative to the working directory.
@@ -1924,7 +1989,7 @@ tuple is yielded. A failure, including one for `path` itself, raises on the
 `next` call that reaches it.
 
 `temp_file` and `temp_dir` create the entry atomically in `directory`, or if it
-is `None`, in the directory named by the `TMPDIR` environment variable, or `/tmp`
+is `none`, in the directory named by the `TMPDIR` environment variable, or `/tmp`
 when that is unset or empty. Its name is `prefix` followed by six random
 characters. A `prefix` that contains `/` or a NUL character raises `ValueError`.
 The file is closed before `temp_file` returns. The program owns the entry and
@@ -1962,22 +2027,22 @@ import http
 import json
 
 def main():
-    response = http.request("GET", "https://example.com/api/items?" + http.urlencode({"q": "tea"}))
+    var response = http.request("GET", "https://example.com/api/items?" + http.urlencode({"q": "tea"}))
     if response.status == 200:
-        items = json.parse(response.body.decode())
-    body = json.dump({"name": "tea"}).encode()
-    headers = [http.Header("Content-Type", "application/json")]
-    created = http.request("POST", "https://example.com/api/items", headers=headers, body=body)
+        var items = json.parse(response.body.decode())
+    var body = json.dump({"name": "tea"}).encode()
+    var headers = [http.Header("Content-Type", "application/json")]
+    var created = http.request("POST", "https://example.com/api/items", headers=headers, body=body)
     print(created.status)
 ```
 
 | Declaration | Meaning |
 | --- | --- |
-| `request(method: str, url: str, headers: list[Header] \| None = None, body: bytes \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Response` | Make a request and read the whole response |
-| `download(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Download` | Send a `GET` request and save the response body to the file at `path` |
-| `request_async(method: str, url: str, headers: list[Header] \| None = None, body: bytes \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Coroutine[Response]` | `request` for tasks |
-| `download_async(url: str, path: str, headers: list[Header] \| None = None, timeout: float = 30.0, follow_redirects: bool = True, ca_file: str \| None = None) -> Coroutine[Download]` | `download` for tasks |
-| `header(headers: list[Header], name: str) -> str \| None` | The value of the first header named `name`, compared case-insensitively, or `None` |
+| `request(method: str, url: str, headers: list[Header] \| none = none, body: bytes \| none = none, timeout: float = 30.0, follow_redirects: bool = true, ca_file: str \| none = none) -> Response` | Make a request and read the whole response |
+| `download(url: str, path: str, headers: list[Header] \| none = none, timeout: float = 30.0, follow_redirects: bool = true, ca_file: str \| none = none) -> Download` | Send a `GET` request and save the response body to the file at `path` |
+| `request_async(method: str, url: str, headers: list[Header] \| none = none, body: bytes \| none = none, timeout: float = 30.0, follow_redirects: bool = true, ca_file: str \| none = none) -> Coroutine[Response]` | `request` for tasks |
+| `download_async(url: str, path: str, headers: list[Header] \| none = none, timeout: float = 30.0, follow_redirects: bool = true, ca_file: str \| none = none) -> Coroutine[Download]` | `download` for tasks |
+| `header(headers: list[Header], name: str) -> str \| none` | The value of the first header named `name`, compared case-insensitively, or `none` |
 | `urlencode(values: dict[str, str]) -> str` | `values` encoded as `key=value` pairs joined with `&`, in insertion order |
 | `class Header` | A class with the fields `name: str` and `value: str` |
 | `class Response` | A class with the fields `status: int`, `headers: list[Header]`, `body: bytes`, and `url: str` |
@@ -2060,12 +2125,12 @@ blocks every task while it runs. `timeout` applies as for `request`.
 import io
 
 def main():
-    source = io.open("input.bin")
+    var source = io.open("input.bin")
     try:
-        target = io.open("output.bin", mode="w")
+        var target = io.open("output.bin", mode="w")
         try:
-            while True:
-                chunk = source.read(65536)
+            while true:
+                var chunk = source.read(65536)
                 if len(chunk) == 0:
                     break
                 target.write(chunk)
@@ -2086,18 +2151,18 @@ def main():
 | `File` method | Meaning |
 | --- | --- |
 | `read(size: int) -> bytes` | Read up to `size` octets; the result is empty only at end of input |
-| `readline() -> str \| None` | Read the next line the same way `input` does, or return `None` at end of input |
-| `write(data: bytes) -> None` | Write all of `data` |
-| `write_text(text: str) -> None` | Write the UTF-8 encoding of `text`, without adding a newline |
+| `readline() -> str \| none` | Read the next line the same way `input` does, or return `none` at end of input |
+| `write(data: bytes) -> none` | Write all of `data` |
+| `write_text(text: str) -> none` | Write the UTF-8 encoding of `text`, without adding a newline |
 | `iter() -> Iterator[str]` | Iterate over lines from the current file position |
-| `flush() -> None` | Write any buffered data |
-| `close() -> None` | Flush and close the file |
+| `flush() -> none` | Write any buffered data |
+| `close() -> none` | Flush and close the file |
 | `enter() -> File` | Return this open file for scoped use |
-| `exit(error: Exception \| None) -> None` | Close the file |
+| `exit(error: Exception \| none) -> none` | Close the file |
 
 A native type is a library class that has methods and no fields. Its values can
 only be created by functions in its module. A native type can be used in
-annotations, aliases, unions, and `isinstance`, and its values can be stored and
+annotations, aliases, unions, and `is` type tests, and its values can be stored and
 passed as arguments. It does not support `==`, printing, or construction. All
 references to a handle refer to the same handle, so closing it through one
 reference closes it for all of them.
@@ -2151,18 +2216,18 @@ from `print` (§10).
 import json
 
 def main():
-    doc = json.parse('{"name": "Willow", "ports": [80, 443]}')
-    if isinstance(doc, dict):
-        ports = doc["ports"]
-        if isinstance(ports, list):
+    var doc = json.parse('{"name": "Willow", "ports": [80, 443]}')
+    if doc is dict:
+        var ports = doc["ports"]
+        if ports is list:
             print(len(ports))       # 2
-    reply: json.Json = {"ok": True, "items": [1, 2.5, None]}
+    var reply: json.Json = {"ok": true, "items": [1, 2.5, none]}
     print(json.dump(reply))         # {"ok":true,"items":[1,2.5,null]}
 ```
 
 | Declaration | Meaning |
 | --- | --- |
-| `type Json = None \| bool \| int \| float \| str \| list[Json] \| dict[str, Json]` | A JSON value |
+| `type Json = none \| bool \| int \| float \| str \| list[Json] \| dict[str, Json]` | A JSON value |
 | `class JsonError(Exception)` | Invalid JSON text, or a value that `dump` cannot encode |
 | `parse(text: str) -> Json` | The value represented by the JSON text `text` |
 | `dump(value: Json) -> str` | The JSON text for `value` |
@@ -2218,9 +2283,9 @@ infinite or the result is outside the range of `int`.
 import net
 
 def main():
-    listener = net.listen("127.0.0.1", 0)
-    client = net.connect("127.0.0.1", listener.local_port())
-    server = listener.accept(timeout=5.0)
+    var listener = net.listen("127.0.0.1", 0)
+    var client = net.connect("127.0.0.1", listener.local_port())
+    var server = listener.accept(timeout=5.0)
     client.sendall("ping\n".encode())
     print(server.recv(1024).decode())       # ping
     client.close()
@@ -2230,7 +2295,7 @@ def main():
 
 | Declaration | Meaning |
 | --- | --- |
-| `connect(host: str, port: int, timeout: float \| None = 30.0) -> Connection` | Open a TCP connection |
+| `connect(host: str, port: int, timeout: float \| none = 30.0) -> Connection` | Open a TCP connection |
 | `listen(host: str, port: int, backlog: int = 16) -> Listener` | Listen for TCP connections on `host` |
 | `reader(connection: Connection) -> Reader` | Buffer reads from `connection`, which the reader then owns |
 | `class Connection` | A native type with the methods below |
@@ -2239,21 +2304,21 @@ def main():
 
 | Method | Meaning |
 | --- | --- |
-| `Connection.recv(size: int, timeout: float \| None = None) -> bytes` | Return up to `size` bytes as soon as any arrive, or empty bytes when the peer has closed its side |
-| `Connection.sendall(data: bytes, timeout: float \| None = None) -> None` | Send all of `data` |
-| `Connection.close() -> None` | Close the connection |
-| `Listener.accept(timeout: float \| None = None) -> Connection` | Wait for the next connection |
+| `Connection.recv(size: int, timeout: float \| none = none) -> bytes` | Return up to `size` bytes as soon as any arrive, or empty bytes when the peer has closed its side |
+| `Connection.sendall(data: bytes, timeout: float \| none = none) -> none` | Send all of `data` |
+| `Connection.close() -> none` | Close the connection |
+| `Listener.accept(timeout: float \| none = none) -> Connection` | Wait for the next connection |
 | `Listener.local_port() -> int` | The port the listener is bound to |
-| `Listener.close() -> None` | Stop listening |
+| `Listener.close() -> none` | Stop listening |
 | `Connection.enter() -> Connection` | Return this open connection for scoped use |
-| `Connection.exit(error: Exception \| None) -> None` | Close the connection |
+| `Connection.exit(error: Exception \| none) -> none` | Close the connection |
 | `Listener.enter() -> Listener` | Return this open listener for scoped use |
-| `Listener.exit(error: Exception \| None) -> None` | Close the listener |
-| `Reader.read_exactly(size: int, timeout: float \| None = None) -> bytes` | Return exactly `size` bytes |
-| `Reader.read_until(separator: bytes, max_bytes: int = 1048576, timeout: float \| None = None) -> bytes` | Return the bytes through the next `separator` |
-| `Reader.close() -> None` | Close the reader and its connection |
+| `Listener.exit(error: Exception \| none) -> none` | Close the listener |
+| `Reader.read_exactly(size: int, timeout: float \| none = none) -> bytes` | Return exactly `size` bytes |
+| `Reader.read_until(separator: bytes, max_bytes: int = 1048576, timeout: float \| none = none) -> bytes` | Return the bytes through the next `separator` |
+| `Reader.close() -> none` | Close the reader and its connection |
 | `Reader.enter() -> Reader` | Return this open reader for scoped use |
-| `Reader.exit(error: Exception \| None) -> None` | Close the reader and its connection |
+| `Reader.exit(error: Exception \| none) -> none` | Close the reader and its connection |
 
 A host is a host name, which is looked up with the system resolver, or a literal
 IPv4 or IPv6 address. Hosts are written in ASCII, and internationalized domain
@@ -2318,12 +2383,12 @@ message `I/O operation on closed reader`.
 import random
 
 def main():
-    rng = random.generator(42)
+    var rng = random.generator(42)
     print(rng.randint(1, 6))
-    items = ["a", "b", "c"]
+    var items = ["a", "b", "c"]
     rng.shuffle(items)
     print(rng.choice(items))
-    key = random.secure_bytes(16)
+    var key = random.secure_bytes(16)
 ```
 
 | Declaration | Meaning |
@@ -2337,7 +2402,7 @@ def main():
 | `Random.random() -> float` | The next float in `[0, 1)` |
 | `Random.randint(a: int, b: int) -> int` | The next integer from `a` through `b`, inclusive |
 | `Random.choice[T](items: list[T]) -> T` | A uniformly chosen element of `items` |
-| `Random.shuffle[T](items: list[T]) -> None` | Reorder `items` in place, uniformly at random |
+| `Random.shuffle[T](items: list[T]) -> none` | Reorder `items` in place, uniformly at random |
 
 Each `Random` has its own state, so the same seed always produces the same
 sequence of results from the same calls, in this version of Willow. The
@@ -2354,34 +2419,34 @@ raises `OSError`.
 import subprocess
 
 def main():
-    result = subprocess.run(["printf", "%s", "hello"], capture_output=True)
-    output = result.stdout
-    if output is not None:
+    var result = subprocess.run(["printf", "%s", "hello"], capture_output=true)
+    var output = result.stdout
+    if output is not none:
         print(output.decode())          # hello
 ```
 
 | Declaration | Meaning |
 | --- | --- |
-| `run(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Result` | Run a command and wait for it to finish |
-| `run_async(args: list[str], input: bytes \| None = None, capture_output: bool = False, cwd: str \| None = None, env: dict[str, str] \| None = None, timeout: float \| None = None) -> Coroutine[Result]` | `run` for a task, without blocking other tasks |
-| `spawn(args: list[str], cwd: str \| None = None, env: dict[str, str] \| None = None, stdin: io.File \| None = None, stdout: io.File \| None = None, stderr: io.File \| None = None) -> Process` | Start a command and return without waiting for it |
-| `class Result` | A class with the fields `returncode: int`, `stdout: bytes \| None`, and `stderr: bytes \| None` |
+| `run(args: list[str], input: bytes \| none = none, capture_output: bool = false, cwd: str \| none = none, env: dict[str, str] \| none = none, timeout: float \| none = none) -> Result` | Run a command and wait for it to finish |
+| `run_async(args: list[str], input: bytes \| none = none, capture_output: bool = false, cwd: str \| none = none, env: dict[str, str] \| none = none, timeout: float \| none = none) -> Coroutine[Result]` | `run` for a task, without blocking other tasks |
+| `spawn(args: list[str], cwd: str \| none = none, env: dict[str, str] \| none = none, stdin: io.File \| none = none, stdout: io.File \| none = none, stderr: io.File \| none = none) -> Process` | Start a command and return without waiting for it |
+| `class Result` | A class with the fields `returncode: int`, `stdout: bytes \| none`, and `stderr: bytes \| none` |
 | `class Process` | A native type with the methods below |
 
 | `Process` method | Meaning |
 | --- | --- |
-| `poll() -> int \| None` | The exit status if the child has exited, otherwise `None` |
-| `wait(timeout: float \| None = None) -> int` | Wait for the child to exit and return its status |
-| `wait_async(timeout: float \| None = None) -> Coroutine[int]` | `wait` for a task, without blocking other tasks |
-| `terminate() -> None` | Send `SIGTERM` to the child |
-| `kill() -> None` | Send `SIGKILL` to the child |
+| `poll() -> int \| none` | The exit status if the child has exited, otherwise `none` |
+| `wait(timeout: float \| none = none) -> int` | Wait for the child to exit and return its status |
+| `wait_async(timeout: float \| none = none) -> Coroutine[int]` | `wait` for a task, without blocking other tasks |
+| `terminate() -> none` | Send `SIGTERM` to the child |
+| `kill() -> none` | Send `SIGKILL` to the child |
 
 `args` contains the program followed by its arguments. They are passed to the
 program directly, without a shell. A program name that contains `/` is treated as
 a path. Any other program name is searched for in the `PATH` of the child's
 environment, or in `/usr/bin:/bin` if that environment has no `PATH`. `cwd` sets
 the child's working directory and `env` replaces its environment. When either is
-`None`, the child inherits the parent's. A process's status is its exit code, or
+`none`, the child inherits the parent's. A process's status is its exit code, or
 the negative of the signal number if a signal ended it. A nonzero status is
 returned normally and does not raise an exception.
 
@@ -2391,7 +2456,7 @@ does not read all of the input, the rest is discarded without an error. Without
 `input`, the child inherits stdin. With `capture_output`, `run` collects the
 child's stdout and stderr as bytes while it writes the input, so full pipes
 cannot deadlock. Without `capture_output`, the child inherits stdout and
-stderr, and both fields of the result are `None`. Captured output is held in
+stderr, and both fields of the result are `none`. Captured output is held in
 memory. `run` returns as soon as the child exits, even if processes started by
 the child are still running.
 
@@ -2402,7 +2467,7 @@ Processes started by the child are not killed.
 
 `spawn` connects the child's standard streams to the given `io.File` handles.
 The `stdin` handle must be open for reading, and the `stdout` and `stderr`
-handles must be open for writing. When a handle is `None`, the child inherits
+handles must be open for writing. When a handle is `none`, the child inherits
 that stream. The parent's handles remain open. If the `stdin` handle may already
 have input read into its buffer, `spawn` raises `ValueError` with the message
 `stdin has buffered input`. This is the case when the handle has been read from
@@ -2453,10 +2518,11 @@ import fs
 import sys
 
 def main():
-    args = sys.args()
+    var args = sys.args()
     if len(args) != 1:
         sys.eprint("usage: chars <file>")
         sys.exit(2)
+    var text: str
     try:
         text = fs.read_file(args[0])
     except OSError as error:
@@ -2468,9 +2534,9 @@ def main():
 | Function | Meaning |
 | --- | --- |
 | `args() -> list[str]` | A new list of the program's arguments in order, not including the program name |
-| `eprint(value) -> None` | Write a printable value and `\n` to stderr |
-| `exit(status: int) -> None` | End the program with exit status `status` |
-| `getenv(name: str) -> str \| None` | The value of the environment variable `name`, or `None` if it is not set |
+| `eprint(value) -> none` | Write a printable value and `\n` to stderr |
+| `exit(status: int) -> none` | End the program with exit status `status` |
+| `getenv(name: str) -> str \| none` | The value of the environment variable `name`, or `none` if it is not set |
 | `environ() -> dict[str, str]` | A new dictionary of the environment variables, ordered by name |
 | `getcwd() -> str` | The absolute path of the working directory |
 
@@ -2493,9 +2559,9 @@ raises `ValueError` with the message `invalid UTF-8`.
 | --- | --- |
 | `isatty(file: io.File) -> bool` | Whether `file` is a terminal |
 | `color_enabled(file: io.File) -> bool` | Whether `file` is a terminal, `TERM` is not `dumb`, and `NO_COLOR` is not set |
-| `style(text: str, color: str = "default", bold: bool = False, enabled: bool = True) -> str` | `text` wrapped in ANSI escape sequences for the color and bold setting, or `text` unchanged when `enabled` is false |
-| `progress(message: str) -> None` | Replace the progress line on stderr with `message` |
-| `finish_progress(message: str = "") -> None` | Clear the progress line, then write `message` and a newline to stderr if `message` is not empty |
+| `style(text: str, color: str = "default", bold: bool = false, enabled: bool = true) -> str` | `text` wrapped in ANSI escape sequences for the color and bold setting, or `text` unchanged when `enabled` is false |
+| `progress(message: str) -> none` | Replace the progress line on stderr with `message` |
+| `finish_progress(message: str = "") -> none` | Clear the progress line, then write `message` and a newline to stderr if `message` is not empty |
 
 The colors are `default`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`,
 `cyan`, and `white`. Any other color raises `ValueError` with the message
@@ -2515,7 +2581,7 @@ Both functions flush stderr, which they write through the same buffer as
 | --- | --- |
 | `time() -> float` | Seconds since the Unix epoch |
 | `monotonic() -> float` | Seconds on a clock that never goes backward, measured from an unspecified starting point |
-| `sleep(seconds: float) -> None` | Wait for at least `seconds` seconds |
+| `sleep(seconds: float) -> none` | Wait for at least `seconds` seconds |
 | `utc(timestamp: float) -> str` | The UTC time `timestamp`, formatted as `YYYY-MM-DDTHH:MM:SSZ` |
 
 `sleep` raises `ValueError` with the message
@@ -2538,6 +2604,8 @@ async def square(value: int) -> int:
     return value * value
 
 async def main():
+    var first: aio.Task[int]
+    var second: aio.Task[int]
     async with aio.task_group() as group:
         first = group.start(square(3))
         second = group.start(square(4))
@@ -2553,8 +2621,8 @@ function's return annotation. Thus a function declared
 Its body must return values assignable to `str`, following §9's return rules.
 
 `Coroutine[T]` and `aio.Task[T]` are opaque nominal types. They are invariant in
-`T`, and the restriction on unions containing different specializations of one
-generic class also applies to each of them. They cannot be constructed directly.
+`T`, and like a generic class, each has one runtime class for all of its
+specializations (§4). They cannot be constructed directly.
 They are not structural protocols; user-defined values cannot make themselves
 awaitable.
 
@@ -2604,8 +2672,8 @@ which their handles are awaited.
 
 `async with expression as name:` is allowed only in an async function or method.
 It evaluates the expression once and enters its `aio.TaskGroup`. The optional
-`as name` binds that group as a local variable; the statement introduces no new
-variable scope.
+`as name` declares that group in the body's lexical scope. The group name and
+variables declared inside the body are not visible after the statement.
 
 This is a built-in task-group scope. It accepts only `aio.TaskGroup`, which
 does not satisfy `ContextManager`. General async context managers are not
@@ -2614,7 +2682,7 @@ supported.
 | Method | Meaning |
 | --- | --- |
 | `start[T](coro: Coroutine[T]) -> Task[T]` | Consume `coro` and schedule a child task |
-| `cancel() -> None` | Request a graceful stop of this group's body and children |
+| `cancel() -> none` | Request a graceful stop of this group's body and children |
 
 A group is inactive until it is entered, active from entry until its boundary
 completes, including the join, and exited afterwards. An active group is
@@ -2663,7 +2731,7 @@ normally before reaching another checkpoint.
 
 Cancellation is control flow outside the `Exception` hierarchy. It bypasses
 `except` handlers and unwinds through `finally` and `with` cleanup. A plain
-context manager's `exit` receives `None`, as for other control transfers.
+context manager's `exit` receives `none`, as for other control transfers.
 Suspension at an await does not exit active scopes.
 
 Requests retain the identity of their originating group. A request is delivered
@@ -2740,16 +2808,18 @@ narrowing, and control-transfer checking merge these transfers with the body's
 ordinary completion. Every `await` counts, including one whose operand reaches
 no checkpoint at run time.
 
-Assignments before the first such transfer remain definite after the group. A
-value assigned only after an await in the body cannot be assumed assigned after
-the group, and a return after that await does not by itself satisfy the
-enclosing function's requirement to return on every path. A return whose
-expression has finished and is already pending during the join is preserved.
+Assignments to enclosing variables before the first such transfer remain
+definite after the group. A value assigned only after an await in the body
+cannot be assumed assigned after the group, and a return after that await does
+not by itself satisfy the enclosing function's requirement to return on every
+path. A return whose expression has finished and is already pending during the
+join is preserved.
 Interruption for a failure leaves by exception, rather than creating a normal
 exit.
 
-To use the results of concurrent work, start the tasks in the group and read
-their results after it, as in the example at the start of this section. Their
+To use the results of concurrent work after the group, declare the handle
+variables in the enclosing scope, start the tasks in the group, and assign their
+handles to those variables, as in the example at the start of this section. The
 handles are assigned before the first await, and a group whose stop was never
 requested has no cancelled children. To run work sequentially, await its
 coroutine directly without a group.

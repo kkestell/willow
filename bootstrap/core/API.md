@@ -1,9 +1,9 @@
 # Core API for stage 0
 
-The functions stage 0 calls to lower the built-ins and operations of L0
-(agents/bootstrap.md §3), and the intrinsic layer core is written over. Every
-function here is `$W.core.<name>`. Core may define other functions; stage 0
-calls only these, and stage 1 calls `os` and `run` through `import core`.
+The functions stage 0 calls to lower the built-ins and operations of L0, and
+the intrinsic layer core is written over. Every function here is
+`$W.core.<name>`. Core may define other functions; stage 0 calls only these,
+and stage 1 calls `os` and `run` through `import core`.
 
 ## Conventions
 
@@ -33,7 +33,7 @@ calls only these, and stage 1 calls `os` and `run` through `import core`.
 | `init()` | Called by the entry before `main`; ignores SIGPIPE |
 | `fail(class_name: str, message: str)` | Writes `error: <class_name>: <message>` and a newline to stderr and exits with status 1 |
 
-Fatal failures of L0 (agents/bootstrap.md §3):
+Fatal failures of L0:
 
 | Class | Message | Raised by |
 | --- | --- | --- |
@@ -184,11 +184,11 @@ literal `"None"`.
 
 ## Exceptions under stage 1
 
-Programs that stage 1 compiles raise exceptions instead of ending
-(agents/bootstrap.md §6). The word `$W.pending` holds the pending exception,
-or 0. Stage 1 compiles its own body for `fail`, which creates the exception
-with `failure` and stores it in `$W.pending`. An exception object is a header,
-its location and frames, both `str` and 0 until it is raised, and its fields,
+Programs that stage 1 compiles raise exceptions instead of ending. The word
+`$W.pending` holds the pending exception, or 0. Stage 1 compiles its own body
+for `fail`, which creates the exception with `failure` and stores it in
+`$W.pending`. An exception object is a header, its location and frames, both
+`str` and 0 until it is raised, and its fields,
 `message` first. The frames are the report's lines after the first, each
 starting with a newline. The exception reporting functions run with
 `$W.pending` cleared.

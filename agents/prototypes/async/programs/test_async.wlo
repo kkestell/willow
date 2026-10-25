@@ -1,9 +1,0 @@
-import aio
-
-async def double(x: int) -> int:
-    return x * 2
-
-async def test_double() -> None:        # §12 l.1501: tests must be `def ... -> None`; async is open
-    async with aio.task_group() as group:
-        task = group.start(double(2))
-    assert task.result() == 4

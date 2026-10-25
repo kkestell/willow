@@ -1,6 +1,6 @@
 # Agent image for the bootstrap work: the gnat base image plus the native
-# toolchain from agents/bootstrap.md. QBE is built from the pinned release
-# because Debian's package is older.
+# toolchain. QBE is built from the pinned release because Debian's package is
+# older.
 FROM gnat-agent
 
 USER root

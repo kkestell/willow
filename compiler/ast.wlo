@@ -19,7 +19,7 @@ class Module:
     # Set by the loader.
     name: str
     # Whether the module is core or comes from the standard library's lib/,
-    # which may use the intrinsic layer (agents/bootstrap.md §5) and declare
+    # which may use the intrinsic layer and declare
     # constants. Set by the loader, by where the module came from.
     privileged: bool
     imports: list[Import]

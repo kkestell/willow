@@ -1,7 +1,6 @@
-# The core module: the Willow runtime, written in L0 over the intrinsic layer
-# described in agents/bootstrap.md §5. Stage 0 compiles this module into every
-# program. Only this module may use intrinsics. bootstrap/core/API.md lists the
-# functions stage 0 calls.
+# The core module: the Willow runtime, written in L0 over the intrinsic layer.
+# Stage 0 compiles this module into every program. Only this module may use
+# intrinsics. bootstrap/core/API.md lists the functions stage 0 calls.
 
 extern def write(fd: cint, buf: ptr, count: int) -> int
 extern def exit(status: cint)
@@ -290,7 +289,7 @@ def write_all(fd: int, buf: ptr, count: int):
 def write_str(fd: int, s: str):
     write_all(fd, str_bytes(s), str_size(s))
 
-# Reports a fatal L0 failure (agents/bootstrap.md §3). Stage 1 compiles its
+# Reports a fatal L0 failure. Stage 1 compiles its
 # own body instead, which raises the exception through `failure`.
 def fail(class_name: str, message: str):
     write_str(2, "error: ")

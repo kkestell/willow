@@ -1,5 +1,5 @@
 # Writes checked functions as QBE intermediate language, with stage 0's value
-# representation and symbols (agents/bootstrap.md §4, §7): every value is an
+# representation and symbols: every value is an
 # `l` slot, a function is `$W.<module>.<name>`, a string literal
 # `$W.str.<n>`, and a type descriptor `$W.<type>.type`, except that the
 # program's own modules' functions and types start with `$P.`, apart from
@@ -76,9 +76,8 @@ class Emitter:
     wrappers: dict[str, bool]
     emitted: int = 0
     # Per function: its name in frames, its module's path, and whether it
-    # records frames, which privileged modules' functions do not
-    # (agents/bootstrap.md §6), so that an exception raised in one is
-    # located at the call from the program.
+    # records frames, which privileged modules' functions do not, so that
+    # an exception raised in one is located at the call from the program.
     function_name: str = ""
     path: str = ""
     frames: bool = False

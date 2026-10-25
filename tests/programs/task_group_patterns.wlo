@@ -1,7 +1,7 @@
 import aio
 
-# Ports of agents/prototypes/async/programs: a pipeline, a fan-out with a
-# deadline, and a retry. Sleeps stand in for network operations.
+# A pipeline, a fan-out with a deadline, and a retry. Sleeps stand in for
+# network operations.
 
 class Buffer:
     items: list[str]

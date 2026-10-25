@@ -159,7 +159,7 @@ def bytes_methods() -> dict[str, Builtin]:
     add(table, "hex", [], prim("str"))
     return table
 
-# The intrinsics that core calls (agents/bootstrap.md §5). `__type` has its
+# The intrinsics that core calls. `__type` has its
 # own syntax, and `__os` is a name.
 def intrinsics() -> dict[str, Builtin]:
     table: dict[str, Builtin] = {}

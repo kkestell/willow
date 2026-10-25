@@ -7,8 +7,7 @@ files use `.wlo`. `docs/spec.md` specifies the language.
 
 The self-hosting native compiler is in `compiler/`, its standard library in
 `lib/`, and its core runtime in `bootstrap/core/`. Stages 0 and 1 under
-`bootstrap/` build it from source. Read `agents/bootstrap.md` before working
-on the compiler, library, or bootstrap chain.
+`bootstrap/` build it from source.
 
 - Build the small language we need now. This is an early implementation, not a
   production-hardening exercise.
