@@ -216,7 +216,7 @@ class Printer:
         if isinstance(node, ast.Lambda):
             names: list[str] = []
             for param in node.params:
-                names.append(self.at(param.name, param.line, param.col))
+                names.append(self.param(param))
             return "((" + ", ".join(names) + ") => " + self.expr(node.body) + ")"
         if isinstance(node, ast.TupleDisplay):
             return "tuple(" + self.exprs(node.elements) + ")"

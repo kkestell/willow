@@ -591,10 +591,12 @@ Each parameter may have a type annotation, as in `(x: int) => x + 1`.
 An unannotated parameter takes its type from an expected callable type; a
 parameter with neither an annotation nor an expected type is a compile-time
 error. The expression determines the return type, and an expected callable
-type's return type is the expected type of the expression. A lambda with all parameter
-types annotated, or with no parameters, needs no expected type. When an expected
-callable type is present, the lambda must be assignable to it under the ordinary
-callable rules.
+type's return type is the expected type of the expression. This context can type
+empty displays or a nested lambda in the body; it does not replace the body's
+inferred return type. A lambda with all parameter types annotated, or with no
+parameters, needs no expected type. Annotated and unannotated parameters may be
+mixed. When an expected callable type is present, the lambda must be assignable
+to it under the ordinary callable rules.
 Lambdas have no defaults or return annotations; use a nested `def` when multiple
 statements are needed. Captures follow §9.
 

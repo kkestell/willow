@@ -1,0 +1,27 @@
+def preserve[T](f: (T) -> T) -> (T) -> T:
+    return f
+
+def apply(f: (int, int) -> int) -> int:
+    return f(3, 4)
+
+def main():
+    increment = (x: int) => x + 1
+    print(increment(4))
+    print(((x: int,) => x * 2)(3))
+    print(apply((x: int, y) => x + y))
+    # An annotation can accept more values than the expected parameter type.
+    missing: (int) -> bool = (x: int | none) => x is none
+    print(missing(1))
+    half: (int) -> int | float = (x: int) => float(x) / 2.0
+    print(half(3))
+    values: (int) -> list[int] = (x) => []
+    names: () -> dict[str, int] = () => {}
+    print(len(values(1)))
+    print(len(names()))
+    nested: (int) -> (str) -> str = (n) => (s) => s + str(n)
+    print(nested(3)("#"))
+    # Callable annotations can themselves contain parentheses.
+    invoke = (f: (int) -> int, x: int) => f(x)
+    print(invoke(increment, 6))
+    annotated = preserve((x: int) => x + 2)
+    print(annotated(8))

@@ -1,0 +1,1 @@
+lambda_annotation_missing.wlo:2:18: error: lambda parameter 'y' needs a type annotation or an expected callable type

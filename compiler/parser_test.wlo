@@ -267,6 +267,8 @@ def main():
         ["((x) => x)(1)", "(((x) => x))(1)"],
         ["(x) => x + 1 * 2 == 3 or false", "((x) => (((x + (1 * 2)) == 3) or false))"],
         ["lambda", "lambda"],
+        ["(x: int, y) => x + y", "((x: int, y) => (x + y))"],
+        ["(f: (int) -> str) => f(1)", "((f: ((int) -> str)) => f(1))"],
         ["f((x) => x, 1)", "f(((x) => x), 1)"],
         ["-await c.m(1)", "(- (await c.m(1)))"],
         ["await f() + 1", "((await f()) + 1)"],

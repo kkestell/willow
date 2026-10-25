@@ -75,15 +75,14 @@ class FunctionDecl:
     owner: ClassDecl | ProtocolDecl | none = none
     type_name: str = ""
     generator: bool = false
-    # The binder's signature. A lambda has none until the checker gives it
-    # the one its expected type or body determines.
+    # The binder's signature. A lambda gets its signature during body checking.
     record: types.Function | none = none
     # `extern def`, which only core may declare: a C function with no body,
     # variadic when its parameters end with `...`.
     external: bool = false
     variadic: bool = false
 
-# A method's `self` and a lambda's parameters have no annotation.
+# A method's `self` and unannotated lambda parameters have no annotation.
 class Param:
     line: int
     col: int

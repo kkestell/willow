@@ -190,7 +190,10 @@ class Parser:
         params: list[ast.Param] = []
         while not self.accept(tokens.Kind.RPAREN):
             name = self.expect(tokens.Kind.NAME, "a parameter name")
-            params.append(ast.Param(name.line, name.col, name.text, none, none, false))
+            annotation: ast.TypeExpr | none = none
+            if self.accept(tokens.Kind.COLON):
+                annotation = self.parse_type()
+            params.append(ast.Param(name.line, name.col, name.text, annotation, none, false))
             if self.list_end(tokens.Kind.RPAREN, "')'"):
                 break
         self.expect(tokens.Kind.FAT_ARROW, "'=>'")

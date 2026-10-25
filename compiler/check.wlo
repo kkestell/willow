@@ -1375,11 +1375,7 @@ class Checker:
         if expected is not none:
             target = types.callable_member(expected)
         count = len(function.params)
-        if target is none:
-            if count > 0:
-                self.fail(expr.line, expr.col, "lambda parameters need an expected callable type")
-                return none_type()
-        else if len(target.params) != count:
+        if target is not none and len(target.params) != count:
             noun = "parameters"
             if count == 1:
                 noun = "parameter"
@@ -1396,22 +1392,31 @@ class Checker:
             entry[captured.id] = self.declared(captured.id)
         params: list[types.Param] = []
         for i in range(count):
-            symbol = function.params[i].symbol
-            assert symbol is not none and target is not none, "lambda parameter without a symbol"
-            symbol.ty = target.params[i]
+            declaration = function.params[i]
+            symbol = declaration.symbol
+            assert symbol is not none, "lambda parameter without a symbol"
+            ty = symbol.ty
+            if declaration.annotation is none:
+                if target is none:
+                    self.fail(declaration.line, declaration.col, f"lambda parameter '{declaration.name}' needs a type annotation or an expected callable type")
+                    return none_type()
+                ty = target.params[i]
+            assert ty is not none, "unresolved lambda parameter annotation"
+            symbol.ty = ty
             checker.symbols[symbol.id] = symbol
-            entry[symbol.id] = target.params[i]
-            params.append(types.Param(symbol.name, target.params[i], none, false))
+            entry[symbol.id] = ty
+            params.append(types.Param(symbol.name, ty, none, false))
         returned = function.body[0].node
         assert isinstance(returned, ast.Return), "lambda without a return"
         body = returned.value
         assert body is not none, "lambda without a body"
-        result: types.Type = none_type()
         if target is not none and not node.infer_result:
-            checker.check_against(body, entry, target.result)
-            result = target.result
-        else:
-            result = checker.check_expr(body, entry)
+            body.expected = target.result
+        result = checker.check_expr(body, entry)
+        if target is not none and not node.infer_result:
+            checker.expect(body, target.result, result)
+        # Context guides inference, but the function returns the body's type.
+        body.expected = result
         self.adopt(checker.error)
         function.record = types.Function(function.id, function.name, function.type_name, [], params, result)
         parameter_types: list[types.Type] = []
@@ -1566,11 +1571,15 @@ class Checker:
                             partial[types.var_key(var)] = chosen
                     expected_lambda = types.substitute(params[i].ty, partial)
                     target = types.callable_member(expected_lambda)
-                    if target is none or types.mentions_any(types.CallableType(target.params, none_type()), vars):
-                        self.fail(call_args[i].line, call_args[i].col, "cannot infer the parameter types of this lambda")
-                        return none_type()
                     lambda_node = call_args[i].node
                     assert isinstance(lambda_node, ast.Lambda), "deferred non-lambda"
+                    if target is none:
+                        self.fail(call_args[i].line, call_args[i].col, "cannot infer the parameter types of this lambda")
+                        return none_type()
+                    for j in range(min(len(lambda_node.params), len(target.params))):
+                        if lambda_node.params[j].annotation is none and types.mentions_any(target.params[j], vars):
+                            self.fail(call_args[i].line, call_args[i].col, "cannot infer the parameter types of this lambda")
+                            return none_type()
                     lambda_node.infer_result = types.mentions_any(target.result, vars)
                     call_args[i].expected = expected_lambda
                     actual = self.check_expr(call_args[i], state)

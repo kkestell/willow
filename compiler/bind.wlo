@@ -971,8 +971,7 @@ class Resolver:
             for param in node.params:
                 params.append(ast.Ident(param.line, param.col, param.name))
             self.binder.check_unique(self.module, params, "parameter")
-            # Its result type comes from where it is used, so its return
-            # type is a placeholder and it has no signature.
+            # The checker infers its result from the expression body.
             result = ast.TypeName(expr.line, expr.col, "none", "", [], false)
             body = [ast.Stmt(expr.line, expr.col, ast.Return(node.body))]
             function = ast.FunctionDecl(expr.line, expr.col, "<lambda>", [], node.params, result, body, false, [], [])
@@ -981,6 +980,12 @@ class Resolver:
             function.type_name = self.function.type_name + ".<lambda>"
             node.function = function
             self.binder.resolve_function(self.module, function, self.scope, self.type_scope)
+            for param in function.params:
+                annotation = param.annotation
+                symbol = param.symbol
+                assert symbol is not none, "lambda parameter without a symbol"
+                if annotation is not none:
+                    symbol.ty = self.resolve_type(annotation)
         else if isinstance(node, ast.CallValue):
             self.resolve_expr(node.callee, true)
             self.resolve_args(node.args, node.keywords)
