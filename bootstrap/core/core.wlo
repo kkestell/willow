@@ -359,10 +359,11 @@ def print_bool(b: bool):
 
 def int_to_str(n: int) -> str:
     # 21 bytes hold the longest int and the zero byte snprintf writes.
-    s = __alloc_atomic(16 + 21)
-    length = snprintf(__offset(s, 16), 21, str_bytes("%lld"), n)
+    s = __alloc_atomic(24 + 21)
+    length = snprintf(__offset(s, 24), 21, str_bytes("%lld"), n)
     __store8(s, 0, __word(__type(str)))
     __store8(s, 8, __word(length))
+    __store8(s, 16, __word(0))
     return __str(__word(s))
 
 def bool_to_str(b: bool) -> str:
@@ -371,8 +372,9 @@ def bool_to_str(b: bool) -> str:
     return "False"
 
 # A string is a header word pointing at the str descriptor, the byte length,
-# the UTF-8 bytes, and a zero byte so the bytes can be passed to libc. Strings
-# are always valid UTF-8, so a code point starts at every byte that is not a
+# a cached hash plus one (zero when uncomputed), the UTF-8 bytes, and a zero
+# byte so the bytes can be passed to libc. Strings are always valid UTF-8, so
+# a code point starts at every byte that is not a
 # continuation byte (128 through 191), and a valid needle can only match at a
 # code point boundary.
 
@@ -380,23 +382,24 @@ def str_size(s: str) -> int:
     return __int(__load8(__ptr(__word(s)), 8))
 
 def str_bytes(s: str) -> ptr:
-    return __offset(__ptr(__word(s)), 16)
+    return __offset(__ptr(__word(s)), 24)
 
 def str_byte(s: str, i: int) -> int:
     return __load1(str_bytes(s), i)
 
 # A string of `length` bytes whose contents the caller fills in.
 def str_alloc(length: int) -> ptr:
-    s = __alloc_atomic(17 + length)
+    s = __alloc_atomic(25 + length)
     __store8(s, 0, __word(__type(str)))
     __store8(s, 8, __word(length))
-    __store1(s, 16 + length, 0)
+    __store8(s, 16, __word(0))
+    __store1(s, 24 + length, 0)
     return s
 
 # The string holding bytes `start` up to `stop` of `s`.
 def str_sub(s: str, start: int, stop: int) -> str:
     result = str_alloc(stop - start)
-    memcpy(__offset(result, 16), __offset(str_bytes(s), start), stop - start)
+    memcpy(__offset(result, 24), __offset(str_bytes(s), start), stop - start)
     return __str(__word(result))
 
 def is_continuation(b: int) -> bool:
@@ -470,8 +473,8 @@ def str_concat(a: str, b: str) -> str:
     a_size = str_size(a)
     b_size = str_size(b)
     s = str_alloc(a_size + b_size)
-    memcpy(__offset(s, 16), str_bytes(a), a_size)
-    memcpy(__offset(s, 16 + a_size), str_bytes(b), b_size)
+    memcpy(__offset(s, 24), str_bytes(a), a_size)
+    memcpy(__offset(s, 24 + a_size), str_bytes(b), b_size)
     return __str(__word(s))
 
 def str_eq(a: str, b: str) -> bool:
@@ -627,7 +630,7 @@ def repeat_byte(b: int, count: int) -> str:
     s = str_alloc(count)
     i = 0
     while i < count:
-        __store1(s, 16 + i, b)
+        __store1(s, 24 + i, b)
         i = i + 1
     return __str(__word(s))
 
@@ -785,7 +788,7 @@ def str_join(sep: str, items: ptr) -> str:
     slots = __ptr(__load8(items, 24))
     sep_ptr = __ptr(__word(sep))
     sep_size = __int(__load8(sep_ptr, 8))
-    sep_bytes = __offset(sep_ptr, 16)
+    sep_bytes = __offset(sep_ptr, 24)
     size = sep_size * (count - 1)
     i = 0
     while i < count:
@@ -793,7 +796,7 @@ def str_join(sep: str, items: ptr) -> str:
         size = size + __int(__load8(item, 8))
         i = i + 1
     s = str_alloc(size)
-    at = 16
+    at = 24
     i = 0
     while i < count:
         if i > 0:
@@ -803,10 +806,10 @@ def str_join(sep: str, items: ptr) -> str:
         item = __ptr(__load8(slots, i * 8))
         item_size = __int(__load8(item, 8))
         if item_size == 1:
-            __store1(s, at, __load1(item, 16))
+            __store1(s, at, __load1(item, 24))
             at = at + 1
         else:
-            memcpy(__offset(s, at), __offset(item, 16), item_size)
+            memcpy(__offset(s, at), __offset(item, 24), item_size)
             at = at + item_size
         i = i + 1
     return __str(__word(s))
@@ -853,11 +856,11 @@ def str_chr(n: int) -> str:
         size = 4
         lead = 240 + n // 262144
     s = str_alloc(size)
-    __store1(s, 16, lead)
+    __store1(s, 24, lead)
     i = size - 1
     rest = n
     while i > 0:
-        __store1(s, 16 + i, 128 + rest % 64)
+        __store1(s, 24 + i, 128 + rest % 64)
         rest = rest // 64
         i = i - 1
     return __str(__word(s))
@@ -881,7 +884,7 @@ def convert_case(s: str, lower: bool) -> str:
                 b = b + 32
             elif not lower and b >= 97 and b <= 122:
                 b = b - 32
-            __store1(result, 16 + i, b)
+            __store1(result, 24 + i, b)
             i = i + 1
         return __str(__word(result))
     runs = case_upper_runs()
@@ -2201,7 +2204,7 @@ def bytes_new(values: ptr) -> ptr:
         value = __int(list_get(values, i))
         if value < 0 or value > 255:
             fail("ValueError", "bytes must be in range(0, 256)")
-        __store1(data, 16 + i, value)
+        __store1(data, 24 + i, value)
         i = i + 1
     return bytes_tag(__str(__word(data)))
 
@@ -2209,7 +2212,7 @@ def str_encode(s: str) -> ptr:
     return bytes_tag(str_sub(s, 0, str_size(s)))
 
 def bytes_decode(data: ptr) -> str:
-    return str_from_bytes(__offset(data, 16), str_size(__str(__word(data))))
+    return str_from_bytes(__offset(data, 24), str_size(__str(__word(data))))
 
 def bytes_concat(a: ptr, b: ptr) -> ptr:
     return bytes_tag(str_concat(__str(__word(a)), __str(__word(b))))
@@ -2220,7 +2223,7 @@ def bytes_index(data: ptr, i: int) -> int:
         i = i + size
     if i < 0 or i >= size:
         fail("IndexError", "index out of range")
-    return __load1(data, 16 + i)
+    return __load1(data, 24 + i)
 
 def bytes_slice(data: ptr, start: int, stop: int) -> ptr:
     s = __str(__word(data))
@@ -2263,8 +2266,8 @@ def bytes_hex(data: ptr) -> str:
     i = 0
     while i < str_size(s):
         b = str_byte(s, i)
-        __store1(text, 16 + i * 2, str_byte(digits, b // 16))
-        __store1(text, 17 + i * 2, str_byte(digits, b % 16))
+        __store1(text, 24 + i * 2, str_byte(digits, b // 16))
+        __store1(text, 25 + i * 2, str_byte(digits, b % 16))
         i = i + 1
     return __str(__word(text))
 
@@ -2288,11 +2291,11 @@ def bytes_fromhex(text: str) -> ptr:
         low = hex_digit(str_byte(text, i + 1))
         if high < 0 or low < 0:
             fail("ValueError", "invalid hex string")
-        __store1(data, 16 + size, high * 16 + low)
+        __store1(data, 24 + size, high * 16 + low)
         size = size + 1
         i = skip_spaces(text, i + 2)
     __store8(data, 8, __word(size))
-    __store1(data, 16 + size, 0)
+    __store1(data, 24 + size, 0)
     return bytes_tag(__str(__word(data)))
 
 # A list is a header word pointing at the list descriptor, the length, the
@@ -2580,7 +2583,7 @@ def str_from_bytes(p: ptr, size: int) -> str:
     if not utf8_valid(p, size):
         fail("ValueError", "invalid UTF-8")
     s = str_alloc(size)
-    memcpy(__offset(s, 16), p, size)
+    memcpy(__offset(s, 24), p, size)
     return __str(__word(s))
 
 # Read buffers hold the next unread offset and the end offset, followed by
@@ -2619,7 +2622,7 @@ def file_read(fd: int, buffer: ptr, size: int, path: str) -> ptr:
     if count > size:
         count = size
     data = str_alloc(count)
-    memcpy(__offset(data, 16), __offset(buffer, 24 + start), count)
+    memcpy(__offset(data, 24), __offset(buffer, 24 + start), count)
     __store8(buffer, 0, __word(start + count))
     return bytes_tag(__str(__word(data)))
 
@@ -2722,7 +2725,7 @@ def append_flags() -> int:
 
 def fs_read_file(path: str) -> str:
     data = fs_read_data(path)
-    return str_from_bytes(__offset(data, 16), __int(__load8(data, 8)))
+    return str_from_bytes(__offset(data, 24), __int(__load8(data, 8)))
 
 # Raw bytes share the string layout; the caller decides whether to decode.
 def fs_read_data(path: str) -> ptr:
@@ -2748,7 +2751,7 @@ def fs_read_data(path: str) -> ptr:
     if close(fd) < 0:
         fail_os("read", path)
     data = str_alloc(size)
-    memcpy(__offset(data, 16), buf, size)
+    memcpy(__offset(data, 24), buf, size)
     return data
 
 def fs_write_file(path: str, text: str):
@@ -2913,10 +2916,10 @@ def net_local_port(fd: int) -> int:
 # A negative count means the nonblocking operation needs readiness.
 def net_try_recv(fd: int, buffer: ptr, size: int) -> int:
     while True:
-        count = recv(fd, __offset(buffer, 16), size, 0)
+        count = recv(fd, __offset(buffer, 24), size, 0)
         if count >= 0:
             __store8(buffer, 8, __word(count))
-            __store1(buffer, 16 + count, 0)
+            __store1(buffer, 24 + count, 0)
             return count
         code = errno()
         if code == net_layout().again:
@@ -2931,7 +2934,7 @@ def net_received(buffer: ptr) -> word:
 
 def net_try_send(fd: int, data: ptr, offset: int, size: int) -> int:
     while True:
-        count = send(fd, __offset(data, 16 + offset), size - offset, net_layout().no_signal)
+        count = send(fd, __offset(data, 24 + offset), size - offset, net_layout().no_signal)
         if count >= 0:
             return count
         code = errno()
@@ -3058,7 +3061,7 @@ def random_secure_bytes(size: int) -> ptr:
         count = size - offset
         if count > 256:
             count = 256
-        if getentropy(__offset(data, 16 + offset), count) != 0:
+        if getentropy(__offset(data, 24 + offset), count) != 0:
             fail("OSError", "cannot read random bytes: " + os_reason())
         offset = offset + count
     return bytes_tag(__str(__word(data)))
@@ -3478,8 +3481,12 @@ def dict_value_at(d: ptr, entry: int) -> word:
 # `h` in [0, 2^31], so the next multiply stays below 2^62, and the final fold
 # returns a non-negative result below 2^32.
 def str_hash(s: str) -> int:
+    p = __ptr(__word(s))
+    cached = __int(__load8(p, 16))
+    if cached != 0:
+        return cached - 1
     n = __int(__load8(__ptr(__word(s)), 8))
-    b = __offset(__ptr(__word(s)), 16)
+    b = __offset(__ptr(__word(s)), 24)
     h = n
     i = 0
     while i + 4 <= n:
@@ -3496,7 +3503,9 @@ def str_hash(s: str) -> int:
         x = x % 2147483648 + x // 2147483648
         h = x % 2147483648 + x // 2147483648
     x = h * 1000003 + n
-    return x % 2147483648 + x // 2147483648
+    hash = x % 2147483648 + x // 2147483648
+    __store8(p, 16, __word(hash + 1))
+    return hash
 
 # A key's hash, which is never negative.
 def dict_hash(kind: int, key: word) -> int:
@@ -3670,7 +3679,7 @@ def format_fixed(x: float, precision: int) -> str:
         return float_to_str(x)
     size = 330 + precision
     result = str_alloc(size)
-    length = snprintf(__offset(result, 16), size, str_bytes("%." + int_to_str(precision) + "f"), x)
+    length = snprintf(__offset(result, 24), size, str_bytes("%." + int_to_str(precision) + "f"), x)
     __store8(result, 8, __word(length))
     return __str(__word(result))
 
@@ -3775,7 +3784,7 @@ def ascii_lower(s: str) -> str:
         b = str_byte(s, i)
         if b >= 65 and b <= 90:
             b = b + 32
-        __store1(result, 16 + i, b)
+        __store1(result, 24 + i, b)
         i = i + 1
     return __str(__word(result))
 
