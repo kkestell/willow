@@ -1,26 +1,26 @@
 ColorMode.AUTO
 ColorMode.AUTO    ColorMode.NEVER|
-False
-True
-True
+false
+true
+true
 mode ColorMode.NEVER
 keyword Keyword.end
 text AUTO
 nothing
-False
-False
-True
-True
-False
-False
-True
-False
-False
+false
+false
+true
+true
+false
+false
+true
+false
+false
 ColorMode.NEVER
 ColorMode.ALWAYS
 ColorMode.NEVER off
 ColorMode.AUTO auto
 ColorMode.ALWAYS on
-True
-None
+true
+none
 1

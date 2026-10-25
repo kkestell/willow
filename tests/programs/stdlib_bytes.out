@@ -1,6 +1,6 @@
 1 -1 0 1
-True True False
-True True False
+true true false
+true true false
 [61], [62], [], [63]
 [61], [622c2c63]
 [612c622c2c63]
@@ -10,8 +10,8 @@ True True False
 [61], [622d63]
 empty separator
 000f10ffab []
-True
-True
+true
+true
 0
 Hi
 abc: invalid hex string

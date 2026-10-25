@@ -6,13 +6,13 @@ hello
 /
 A=1
 0 1048576 1048576
-True
-done True
-0 True
+true
+done true
+0 true
 timeout must be finite and positive
 cannot run /nonexistent/program: No such file or directory
-command timed out after 0.2 seconds True
-True
+command timed out after 0.2 seconds true
+true
 process did not exit within 0.1 seconds
-None
+none
 -15 -15

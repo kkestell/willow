@@ -14,9 +14,6 @@
 - The checker reports the first error in a program.
 - A generic recursive alias applied to an outer type parameter
   (`def f[T](n: Nested[T])`) makes substitution recurse without end.
-- Implement lowercase `true`, `false`, and `none` in the compiler and runtime,
-  including type annotations, diagnostics, and printed values, per
-  `docs/spec.md`.
 - Migrate library sources, examples, tests, documentation, and editor support
   to the lowercase literals. Handle the bootstrap transition while preserving
   the frozen stage 1 compiler; add regression coverage and validate the

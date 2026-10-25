@@ -2,11 +2,11 @@
 404 http://127.0.0.1:PORT/status/404 status 404 404
 500 http://127.0.0.1:PORT/status/500 status 500 500
 256 0 255
-café one None
+café one none
 one, two
 {"method": "POST", "path": "/echo?a=1&b=q=x+y", "x_test": "yes", "content_type": "application/json", "body": "{\u0022name\u0022:\u0022Ada\u0022,\u0022score\u0022:3}"}
 {"method": "GET"
-True
+true
 200 http://127.0.0.1:PORT/redirect/0 done
 200 http://127.0.0.1:PORT/json {"name": "Willow", "ports": [80, 443]}
 302
@@ -16,9 +16,9 @@ True
 too many redirects
 too many redirects
 request timed out after 0.5 seconds
-True
-True
-200 256 256 True
+true
+true
+200 256 256 true
 404 0 kept
 dropped download: kept
 cannot write DIR: Is a directory

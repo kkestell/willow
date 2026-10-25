@@ -2962,8 +2962,8 @@ class Emitter:
             return self.core_call("bool_to_str", [value], True)
         elif kind == "union":
             return self.core_call("union_to_str", [value], True)
-        elif kind == "None":
-            return self.string("None")
+        elif kind == "none":
+            return self.string("none")
         elif isinstance(ty, types.EnumType):
             return self.core_call("enum_to_str", [self.descriptor(ty.decl.type_name, ty.decl.library), value], True)
         assert kind == "str", "unchecked scalar conversion"
@@ -3529,10 +3529,10 @@ def is_union(t: types.Type) -> bool:
     return isinstance(types.expand(t), types.UnionType)
 
 def may_be_none(t: types.Type) -> bool:
-    return is_union(t) or types.kind(t) == "None"
+    return is_union(t) or types.kind(t) == "none"
 
 def is_none(t: types.Type) -> bool:
-    return isinstance(t, types.Prim) and t.name == "None"
+    return isinstance(t, types.Prim) and t.name == "none"
 
 def is_os(expr: ast.Expr) -> bool:
     node = expr.node

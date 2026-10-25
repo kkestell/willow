@@ -164,10 +164,10 @@ class Printer:
             return "f[" + self.exprs(node.parts) + "]"
         if isinstance(node, ast.Constant):
             if node == ast.Constant.TRUE:
-                return "True"
+                return "true"
             if node == ast.Constant.FALSE:
-                return "False"
-            return "None"
+                return "false"
+            return "none"
         if isinstance(node, ast.Name):
             return node.name
         if isinstance(node, ast.FunctionValue):
@@ -206,8 +206,8 @@ class Printer:
             return "(" + self.expr(node.left) + " " + node.op + " " + self.expr(node.right) + ")"
         if isinstance(node, ast.Is):
             if node.negated:
-                return "(" + self.expr(node.operand) + " is not None)"
-            return "(" + self.expr(node.operand) + " is None)"
+                return "(" + self.expr(node.operand) + " is not none)"
+            return "(" + self.expr(node.operand) + " is none)"
         if isinstance(node, ast.IsInstance):
             return "isinstance(" + self.expr(node.operand) + ", " + self.type_name(node.type_name) + ")"
         if isinstance(node, ast.Await):

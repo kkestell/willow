@@ -2,12 +2,12 @@
 c
 é
 abcd
-True
-True
-True
-False
-True
-True
+true
+true
+true
+false
+true
+true
 h
 é
 !
@@ -17,8 +17,8 @@ h
 4
 2
 -1
-True
-False
+true
+false
 bbbbbb
 abc
 [pad]
@@ -37,15 +37,15 @@ x, y, z
 main
 main
 main
-True
-False
-False
-True
-False
-True
-False
-True
-False
+true
+false
+false
+true
+false
+true
+false
+true
+false
 [ab   ]
 [   ab]
 [abcdef]

@@ -367,8 +367,8 @@ def int_to_str(n: int) -> str:
 
 def bool_to_str(b: bool) -> str:
     if b:
-        return "True"
-    return "False"
+        return "true"
+    return "false"
 
 # A string is a header word pointing at the str descriptor, the byte length,
 # a cached hash plus one (zero when uncomputed), the UTF-8 bytes, and a zero
@@ -3862,7 +3862,7 @@ def union_eq(a: ptr, b: ptr) -> bool:
 
 def union_to_str(value: ptr) -> str:
     if __addr_is_null(value):
-        return "None"
+        return "none"
     kind = header(value)
     if kind == __type(str):
         return __str(__word(value))

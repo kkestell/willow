@@ -165,7 +165,7 @@ def named_union(parts: list[Type], alias: str) -> Type:
     return UnionType(flat, alias)
 
 def optional(t: Type) -> Type:
-    return union([t, prim("None")])
+    return union([t, prim("none")])
 
 # A class's type as its own body sees it: specialized by its own type
 # parameters when it is generic.
@@ -283,11 +283,11 @@ def has(t: Type, kind_name: str) -> bool:
     return False
 
 def is_optional(t: Type) -> bool:
-    return isinstance(t, UnionType) and has(t, "None")
+    return isinstance(t, UnionType) and has(t, "none")
 
 def printable(t: Type) -> bool:
     for m in members(t):
-        if kind(m) not in ["int", "float", "bool", "str", "None", "enum"]:
+        if kind(m) not in ["int", "float", "bool", "str", "none", "enum"]:
             return False
     return True
 
@@ -299,7 +299,7 @@ def comparable(t: Type) -> bool:
             for element in m.elements:
                 if not comparable(element):
                     return False
-        elif kind(m) not in ["int", "float", "bool", "str", "None", "bytes", "enum"]:
+        elif kind(m) not in ["int", "float", "bool", "str", "none", "bytes", "enum"]:
             return False
     return True
 
@@ -807,7 +807,7 @@ def items(t: TupleType) -> Type | str:
                 rest.append(m)
                 kept = rest
     if len(kept) == 0:
-        return prim("None")
+        return prim("none")
     for i in range(1, len(kept)):
         message = conflict(kept[:i], kept[i])
         if message != "":

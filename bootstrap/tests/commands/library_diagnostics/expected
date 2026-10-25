@@ -18,7 +18,7 @@ min_arguments.wlo:2:9: error: 'min' cannot be applied to int and float
 status 1
 semaphore_argument.wlo:4:23: error: expected int, received str
 status 1
-split_argument.wlo:2:15: error: expected str | None, received int
+split_argument.wlo:2:15: error: expected str | none, received int
 status 1
 split_keyword.wlo:2:15: error: 'split' has no parameter 'limit'
 status 1
@@ -26,5 +26,5 @@ splitlines_argument.wlo:2:20: error: expected bool, received int
 status 1
 sum_callable.wlo:2:34: error: 'sum' expects 1 argument, received 2
 status 1
-wait_timeout.wlo:4:12: error: expected float | None, received int
+wait_timeout.wlo:4:12: error: expected float | none, received int
 status 1

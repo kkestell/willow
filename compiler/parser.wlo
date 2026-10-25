@@ -115,6 +115,8 @@ class Parser:
             self.unexpected("a type")
             return node
         self.advance()
+        if kind == tokens.Kind.NONE:
+            node.name = "none"
         if kind == tokens.Kind.NAME or is_protocol_name(kind):
             if kind == tokens.Kind.NAME:
                 self.qualify(node, token.text, "a type name")
@@ -218,7 +220,7 @@ class Parser:
             node = ast.Binary("not in", left, self.parse_operand())
         elif token.kind == tokens.Kind.IS:
             negated = self.accept(tokens.Kind.NOT)
-            self.expect(tokens.Kind.NONE, "'None'")
+            self.expect(tokens.Kind.NONE, "'none'")
             self.reject_bitwise_or()
             node = ast.Is(negated, left)
         else:
@@ -877,7 +879,7 @@ class Parser:
                 break
         if has_star and (len(params) == 0 or not params[len(params) - 1].keyword_only):
             self.fail(star, "'*' must be followed by a keyword-only parameter")
-        return_type: ast.TypeExpr = ast.TypeName(name.line, name.col, "None", "", [], False)
+        return_type: ast.TypeExpr = ast.TypeName(name.line, name.col, "none", "", [], False)
         if self.accept(tokens.Kind.ARROW):
             return_type = self.parse_type()
         body: list[ast.Stmt] = []
@@ -908,7 +910,7 @@ class Parser:
             params.append(ast.Param(param.line, param.col, param.text, self.parse_type(), None, False))
             if self.list_end(tokens.Kind.RPAREN, "')'"):
                 break
-        return_type: ast.TypeExpr = ast.TypeName(name.line, name.col, "None", "", [], False)
+        return_type: ast.TypeExpr = ast.TypeName(name.line, name.col, "none", "", [], False)
         if self.accept(tokens.Kind.ARROW):
             return_type = self.parse_type()
         self.expect(tokens.Kind.NEWLINE, "end of line")

@@ -2,7 +2,7 @@ bare_raise.wlo:2:5: error: bare 'raise' is only allowed in an 'except' clause
 status 1
 builtin_result.wlo:2:23: error: expected str, received int
 status 1
-callable_input.wlo:4:30: error: expected (int | None) -> int, received function f
+callable_input.wlo:4:30: error: expected (int | none) -> int, received function f
 status 1
 duplicate_enum.wlo:4:5: error: duplicate enum member 'A'
 status 1
@@ -10,11 +10,11 @@ enum_ordering.wlo:5:13: error: operator '<' cannot be applied to E and E
 status 1
 expanding_alias.wlo:1:21: error: alias 'Grow' expands without end
 status 1
-field_narrowing.wlo:5:21: error: operator '+' cannot be applied to int | None and int
+field_narrowing.wlo:5:21: error: operator '+' cannot be applied to int | none and int
 status 1
 float_conversion.wlo:2:15: error: cannot convert a value of type float to float
 status 1
-index_narrowing.wlo:4:21: error: operator '+' cannot be applied to int | None and int
+index_narrowing.wlo:4:21: error: operator '+' cannot be applied to int | none and int
 status 1
 int_conversion.wlo:2:13: error: cannot convert a value of type int to int
 status 1

@@ -3,15 +3,15 @@ int 42
 str two
 no
 yes
-True
-False
-False
-True
-False
+true
+false
+false
+true
+false
 7
 5
-True
-True
+true
+true
 6
 six!
 10

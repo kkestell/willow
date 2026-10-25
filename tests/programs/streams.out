@@ -5,13 +5,13 @@ fourth
 abcd
 line
 last
-None 0 None
+none 0 none
 ab
 c
 one
 two
 0
-None
+none
 closed: I/O operation on closed file
 mode: file is not open for reading
 size: read size must be positive

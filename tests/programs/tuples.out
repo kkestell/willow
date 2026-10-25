@@ -1,7 +1,7 @@
 1
 Ada
 2
-None
+none
 3
 3
 0
@@ -12,37 +12,37 @@ b
 1
 float 1.5 2.5
 int
-True
+true
 4.5
-True
+true
 tuple Ada
 list
 none
 5
-True
-True
-True
-True
-True
-True
-False
-False
-True
-True
-False
-True
-False
-True
-False
-False
-False
-True
-True
-False
-1 False
-2.5 True
-None False
-Side.RIGHT 1.5 True
-Side.LEFT 3 False
+true
+true
+true
+true
+true
+true
+false
+false
+true
+true
+false
+true
+false
+true
+false
+false
+false
+true
+true
+false
+1 false
+2.5 true
+none false
+Side.RIGHT 1.5 true
+Side.LEFT 3 false
 2
 3

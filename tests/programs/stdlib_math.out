@@ -1,16 +1,16 @@
 3.141592653589793
 2.718281828459045
-True
+true
 -1
 0
 2
 3
 -3
-True
-False
-True
-True
-True
+true
+false
+true
+true
+true
 1024.0
 9.0
 -0.0
@@ -20,10 +20,10 @@ True
 0.0
 1.0
 0.0
-True
+true
 0.0
 0.0
-True
+true
 -3.141592653589793
 12.566370614359172
 cannot convert float to int

@@ -1,1 +1,1 @@
-async_discard_union.wlo:3:5: error: cannot discard a value of type Coroutine[int] | None; a discarded coroutine never runs
+async_discard_union.wlo:3:5: error: cannot discard a value of type Coroutine[int] | none; a discarded coroutine never runs

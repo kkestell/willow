@@ -1,0 +1,23 @@
+def find(items: list[int], wanted: int, *, strict: bool = false) -> int | none:
+    for i in range(len(items)):
+        if items[i] == wanted:
+            return i
+    if strict:
+        return -1
+    return none
+
+def log(message: str) -> none:
+    print(message)
+
+def main():
+    flag: bool = true
+    missing = find([1, 2], 3)
+    print(flag)
+    print(not flag)
+    print(missing)
+    print(missing is none)
+    print(find([1, 2], 2) is not none)
+    print(find([1, 2], 3, strict=true))
+    print(f"{false} {none} {missing}")
+    print(str(none) + str(true))
+    log("done")

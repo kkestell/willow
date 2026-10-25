@@ -1,7 +1,7 @@
 late
-200 late True
-True
-True
+200 late true
+true
+true
 POST /echo HTTP/1.1
 302 /delay
 invalid URL 'ftp://example.com/'
@@ -10,7 +10,7 @@ request timed out after 0.3 seconds
 200 9 file body
 404 0 file body
 request timed out after 0.3 seconds
-False 0
+false 0
 1
-0 False
+0 false
 client left /cancel-download, client left /cancel-request, client left /stall, client left /stall

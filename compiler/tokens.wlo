@@ -107,7 +107,8 @@ class Token:
     line: int
     col: int
 
-# The reserved words of spec §2, including the reserved type names.
+# The reserved words of spec §2, including the reserved type names. The
+# capitalized literals remain reserved until the sources move to lowercase.
 def keywords() -> dict[str, Kind]:
     return {
         "False": Kind.FALSE,
@@ -128,6 +129,7 @@ def keywords() -> dict[str, Kind]:
         "else": Kind.ELSE,
         "enum": Kind.ENUM,
         "except": Kind.EXCEPT,
+        "false": Kind.FALSE,
         "finally": Kind.FINALLY,
         "for": Kind.FOR,
         "from": Kind.FROM,
@@ -138,6 +140,7 @@ def keywords() -> dict[str, Kind]:
         "is": Kind.IS,
         "lambda": Kind.LAMBDA,
         "match": Kind.MATCH,
+        "none": Kind.NONE,
         "nonlocal": Kind.NONLOCAL,
         "not": Kind.NOT,
         "or": Kind.OR,
@@ -145,6 +148,7 @@ def keywords() -> dict[str, Kind]:
         "protocol": Kind.PROTOCOL,
         "raise": Kind.RAISE,
         "return": Kind.RETURN,
+        "true": Kind.TRUE,
         "try": Kind.TRY,
         "type": Kind.TYPE,
         "while": Kind.WHILE,

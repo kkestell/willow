@@ -11,5 +11,5 @@ ESC[1mboldESC[0m
 ESC[1;36mbothESC[0m
 off
 unknown color 'purple'
-False False False
+false false false
 progress message cannot contain a line break

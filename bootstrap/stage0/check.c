@@ -2072,7 +2072,7 @@ static bool to_str(Checker *self, Value value, const Type *ty, Value *result) {
         *result = value;
         break;
     case TYPE_None: {
-        Value text = intern(self->strings, STR("None"));
+        Value text = intern(self->strings, STR("none"));
         *result = VAL(Seq, {box_copy(&value, sizeof(value)), box_copy(&text, sizeof(text))});
         break;
     }

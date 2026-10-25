@@ -14,10 +14,10 @@ options:
   --name NAME          Your name (required)
   -v, --verbose        Say more
 
-out.txt 3 0.5 Ada False in.txt []
-x.txt 7 2.0 Ada True in.txt [a, b]
-out.txt 2 0.5 -dash False in.txt []
-out.txt 3 0.5 Ada False -in.txt [--verbose]
+out.txt 3 0.5 Ada false in.txt []
+x.txt 7 2.0 Ada true in.txt [a, b]
+out.txt 2 0.5 -dash false in.txt []
+out.txt 3 0.5 Ada false -in.txt [--verbose]
 help: 16 lines
 help: 16 lines
 tool: error: missing argument 'source'

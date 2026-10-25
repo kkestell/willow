@@ -1,1 +1,1 @@
-finally_narrowing.wlo:9:17: error: operator '+' cannot be applied to int | None and int
+finally_narrowing.wlo:9:17: error: operator '+' cannot be applied to int | none and int

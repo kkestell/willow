@@ -1,6 +1,6 @@
 q=a+b%26c&%C3%A9=x%3Dy~&empty=
 []
-text/plain one None
+text/plain one none
 invalid URL 'ftp://example.com/'
 invalid URL 'http://'
 URL user information is not allowed

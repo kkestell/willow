@@ -1,1 +1,1 @@
-group_join_capture.wlo:14:21: error: operator '+' cannot be applied to int | None and int
+group_join_capture.wlo:14:21: error: operator '+' cannot be applied to int | none and int

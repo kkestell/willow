@@ -4,7 +4,7 @@ a
 é
 65
 1
-True
+true
 2.5
 3
 2
@@ -22,8 +22,8 @@ dictionary changed size during iteration
 6
 5
 6
-False
-True
+false
+true
 x
 one
 two

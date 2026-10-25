@@ -1,1 +1,1 @@
-captured_narrowing.wlo:8:17: error: operator '+' cannot be applied to int | None and int
+captured_narrowing.wlo:8:17: error: operator '+' cannot be applied to int | none and int

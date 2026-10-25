@@ -1,7 +1,7 @@
 1
 2.5
 text
-None
+none
 named
 eprint_values.wlo:9:5: error: ValueError: done
   in main at eprint_values.wlo:9:5

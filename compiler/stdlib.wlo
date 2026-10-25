@@ -80,7 +80,7 @@ def add_helper(table: dict[str, Builtin], name: str, params: list[BuiltinParam],
 # binder resolves.
 def builtins() -> dict[str, Builtin]:
     table: dict[str, Builtin] = {}
-    add(table, "print", [any_arg("")], prim("None"))
+    add(table, "print", [any_arg("")], prim("none"))
     add(table, "str", [any_arg("")], prim("str"))
     add(table, "int", [any_arg("")], prim("int"))
     add(table, "float", [any_arg("")], prim("float"))
@@ -169,9 +169,9 @@ def intrinsics() -> dict[str, Builtin]:
     add(table, "__load1", [arg("", prim("ptr")), arg("", prim("int"))], prim("int"))
     add(table, "__load4", [arg("", prim("ptr")), arg("", prim("int"))], prim("int"))
     add(table, "__load8", [arg("", prim("ptr")), arg("", prim("int"))], prim("word"))
-    add(table, "__store1", [arg("", prim("ptr")), arg("", prim("int")), arg("", prim("int"))], prim("None"))
-    add(table, "__store4", [arg("", prim("ptr")), arg("", prim("int")), arg("", prim("int"))], prim("None"))
-    add(table, "__store8", [arg("", prim("ptr")), arg("", prim("int")), arg("", prim("word"))], prim("None"))
+    add(table, "__store1", [arg("", prim("ptr")), arg("", prim("int")), arg("", prim("int"))], prim("none"))
+    add(table, "__store4", [arg("", prim("ptr")), arg("", prim("int")), arg("", prim("int"))], prim("none"))
+    add(table, "__store8", [arg("", prim("ptr")), arg("", prim("int")), arg("", prim("word"))], prim("none"))
     add(table, "__word", [any_arg("")], prim("word"))
     add(table, "__int", [arg("", prim("word"))], prim("int"))
     add(table, "__float", [arg("", prim("word"))], prim("float"))
@@ -223,14 +223,14 @@ def protocols() -> dict[str, types.Protocol]:
     protocol_method(iterable, "iter", [], types.iterator(iterable.typevars[0]))
     manager = standard_protocol("ContextManager", -3)
     protocol_method(manager, "enter", [], manager.typevars[0])
-    protocol_method(manager, "exit", [param("error", optional_exception())], prim("None"))
+    protocol_method(manager, "exit", [param("error", optional_exception())], prim("none"))
     generator = standard_protocol("Generator", -4)
     t = generator.typevars[0]
     protocol_method(generator, "iter", [], types.iterator(t))
     protocol_method(generator, "next", [], t)
-    protocol_method(generator, "close", [], prim("None"))
+    protocol_method(generator, "close", [], prim("none"))
     protocol_method(generator, "enter", [], types.protocol_self(generator))
-    protocol_method(generator, "exit", [param("error", optional_exception())], prim("None"))
+    protocol_method(generator, "exit", [param("error", optional_exception())], prim("none"))
     return {
         "Iterator": types.iterator_protocol(),
         "Iterable": iterable,
@@ -288,7 +288,7 @@ def default_param(name: str, ty: types.Type, default: ast.Expr) -> types.Param:
 # handle and `exit` closes it.
 def scoped(decl: types.Class):
     native_method(decl, "enter", [], class_type(decl))
-    native_method(decl, "exit", [param("error", optional_exception())], prim("None"))
+    native_method(decl, "exit", [param("error", optional_exception())], prim("none"))
 
 def new_module(name: str) -> Module:
     return Module(name, {}, {}, {}, {})
@@ -297,10 +297,10 @@ def io_file() -> types.Class:
     file = native_class("io", "File", "file")
     native_method(file, "read", [param("size", prim("int"))], prim("bytes"))
     native_method(file, "readline", [], optional("str"))
-    native_method(file, "write", [param("data", prim("bytes"))], prim("None"))
-    native_method(file, "write_text", [param("text", prim("str"))], prim("None"))
-    native_method(file, "flush", [], prim("None"))
-    native_method(file, "close", [], prim("None"))
+    native_method(file, "write", [param("data", prim("bytes"))], prim("none"))
+    native_method(file, "write_text", [param("text", prim("str"))], prim("none"))
+    native_method(file, "flush", [], prim("none"))
+    native_method(file, "close", [], prim("none"))
     native_method(file, "iter", [], types.iterator(prim("str")))
     scoped(file)
     return file
@@ -329,10 +329,10 @@ def dispatched() -> list[types.Class]:
     t = types.TypeVar(-17, "T", None)
     generator = dispatched_class("<generator>", "generator", t)
     native_method(generator, "next", [], t)
-    native_method(generator, "close", [], prim("None"))
+    native_method(generator, "close", [], prim("none"))
     generators = protocols()["Generator"]
     native_method(generator, "enter", [], types.ProtocolType(generators, [t]))
-    native_method(generator, "exit", [param("error", optional_exception())], prim("None"))
+    native_method(generator, "exit", [param("error", optional_exception())], prim("none"))
     result.append(generator)
     return result
 

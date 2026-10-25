@@ -153,7 +153,7 @@ def main():
         ["main.wlo:4:11: error: type parameter 'T' hides another type parameter", "class Box[T]:\n    value: T\n\n    def m[T](self, x: T) -> T:\n        return x\ndef main():\n    pass\n"],
         ["main.wlo:1:1: error: program has no main function", "def f():\n    pass\n"],
         ["main.wlo:1:1: error: program has no main function", "class main:\n    x: int\n"],
-        ["main.wlo:1:5: error: main must take no parameters and return None", "def main(x: int):\n    pass\n"],
+        ["main.wlo:1:5: error: main must take no parameters and return none", "def main(x: int):\n    pass\n"],
         # Names
         ["main.wlo:2:9: error: unknown name 'y'", "def main():\n    x = y\n"],
         ["main.wlo:2:5: error: unknown function 'g'", "def main():\n    g()\n"],
@@ -187,10 +187,10 @@ def main():
         ["main.wlo:3:18: error: nonlocal 'n' must name a variable of an enclosing function", "def main():\n    def g(n: int):\n        nonlocal n\n"],
         ["main.wlo:5:18: error: 'x' is used before its nonlocal declaration", "def main():\n    x = 1\n    def g():\n        x = 2\n        nonlocal x\n"],
         ["main.wlo:4:13: error: 'x' is used before its nonlocal declaration", "def main():\n    x = 1\n    def g():\n        y = x\n        nonlocal x\n        x = 2\n"],
-        ["main [x*, g] [] { x = 1; def g() -> None { nonlocal x; x = (x + 1) }; (g)() }\ng [] [x] { nonlocal x; x = (x + 1) }", "def main():\n    x = 1\n    def g():\n        nonlocal x\n        x = x + 1\n    g()\n"],
-        ["main [x*, h] [] { x = 1; def h() -> None { def k() -> None { y = x } } }\nh [k] [x] { def k() -> None { y = x } }\nk [y] [x] { y = x }", "def main():\n    x = 1\n    def h():\n        def k():\n            y = x\n"],
-        ["f [] [] { return None }\nmain [a, b, c, e, k, v, i] [] { <a, b> = f(); for c in f() { pass }; try { pass } except E as e { pass }; for <k, v> in f() { i = 1 } }",
-            "class E(Exception):\n    pass\ndef f():\n    return None\ndef main():\n    a, b = f()\n    for c in f():\n        pass\n    try:\n        pass\n    except E as e:\n        pass\n    for k, v in f():\n        i = 1\n", ],
+        ["main [x*, g] [] { x = 1; def g() -> none { nonlocal x; x = (x + 1) }; (g)() }\ng [] [x] { nonlocal x; x = (x + 1) }", "def main():\n    x = 1\n    def g():\n        nonlocal x\n        x = x + 1\n    g()\n"],
+        ["main [x*, h] [] { x = 1; def h() -> none { def k() -> none { y = x } } }\nh [k] [x] { def k() -> none { y = x } }\nk [y] [x] { y = x }", "def main():\n    x = 1\n    def h():\n        def k():\n            y = x\n"],
+        ["f [] [] { return none }\nmain [a, b, c, e, k, v, i] [] { <a, b> = f(); for c in f() { pass }; try { pass } except E as e { pass }; for <k, v> in f() { i = 1 } }",
+            "class E(Exception):\n    pass\ndef f():\n    return none\ndef main():\n    a, b = f()\n    for c in f():\n        pass\n    try:\n        pass\n    except E as e:\n        pass\n    for k, v in f():\n        i = 1\n", ],
         ["f [] [] { pass }\nmain [g, y] [] { g = f; (g)(1); y = E.A; a.h(E.A) }\nh [] [] { pass }", "import a\nenum E:\n    A\ndef f(x: int):\n    pass\ndef main():\n    g = f\n    g(1)\n    y = E.A\n    a.h(E.A)\n", "a", "def h(x: int):\n    pass\n"],
         ["main [x*, f] [] { x = 1; f = (lambda y: (x + y)) }", "def main():\n    x = 1\n    f = lambda y: x + y\n"],
         ["f [] [] { pass }\nmain [f] [] { f = 1; (f)() }", "def f():\n    pass\ndef main():\n    f = 1\n    f()\n"],
@@ -204,17 +204,17 @@ def main():
         ["main.wlo:2:19: error: duplicate parameter 'y'", "def main():\n    f = lambda y, y: y\n"],
         ["main.wlo:3:19: error: duplicate parameter 'a'", "def main():\n    x = 1\n    def g(a: int, a: int):\n        pass\n"],
         ["main.wlo:3:7: error: 'a.h' is not generic", "import a\ndef main():\n    a.h[int](1)\n", "a", "def h(x: int):\n    pass\n"],
-        ["main [p, x*, g] [] { p = 1; for x in p { def g() -> None { y = x } } }\ng [y] [x] { y = x }", "def main():\n    p = 1\n    for x in p:\n        def g():\n            y = x\n"],
+        ["main [p, x*, g] [] { p = 1; for x in p { def g() -> none { y = x } } }\ng [y] [x] { y = x }", "def main():\n    p = 1\n    for x in p:\n        def g():\n            y = x\n"],
         ["first [] [] { return x }\nmain [xs, i] [] { xs = i; i = xs[i]; first[int](xs) }", "def first[T](x: T) -> T:\n    return x\ndef main():\n    xs = i\n    i = xs[i]\n    first[int](xs)\n"],
         # Types
         ["main.wlo:1:10: error: alias 'A' expands to itself", "type A = A | int\ndef main():\n    pass\n"],
         ["main.wlo:2:16: error: alias 'A' expands to itself", "type A = B\ntype B = int | A\ndef main():\n    pass\n"],
-        ["main.wlo:1:13: error: alias 'S' expands to itself", "type S[T] = S[T] | None\ndef main():\n    pass\n"],
-        ["main.wlo:2:10: error: type 'Opt' needs type arguments", "type Opt[T] = T | None\ndef f(x: Opt):\n    pass\ndef main():\n    pass\n"],
-        ["main.wlo:2:10: error: 'Opt' expects 1 type argument, received 2", "type Opt[T] = T | None\ndef f(x: Opt[int, str]):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:13: error: alias 'S' expands to itself", "type S[T] = S[T] | none\ndef main():\n    pass\n"],
+        ["main.wlo:2:10: error: type 'Opt' needs type arguments", "type Opt[T] = T | none\ndef f(x: Opt):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:2:10: error: 'Opt' expects 1 type argument, received 2", "type Opt[T] = T | none\ndef f(x: Opt[int, str]):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:2:10: error: type 'I' does not take type arguments", "type I = int\ndef f(x: I[str]):\n    pass\ndef main():\n    pass\n"],
-        ["main.wlo:1:13: error: a type parameter can be in a union only with None", "type G[T] = T | list[G[list[T]]]\ndef f(g: G[int]):\n    pass\ndef main():\n    pass\n"],
-        ["main.wlo:1:13: error: a type parameter can be in a union only with None", "def f[T](x: T | int) -> T:\n    return x\ndef main():\n    pass\n"],
+        ["main.wlo:1:13: error: a type parameter can be in a union only with none", "type G[T] = T | list[G[list[T]]]\ndef f(g: G[int]):\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:1:13: error: a type parameter can be in a union only with none", "def f[T](x: T | int) -> T:\n    return x\ndef main():\n    pass\n"],
         ["main.wlo:1:13: error: type parameter 'T' does not take type arguments", "def f[T](x: T[int]) -> T:\n    return x\ndef main():\n    pass\n"],
         ["main.wlo:1:10: error: a type parameter's bound must be a class, native type, or protocol", "def f[T: int](x: T) -> T:\n    return x\ndef main():\n    pass\n"],
         ["main.wlo:5:14: error: type argument int does not satisfy the bound Named of 'T'", "protocol Named:\n    def name(self) -> str\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[int]):\n    pass\ndef main():\n    pass\n"],
@@ -230,11 +230,11 @@ def main():
         ["main.wlo:3:16: error: unknown enum 'K'", "class K:\n    x: int\ndef f(x: int = K.x):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:18: error: expected float, received int", "def f(x: float = 1):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:2:14: error: expected str, received int", "class C:\n    x: str = 1\ndef main():\n    pass\n"],
-        ["main.wlo:1:11: error: main must take no parameters and return None", "async def main() -> int:\n    return 1\n"],
-        ["main.wlo:1:5: error: main must take no parameters and return None", "def main() -> int:\n    return 1\n"],
+        ["main.wlo:1:11: error: main must take no parameters and return none", "async def main() -> int:\n    return 1\n"],
+        ["main.wlo:1:5: error: main must take no parameters and return none", "def main() -> int:\n    return 1\n"],
         ["main.wlo:3:17: error: class 'handles.Connection' cannot be used as a value", "import handles\ndef main():\n    x = handles.Connection\n", "handles", "class Connection:\n    value: int\n"],
         ["main.wlo:2:23: error: 'Coroutine' cannot be used in isinstance", "def main():\n    b = isinstance(1, Coroutine)\n"],
-        ["main.wlo:3:29: error: type 'Coroutine' needs type arguments", "async def g() -> int:\n    return 1\ndef f(c: Coroutine[int], d: Coroutine) -> None:\n    pass\ndef main():\n    pass\n"],
+        ["main.wlo:3:29: error: type 'Coroutine' needs type arguments", "async def g() -> int:\n    return 1\ndef f(c: Coroutine[int], d: Coroutine) -> none:\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:9: error: exception classes cannot be generic", "class E[T](Exception):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:7: error: cannot redefine built-in class 'ValueError'", "class ValueError:\n    x: int\ndef main():\n    pass\n"],
         ["main.wlo:3:10: error: type 'Box' needs type arguments", "class Box[T]:\n    v: T\ndef f(b: Box):\n    pass\ndef main():\n    pass\n"],
@@ -253,22 +253,22 @@ def main():
             print(f"  actual:   {actual}")
             ok = False
     signature_cases = [
-        ["main: def f(box: C, index: int) -> None\nmain: def main() -> None\nmain: field C.items: list[int]", "class C:\n    items: list[int]\ndef f(box: C, index: int):\n    box.items[index]()\ndef main():\n    pass\n"],
-        ["main: def f(box: C) -> None\nmain: def main() -> None\nmain: field C.items: dict[E, int]", "enum E:\n    A\nclass C:\n    items: dict[E, int]\ndef f(box: C):\n    box.items[E.A]()\ndef main():\n    pass\n"],
-        ["main: def f(t: Tree, j: J) -> list[Tree]\nmain: def main() -> None", "type Tree = int | list[Tree]\ntype J = None | dict[str, J]\ndef f(t: Tree, j: J) -> list[Tree]:\n    return [t]\ndef main():\n    pass\n"],
-        ["main: def f(p: tuple[int, str], o: Opt[int], q: Opt[list[int]]) -> Opt[str]\nmain: def main() -> None", "type Pair[K, V] = tuple[K, V]\ntype Opt[T] = T | None\ndef f(p: Pair[int, str], o: Opt[int], q: Opt[list[int]]) -> Opt[str]:\n    return None\ndef main():\n    pass\n"],
-        ["main: def f(x: None, y: Opt[int | None]) -> None\nmain: def main() -> None", "type Opt[T] = T | None\ndef f(x: Opt[None], y: Opt[int | None]):\n    pass\ndef main():\n    pass\n"],
-        ["main: def f(x: list[Count], y: dict[str, Count]) -> list[list[Count]]\nmain: def main() -> None", "type Count = int\ndef f(x: list[Count], y: dict[str, Count]) -> list[list[Count]]:\n    return []\ndef main():\n    pass\n"],
-        ["main: def f(connection: handles.Connection) -> handles.Connection\nmain: def main() -> None\nhandles: field handles.Connection.value: int", "import handles\ndef f(connection: handles.Connection) -> handles.Connection:\n    return connection\ndef main():\n    pass\n", "handles", "class Connection:\n    value: int\n"],
-        ["main: def f(x: E, y: E | None, z: tuple[E, int]) -> None\nmain: def main() -> None\nmain: field C.e: E", "enum E:\n    A\n    B\ndef f(x: E = E.B, y: E | None = None, z: tuple[E, int] = (E.A, -1)):\n    pass\nclass C:\n    e: E = E.A\ndef main():\n    pass\n"],
-        ["main: def f(x: (int) -> str | None, y: ((int) -> str) | None) -> None\nmain: def main() -> None", "def f(x: (int) -> str | None, y: ((int) -> str) | None):\n    pass\ndef main():\n    pass\n"],
-        ["main: def f(x: P | C | None) -> None\nmain: def main() -> None\nmain: field C.x: int", "protocol P:\n    def m(self) -> int\nclass C:\n    x: int\ndef f(x: P | C | None):\n    pass\ndef main():\n    pass\n"],
-        ["main: def f(x: T) -> T\nmain: def g(b: Box[P]) -> None\nmain: def main() -> None\nmain: def P.name(self: P) -> str\nmain: field P.n: str\nmain: field Box.v: T", "protocol Named:\n    def name(self) -> str\nclass P:\n    n: str\n    def name(self) -> str:\n        return self.n\ndef f[T: Named](x: T) -> T:\n    return x\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[P]):\n    pass\ndef main():\n    pass\n"],
-        ["main: def f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind\nmain: def main() -> None\nshapes: field shapes.Circle.r: float\nshapes: field shapes.Square.s: float", "import shapes\ndef f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind:\n    return shapes.Kind.A\ndef main():\n    pass\n", "shapes", "type Shape = Circle | Square\nclass Circle:\n    r: float\nclass Square:\n    s: float\nenum Kind:\n    A\n"],
-        ["main: def main() -> Coroutine[None]", "async def main():\n    pass\n"],
-        ["main: def f(b: Box[list[int]], s: list[list[int]], u: Box[list[int | float]]) -> Box[list[int]]\nmain: def main() -> None\nmain: field Box.item: T", "class Box[T: Iterable[int | float]]:\n    item: T\ntype SBox[T: Iterable[int]] = list[T]\ndef f(b: Box[list[int]], s: SBox[list[int]], u: Box[list[int | float]]) -> Box[list[int]]:\n    return b\ndef main():\n    pass\n"],
-        ["main: def f(b: Box[L]) -> None\nmain: def main() -> None\nmain: def L.items(self: L) -> list[int]\nmain: field Box.item: T", "protocol HasList:\n    def items(self) -> list[int]\nclass L:\n    def items(self) -> list[int]:\n        return [1]\nclass Box[T: HasList]:\n    item: T\ndef f(b: Box[L]):\n    pass\ndef main():\n    pass\n"],
-        ["main: def f(a: tuple[int, str], b: tuple[()], c: tuple[int]) -> None\nmain: def main() -> None", "def f(a: tuple[int, str], b: tuple[()], c: tuple[int]):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(box: C, index: int) -> none\nmain: def main() -> none\nmain: field C.items: list[int]", "class C:\n    items: list[int]\ndef f(box: C, index: int):\n    box.items[index]()\ndef main():\n    pass\n"],
+        ["main: def f(box: C) -> none\nmain: def main() -> none\nmain: field C.items: dict[E, int]", "enum E:\n    A\nclass C:\n    items: dict[E, int]\ndef f(box: C):\n    box.items[E.A]()\ndef main():\n    pass\n"],
+        ["main: def f(t: Tree, j: J) -> list[Tree]\nmain: def main() -> none", "type Tree = int | list[Tree]\ntype J = none | dict[str, J]\ndef f(t: Tree, j: J) -> list[Tree]:\n    return [t]\ndef main():\n    pass\n"],
+        ["main: def f(p: tuple[int, str], o: Opt[int], q: Opt[list[int]]) -> Opt[str]\nmain: def main() -> none", "type Pair[K, V] = tuple[K, V]\ntype Opt[T] = T | none\ndef f(p: Pair[int, str], o: Opt[int], q: Opt[list[int]]) -> Opt[str]:\n    return none\ndef main():\n    pass\n"],
+        ["main: def f(x: none, y: Opt[int | none]) -> none\nmain: def main() -> none", "type Opt[T] = T | none\ndef f(x: Opt[none], y: Opt[int | none]):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(x: list[Count], y: dict[str, Count]) -> list[list[Count]]\nmain: def main() -> none", "type Count = int\ndef f(x: list[Count], y: dict[str, Count]) -> list[list[Count]]:\n    return []\ndef main():\n    pass\n"],
+        ["main: def f(connection: handles.Connection) -> handles.Connection\nmain: def main() -> none\nhandles: field handles.Connection.value: int", "import handles\ndef f(connection: handles.Connection) -> handles.Connection:\n    return connection\ndef main():\n    pass\n", "handles", "class Connection:\n    value: int\n"],
+        ["main: def f(x: E, y: E | none, z: tuple[E, int]) -> none\nmain: def main() -> none\nmain: field C.e: E", "enum E:\n    A\n    B\ndef f(x: E = E.B, y: E | none = none, z: tuple[E, int] = (E.A, -1)):\n    pass\nclass C:\n    e: E = E.A\ndef main():\n    pass\n"],
+        ["main: def f(x: (int) -> str | none, y: ((int) -> str) | none) -> none\nmain: def main() -> none", "def f(x: (int) -> str | none, y: ((int) -> str) | none):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(x: P | C | none) -> none\nmain: def main() -> none\nmain: field C.x: int", "protocol P:\n    def m(self) -> int\nclass C:\n    x: int\ndef f(x: P | C | none):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(x: T) -> T\nmain: def g(b: Box[P]) -> none\nmain: def main() -> none\nmain: def P.name(self: P) -> str\nmain: field P.n: str\nmain: field Box.v: T", "protocol Named:\n    def name(self) -> str\nclass P:\n    n: str\n    def name(self) -> str:\n        return self.n\ndef f[T: Named](x: T) -> T:\n    return x\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[P]):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind\nmain: def main() -> none\nshapes: field shapes.Circle.r: float\nshapes: field shapes.Square.s: float", "import shapes\ndef f(s: shapes.Shape, c: shapes.Circle) -> shapes.Kind:\n    return shapes.Kind.A\ndef main():\n    pass\n", "shapes", "type Shape = Circle | Square\nclass Circle:\n    r: float\nclass Square:\n    s: float\nenum Kind:\n    A\n"],
+        ["main: def main() -> Coroutine[none]", "async def main():\n    pass\n"],
+        ["main: def f(b: Box[list[int]], s: list[list[int]], u: Box[list[int | float]]) -> Box[list[int]]\nmain: def main() -> none\nmain: field Box.item: T", "class Box[T: Iterable[int | float]]:\n    item: T\ntype SBox[T: Iterable[int]] = list[T]\ndef f(b: Box[list[int]], s: SBox[list[int]], u: Box[list[int | float]]) -> Box[list[int]]:\n    return b\ndef main():\n    pass\n"],
+        ["main: def f(b: Box[L]) -> none\nmain: def main() -> none\nmain: def L.items(self: L) -> list[int]\nmain: field Box.item: T", "protocol HasList:\n    def items(self) -> list[int]\nclass L:\n    def items(self) -> list[int]:\n        return [1]\nclass Box[T: HasList]:\n    item: T\ndef f(b: Box[L]):\n    pass\ndef main():\n    pass\n"],
+        ["main: def f(a: tuple[int, str], b: tuple[()], c: tuple[int]) -> none\nmain: def main() -> none", "def f(a: tuple[int, str], b: tuple[()], c: tuple[int]):\n    pass\ndef main():\n    pass\n"],
     ]
     for program in signature_cases:
         actual = signatures(program, False)
@@ -279,9 +279,9 @@ def main():
             ok = False
     # A test file needs no main; its tests take no parameters and return None.
     test_cases = [
-        ["main: def test_b() -> None\nmain: def test_a() -> None\nmain: def test_c() -> Coroutine[None]", "def test_b():\n    pass\ndef test_a():\n    pass\nasync def test_c():\n    pass\n"],
-        ["main.wlo:1:5: error: test function 'test_a' must take no parameters and return None", "def test_a(x: int):\n    pass\n"],
-        ["main.wlo:1:5: error: test function 'test_b' must take no parameters and return None", "def test_b() -> int:\n    return 1\ndef test_a():\n    pass\n"],
+        ["main: def test_b() -> none\nmain: def test_a() -> none\nmain: def test_c() -> Coroutine[none]", "def test_b():\n    pass\ndef test_a():\n    pass\nasync def test_c():\n    pass\n"],
+        ["main.wlo:1:5: error: test function 'test_a' must take no parameters and return none", "def test_a(x: int):\n    pass\n"],
+        ["main.wlo:1:5: error: test function 'test_b' must take no parameters and return none", "def test_b() -> int:\n    return 1\ndef test_a():\n    pass\n"],
     ]
     for program in test_cases:
         actual = signatures(program, True)
@@ -301,7 +301,7 @@ def main():
         if " ".join(order) != "test_a test_b":
             print("FAIL tests in name order: " + " ".join(order))
             ok = False
-    names = function_names(["", "import a\nprotocol P:\n    def f(self) -> int\n    def g(self) -> int\nclass C:\n    x: int\n    def m(self) -> int:\n        return 1\ndef h() -> int:\n    return 1\ndef main():\n    if True:\n        def g[T](x: T) -> T:\n            return x\n    else:\n        def g[T](x: T) -> T:\n            f = lambda: x\n            return x\n", "a", "class D:\n    y: int\n    def n(self):\n        pass\n"])
+    names = function_names(["", "import a\nprotocol P:\n    def f(self) -> int\n    def g(self) -> int\nclass C:\n    x: int\n    def m(self) -> int:\n        return 1\ndef h() -> int:\n    return 1\ndef main():\n    if true:\n        def g[T](x: T) -> T:\n            return x\n    else:\n        def g[T](x: T) -> T:\n            f = lambda: x\n            return x\n", "a", "class D:\n    y: int\n    def n(self):\n        pass\n"])
     expected = "P.f P.g C.m h main main.g main.g main.g.<lambda> a.D.n"
     if names != expected:
         print("FAIL function ids and type names")

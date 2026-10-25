@@ -10,9 +10,9 @@ FAIL test_a.wlo test_a
   test did not return (exit status 1)
 0 passed, 1 failed
 status 1
-test_c.wlo:1:5: error: test function 'test_c' must take no parameters and return None
+test_c.wlo:1:5: error: test function 'test_c' must take no parameters and return none
 status 1
-test_c.wlo:1:11: error: test function 'test_c' must take no parameters and return None
+test_c.wlo:1:11: error: test function 'test_c' must take no parameters and return none
 status 1
 error: no tests found in empty
 status 1

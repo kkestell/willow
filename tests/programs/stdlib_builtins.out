@@ -10,7 +10,7 @@ yield 0
 yield 1
 yield 2
 6 0.75 0.0 3
-True False True False
+true false true false
 3 4 3 1
 0 1 2 3 
 yield 0
@@ -29,9 +29,9 @@ grace
 2
 ada=1
 grace=2
-1 0 None
-True
-True 5
+1 0 none
+true
+true 5
 dictionary changed size during iteration
 -1 2 -3 
 6

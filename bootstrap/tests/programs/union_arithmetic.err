@@ -1,1 +1,1 @@
-union_arithmetic.wlo:3:13: error: operator '+' cannot be applied to int | None and int
+union_arithmetic.wlo:3:13: error: operator '+' cannot be applied to int | none and int

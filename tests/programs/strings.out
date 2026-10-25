@@ -5,36 +5,36 @@ first line
     indented line
 last line
 38
-True
+true
 Aé😀
 2
-1|-2.5|True|None|None|0.25|s|7
+1|-2.5|true|none|none|0.25|s|7
 first
 second
 firstsecond
 1 Willow! 2
 
 {}
-12.0FalseNoneNonex
+12.0falsenonenonex
 0.30000000000000004
 11
 6
 -1
 0
-True
-True
+true
+true
 a
 ñ
 😀
-True
-False
-True
-True
-False
-True
-True
-True
-False
+true
+false
+true
+true
+false
+true
+true
+true
+false
 bbbbbb
 bb
 -a-b-c-

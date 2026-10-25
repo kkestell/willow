@@ -211,7 +211,7 @@ class Binder:
                 self.fail(module, decl.line, decl.col, "extern functions are only allowed in core")
                 return False
             decl.id = self.new_id()
-            decl.record = types.Function(decl.id, decl.name, type_name, [], [], types.prim("None"))
+            decl.record = types.Function(decl.id, decl.name, type_name, [], [], types.prim("none"))
         elif isinstance(decl, ast.ClassDecl):
             if decl.exception and len(decl.type_params) > 0:
                 first = decl.type_params[0]
@@ -243,7 +243,7 @@ class Binder:
     def declare_method(self, method: ast.FunctionDecl, type_name: str) -> types.Function:
         method.id = self.new_id()
         method.type_name = type_name + "." + method.name
-        record = types.Function(method.id, method.name, method.type_name, [], [], types.prim("None"))
+        record = types.Function(method.id, method.name, method.type_name, [], [], types.prim("none"))
         method.record = record
         return record
 
@@ -267,9 +267,9 @@ class Binder:
                 # The compiler converts eprint's printable argument to text
                 # and recognizes exit as a control transfer.
                 if name == "eprint":
-                    return stdlib.Builtin(name, [stdlib.any_arg("value")], types.prim("None"), "")
+                    return stdlib.Builtin(name, [stdlib.any_arg("value")], types.prim("none"), "")
                 if name == "exit":
-                    return stdlib.Builtin(name, [stdlib.arg("status", types.prim("int"))], types.prim("None"), "")
+                    return stdlib.Builtin(name, [stdlib.arg("status", types.prim("int"))], types.prim("none"), "")
             return target.names[name]
         provided = module.provided[path]
         if name in provided.functions:
@@ -476,12 +476,12 @@ class Binder:
                 applied = application.ty
                 if applied is None:
                     self.fail(module, line, col, f"alias '{decl.name}' expands to itself")
-                    return types.prim("None")
+                    return types.prim("none")
                 return applied
         depth = scope.depth + 1
         if depth > 100:
             self.fail(module, line, col, f"alias '{decl.name}' expands without end")
-            return types.prim("None")
+            return types.prim("none")
         application = Application(args, None)
         state.applications.append(application)
         names: dict[str, types.Type] = {}
@@ -519,9 +519,9 @@ class Binder:
     # The type that `node`, written in `module`, names in `scope`. `name`
     # names a union.
     def resolve_type(self, node: ast.TypeExpr, module: ast.Module, scope: TypeScope, name: str) -> types.Type:
-        none = types.prim("None")
+        none_type = types.prim("none")
         if self.error is not None:
-            return none
+            return none_type
         if isinstance(node, ast.UnionType):
             return self.resolve_union(node, module, scope, name)
         if isinstance(node, ast.CallableType):
@@ -538,7 +538,7 @@ class Binder:
                 key = self.resolve_type(key_node, module, scope, "")
                 if self.error is None and not types.is_key(key):
                     self.fail(module, parser.type_line(key_node), parser.type_col(key_node), "dictionary keys must be int, str, or an enum")
-                    return none
+                    return none_type
                 return types.DictType(key, self.lazy(node.args[1], module, scope))
             if written == "tuple":
                 elements: list[types.Type] = []
@@ -556,7 +556,7 @@ class Binder:
                 return found
         named = self.resolve_named(module, node)
         if named is None:
-            return none
+            return none_type
         type_name = named_type_name(named)
         vars = named_typevars(named)
         count = len(vars)
@@ -567,16 +567,16 @@ class Binder:
             # arguments.
             if not node.has_args:
                 self.fail(module, node.line, node.col, f"type '{type_name}' needs type arguments")
-                return none
+                return none_type
             if len(node.args) != count:
                 self.fail(module, node.line, node.col, f"'{type_name}' expects {count} {plural(count, 'type argument')}, received {len(node.args)}")
-                return none
+                return none_type
             resolved: list[types.Type] = []
             for i in range(count):
                 arg = node.args[i]
                 resolved.append(self.resolve_type(arg, module, scope, ""))
                 if self.error is not None:
-                    return none
+                    return none_type
                 if i < len(vars) and vars[i].bound is not None:
                     self.waiting.append(Bound(module, vars[i], resolved[i], parser.type_line(arg), parser.type_col(arg)))
             if isinstance(named, AliasState):
@@ -587,14 +587,14 @@ class Binder:
                 return types.ClassType(named, resolved)
         if node.has_args:
             self.fail(module, node.line, node.col, f"type '{type_name}' does not take type arguments")
-            return none
+            return none_type
         if isinstance(named, AliasState):
             if named.resolving:
                 self.fail(module, node.line, node.col, f"alias '{named.decl.name}' expands to itself")
-                return none
+                return none_type
             aliased = self.resolve_alias(named)
             if aliased is None:
-                return none
+                return none_type
             return aliased
         if isinstance(named, ProvidedAlias):
             return named.ty
@@ -618,7 +618,7 @@ class Binder:
         for member in node.members:
             resolved = self.resolve_type(member, module, scope, "")
             if self.error is not None:
-                return types.prim("None")
+                return types.prim("none")
             for m in types.members(resolved):
                 held = False
                 if substituted:
@@ -637,8 +637,8 @@ class Binder:
             self.check_overlap(overlap)
         union = types.named_union(overlap.members, name)
         for m in overlap.members:
-            if isinstance(m, types.TypeVar) and not (len(overlap.members) == 2 and types.has(union, "None")):
-                self.fail(module, node.line, node.col, "a type parameter can be in a union only with None")
+            if isinstance(m, types.TypeVar) and not (len(overlap.members) == 2 and types.has(union, "none")):
+                self.fail(module, node.line, node.col, "a type parameter can be in a union only with none")
                 return union
         return union
 
@@ -653,7 +653,7 @@ class Binder:
             self.resolve_extern(module, function, record)
             return
         scope = outer
-        self_type: types.Type = types.prim("None")
+        self_type: types.Type = types.prim("none")
         owner = function.owner
         if isinstance(owner, ast.ClassDecl):
             owner_record = owner.record
@@ -731,7 +731,7 @@ class Binder:
         if isinstance(node, ast.String):
             return types.prim("str")
         if isinstance(node, ast.Constant) and node == ast.Constant.NONE:
-            return types.prim("None")
+            return types.prim("none")
         return types.prim("bool")
 
     # Checks that `default`, the default of a parameter or field of type
@@ -975,7 +975,7 @@ class Resolver:
             self.binder.check_unique(self.module, params, "parameter")
             # Its result type comes from where it is used, so its return
             # type is a placeholder and it has no signature.
-            result = ast.TypeName(expr.line, expr.col, "None", "", [], False)
+            result = ast.TypeName(expr.line, expr.col, "none", "", [], False)
             body = [ast.Stmt(expr.line, expr.col, ast.Return(node.body))]
             function = ast.FunctionDecl(expr.line, expr.col, "<lambda>", [], node.params, result, body, False, [], [])
             function.id = self.binder.new_id()
@@ -1407,7 +1407,7 @@ class Resolver:
         nested.id = self.binder.new_id()
         nested.parent = self.function
         nested.type_name = self.function.type_name + "." + nested.name
-        record = types.Function(nested.id, nested.name, nested.type_name, [], [], types.prim("None"))
+        record = types.Function(nested.id, nested.name, nested.type_name, [], [], types.prim("none"))
         nested.record = record
         self.binder.resolve_signature(self.module, nested, self.type_scope)
         self.binder.check_waiting()
@@ -1560,7 +1560,7 @@ def check_main(binder: Binder, entry: ast.Module):
         binder.fail(entry, 1, 1, "program has no main function")
         return
     if len(main.params) > 0 or not returns_none(main):
-        binder.fail(entry, main.line, main.col, "main must take no parameters and return None")
+        binder.fail(entry, main.line, main.col, "main must take no parameters and return none")
 
 # A test entry's tests are its functions whose names begin with `test_`, in
 # order of name.
@@ -1568,7 +1568,7 @@ def check_tests(binder: Binder, entry: ast.Module):
     for decl in entry.declarations:
         if isinstance(decl, ast.FunctionDecl) and decl.name.startswith("test_"):
             if len(decl.params) > 0 or not returns_none(decl):
-                binder.fail(entry, decl.line, decl.col, f"test function '{decl.name}' must take no parameters and return None")
+                binder.fail(entry, decl.line, decl.col, f"test function '{decl.name}' must take no parameters and return none")
                 return
             i = len(entry.tests)
             entry.tests.append(decl)
@@ -1586,7 +1586,7 @@ def returns_none(function: ast.FunctionDecl) -> bool:
     result = record.result
     if function.is_async and isinstance(result, types.ClassType) and len(result.args) == 1:
         result = result.args[0]
-    return isinstance(result, types.Prim) and result.name == "None"
+    return isinstance(result, types.Prim) and result.name == "none"
 
 # The functions of `module` that have bodies, followed by the methods of its
 # classes.
@@ -1726,7 +1726,7 @@ def is_cint(node: ast.TypeExpr) -> bool:
     return isinstance(node, ast.TypeName) and node.module == "" and node.name == "cint"
 
 def is_scalar(name: str) -> bool:
-    return name in ["int", "float", "bool", "str", "bytes", "None"]
+    return name in ["int", "float", "bool", "str", "bytes", "none"]
 
 # The type names that isinstance takes without a declaration.
 def is_builtin_type(name: str) -> bool:

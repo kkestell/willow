@@ -7,7 +7,7 @@ None
 y 141
 hello
 []
-1048576 True
+1048576 true
 0
 /
 A=1
@@ -17,8 +17,8 @@ empty: args must contain a nonempty executable name
 nul: argument contains a NUL character
 timeout: timeout must be finite and positive
 missing: cannot run /nonexistent/program: No such file or directory
-command timed out after 0.2 seconds True
-None
+command timed out after 0.2 seconds true
+none
 process did not exit within 0.1 seconds
 -15 -15 -15
 0

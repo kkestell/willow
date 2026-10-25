@@ -1,1 +1,1 @@
-generic_invariant.wlo:5:30: error: expected Box[int | None], received Box[int]
+generic_invariant.wlo:5:30: error: expected Box[int | none], received Box[int]

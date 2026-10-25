@@ -1,1 +1,1 @@
-optional_field.wlo:6:22: error: type Node | None has no field 'value'
+optional_field.wlo:6:22: error: type Node | none has no field 'value'

@@ -7,7 +7,7 @@ make
 5
 2.5
 hi
-True
-False
+true
+false
 42
 cannot convert str to int

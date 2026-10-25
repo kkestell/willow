@@ -1,6 +1,6 @@
-out -2 3 None
+out -2 3 none
 0.5
-True
-out -2 None Kind.FANCY
-True
-other 7 3 None
+true
+out -2 none Kind.FANCY
+true
+other 7 3 none

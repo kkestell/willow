@@ -238,7 +238,7 @@ String type_name(const Type *self) {
     case TYPE_Str:
         return STR("str");
     case TYPE_None:
-        return STR("None");
+        return STR("none");
     case TYPE_Ptr:
         return STR("ptr");
     case TYPE_Word:

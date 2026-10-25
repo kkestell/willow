@@ -1,1 +1,1 @@
-group_task_type.wlo:8:44: error: expected aio.Task[int | None], received aio.Task[int]
+group_task_type.wlo:8:44: error: expected aio.Task[int | none], received aio.Task[int]

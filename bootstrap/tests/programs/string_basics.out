@@ -10,9 +10,9 @@ b > a
 same == same
  < a
 z < é
-True
-True
-True
-False
+true
+true
+true
+false
 ababab!
-True
+true

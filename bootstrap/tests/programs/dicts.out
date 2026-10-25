@@ -1,12 +1,12 @@
 2
 36
 {ada: 37, alan: 41, grace: 85}
-True
-True
+true
+true
 41
-None
+none
 0
-None
+none
 41
 {ada: 37, grace: 85}
 {ada: 37, grace: 85, alan: 42}
@@ -23,9 +23,9 @@ alan
 9
 -1
 4
-None
-None
+none
+none
 default
-True
+true
 a ant,asp
 b bee

@@ -3,7 +3,7 @@ Hi, Ada!
 Welcome, Ada!
 Hello, Ada! Hello, Ada!
 2.5 3 1.0
-report 10 0.5 None
+report 10 0.5 none
 other 10 -0.0 x
 plain 2
 named 3
@@ -15,10 +15,10 @@ b
 stopped 7
 [3,1] 2
 3 2 1
-a 100 True x
-b 5 False t
+a 100 true x
+b 5 false t
 6 12
-True
+true
 a+b
 x/y a-b  |
 2 1 1
