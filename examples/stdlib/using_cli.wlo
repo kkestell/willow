@@ -1,0 +1,31 @@
+import cli
+import io
+import sys
+
+def main():
+    var parser = cli.parser("greet", description="Greet a group of people")
+    parser.add_str("greeting", "Hello", help="Opening word")
+    parser.add_int("repeat", 1, help="Number of greetings", short="n")
+    parser.add_flag("shout", help="Use uppercase", short="s")
+    parser.add_positional("name", help="First person")
+    parser.add_rest("others", help="More people")
+
+    # Pass sys.args() here in a real command-line program.
+    var args: cli.Args
+    try:
+        args = parser.parse(["-n", "2", "--shout", "Ada", "Grace"])
+    except cli.HelpRequested as help:
+        io.stdout().write_text(help.message)
+        sys.exit(0)
+    except cli.UsageError as error:
+        sys.eprint(error.message)
+        sys.exit(2)
+
+    var names = [args.get_str("name")]
+    for name in args.get_list("others"):
+        names.append(name)
+    var greeting = args.get_str("greeting") + ", " + " and ".join(names) + "!"
+    if args.get_bool("shout"):
+        greeting = greeting.upper()
+    for i in range(args.get_int("repeat")):
+        print(greeting)
