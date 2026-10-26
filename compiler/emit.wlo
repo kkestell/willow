@@ -123,10 +123,35 @@ class Emitter:
         return f"$W.str.{self.strings[text]}"
 
     def core_call(name: str, args: list[str], returns: bool) -> str:
-        if name == "list_len":
+        if name == "list_len" or name == "str_size" or name == "list_capacity" or name == "list_slots":
+            var offset = 8
+            if name == "list_capacity":
+                offset = 16
+            if name == "list_slots":
+                offset = 24
             var address = self.temp()
             var result = self.temp()
-            self.line(f"{address} =l add {args[0]}, 8")
+            self.line(f"{address} =l add {args[0]}, {offset}")
+            self.line(f"{result} =l loadl {address}")
+            return result
+        if name == "str_bytes":
+            var result = self.temp()
+            self.line(f"{result} =l add {args[0]}, 24")
+            return result
+        if name == "str_byte":
+            var address = self.temp()
+            var result = self.temp()
+            self.line(f"{address} =l add {args[0]}, 24")
+            self.line(f"{address} =l add {address}, {args[1]}")
+            self.line(f"{result} =l loadub {address}")
+            return result
+        if name == "tuple_get":
+            var offset = self.temp()
+            var address = self.temp()
+            var result = self.temp()
+            self.line(f"{offset} =l mul {args[1]}, 8")
+            self.line(f"{address} =l add {args[0]}, 24")
+            self.line(f"{address} =l add {address}, {offset}")
             self.line(f"{result} =l loadl {address}")
             return result
         if name == "list_get" or name == "list_set":
@@ -2402,6 +2427,8 @@ class Emitter:
             assert record is not none, f"function {target.name} has no signature"
             var symbol = self.specialization(record, [], node.type_args)
             var result = types.substitute(record.result, types.bind_vars(record.typevars, types.substitute_all(node.type_args, self.bindings)))
+            if self.module_of(target) == "W.core":
+                return self.core_call(target.name, args, not is_none(self.concrete_type(result)))
             return self.willow_call(symbol, typed(args), not is_none(self.concrete_type(result)))
         if target is stdlib.Builtin:
             return self.builtin(node, target)
