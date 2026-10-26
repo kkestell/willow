@@ -1,0 +1,12 @@
+# An L0 stand-in for compiler/source.wlo, copied over it when the stage 1
+# build directory is prepared. Stage 0's fs.read_file ends the program on
+# failure, which is enough for the bootstrap.
+
+import diagnostic
+import fs
+
+class Unreadable:
+    reason: str
+
+def read(path: str) -> str | diagnostic.Diagnostic | Unreadable:
+    return fs.read_file(path)

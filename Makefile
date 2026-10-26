@@ -24,8 +24,9 @@ $(RUNNER): $(WILLOW) tests/runner.wlo
 # stage 2 builds itself, which must emit the same IL as the stage 2 that
 # stage 1 built. build/willow is that last stage 2.
 WILLOW0 := $(BUILD_DIR)/stage0/willow0
-STAGE1_SOURCES := $(wildcard bootstrap/stage1/*.wlo) bootstrap/core/core.wlo $(wildcard lib/*.wlo)
 STAGE2_SOURCES := $(wildcard compiler/*.wlo) bootstrap/core/core.wlo $(wildcard lib/*.wlo)
+# Stage 1 is the compiler's core modules with the L0 driver in bootstrap/stage1/.
+STAGE1_SOURCES := $(wildcard bootstrap/stage1/*.wlo) $(STAGE2_SOURCES)
 
 bootstrap: $(BUILD_DIR)/willow2b
 	$(BUILD_DIR)/willow2a compile $(BUILD_DIR)/stage2/willow.wlo -o $(BUILD_DIR)/stage2a.ssa
@@ -42,7 +43,8 @@ $(WILLOW0): $(wildcard bootstrap/stage0/*.c) bootstrap/stage0/willow0.h $(BUILD_
 $(BUILD_DIR)/willow1: $(WILLOW0) bootstrap/prepare.sh $(STAGE1_SOURCES)
 	mkdir -p $(BUILD_DIR)
 	rm -rf $(BUILD_DIR)/stage1
-	bootstrap/prepare.sh bootstrap/stage1 $(BUILD_DIR)/stage1
+	bootstrap/prepare.sh compiler $(BUILD_DIR)/stage1
+	cp bootstrap/stage1/*.wlo $(BUILD_DIR)/stage1/
 	$(WILLOW0) build $(BUILD_DIR)/stage1/willow1.wlo -o $@
 
 $(BUILD_DIR)/willow2a: $(BUILD_DIR)/willow1 bootstrap/prepare.sh $(STAGE2_SOURCES)
@@ -56,11 +58,10 @@ $(BUILD_DIR)/willow2b: $(BUILD_DIR)/willow2a
 $(WILLOW): $(BUILD_DIR)/willow2b
 	cp $(BUILD_DIR)/willow2b $@
 
-# Stage 0's L0 programs and core tests, stage 1's and stage 2's own tests,
-# and then make test.
+# Stage 0's L0 programs and core tests, stage 2's own tests, and then make
+# test.
 bootstrap-test: bootstrap $(RUNNER)
 	$(RUNNER) --build $(WILLOW0) $(wildcard bootstrap/tests/programs/*.wlo) $(wildcard bootstrap/tests/core/*.wlo)
-	bootstrap/tests/stage1.sh
 	bootstrap/tests/stage2.sh
 	$(MAKE) test
 

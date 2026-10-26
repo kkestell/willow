@@ -43,9 +43,9 @@ def compile(path: str) -> str:
     if not fs.exists(path):
         fail(f"willow1: {path}: No such file or directory")
     var name = loader.entry_name(path)
-    if not is_module_name(name) or name == "core":
+    if not loader.is_identifier(name) or name == "core":
         fail(f"willow1: {path}: '{name}' cannot be a module name")
-    var sources = loader.load(path, true)
+    var sources = loader.load(path, fs.read_file(path), loader.file_roots(path), true)
     if sources is diagnostic.Diagnostic:
         report(sources)
         return ""
@@ -62,15 +62,7 @@ def compile(path: str) -> str:
     for module in modules:
         for function in bind.functions(module):
             emitter.function(function)
-    return emitter.finish(modules[0])
-
-def is_module_name(name: str) -> bool:
-    if name == "" or not (name[0].isalpha() or name[0] == "_"):
-        return false
-    for c in name:
-        if not (c.isalnum() or c == "_") or ord(c) > 127:
-            return false
-    return true
+    return emitter.finish(modules[0], false)
 
 # Assembles `il` with qbe and links it with libgc into the executable
 # `output`. The intermediate files sit next to `output`, since L0 cannot make
