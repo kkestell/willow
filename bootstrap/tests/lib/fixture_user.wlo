@@ -1,4 +1,4 @@
-# A library module that imports another, for stage 1's tests.
+# A library module that imports another, for stage 2's tests.
 
 import fixture_store
 

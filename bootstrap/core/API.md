@@ -3,7 +3,7 @@
 The functions stage 0 calls to lower the built-ins and operations of L0, and
 the intrinsic layer core is written over. Every function here is
 `$W.core.<name>`. Core may define other functions; stage 0 calls only these,
-and stage 1 calls `os` and `run` through `import core`.
+and stages 1 and 2 call `os` and `run` through `import core`.
 
 ## Conventions
 
@@ -175,7 +175,7 @@ literal `"none"`.
 | `fs_exists(path: str) -> bool` | `fs.exists(path)`: false when the path, or a symlink's target, is missing or a component is not a directory |
 | `fs_realpath(path: str) -> str` | `fs.realpath(path)`, the absolute path with symlinks resolved |
 
-## Called by stage 1
+## Called by stages 1 and 2
 
 | Signature | Meaning |
 | --- | --- |
