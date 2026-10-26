@@ -114,32 +114,6 @@
     then `/usr/local/lib`. No JIT. Free match data after each call; compiled
     patterns are not freed. Add PCRE2 to the README's requirements and to
     `Dockerfile.gnat`.
-- Expose missing OS operations.
-  - `fs.chmod(path: str, mode: int) -> none` (following symlinks),
-    `fs.symlink(target: str, link: str) -> none`, and
-    `fs.readlink(path: str) -> str`, raising `OSError` with the messages
-    `cannot change mode of <path>: <reason>`,
-    `cannot create link <link>: <reason>`, and
-    `cannot read link <path>: <reason>`.
-  - `sys.chdir(path: str) -> none`, raising `OSError` with the message
-    `cannot change directory to <path>: <reason>`, and `sys.getpid() -> int`.
-  - `time.utc_offset(timestamp: float) -> int`: seconds east of UTC in the
-    system's local time zone at `timestamp`. It accepts the same range as
-    `time.utc` and raises the same `timestamp out of range` error outside it.
-  - `File.seek(position: int) -> none` (bytes from the start) and
-    `File.tell() -> int`: the position of the next byte the program reads or
-    writes, counting buffered data. Seeking flushes pending writes and
-    discards buffered input. A negative position raises `ValueError` with the
-    message `negative seek position`. A file that cannot seek, such as a pipe,
-    raises `OSError` with the message `cannot seek <path>: <reason>`, using
-    the standard handles' paths as other I/O errors do.
-  - Signal handling. Decision needed: Willow code cannot run inside a C
-    signal handler because of the GC, so a signal must be delivered at a safe
-    point. Options: handlers that run at the next safe point; SIGINT raising
-    an exception; or `await signals.wait(...)` integrated with the event loop
-    through a self-pipe, with a blocking form for programs without tasks.
-    Recommended: the last, for SIGINT, SIGTERM, and SIGHUP, with the default
-    action unchanged for a signal nobody waits on.
 - Add SHA-256 in a new `hash` module: `hash.sha256(data: bytes) -> bytes` and
   a `Sha256` class with `update(data: bytes)`, `digest() -> bytes`, and
   `hexdigest() -> str`, tested against the NIST vectors. Decision needed:

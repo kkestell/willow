@@ -1,0 +1,93 @@
+import fs
+import io
+import sys
+
+def main():
+    var root = fs.temp_dir()
+    var path = fs.join(root, "data")
+    var link = fs.join(root, "link")
+    fs.write_file(path, "é\nsecond\n")
+    fs.symlink("data", link)
+    print(fs.readlink(link))
+    print(fs.stat(link, follow_symlinks=false).kind)
+    fs.chmod(link, 0)
+    try:
+        fs.read_file(path)
+    except OSError as error:
+        print(error.message.startswith("cannot read " + path + ": "))
+    fs.chmod(link, 384)
+    fs.remove(link)
+    # Exercise a target longer than readlink's initial buffer and a dangling link.
+    var target = ""
+    for i in range(300):
+        target = target + "x"
+    fs.symlink(target, link)
+    print(fs.readlink(link) == target)
+    fs.remove(link)
+    for operation in ["chmod", "symlink", "readlink", "chdir"]:
+        try:
+            if operation == "chmod":
+                fs.chmod(link, 384)
+            else if operation == "symlink":
+                fs.symlink("data", path)
+            else if operation == "readlink":
+                fs.readlink(path)
+            else:
+                sys.chdir(link)
+        except OSError as error:
+            var prefix = "cannot change mode of " + link
+            if operation == "symlink":
+                prefix = "cannot create link " + path
+            else if operation == "readlink":
+                prefix = "cannot read link " + path
+            else if operation == "chdir":
+                prefix = "cannot change directory to " + link
+            print(error.message.startswith(prefix + ": "))
+    try:
+        fs.symlink("bad\x00target", link)
+    except ValueError as error:
+        print(error.message)
+    var previous = sys.getcwd()
+    sys.chdir(root)
+    print(fs.realpath(".") == fs.realpath(root))
+    print(fs.read_file("data") == "é\nsecond\n")
+    print(sys.getpid() > 0)
+    sys.chdir(previous)
+    try:
+        sys.chdir("bad\x00path")
+    except ValueError as error:
+        print(error.message)
+
+    var file = io.open(path)
+    with file:
+        print(file.tell())
+        print(file.readline())
+        print(file.tell())
+        print(file.read(2).decode())
+        print(file.tell())
+        file.seek(0)
+        print(file.read(2).decode())
+        file.seek(10)
+        print(len(file.read(1)))
+        print(file.tell())
+        try:
+            file.seek(-1)
+        except ValueError as error:
+            print(error.message)
+    try:
+        file.tell()
+    except ValueError as error:
+        print(error.message)
+    try:
+        file.seek(0)
+    except ValueError as error:
+        print(error.message)
+    with io.open(path, "w") as output:
+        output.write_text("abc")
+        print(output.tell())
+        output.seek(1)
+        output.write_text("Z")
+        print(output.tell())
+    print(fs.read_file(path))
+    fs.remove(path)
+    fs.rmdir(root)

@@ -1,6 +1,39 @@
 # Low-level core helpers and target assembly for stackful coroutines.
 
 def function(name: str) -> str:
+    if name == "signal_storage":
+        return "\n".join([
+            "data $W.signals = align 8 { z 272 }",
+            "function l $W.core.signal_storage() {",
+            "@start",
+            "    ret $W.signals",
+            "}",
+        ])
+    if name == "signal_handler_address":
+        # Only async-signal-safe libc calls and plain memory accesses belong here.
+        return "\n".join([
+            "function l $W.core.signal_handler_address() {",
+            "@start",
+            "    ret $W.signal.handler",
+            "}",
+            "function $W.signal.handler(w %signal) {",
+            "@start",
+            "    %errno =l call $W.core.errno_address()",
+            "    %saved =w loadw %errno",
+            "    %number =l extuw %signal",
+            "    %offset =l mul %number, 8",
+            "    %slot =l add $W.signals, %offset",
+            "    %pending =l add %slot, 20",
+            "    storew 1, %pending",
+            "    %output =l add $W.signals, 4",
+            "    %fd =w loadw %output",
+            "    %byte =l alloc4 4",
+            "    storew %signal, %byte",
+            "    call $write(w %fd, l %byte, l 1)",
+            "    storew %saved, %errno",
+            "    ret",
+            "}",
+        ])
     if name == "coroutine_available":
         return "\n".join([
             "function l $W.core.coroutine_available() {",

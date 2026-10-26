@@ -1,0 +1,38 @@
+true
+true
+0
+0
+true
+timestamp out of range
+timestamp out of range
+timestamp out of range
+timestamp out of range
+0
+0
+-18000
+-14400
+true
+timestamp out of range
+timestamp out of range
+timestamp out of range
+timestamp out of range
+-18000
+-18000
+SIGINT
+SIGTERM
+SIGHUP
+SIGINT
+SIGHUP
+SIGTERM already has a waiter
+registered again
+unsupported signal 'SIGKILL'
+SIGINT
+SIGTERM
+SIGHUP
+pending blocking delivery
+unsupported signal 'SIGKILL'
+-15
+pending delivery
+0
+pending delivery
+0

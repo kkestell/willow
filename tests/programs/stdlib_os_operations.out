@@ -1,0 +1,27 @@
+data
+symlink
+true
+true
+true
+true
+true
+true
+path contains a NUL character
+true
+true
+true
+path contains a NUL character
+0
+é
+3
+se
+5
+é
+0
+10
+negative seek position
+I/O operation on closed file
+I/O operation on closed file
+3
+2
+aZc

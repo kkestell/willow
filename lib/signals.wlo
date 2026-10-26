@@ -1,0 +1,81 @@
+import core
+
+def _number(name: str) -> int:
+    if name == "SIGINT":
+        return 2
+    if name == "SIGTERM":
+        return 15
+    if name == "SIGHUP":
+        return 1
+    raise ValueError("unsupported signal '" + name + "'")
+
+def _fail():
+    raise OSError("cannot wait for signal: " + core.os_reason())
+
+def _pipe() -> ptr:
+    # The first two ints are pipe descriptors, followed by initialization and
+    # per-signal active/pending ints. The handler never touches managed memory.
+    var state = core.signal_storage()
+    if __load4(state, 8) == 0:
+        if core.pipe(state) != 0:
+            _fail()
+        var input = __load4(state, 0)
+        var output = __load4(state, 4)
+        var code = 0
+        for fd in [input, output]:
+            if not core.close_on_exec(fd) or core.fcntl(fd, 4, core.nonblocking_flag()) < 0:
+                code = core.errno()
+                break
+        if code != 0:
+            core.close(input)
+            core.close(output)
+            raise OSError("cannot wait for signal: " + core.net_reason(code))
+        __store4(state, 8, 1)
+    return state
+
+def _start(name: str) -> ptr:
+    var number = _number(name)
+    var state = _pipe()
+    var slot = __offset(state, 16 + number * 8)
+    if __load4(slot, 0) != 0:
+        raise RuntimeError(name + " already has a waiter")
+    if core.signal(number, core.signal_handler_address()) == __ptr(__word(-1)):
+        _fail()
+    __store4(slot, 0, 1)
+    return slot
+
+def _drain():
+    var buffer = __alloc_atomic(256)
+    var fd = __load4(core.signal_storage(), 0)
+    while core.read(fd, buffer, 256) >= 0:
+        pass
+    var code = core.errno()
+    if code != core.net_layout().again and code != 4:
+        raise OSError("cannot wait for signal: " + core.net_reason(code))
+
+async def wait(signal: str):
+    core.aio_checkpoint()
+    var slot = _start(signal)
+    try:
+        var fd = __load4(core.signal_storage(), 0)
+        while __load4(slot, 4) == 0:
+            _drain()
+            if __load4(slot, 4) == 0:
+                core.aio_wait_fd(fd, 1, none)
+        __store4(slot, 4, 0)
+    finally:
+        __store4(slot, 0, 0)
+
+def wait_blocking(signal: str):
+    var slot = _start(signal)
+    try:
+        var fd = __load4(core.signal_storage(), 0)
+        var pollfd = core.net_pollfd(fd, 1)
+        while __load4(slot, 4) == 0:
+            _drain()
+            if __load4(slot, 4) == 0:
+                if core.poll(pollfd, 1, -1) < 0 and core.errno() != 4:
+                    _fail()
+        __store4(slot, 4, 0)
+    finally:
+        __store4(slot, 0, 0)

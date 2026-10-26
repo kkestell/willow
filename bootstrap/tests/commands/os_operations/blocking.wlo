@@ -1,0 +1,17 @@
+import signals
+import subprocess
+import sys
+
+def main():
+    for name in ["SIGINT", "SIGTERM", "SIGHUP"]:
+        var sender = subprocess.spawn(["sh", "-c", "sleep 0.1; kill -s \"$1\" \"$2\"", "sh", name[3:], str(sys.getpid())])
+        signals.wait_blocking(name)
+        print(name)
+        assert sender.wait() == 0
+    subprocess.run(["kill", "-HUP", str(sys.getpid())])
+    signals.wait_blocking("SIGHUP")
+    print("pending blocking delivery")
+    try:
+        signals.wait_blocking("SIGKILL")
+    except ValueError as error:
+        print(error.message)

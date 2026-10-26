@@ -137,6 +137,27 @@ def mkdir(path: str, parents: bool = false, exist_ok: bool = false):
         return
     raise OSError("cannot create directory " + path + ": " + reason)
 
+def chmod(path: str, mode: int):
+    if core.chmod(core.path_bytes(path), mode % 4096) != 0:
+        core.fail_os("change mode of", path)
+
+def symlink(target: str, link: str):
+    if core.symlink(core.path_bytes(target), core.path_bytes(link)) != 0:
+        core.fail_os("create link", link)
+
+def readlink(path: str) -> str:
+    var name = core.path_bytes(path)
+    var capacity = 256
+    while true:
+        var buffer = __alloc_atomic(capacity)
+        var count = core.readlink(name, buffer, capacity)
+        if count < 0:
+            core.fail_os("read link", path)
+        if count < capacity:
+            return core.str_from_bytes(buffer, count)
+        capacity = capacity * 2
+    return ""
+
 def remove(path: str):
     if unlink(core.path_bytes(path)) != 0:
         core.fail_os("remove", path)
