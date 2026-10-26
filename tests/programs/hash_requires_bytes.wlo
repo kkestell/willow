@@ -1,0 +1,4 @@
+import hash
+
+def main():
+    hash.sha256("abc")

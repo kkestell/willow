@@ -120,12 +120,6 @@
     through a self-pipe, with a blocking form for programs without tasks.
     Recommended: the last, for SIGINT, SIGTERM, and SIGHUP, with the default
     action unchanged for a signal nobody waits on.
-- Add SHA-256 in a new `hash` module: `hash.sha256(data: bytes) -> bytes` and
-  a `Sha256` class with `update(data: bytes)`, `digest() -> bytes`, and
-  `hexdigest() -> str`, tested against the NIST vectors. Decision needed:
-  written in Willow after the bitwise operators (no dependency, but slow with
-  masking and overflow checks), or calling a platform library (CommonCrypto on
-  macOS, OpenSSL's libcrypto on Linux), or vendored C compiled into programs.
 
 ---
 
