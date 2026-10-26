@@ -228,9 +228,18 @@ class Parser:
             node = ast.Binary("not in", left, self.parse_operand())
         else if token.kind == tokens.Kind.IS:
             negated = self.accept(tokens.Kind.NOT)
-            self.expect(tokens.Kind.NONE, "'none'")
+            if self.accept(tokens.Kind.NONE):
+                node = ast.Is(negated, left)
+            else:
+                name = self.peek()
+                if name.kind != tokens.Kind.NAME and not is_type_name(name.kind):
+                    self.unexpected("a type name")
+                self.advance()
+                ref = ast.TypeName(name.line, name.col, name.text, "", [], false)
+                if name.kind == tokens.Kind.NAME:
+                    self.qualify(ref, name.text, "a type name")
+                node = ast.TypeTest(left, ref, negated)
             self.reject_bitwise_or()
-            node = ast.Is(negated, left)
         else:
             node = ast.Binary(token.text, left, self.parse_operand())
         if is_comparison(self.peek().kind) or self.peek().kind == tokens.Kind.NOT and self.ahead(1).kind == tokens.Kind.IN:
@@ -283,7 +292,7 @@ class Parser:
         while true:
             token = self.peek()
             node = expr.node
-            if token.kind == tokens.Kind.LBRACKET and (isinstance(node, ast.Name) or isinstance(node, ast.Field)):
+            if token.kind == tokens.Kind.LBRACKET and ((node is ast.Name) or node is ast.Field):
                 specialized = self.parse_specialized(expr)
                 if specialized is not none:
                     expr = specialized
@@ -402,10 +411,6 @@ class Parser:
         if kind == tokens.Kind.NONE:
             self.advance()
             return ast.Expr(token.line, token.col, ast.Constant.NONE)
-        if kind == tokens.Kind.NAME and token.text == "isinstance" and self.ahead(1).kind == tokens.Kind.LPAREN:
-            self.advance()
-            self.advance()
-            return self.parse_isinstance(token)
         if kind == tokens.Kind.NAME and token.text == "__type" and self.ahead(1).kind == tokens.Kind.LPAREN:
             self.advance()
             self.advance()
@@ -467,21 +472,6 @@ class Parser:
                     fstring.specs.append(parse_format_spec(end.text))
         self.advance()
         return ast.Expr(start.line, start.col, fstring)
-
-    # The rest of `isinstance(operand, C)` after its `(`.
-    def parse_isinstance(token: tokens.Token) -> ast.Expr:
-        operand = self.parse_expression()
-        self.expect(tokens.Kind.COMMA, "','")
-        name = self.peek()
-        if name.kind != tokens.Kind.NAME and (name.kind == tokens.Kind.NONE or not is_type_name(name.kind)):
-            self.unexpected("a class name")
-        self.advance()
-        ref = ast.TypeName(name.line, name.col, name.text, "", [], false)
-        if name.kind == tokens.Kind.NAME:
-            self.qualify(ref, name.text, "a class name")
-        self.accept(tokens.Kind.COMMA)
-        self.expect(tokens.Kind.RPAREN, "')'")
-        return ast.Expr(token.line, token.col, ast.IsInstance(operand, ref))
 
     # `__type(T)` after its `(`. Collection types need no arguments here.
     def parse_type_of(token: tokens.Token) -> ast.Expr:
@@ -692,11 +682,11 @@ class Parser:
     # The target that `expr`, parsed as an assignment target, spells.
     def target_of(expr: ast.Expr) -> ast.Target:
         node = expr.node
-        if isinstance(node, ast.Name) and node.name == "self":
+        if node is ast.Name and node.name == "self":
             self.fail_at(expr.line, expr.col, "cannot assign to 'self'")
-        if isinstance(node, ast.Name) and not node.reserved:
+        if node is ast.Name and not node.reserved:
             return ast.Target(expr.line, expr.col, node.name, [])
-        if isinstance(node, ast.TupleDisplay):
+        if node is ast.TupleDisplay:
             elements: list[ast.Target] = []
             for element in node.elements:
                 elements.append(self.target_of(element))
@@ -713,7 +703,7 @@ class Parser:
         token = self.peek()
         assigning = token.kind == tokens.Kind.EQUAL or token.kind == tokens.Kind.COLON
         specialized = expr.node
-        if isinstance(specialized, ast.Specialized) and assigning:
+        if specialized is ast.Specialized and assigning:
             # Only an index can be assigned to.
             index = specialized.index
             index_error = specialized.index_error
@@ -733,28 +723,28 @@ class Parser:
             if token.kind != tokens.Kind.EQUAL:
                 self.unexpected("'='")
         node = expr.node
-        if isinstance(node, ast.Name) and node.reserved and (token.kind == tokens.Kind.EQUAL or token.kind == tokens.Kind.COLON):
+        if node is ast.Name and node.reserved and (token.kind == tokens.Kind.EQUAL or token.kind == tokens.Kind.COLON):
             self.fail_at(expr.line, expr.col, f"cannot assign to '{node.name}'")
         statement = ast.Stmt(expr.line, expr.col, ast.CallStmt(expr))
         if token.kind == tokens.Kind.EQUAL:
             self.advance()
-            if isinstance(node, ast.TupleDisplay):
+            if node is ast.TupleDisplay:
                 target = self.target_of(expr)
                 self.check_targets(target, {})
                 statement.node = ast.Unpack(target, self.parse_expression())
-            else if isinstance(node, ast.Name):
+            else if node is ast.Name:
                 statement.node = ast.Assign(node.name, none, self.parse_expression())
-            else if isinstance(node, ast.Index):
+            else if node is ast.Index:
                 statement.node = ast.IndexAssign(node.object, node.index, self.parse_expression())
-            else if isinstance(node, ast.Field):
+            else if node is ast.Field:
                 statement.node = ast.FieldAssign(node.object, node.name, self.parse_expression())
             else:
                 self.fail(token, "cannot assign to this expression")
             self.reject_chained_assignment()
             return statement
-        if token.kind == tokens.Kind.COLON and (isinstance(node, ast.Index) or isinstance(node, ast.Field)):
+        if token.kind == tokens.Kind.COLON and ((node is ast.Index) or node is ast.Field):
             self.fail(token, "only a name can have an annotation")
-        else if token.kind == tokens.Kind.COLON and isinstance(node, ast.Name):
+        else if token.kind == tokens.Kind.COLON and node is ast.Name:
             self.advance()
             annotation = self.parse_type()
             if not self.accept(tokens.Kind.EQUAL):
@@ -1109,16 +1099,16 @@ def describe(token: tokens.Token) -> str:
     return f"'{token.text}'"
 
 def type_line(t: ast.TypeExpr) -> int:
-    if isinstance(t, ast.TypeName):
+    if t is ast.TypeName:
         return t.line
-    if isinstance(t, ast.UnionType):
+    if t is ast.UnionType:
         return t.line
     return t.line
 
 def type_col(t: ast.TypeExpr) -> int:
-    if isinstance(t, ast.TypeName):
+    if t is ast.TypeName:
         return t.col
-    if isinstance(t, ast.UnionType):
+    if t is ast.UnionType:
         return t.col
     return t.col
 
@@ -1170,4 +1160,4 @@ def starts_expression(kind: tokens.Kind) -> bool:
 
 # Whether a statement may consist of the expression `node` alone.
 def is_call(node: ast.ExprNode) -> bool:
-    return isinstance(node, ast.Call) or isinstance(node, ast.MethodCall) or isinstance(node, ast.CallValue) or isinstance(node, ast.SpecializedCall) or isinstance(node, ast.Await)
+    return node is ast.Call or node is ast.MethodCall or node is ast.CallValue or node is ast.SpecializedCall or node is ast.Await

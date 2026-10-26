@@ -1,0 +1,151 @@
+import fs
+
+type Number = int | float
+type Numbers = list[int]
+type Missing = none
+type Callback = (int) -> int
+type Error = Exception
+type Pair = tuple[int, str]
+type Table = dict[int, int]
+
+enum Flag:
+    ON
+
+type Mode = Flag
+
+class Box[T]:
+    value: T
+
+type IntBox = Box[int]
+type Boxes[T] = Box[T]
+type Lists[T] = list[T]
+
+protocol Reader:
+    def read() -> int
+
+type Open = Reader | none
+
+class First:
+    def read() -> int:
+        return 1
+
+class Second:
+    def read() -> int:
+        return 2
+
+class Trouble(Exception):
+    pass
+
+def add(value: int) -> int:
+    return value + 1
+
+def number(value: int | float | str | none) -> str:
+    if value is not Number:
+        if value is Missing:
+            return "none"
+        return value
+    if value is int:
+        return str(value + 1)
+    return str(value + 0.5)
+
+def boxed(value: Box[str] | none) -> str:
+    if value is IntBox:
+        assert value is Boxes
+        assert value is Box
+        return value.value + "!"
+    return "none"
+
+def lists(value: list[str] | none) -> str:
+    if value is Lists:
+        assert value is Numbers
+        return value[0]
+    return "none"
+
+def tuples(value: tuple[str, int] | none) -> str:
+    if value is Pair:
+        return value[0] + str(value[1])
+    return "none"
+
+def dicts(value: dict[str, str] | none) -> str:
+    if value is Table:
+        return value["key"]
+    return "none"
+
+def mode(value: Flag | none) -> bool:
+    return value is Mode
+
+def once(calls: list[int]) -> int | str:
+    calls[0] = calls[0] + 1
+    return 3
+
+def invoke(value: ((int) -> int) | str) -> int:
+    if value is Callback:
+        return value(4)
+    return len(value)
+
+def optional[T](value: T | none) -> T | none:
+    if value is not none:
+        return value
+    return none
+
+def read(value: Open) -> int:
+    if value is none:
+        return 0
+    return value.read()
+
+def widen(value: First | Second | none) -> Reader | none:
+    return value
+
+def error(value: ValueError | Trouble | str | none) -> str:
+    if value is Error:
+        failure: Exception = value
+        return failure.message
+    if value is str:
+        return value
+    return "none"
+
+async def pending() -> int:
+    return 7
+
+def coroutine() -> Coroutine[int] | none:
+    return pending()
+
+def native(value: fs.Stat | int) -> bool:
+    return value is fs.Stat
+
+async def main():
+    assert number(2) == "3"
+    assert number(2.0) == "2.5"
+    assert number("text") == "text"
+    assert number(none) == "none"
+    assert boxed(Box("box")) == "box!"
+    assert boxed(none) == "none"
+    assert lists(["list"]) == "list"
+    assert lists(none) == "none"
+    assert tuples(("tuple", 2)) == "tuple2"
+    assert tuples(none) == "none"
+    assert dicts({"key": "dict"}) == "dict"
+    assert dicts(none) == "none"
+    assert mode(Flag.ON)
+    assert not mode(none)
+    calls = [0]
+    assert once(calls) is Number
+    assert calls[0] == 1
+    assert invoke(add) == 5
+    assert invoke("abc") == 3
+    assert optional[int](3) == 3
+    assert optional[int](none) is none
+    assert read(widen(First())) == 1
+    assert read(widen(Second())) == 2
+    assert read(widen(none)) == 0
+    assert error(ValueError("bad")) == "bad"
+    assert error(Trouble("custom")) == "custom"
+    assert error("text") == "text"
+    assert error(none) == "none"
+    assert native(fs.stat("type_tests.wlo"))
+    assert not native(1)
+    task = coroutine()
+    assert task is Coroutine
+    assert await task == 7
+    assert none is none
+    print("type tests")

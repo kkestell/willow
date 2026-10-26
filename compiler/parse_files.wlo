@@ -23,7 +23,7 @@ def main():
     failed = false
     for path in args:
         lexed = lexer.lex(path, fs.read_file(path))
-        if isinstance(lexed, diagnostic.Diagnostic):
+        if lexed is diagnostic.Diagnostic:
             sys.eprint(lexed.format())
             failed = true
         else if mode == "--tokens":
@@ -31,7 +31,7 @@ def main():
                 print(f"{path}:{token.line}:{token.col}: {token.kind} {token.text}")
         else:
             parsed = parser.parse(path, lexed, false)
-            if isinstance(parsed, diagnostic.Diagnostic):
+            if parsed is diagnostic.Diagnostic:
                 sys.eprint(parsed.format())
                 failed = true
             else if mode == "--tree" or mode == "--positions":

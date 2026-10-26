@@ -42,9 +42,9 @@ def main():
     for text in store("text"):
         assert text == "text"
     for mixed in store[int | float](2.5):
-        assert isinstance(mixed, float)
+        assert mixed is float
     for missing in store[none](none):
-        assert missing == none
+        assert missing is none
     print("stored")
     slot: Slot[float] = Slot()
     print(slot.get())

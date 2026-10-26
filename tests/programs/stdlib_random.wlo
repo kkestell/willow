@@ -7,7 +7,7 @@ def draw(source: RandomSource) -> float:
     return source.random()
 
 def checked_draw(source: random.Random | none) -> float:
-    assert isinstance(source, random.Random)
+    assert source is random.Random
     return draw(source)
 
 def show(items: list[int]) -> str:

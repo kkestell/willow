@@ -1,0 +1,1 @@
+type_test_removed_builtin.wlo:2:11: error: unknown function 'isinstance'

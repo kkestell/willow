@@ -63,7 +63,7 @@ class Loader:
         except OSError as error:
             self.fail(importer, importing, f"cannot load module '{name}': {read_reason(error)}")
             return
-        if isinstance(text, diagnostic.Diagnostic):
+        if text is diagnostic.Diagnostic:
             self.error = text
             return
         self.add(name, path, text, false)
@@ -76,11 +76,11 @@ class Loader:
         else:
             self.loaded[name] = true
         lexed = lexer.lex(path, text)
-        if isinstance(lexed, diagnostic.Diagnostic):
+        if lexed is diagnostic.Diagnostic:
             self.error = lexed
             return
         tree = parser.parse(path, lexed, privileged)
-        if isinstance(tree, diagnostic.Diagnostic):
+        if tree is diagnostic.Diagnostic:
             self.error = tree
             return
         self.sources.append(Source(name, tree))

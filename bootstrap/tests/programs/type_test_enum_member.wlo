@@ -1,0 +1,6 @@
+enum E:
+    A
+def test(value: E) -> bool:
+    return value is E.A
+def main():
+    pass

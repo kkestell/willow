@@ -3,7 +3,7 @@ import shapes
 def describe(shape: shapes.Shape | none) -> str:
     if shape is none:
         return "no shape"
-    if isinstance(shape, shapes.Circle):
+    if shape is shapes.Circle:
         return f"circle of radius {shape.radius}"
     return f"square of area {shapes.area(shape)}"
 

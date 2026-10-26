@@ -18,7 +18,7 @@ class Holder:
     f: ((int) -> int | float) | none
 
 def half(x: int | float) -> float:
-    if isinstance(x, int):
+    if x is int:
         return float(x) / 2.0
     return x / 2.0
 

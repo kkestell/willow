@@ -62,8 +62,8 @@ def main():
         assert error.message == "advance"
     assert take(((1.5, 2),)) == (1.5, 2)
     mixed = iter((1.5, 2))
-    assert isinstance(next(mixed), float)
-    assert isinstance(next(mixed), int)
+    assert next(mixed) is float
+    assert next(mixed) is int
     values = PairSource([(2.5, 3)])
     assert next(pairs(values)) == ((2.5, 3), (2.5, 3))
     assert next(numbered(values)) == (4, (2.5, 3))

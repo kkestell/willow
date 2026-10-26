@@ -474,11 +474,14 @@ calls, it must first be narrowed to a single member (§9).
 covers; `value is not C` negates that test. `C` is a type name without type
 arguments: `int`, `float`, `bool`, `str`, `bytes`, `none`, `list`, `dict`,
 `tuple`, `Coroutine`, or a class, enum, native type, or alias, optionally
-qualified with a module name. Open types and aliases that include them cannot
-be tested. A callable member has no type name; excluding a union's other
-members with `is not` narrows it to its callable member. `C` must cover one or more members
+qualified with a module name. Aliases are tested by their runtime coverage:
+`type Lists[T] = list[T]` covers `list`, while `type Maybe[T] = T | none`
+remains open. Open coverage cannot be tested. Callable has no built-in type
+name; an alias can name it, or excluding a union's other members with
+`is not` narrows it to its callable member. `C` must cover one or more members
 of the value's type and be disjoint from the rest. These operators test types,
-not object identity.
+not object identity. Testing an enum member is an error; compare enum values
+with `==` or `!=`.
 
 ```python
 def describe(value: int | str | none) -> str:

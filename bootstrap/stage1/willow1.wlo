@@ -46,7 +46,7 @@ def compile(path: str) -> str:
     if not is_module_name(name) or name == "core":
         fail(f"willow1: {path}: '{name}' cannot be a module name")
     sources = loader.load(path, true)
-    if isinstance(sources, diagnostic.Diagnostic):
+    if sources is diagnostic.Diagnostic:
         report(sources)
         return ""
     error = bind.bind(sources, false)

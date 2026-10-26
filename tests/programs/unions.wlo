@@ -11,24 +11,24 @@ class Dog:
 def describe(value: int | str | none) -> str:
     if value is none:
         return "nothing"
-    if isinstance(value, int):
+    if value is int:
         return f"number {value + 1}"
     return "text " + value
 
 def render(value: Json) -> str:
     if value is none:
         return "null"
-    else if isinstance(value, bool):
+    else if value is bool:
         if value:
             return "true"
         return "false"
-    else if isinstance(value, int):
+    else if value is int:
         return str(value)
-    else if isinstance(value, float):
+    else if value is float:
         return f"{value}"
-    else if isinstance(value, str):
+    else if value is str:
         return value
-    else if isinstance(value, list):
+    else if value is list:
         parts: list[str] = []
         for item in value:
             parts.append(render(item))
@@ -39,7 +39,7 @@ def render(value: Json) -> str:
     return "{" + ", ".join(parts) + "}"
 
 def greet(pet: Cat | Dog) -> str:
-    if isinstance(pet, Dog):
+    if pet is Dog:
         return f"{pet.name} knows {pet.tricks} tricks"
     return pet.name + " ignores you"
 
@@ -78,7 +78,7 @@ def main():
     data: Json = {"name": "willow", "tags": ["small", "typed"], "version": 1, "ratio": 0.5,
                   "nested": {"ok": true, "none": none, "empty": []}}
     print(render(data))
-    if isinstance(data, dict):
+    if data is dict:
         data["version"] = 2.0
     print(render(data))
 
@@ -87,6 +87,6 @@ def main():
         print("unreachable")
     maybe = "text"
     print(maybe + "!")
-    if not isinstance(maybe, str):
+    if maybe is not str:
         return
     print(len(maybe))

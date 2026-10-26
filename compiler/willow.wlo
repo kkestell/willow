@@ -124,7 +124,7 @@ def main():
     except OSError as error:
         fail("error: " + loader.read_reason(error))
         return
-    if isinstance(text, diagnostic.Diagnostic):
+    if text is diagnostic.Diagnostic:
         fail(text.format())
         return
     # A project's entry name was checked with its manifest.
@@ -160,7 +160,7 @@ def read_project() -> manifest.Project | none:
 # error.
 def translate(path: str, text: str, roots: loader.Roots) -> list[ast.Module]:
     modules = checked(path, text, roots, false)
-    if isinstance(modules, diagnostic.Diagnostic):
+    if modules is diagnostic.Diagnostic:
         fail(modules.format())
         return []
     return modules
@@ -169,7 +169,7 @@ def translate(path: str, text: str, roots: loader.Roots) -> list[ast.Module]:
 # needs no `main`.
 def checked(path: str, text: str, roots: loader.Roots, test: bool) -> list[ast.Module] | diagnostic.Diagnostic:
     sources = loader.load(path, text, roots, true)
-    if isinstance(sources, diagnostic.Diagnostic):
+    if sources is diagnostic.Diagnostic:
         return sources
     error = bind.bind(sources, test)
     if error is not none:
@@ -245,12 +245,12 @@ def test(args: list[str]):
             sys.eprint("error: " + loader.read_reason(error))
             failed_checks = true
             continue
-        if isinstance(text, diagnostic.Diagnostic):
+        if text is diagnostic.Diagnostic:
             sys.eprint(text.format())
             failed_checks = true
             continue
         modules = checked(file, text, roots, true)
-        if isinstance(modules, diagnostic.Diagnostic):
+        if modules is diagnostic.Diagnostic:
             sys.eprint(modules.format())
             failed_checks = true
             continue

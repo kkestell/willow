@@ -1,0 +1,5 @@
+type Open = Iterable[int] | none
+def test(value: list[int]) -> bool:
+    return value is Open
+def main():
+    pass

@@ -11,7 +11,7 @@ import tokens
 # error as "line:col: message".
 def describe(source: str) -> str:
     result = lexer.lex("test.wlo", source)
-    if isinstance(result, diagnostic.Diagnostic):
+    if result is diagnostic.Diagnostic:
         return f"{result.line}:{result.col}: {result.message}"
     words: list[str] = []
     for token in result:
@@ -36,7 +36,7 @@ def check(source: str, expected: str) -> bool:
 # The line and column of the token with index `index` in `source`.
 def position(source: str, index: int) -> str:
     result = lexer.lex("test.wlo", source)
-    if isinstance(result, diagnostic.Diagnostic):
+    if result is diagnostic.Diagnostic:
         return result.format()
     token = result[index]
     return f"{token.line}:{token.col}"

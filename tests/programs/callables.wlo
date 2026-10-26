@@ -13,7 +13,7 @@ def double(x: int) -> int:
     return x * 2
 
 def describe(x: int | float) -> str:
-    return f"{x} {isinstance(x, float)}"
+    return f"{x} {(x is float)}"
 
 def half(x: float) -> float:
     return x / 2.0
@@ -46,7 +46,7 @@ def main():
     print(d(1.5))
     h: (float) -> int | float = half
     r = h(3.0)
-    print(isinstance(r, float))
+    print((r is float))
     print(r)
     # One callable converts to another.
     k: (float) -> float = half

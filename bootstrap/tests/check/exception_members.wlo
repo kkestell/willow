@@ -8,24 +8,21 @@ class Src:
 class Trouble(Exception):
     pass
 
-def widen(value: Src | Exception | none) -> Reader | Exception | none:
-    return value
-
-def describe(value: Reader | Exception | none) -> str:
-    if isinstance(value, Exception):
+def describe(value: Src | Exception | none) -> str:
+    if value is Exception:
         return value.message
     if value is none:
         return "none"
     return str(value.read())
 
 def is_error(value: Exception | str | none) -> bool:
-    return isinstance(value, Exception)
+    return value is Exception
 
 def main():
-    print(describe(widen(ValueError("bad"))))
-    print(describe(widen(Trouble("custom"))))
-    print(describe(widen(Src())))
-    print(describe(widen(none)))
+    print(describe(ValueError("bad")))
+    print(describe(Trouble("custom")))
+    print(describe(Src()))
+    print(describe(none))
     print(is_error(Exception("base")))
     print(is_error(ValueError("builtin")))
     print(is_error(Trouble("custom")))

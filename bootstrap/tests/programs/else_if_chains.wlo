@@ -11,7 +11,7 @@ def classify(n: int) -> str:
 def describe(value: int | str | none) -> str:
     if value is none:
         return "nothing"
-    else if isinstance(value, int):
+    else if value is int:
         return str(value + 1)
     else:
         return value

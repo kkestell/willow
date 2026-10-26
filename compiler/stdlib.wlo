@@ -11,7 +11,7 @@ class Builtin:
     name: str
     params: list[BuiltinParam]
     # none when the checker works the result out from the arguments, and for
-    # range and isinstance, which have their own forms.
+    # range, which has its own form.
     result: types.Type | none
     # The runtime helper, when it is not named after the function.
     helper: str
@@ -91,7 +91,6 @@ def builtins() -> dict[str, Builtin]:
     add(table, "input", [], optional("str"))
     add(table, "ord", [arg("", prim("str"))], prim("int"))
     add(table, "chr", [arg("", prim("int"))], prim("str"))
-    add(table, "isinstance", [], none)
     sorted_params = [any_arg("items")]
     sorted_params.extend(sort_params())
     add(table, "sorted", sorted_params, none)
@@ -249,7 +248,7 @@ def coroutine_of(t: types.Type) -> types.Type:
 # Whether `t` is a coroutine type or a union with a coroutine member.
 def has_coroutine(t: types.Type) -> bool:
     for m in types.members(t):
-        if isinstance(m, types.ClassType) and m.decl.type_name == "Coroutine":
+        if m is types.ClassType and m.decl.type_name == "Coroutine":
             return true
     return false
 

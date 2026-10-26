@@ -1,4 +1,4 @@
 def f(x: int | none):
-    print(isinstance(x, none))
+    print((x is none))
 def main():
     pass

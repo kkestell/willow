@@ -301,7 +301,7 @@ typedef enum ExprTag {
     EXPR_Binary,
     EXPR_TypeOf,
     EXPR_None,
-    EXPR_IsNone
+    EXPR_TypeTest
 } ExprTag;
 
 struct ExprKind {
@@ -329,9 +329,8 @@ struct ExprKind {
         struct { const char *op; Pos op_pos; Expr *left; Expr *right; } Binary;
         /// The `__type(T)` intrinsic, whose argument is a type.
         TypeName TypeOf;
-        /// `operand is None`, or `operand is not None` when negated, with the
-        /// position of `is`.
-        struct { Expr *operand; bool negated; Pos op_pos; } IsNone;
+        /// A runtime-class test at `is`; a null target tests for `none`.
+        struct { Expr *operand; bool negated; Pos op_pos; Expr *target; } TypeTest;
     } as;
 };
 
@@ -547,6 +546,7 @@ typedef enum ValueTag {
     VALUE_DictGet,
     VALUE_Item,
     VALUE_Seq,
+    VALUE_TypeTest,
     VALUE_In,
     VALUE_Load,
     VALUE_Store
@@ -559,6 +559,7 @@ struct Value {
         /// The address of a data symbol, without its `$`.
         String Global;
         String Local;
+        struct { Value *operand; StringVec descriptors; } TypeTest;
         Call Call;
         /// A QBE instruction on two `l` operands.
         struct { const char *instr; Value *left; Value *right; } Binary;

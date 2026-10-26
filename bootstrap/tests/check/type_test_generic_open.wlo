@@ -1,0 +1,5 @@
+type Open[T] = T | none
+def test(value: int) -> bool:
+    return value is Open
+def main():
+    pass

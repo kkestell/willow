@@ -1,5 +1,5 @@
 # Unions without floats: boxing at each assignability point, `is none`,
-# `isinstance`, the `and`, `or`, and `not` facts, `else if`, `while`, and
+# `is` type tests, the `and`, `or`, and `not` facts, `else if`, `while`, and
 # assignment narrowing, and `assert` narrowing.
 
 def pick(n: int) -> int | str | bool | none:
@@ -14,11 +14,11 @@ def pick(n: int) -> int | str | bool | none:
 def describe(value: int | str | bool | none) -> str:
     if value is none:
         return "nothing"
-    else if isinstance(value, bool):
+    else if value is bool:
         if value:
             return "yes"
         return "no"
-    else if isinstance(value, int):
+    else if value is int:
         return "int " + twice(value + 1)
     else:
         return "str " + value
@@ -58,12 +58,12 @@ def main():
     print(first(none, 7))
     print(first(5, none))
     kept = relay(true)
-    if isinstance(kept, bool):
+    if kept is bool:
         print(kept)
     print(relay(none) is none)
     value: int | str = 5
     value = value + 1
-    if isinstance(value, int):
+    if value is int:
         print(value)
     value = "six"
     print(value + "!")

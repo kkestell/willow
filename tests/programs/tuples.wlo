@@ -9,7 +9,7 @@ def pair() -> tuple[int, str]:
 # A tuple of floats passed where a position also holds ints is converted.
 def widen(t: tuple[int | float, float]) -> str:
     first = t[0]
-    if isinstance(first, float):
+    if first is float:
         return f"float {first} {t[1]}"
     return "int"
 
@@ -17,9 +17,9 @@ def maybe(t: tuple[float] | none) -> tuple[int | float] | none:
     return t
 
 def kind(v: tuple[int, str] | list[int] | none) -> str:
-    if isinstance(v, tuple):
+    if v is tuple:
         return "tuple " + v[1]
-    if isinstance(v, list):
+    if v is list:
         return "list"
     return "none"
 
@@ -32,7 +32,7 @@ class Box:
 
 def greet(pair: tuple[Side, int | float] = (Side.RIGHT, 1.5)) -> str:
     second = pair[1]
-    return f"{pair[0]} {second} {isinstance(second, float)}"
+    return f"{pair[0]} {second} {(second is float)}"
 
 def found(flag: bool) -> tuple[int, str] | none:
     if flag:
@@ -45,8 +45,8 @@ def comparisons():
     print(((1, 2), none) == ((1, 2), none))
     print(() == ())
     print(found(true) == (1, "a"))
-    print(found(false) == none)
-    print(found(true) == none)
+    print(found(false) is none)
+    print(found(true) is none)
     one: tuple[int | float] = (1,)
     floats: tuple[float] = (1.0,)
     print(one == floats)
@@ -67,7 +67,7 @@ def comparisons():
 
 def iteration():
     for item in (1, 2.5, none):
-        print(f"{item} {isinstance(item, float)}")
+        print(f"{item} {(item is float)}")
     for nothing in ():
         print(nothing)
 
@@ -96,7 +96,7 @@ def main():
     m = maybe((4.5,))
     if m is not none:
         x = m[0]
-        print(isinstance(x, float))
+        print((x is float))
         print(x)
     print(maybe(none) is none)
     print(kind(t))

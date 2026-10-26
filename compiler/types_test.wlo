@@ -181,12 +181,12 @@ def assignability(r: Results):
     iterable = types.ProtocolType(stdlib.protocols()["Iterable"], [prim("int")])
     r.check("protocol", types.assignable(iterable, types.ListType(prim("int"))), true)
     r.check("protocol items", types.assignable(iterable, types.ListType(prim("str"))), false)
-    r.text("list members", types.conflict([types.ListType(prim("int"))], types.ListType(prim("str"))), "a union can have only one list member")
+    r.text("list members", types.conflict([types.ListType(prim("int"))], types.ListType(prim("str"))), "union members list[int] and list[str] overlap")
     r.text("overlap", types.conflict([prim("int")], prim("int")), "union members int and int overlap")
     r.text("no conflict", types.conflict([prim("int")], prim("str")), "")
     # `for x in (1, "a", 2)` gives int | str.
     items = types.items(types.TupleType([prim("int"), prim("str"), prim("int")]))
-    if isinstance(items, str):
+    if items is str:
         r.text("tuple items", items, "int | str")
     else:
         r.shows("tuple items", items, "int | str")

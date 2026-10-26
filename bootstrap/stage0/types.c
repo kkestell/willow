@@ -157,7 +157,14 @@ Type type_without(const Type *self, const Type *member) {
     TypeVec kept = {0};
     TypeSlice members = type_members(self);
     for (size_t i = 0; i < members.len; i++) {
-        if (!type_equal(&members.data[i], member)) {
+        bool removed = false;
+        TypeSlice remove = type_members(member);
+        for (size_t j = 0; j < remove.len; j++) {
+            if (type_equal(&members.data[i], &remove.data[j])) {
+                removed = true;
+            }
+        }
+        if (!removed) {
             vec_push(kept, members.data[i]);
         }
     }

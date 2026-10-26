@@ -1,5 +1,5 @@
 def f(v: list[int] | none) -> int:
-    if isinstance(v, list):
+    if v is list:
         return len(v)
     return -1
 def main():

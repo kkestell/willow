@@ -51,7 +51,7 @@ def main():
     # Callable conversion keeps the specialized result and omitted default.
     wide: () -> int | float = box.get
     value = wide()
-    assert isinstance(value, float)
+    assert value is float
     assert value == 4.5
     change: (float) -> float = box.replace
     assert change(5.5) == 4.5

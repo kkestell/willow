@@ -548,10 +548,26 @@ static Expr comparison(Parser *self) {
     ExprKind kind;
     if (BINARY_OP(self, &op_pos, "is")) {
         bool negated = accept(self, "not");
+        Expr *target = NULL;
         if (!accept(self, "none")) {
-            parser_fail(self, pos(self), STR("'is' can only test for none"));
+            Pos name_pos = pos(self);
+            String text;
+            if (peek(self)->tag == KIND_Name) {
+                text = advance(self).kind.as.Name;
+            } else if (WORD_IN(peek(self), "int", "float", "bool", "str", "list", "dict")) {
+                text = str_from_cstr(advance(self).kind.as.Word);
+            } else {
+                unexpected(self, "a type name");
+            }
+            Expr named = {name_pos, {.tag = EXPR_Name, .as.Name = text}};
+            while (accept(self, ".")) {
+                Pos field_pos = pos(self);
+                PosName field = name(self, "a type name");
+                named = (Expr){field_pos, {.tag = EXPR_Attr, .as.Attr = {boxed_expr(named), field_pos, field.name}}};
+            }
+            target = boxed_expr(named);
         }
-        kind = (ExprKind){.tag = EXPR_IsNone, .as.IsNone = {boxed_expr(left), negated, op_pos}};
+        kind = (ExprKind){.tag = EXPR_TypeTest, .as.TypeTest = {boxed_expr(left), negated, op_pos, target}};
     } else if (word_is(peek(self), "not") && word_is(&self->tokens.data[self->i + 1].kind, "in")) {
         op_pos = pos(self);
         self->i += 2;

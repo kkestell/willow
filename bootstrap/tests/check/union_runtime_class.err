@@ -1,0 +1,1 @@
+union_runtime_class.wlo:3:28: error: union members Box[int] and Box[str] overlap

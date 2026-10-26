@@ -21,9 +21,9 @@ def name(color: Color) -> str:
 def describe(value: Color | Mode | str | none) -> str:
     if value is none:
         return "nothing"
-    if isinstance(value, Color):
+    if value is Color:
         return "color " + name(value)
-    if isinstance(value, Mode):
+    if value is Mode:
         return "mode " + str(value)
     return "text " + value
 

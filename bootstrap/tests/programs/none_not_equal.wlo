@@ -1,0 +1,3 @@
+def main():
+    value: int | none = none
+    print(none != value)
