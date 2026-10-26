@@ -43,7 +43,7 @@ class Checker:
     def failed() -> bool:
         return self.error is not none
 
-    # Reports a construct that stage 1 does not compile yet, and gives it the
+    # Reports a construct the compiler does not support, and gives it the
     # type none so checking can unwind.
     def unsupported(line: int, col: int, what: str) -> types.Type:
         self.fail(line, col, f"stage 1 does not support {what} yet")
@@ -1762,7 +1762,6 @@ class Checker:
             return self.check_host(expr, node, target, state)
         else if name == "fs.realpath":
             return self.check_host(expr, node, target, state)
-        # Not in L0.
         return self.unsupported(line, col, f"'{name}'")
 
     def check_iterable_builtin(expr: ast.Expr, node: ast.Call, target: stdlib.Builtin, state: dict[int, types.Type]) -> types.Type:

@@ -4,8 +4,7 @@
 # syntax tree, and --positions writes each tree with positions.
 #
 # A file that is not valid UTF-8 ends the program with a ValueError from
-# fs.read_file instead of a diagnostic at the bad byte (spec §2), because L0
-# cannot catch it. Stage 2 can.
+# fs.read_file instead of a diagnostic at the bad byte (spec §2).
 
 import diagnostic
 import fs
