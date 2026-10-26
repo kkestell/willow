@@ -64,11 +64,11 @@ class Loader:
         else:
             self.loaded[name] = true
         lexed = lexer.lex(path, text)
-        if isinstance(lexed, diagnostic.Diagnostic):
+        if lexed is diagnostic.Diagnostic:
             self.error = lexed
             return
         tree = parser.parse(path, lexed, privileged)
-        if isinstance(tree, diagnostic.Diagnostic):
+        if tree is diagnostic.Diagnostic:
             self.error = tree
             return
         self.sources.append(Source(name, tree))

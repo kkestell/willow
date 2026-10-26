@@ -20,7 +20,7 @@ def sign(n: int) -> str:
 def describe(value: int | str | none) -> str:
     if value is none:
         return "nothing"
-    else if isinstance(value, int):
+    else if value is int:
         return f"int {value + 1}"
     else:
         return "str " + value

@@ -20,10 +20,10 @@ def end(local: int) -> int:
     return then
 
 def is_number(value: number | int) -> bool:
-    return isinstance(value, number)
+    return value is number
 
 def is_string(value: string | str) -> bool:
-    return isinstance(value, string)
+    return value is string
 
 def main():
     repeat = end(4)

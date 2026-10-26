@@ -8,6 +8,7 @@
 # emitted in.
 
 import ast
+import check
 import bind
 import coroutine
 import stdlib
@@ -202,7 +203,7 @@ class Emitter:
 
     def function(function: ast.FunctionDecl):
         owner = function.owner
-        if len(function.type_params) > 0 or isinstance(owner, ast.ClassDecl) and len(owner.type_params) > 0:
+        if len(function.type_params) > 0 or owner is ast.ClassDecl and len(owner.type_params) > 0:
             return
         module = self.module_names[function.id]
         if module == "W.core":
@@ -266,7 +267,7 @@ class Emitter:
         if function.is_async:
             self.emit_async_constructor(function, symbol, first)
             symbol = symbol + ".body"
-            assert isinstance(result, types.ClassType), "async function without a coroutine result"
+            assert result is types.ClassType, "async function without a coroutine result"
             result = result.args[0]
         params: list[str] = []
         params.extend(first)
@@ -309,7 +310,7 @@ class Emitter:
         record = function.record
         assert record is not none, "generator without a signature"
         result = self.concrete_type(record.result)
-        assert isinstance(result, types.ProtocolType), "unchecked generator annotation"
+        assert result is types.ProtocolType, "unchecked generator annotation"
         generator_type = types.ProtocolType(stdlib.protocols()["Generator"], result.args)
         self.later.append(GeneratorBody(symbol, function, self.bindings))
         self.begin(symbol, params, true)
@@ -331,7 +332,7 @@ class Emitter:
         record = function.record
         assert record is not none, "generator without a signature"
         result = self.concrete_type(record.result)
-        assert isinstance(result, types.ProtocolType), "unchecked generator annotation"
+        assert result is types.ProtocolType, "unchecked generator annotation"
         symbol = body.symbol
         iterator = symbol + ".iterator"
         self.iterator_descriptor(iterator, result.args[0])
@@ -387,7 +388,7 @@ class Emitter:
         record = function.record
         assert record is not none, "async function without a signature"
         result = self.concrete_type(record.result)
-        assert isinstance(result, types.ClassType), "async function without a coroutine result"
+        assert result is types.ClassType, "async function without a coroutine result"
         self.end(self.call_text(symbol + ".body", args, not is_none(result.args[0])))
 
     # Starts function `symbol` with `params`, which returns a value when
@@ -451,7 +452,7 @@ class Emitter:
         concrete = types.substitute_all(receiver, self.bindings)
         own = types.substitute_all(args, self.bindings)
         owner = function.owner
-        if isinstance(owner, ast.ClassDecl):
+        if owner is ast.ClassDecl:
             record = owner.record
             assert record is not none, "class without a record"
             bindings = types.bind_vars(record.typevars, concrete)
@@ -560,7 +561,7 @@ class Emitter:
                 result = "l "
             self.write("function " + result + symbol + "(" + ", ".join(params) + ") {")
             self.label("@start")
-            forwarding = isinstance(witness.source, types.ProtocolType)
+            forwarding = (witness.source is types.ProtocolType)
             # Where an argument that has a default goes, in the start block.
             slots: list[str] = []
             for j in range(len(want.params)):
@@ -717,7 +718,7 @@ class Emitter:
             self.write("@ran")
         else:
             main = entry.names["main"]
-            assert isinstance(main, ast.FunctionDecl), "entry without main"
+            assert main is ast.FunctionDecl, "entry without main"
             self.call_entry(entry, main)
         # Output is not buffered, so there is nothing to flush.
         self.line("%e =l loadl $W.pending")
@@ -753,11 +754,11 @@ class Emitter:
         # captures, which needs no allocation.
         for later in self.later:
             code = ""
-            if isinstance(later, ValueWrapper):
+            if later is ValueWrapper:
                 code = later.symbol
-            else if isinstance(later, BuiltinWrapper):
+            else if later is BuiltinWrapper:
                 code = later.symbol
-            else if isinstance(later, SpecializedValue) and later.instance.function.parent is none:
+            else if later is SpecializedValue and later.instance.function.parent is none:
                 code = later.symbol
             if code != "":
                 self.write(f"data {code}.closure = " + "{ l $W.function.type, l " + code + " }")
@@ -796,40 +797,40 @@ class Emitter:
 
     def emit_stmt(statement: ast.Stmt):
         node = statement.node
-        if isinstance(node, ast.Assign):
+        if node is ast.Assign:
             value = self.expr(node.value)
             self.line(f"storel {value}, {self.local_address(node.symbol, node.name)}")
-        else if isinstance(node, ast.Unpack):
+        else if node is ast.Unpack:
             value = self.expr(node.value)
             ty = self.concrete_type(node.value.ty)
             self.store_pattern(node.target, value, ty)
-        else if isinstance(node, ast.CallStmt):
+        else if node is ast.CallStmt:
             self.expr(node.call)
-        else if isinstance(node, ast.If):
+        else if node is ast.If:
             self.emit_if(node)
-        else if isinstance(node, ast.While):
+        else if node is ast.While:
             self.emit_while(node)
-        else if isinstance(node, ast.Return):
+        else if node is ast.Return:
             self.emit_return(node)
-        else if isinstance(node, ast.Yield):
+        else if node is ast.Yield:
             self.emit_yield(node)
-        else if isinstance(node, ast.IndexAssign):
+        else if node is ast.IndexAssign:
             self.emit_index_assign(node)
-        else if isinstance(node, ast.FieldAssign):
+        else if node is ast.FieldAssign:
             self.field_assign(node)
-        else if isinstance(node, ast.For):
+        else if node is ast.For:
             self.emit_for(node)
-        else if isinstance(node, ast.Assert):
+        else if node is ast.Assert:
             self.emit_assert(node)
-        else if isinstance(node, ast.Raise):
+        else if node is ast.Raise:
             self.emit_raise(node)
-        else if isinstance(node, ast.Try):
+        else if node is ast.Try:
             self.emit_try(node)
-        else if isinstance(node, ast.With):
+        else if node is ast.With:
             self.emit_with(node, 0)
-        else if isinstance(node, ast.AsyncWith):
+        else if node is ast.AsyncWith:
             self.emit_async_with(node)
-        else if isinstance(node, ast.FunctionDef):
+        else if node is ast.FunctionDef:
             closure = ""
             if len(node.function.type_params) > 0:
                 # Only the cells: each specialization's code is compiled
@@ -838,9 +839,9 @@ class Emitter:
             else:
                 closure = self.closure(node.function)
             self.line(f"storel {closure}, {self.local_address(node.symbol, node.function.name)}")
-        else if isinstance(node, ast.Nonlocal):
+        else if node is ast.Nonlocal:
             pass
-        else if isinstance(node, ast.SimpleStatement):
+        else if node is ast.SimpleStatement:
             if node == ast.SimpleStatement.BREAK:
                 self.leave(self.loop_protects())
                 self.jump("jmp " + self.loop_end[-1])
@@ -965,7 +966,7 @@ class Emitter:
             self.line(f"{kind} =l loadl {exception}")
             for handler in node.handlers:
                 record = handler.type_name.record
-                assert isinstance(record, types.Class), "unchecked except clause"
+                assert record is types.Class, "unchecked except clause"
                 body = self.new_label()
                 next = self.new_label()
                 if record.type_name != "Exception":
@@ -1175,14 +1176,14 @@ class Emitter:
     # literal using `==` or `!=`, and "" otherwise.
     def os_test(condition: ast.Expr) -> str:
         node = condition.node
-        if not isinstance(node, ast.Binary) or node.op not in ["==", "!="]:
+        if node is not ast.Binary or node.op not in ["==", "!="]:
             return ""
         left = node.left.node
         right = node.right.node
         text = ""
-        if is_os(node.left) and isinstance(right, ast.String):
+        if is_os(node.left) and right is ast.String:
             text = right.value
-        else if is_os(node.right) and isinstance(left, ast.String):
+        else if is_os(node.right) and left is ast.String:
             text = left.value
         else:
             return ""
@@ -1217,11 +1218,11 @@ class Emitter:
         call = node.iterable.node
         declared = node.iterable.ty
         assert declared is not none, "unchecked iterable"
-        if isinstance(types.expand(declared), types.TypeVar):
+        if types.expand(declared) is types.TypeVar:
             self.for_protocol(node)
-        else if isinstance(call, ast.Call) and call.name == "range" and isinstance(call.target, stdlib.Builtin):
+        else if call is ast.Call and call.name == "range" and (call.target is stdlib.Builtin):
             self.for_range(node, call)
-        else if isinstance(call, ast.MethodCall) and call.name in ["keys", "values", "items"] and types.kind(self.concrete_type(call.object.ty)) == "dict":
+        else if call is ast.MethodCall and call.name in ["keys", "values", "items"] and types.kind(self.concrete_type(call.object.ty)) == "dict":
             self.for_dict(node, call.object, call.name)
         else:
             ty = self.concrete_type(node.iterable.ty)
@@ -1229,7 +1230,7 @@ class Emitter:
                 self.for_dict(node, node.iterable, "keys")
             else if types.kind(types.expand(ty)) in ["str", "bytes"]:
                 self.for_sequence(node)
-            else if isinstance(types.expand(ty), types.TupleType):
+            else if types.expand(ty) is types.TupleType:
                 self.for_tuple(node)
             else if types.kind(ty) == "list":
                 self.for_list(node)
@@ -1284,7 +1285,7 @@ class Emitter:
         object = self.expr(source)
         ty = self.concrete_type(source.ty)
         ty = types.expand(ty)
-        assert isinstance(ty, types.DictType), "unchecked dict loop"
+        assert ty is types.DictType, "unchecked dict loop"
         version = self.core_call("dict_version", [object], true)
         entry = self.core_call("dict_next", [object, "0", version], true)
         test = self.new_label()
@@ -1302,7 +1303,7 @@ class Emitter:
         else if part == "items":
             key = self.core_call("dict_key_at", [object, entry], true)
             value = self.core_call("dict_value_at", [object, entry], true)
-            assert isinstance(item_type, types.TupleType), "unchecked dict items"
+            assert item_type is types.TupleType, "unchecked dict items"
             item = self.tuple_value(item_type, [key, value])
         else:
             item = self.core_call("dict_key_at", [object, entry], true)
@@ -1443,7 +1444,7 @@ class Emitter:
             value = self.convert(value, ty, declared)
             self.line(f"storel {value}, {self.local_address(symbol, target.name)}")
             return
-        assert isinstance(ty, types.TupleType), "unchecked tuple target"
+        assert ty is types.TupleType, "unchecked tuple target"
         for i in range(len(target.elements)):
             item = self.core_call("tuple_get", [value, str(i)], true)
             self.store_pattern(target.elements[i], item, ty.elements[i])
@@ -1452,7 +1453,7 @@ class Emitter:
         source = self.expr(node.iterable)
         ty = self.concrete_type(node.iterable.ty)
         item_type = self.concrete_type(node.item)
-        assert isinstance(ty, types.TupleType), "unchecked tuple loop"
+        assert ty is types.TupleType, "unchecked tuple loop"
         index = self.temp()
         self.line(f"{index} =l copy 0")
         test = self.new_label()
@@ -1484,7 +1485,7 @@ class Emitter:
 
     def tuple_display(expr: ast.Expr, node: ast.TupleDisplay) -> str:
         ty = self.concrete_type(expr.ty)
-        assert isinstance(ty, types.TupleType), "unchecked tuple display"
+        assert ty is types.TupleType, "unchecked tuple display"
         values: list[str] = []
         for element in node.elements:
             values.append(self.expr(element))
@@ -1504,12 +1505,12 @@ class Emitter:
             iterations = node.iterables
             assert iterations is not none, "unchecked list extension"
             ty = self.concrete_type(node.object.ty)
-            assert isinstance(ty, types.ListType), "unchecked list extension receiver"
+            assert ty is types.ListType, "unchecked list extension receiver"
             collected = self.collect(args[1], iterations[0], types.expand(ty.element))
             return self.core_call("list_extend", [args[0], collected], false)
         if node.name == "sort":
             ty = self.concrete_type(node.object.ty)
-            assert isinstance(ty, types.ListType), "unchecked list sort receiver"
+            assert ty is types.ListType, "unchecked list sort receiver"
             self.sort(args[0], types.expand(ty.element), node.args[1], args[2], args[1], true)
             return "0"
         return self.core_call("list_" + node.name, args, node.name == "pop")
@@ -1517,7 +1518,7 @@ class Emitter:
     def dict_display(expr: ast.Expr, node: ast.DictDisplay) -> str:
         ty = self.concrete_type(expr.ty)
         ty = types.expand(ty)
-        assert isinstance(ty, types.DictType), "unchecked dict type"
+        assert ty is types.DictType, "unchecked dict type"
         kind = "0"
         if types.kind(ty.key) == "str":
             kind = "2"
@@ -1534,25 +1535,25 @@ class Emitter:
         declared = node.object.ty
         assert declared is not none, "unchecked method receiver"
         declared = types.expand(declared)
-        if isinstance(declared, types.TypeVar):
+        if declared is types.TypeVar:
             bound = declared.bound
             if bound is not none:
                 receiver_type = self.concrete_type(bound)
-                if isinstance(receiver_type, types.ProtocolType):
+                if receiver_type is types.ProtocolType:
                     object = self.convert(self.expr(node.object), ty, receiver_type)
                     args = self.arg_values(node.args, node.order)
                     return self.protocol_call(object, receiver_type, node.name, args, written_mask(node))
         if node.name == "iter" and types.iteration_item(ty) is not none:
             return self.native_iter(self.expr(node.object), ty, "")
-        if isinstance(ty, types.ClassType):
+        if ty is types.ClassType:
             return self.class_method(node, ty)
-        if isinstance(ty, types.ProtocolType):
+        if ty is types.ProtocolType:
             return self.class_method(node, ty)
-        if isinstance(ty, types.ListType):
+        if ty is types.ListType:
             return self.list_method(node)
-        if isinstance(ty, types.DictType):
+        if ty is types.DictType:
             return self.dict_method(expr, node)
-        if isinstance(ty, types.Prim) and ty.name in ["str", "bytes"]:
+        if ty is types.Prim and ty.name in ["str", "bytes"]:
             args = [self.expr(node.object)]
             args.extend(self.arg_values(node.args, node.order))
             return self.core_call(ty.name + "_" + node.name, args, true)
@@ -1581,7 +1582,7 @@ class Emitter:
         ty = self.concrete_type(node.object.ty)
         target = self.concrete_type(expr.ty)
         ty = types.expand(ty)
-        assert isinstance(ty, types.DictType), "unchecked dict get object"
+        assert ty is types.DictType, "unchecked dict get object"
         found = self.convert(found, types.expand(ty.value), target)
         self.line(f"{result} =l copy {found}")
         self.jump(f"jmp {done}")
@@ -1593,7 +1594,7 @@ class Emitter:
     def index(node: ast.Index) -> str:
         object = self.expr(node.object)
         ty = self.concrete_type(node.object.ty)
-        if isinstance(ty, types.TupleType):
+        if ty is types.TupleType:
             return self.core_call("tuple_get", [object, str(node.position)], true)
         index = self.expr(node.index)
         name = "list_get"
@@ -1632,12 +1633,12 @@ class Emitter:
         ty = self.concrete_type(node.right.ty)
         ty = types.expand(ty)
         result = "0"
-        if isinstance(ty, types.DictType):
+        if ty is types.DictType:
             result = self.core_call("dict_contains", [container, item], true)
-        else if isinstance(ty, types.Prim):
+        else if ty is types.Prim:
             result = self.core_call(ty.name + "_contains", [container, item], true)
         else:
-            assert isinstance(ty, types.ListType), "unchecked membership"
+            assert ty is types.ListType, "unchecked membership"
             element = types.expand(ty.element)
             left = self.concrete_type(node.left.ty)
             if types.tuple_member(left) is not none or types.tuple_member(element) is not none or not types.assignable(element, left):
@@ -1701,13 +1702,15 @@ class Emitter:
         target = self.concrete_type(target)
         if types.same(source, target):
             return value
-        if isinstance(source, types.UnionType) and protocol_conversion(source, target):
+        if source is types.UnionType and protocol_conversion(source, target):
             return self.convert_union(value, source, target)
-        if isinstance(target, types.UnionType) and protocol_conversion(source, target):
+        if target is types.UnionType and protocol_conversion(source, target):
+            # An open union has only its protocol member and none.
+            # Protocol conversion therefore has a single destination.
             for member in target.members:
-                if types.assignable(member, source):
+                if member is types.ProtocolType:
                     return self.convert(value, source, member)
-        if isinstance(target, types.ProtocolType) and not isinstance(source, types.UnionType):
+        if target is types.ProtocolType and source is not types.UnionType:
             witness = self.witness(source, target)
             object = self.core_call("object_new", [witness.symbol + ".type", "1"], true)
             address = self.temp()
@@ -1749,7 +1752,7 @@ class Emitter:
             result = self.temp()
             self.line(f"{result} =l ceql {value}, 0")
             return result
-        if isinstance(member, types.ProtocolType):
+        if member is types.ProtocolType:
             result = self.temp()
             present = self.temp()
             take = self.new_label()
@@ -1769,10 +1772,10 @@ class Emitter:
         library = false
         if name == "callable":
             name = "function"
-        if isinstance(member, types.ClassType):
+        if member is types.ClassType:
             name = member.decl.type_name
             library = member.decl.library
-        else if isinstance(member, types.EnumType):
+        else if member is types.EnumType:
             name = member.decl.type_name
             library = member.decl.library
         return self.instance_test(value, name, library)
@@ -1827,7 +1830,7 @@ class Emitter:
     # The descriptor of a scalar type that is boxed in a union, or "".
     def box_descriptor(t: types.Type) -> str:
         t = types.expand(t)
-        if isinstance(t, types.EnumType):
+        if t is types.EnumType:
             return self.descriptor(t.decl.type_name, t.decl.library)
         if types.kind(t) in ["int", "float", "bool"]:
             return self.descriptor(types.kind(t), false)
@@ -1844,15 +1847,15 @@ class Emitter:
 
     def node_value(expr: ast.Expr) -> str:
         node = expr.node
-        if isinstance(node, ast.Int):
+        if node is ast.Int:
             return node.text
-        else if isinstance(node, ast.String):
+        else if node is ast.String:
             return self.string(node.value)
-        else if isinstance(node, ast.Constant):
+        else if node is ast.Constant:
             if node == ast.Constant.TRUE:
                 return "1"
             return "0"
-        else if isinstance(node, ast.Name):
+        else if node is ast.Name:
             symbol = node.symbol
             if symbol is none:
                 return self.string(self.target_os)
@@ -1861,55 +1864,55 @@ class Emitter:
             declared = self.concrete_type(symbol.ty)
             ty = self.concrete_type(expr.ty)
             return self.convert(t, declared, ty)
-        else if isinstance(node, ast.Binary):
+        else if node is ast.Binary:
             return self.binary(node)
-        else if isinstance(node, ast.Call):
+        else if node is ast.Call:
             return self.call(node)
-        else if isinstance(node, ast.TypeOf):
+        else if node is ast.TypeOf:
             target = node.target
-            assert isinstance(target, ast.TypeName), "unchecked __type"
+            assert target is ast.TypeName, "unchecked __type"
             return f"$W.{target.name}.type"
-        else if isinstance(node, ast.Float):
+        else if node is ast.Float:
             return self.float_bits("d_" + str(node.value))
-        else if isinstance(node, ast.FString):
+        else if node is ast.FString:
             return self.fstring(node)
-        else if isinstance(node, ast.EnumMember):
+        else if node is ast.EnumMember:
             record = node.decl.record
             assert record is not none, "unchecked enum"
             for i in range(len(record.members)):
                 if record.members[i] == node.name:
                     return str(i)
             return self.unchecked("enum member")
-        else if isinstance(node, ast.MethodCall):
+        else if node is ast.MethodCall:
             return self.method_call(expr, node)
-        else if isinstance(node, ast.Field):
+        else if node is ast.Field:
             object = self.expr(node.object)
             method = expr.ty
-            if isinstance(method, types.FunctionType):
+            if method is types.FunctionType:
                 return self.bound_method(node.object, method.fn, object)
             address = self.field_address(node.object, node.name, object)
             value = self.temp()
             self.line(f"{value} =l loadl {address}")
             return value
-        else if isinstance(node, ast.Index):
+        else if node is ast.Index:
             return self.index(node)
-        else if isinstance(node, ast.Slice):
+        else if node is ast.Slice:
             return self.slice(node)
-        else if isinstance(node, ast.Unary):
+        else if node is ast.Unary:
             return self.unary(node)
-        else if isinstance(node, ast.Is):
+        else if node is ast.Is:
             return self.emit_is(node)
-        else if isinstance(node, ast.IsInstance):
-            return self.emit_isinstance(node)
-        else if isinstance(node, ast.ListDisplay):
+        else if node is ast.TypeTest:
+            return self.emit_type_test(node)
+        else if node is ast.ListDisplay:
             return self.list_display(node)
-        else if isinstance(node, ast.TupleDisplay):
+        else if node is ast.TupleDisplay:
             return self.tuple_display(expr, node)
-        else if isinstance(node, ast.DictDisplay):
+        else if node is ast.DictDisplay:
             return self.dict_display(expr, node)
-        else if isinstance(node, ast.CallValue):
+        else if node is ast.CallValue:
             return self.call_value(node)
-        else if isinstance(node, ast.FunctionValue):
+        else if node is ast.FunctionValue:
             if len(node.type_args) > 0:
                 return self.specialized_value(expr, node)
             code = self.symbol(node.target) + ".value"
@@ -1919,27 +1922,27 @@ class Emitter:
             else:
                 self.wrap(code, ValueWrapper(code, node.target))
             return code + ".closure"
-        else if isinstance(node, ast.BuiltinValue):
+        else if node is ast.BuiltinValue:
             call = node.call
             assert call is not none, "unchecked built-in value"
             code = f"$W.builtin.{len(self.later)}"
             callable = self.concrete_type(expr.ty)
-            assert isinstance(callable, types.CallableType), "unchecked built-in signature"
+            assert callable is types.CallableType, "unchecked built-in signature"
             self.later.append(BuiltinWrapper(code, call, len(callable.params)))
             return code + ".closure"
-        else if isinstance(node, ast.Lambda):
+        else if node is ast.Lambda:
             function = node.function
             assert function is not none, "unbound lambda"
             return self.closure(function)
-        else if isinstance(node, ast.Await):
+        else if node is ast.Await:
             name = "async_await"
             operand = self.concrete_type(node.operand.ty)
             value = self.expr(node.operand)
-            if isinstance(operand, types.ClassType) and operand.decl.library and operand.decl.type_name == "aio.Task":
+            if operand is types.ClassType and operand.decl.library and operand.decl.type_name == "aio.Task":
                 name = "aio_await_task"
                 value = self.load_field(value, 8)
             return self.core_call(name, [value], true)
-        else if isinstance(node, ast.Typed):
+        else if node is ast.Typed:
             return f"%p.{node.index}"
         return self.unchecked("expression")
 
@@ -1951,12 +1954,12 @@ class Emitter:
             return self.contains(node)
         left_type = self.concrete_type(node.left.ty)
         right_type = self.concrete_type(node.right.ty)
-        if (op == "==" or op == "!=") and (may_be_none(left_type) or may_be_none(right_type) or isinstance(left_type, types.TupleType)):
+        if (op == "==" or op == "!=") and (may_be_none(left_type) or may_be_none(right_type) or (left_type is types.TupleType)):
             return self.union_equality(node)
         kind = types.kind(left_type)
         left = self.expr(node.left)
         right = self.expr(node.right)
-        if isinstance(left_type, types.TupleType):
+        if left_type is types.TupleType:
             return self.tuple_order(op, left, right, left_type)
         if kind in ["str", "bytes"]:
             if op == "+":
@@ -1980,7 +1983,7 @@ class Emitter:
             return self.float_bits(self.int_quotient(left, right))
         if op == "//" or op == "%":
             literal = node.right.node
-            if isinstance(literal, ast.Int):
+            if literal is ast.Int:
                 shift = power_of_two(literal.text)
                 if shift != 0:
                     # In two's complement, an arithmetic shift is floor
@@ -2026,7 +2029,7 @@ class Emitter:
             different = self.new_label()
             self.jump(f"jnz {equal}, {same}, {different}")
             self.label(different)
-            if isinstance(element, types.TupleType):
+            if element is types.TupleType:
                 ordered = self.tuple_order(op, a, b, element)
             else if types.kind(element) == "float":
                 ordered = self.float_binary(op, a, b)
@@ -2051,24 +2054,24 @@ class Emitter:
             self.line(f"{t} =l ceql {operand}, 0")
         return t
 
-    # The checker has made sure the type is a member of the operand's, so
-    # only a union needs a test.
-    def emit_isinstance(node: ast.IsInstance) -> str:
+    # The test's covered members have the same runtime classes after
+    # substituting type arguments; only their representations may change.
+    def emit_type_test(node: ast.TypeTest) -> str:
         operand = self.expr(node.operand)
         ty = self.concrete_type(node.operand.ty)
-        if not is_union(ty):
-            return "1"
-        named = node.type_name
-        type_name = named.name
-        library = false
-        record = named.record
-        if isinstance(record, types.Class):
-            type_name = record.type_name
-            library = record.library
-        else if isinstance(record, types.Enum):
-            type_name = record.type_name
-            library = record.library
-        return self.instance_test(operand, type_name, library)
+        result = "1"
+        if is_union(ty):
+            result = "0"
+            for member in check.tested_members(ty, node.type_name):
+                held = self.member_test(operand, member)
+                combined = self.temp()
+                self.line(f"{combined} =l or {result}, {held}")
+                result = combined
+        if node.negated:
+            negated = self.temp()
+            self.line(f"{negated} =l ceql {result}, 0")
+            return negated
+        return result
 
     def unary(node: ast.Unary) -> str:
         value = self.expr(node.operand)
@@ -2367,7 +2370,7 @@ class Emitter:
 
     def call(node: ast.Call) -> str:
         target = node.target
-        if isinstance(target, ast.FunctionDecl):
+        if target is ast.FunctionDecl:
             if target.external:
                 return self.extern_call(node, target, "$" + target.name)
             args = self.arg_values(node.args, node.order)
@@ -2379,9 +2382,9 @@ class Emitter:
             symbol = self.specialization(record, [], node.type_args)
             result = types.substitute(record.result, types.bind_vars(record.typevars, types.substitute_all(node.type_args, self.bindings)))
             return self.willow_call(symbol, typed(args), not is_none(self.concrete_type(result)))
-        if isinstance(target, stdlib.Builtin):
+        if target is stdlib.Builtin:
             return self.builtin(node, target)
-        assert isinstance(target, types.Class), "unchecked constructor"
+        assert target is types.Class, "unchecked constructor"
         return self.construct(node, target)
 
     def construct(node: ast.Call, target: types.Class) -> str:
@@ -2398,7 +2401,7 @@ class Emitter:
     def field_address(expr: ast.Expr, name: str, object: str) -> str:
         ty = self.concrete_type(expr.ty)
         ty = types.expand(ty)
-        assert isinstance(ty, types.ClassType), "unchecked field receiver"
+        assert ty is types.ClassType, "unchecked field receiver"
         for i in range(len(ty.decl.fields)):
             if ty.decl.fields[i].name == name:
                 address = self.temp()
@@ -2422,11 +2425,11 @@ class Emitter:
 
     # `written` is as protocol_call takes it.
     def dispatch_method(object: str, ty: types.Type, name: str, args: list[str], own: list[types.Type], written: str) -> str:
-        if isinstance(ty, types.ProtocolType):
+        if ty is types.ProtocolType:
             return self.protocol_call(object, ty, name, args, written)
         if name == "iter" and types.iteration_item(ty) is not none:
             return self.native_iter(object, ty, "")
-        assert isinstance(ty, types.ClassType), "unchecked method receiver"
+        assert ty is types.ClassType, "unchecked method receiver"
         for method in ty.decl.methods:
             if method.name == name:
                 passed = [object]
@@ -2543,11 +2546,11 @@ class Emitter:
         self.at_line = expr.line
         self.at_col = expr.col
         node = expr.node
-        assert isinstance(node, ast.MethodCall), "unchecked saved method"
+        assert node is ast.MethodCall, "unchecked saved method"
         declared = node.object.ty
         assert declared is not none, "unchecked saved receiver"
         ty = self.concrete_type(declared)
-        if isinstance(declared, types.TypeVar):
+        if declared is types.TypeVar:
             bound = declared.bound
             if bound is not none:
                 target = self.concrete_type(bound)
@@ -2579,7 +2582,7 @@ class Emitter:
 
     def native_adapter(source: types.Type, item: types.Type, part: str) -> NativeIterator:
         for later in self.later:
-            if isinstance(later, NativeIterator) and later.part == part and types.same(later.source, source) and types.same(later.item, item):
+            if later is NativeIterator and later.part == part and types.same(later.source, source) and types.same(later.item, item):
                 return later
         adapter = NativeIterator(f"$W.iterator.{len(self.later)}", source, item, part)
         self.later.append(adapter)
@@ -2589,7 +2592,7 @@ class Emitter:
         item = types.iteration_item(ty)
         assert item is not none, "unchecked native iteration"
         version = "0"
-        if isinstance(ty, types.DictType):
+        if ty is types.DictType:
             version = self.core_call("dict_version", [source], true)
             if part == "values":
                 item = types.expand(ty.value)
@@ -2624,7 +2627,7 @@ class Emitter:
         if kind == "tuple":
             index = self.core_call("iterator_cursor", ["%state"], true)
         value = self.core_call("iterator_" + kind + "_next", ["%state"], true)
-        if isinstance(source_type, types.DictType):
+        if source_type is types.DictType:
             source = self.core_call("iterator_source", ["%state"], true)
             if adapter.part == "values":
                 value = self.core_call("dict_value_at", [source, value], true)
@@ -2632,11 +2635,11 @@ class Emitter:
                 key = self.core_call("dict_key_at", [source, value], true)
                 item = self.core_call("dict_value_at", [source, value], true)
                 ty = adapter.item
-                assert isinstance(ty, types.TupleType), "unchecked dictionary items"
+                assert ty is types.TupleType, "unchecked dictionary items"
                 value = self.tuple_value(ty, [key, item])
             else:
                 value = self.core_call("dict_key_at", [source, value], true)
-        else if isinstance(source_type, types.TupleType):
+        else if source_type is types.TupleType:
             value = self.tuple_item(value, index, source_type, adapter.item)
         self.end(value)
 
@@ -2720,7 +2723,7 @@ class Emitter:
         self.core_call("list_sort", [xs, keys, equality_kind(callable.result), reverse], false)
 
     def validate_nan(value: str, ty: types.Type):
-        if isinstance(ty, types.TupleType):
+        if ty is types.TupleType:
             for i in range(len(ty.elements)):
                 item = self.core_call("tuple_get", [value, str(i)], true)
                 self.validate_nan(item, ty.elements[i])
@@ -2731,7 +2734,7 @@ class Emitter:
             self.guard(nan, "ValueError", "cannot compare NaN")
 
     def ordered(left: str, right: str, ty: types.Type, op: str) -> str:
-        if isinstance(ty, types.TupleType):
+        if ty is types.TupleType:
             return self.tuple_order(op, left, right, ty)
         if types.kind(ty) == "float":
             return self.float_binary(op, left, right)
@@ -2964,7 +2967,7 @@ class Emitter:
             return self.core_call("union_to_str", [value], true)
         else if kind == "none":
             return self.string("none")
-        else if isinstance(ty, types.EnumType):
+        else if ty is types.EnumType:
             return self.core_call("enum_to_str", [self.descriptor(ty.decl.type_name, ty.decl.library), value], true)
         assert kind == "str", "unchecked scalar conversion"
         return value
@@ -2972,7 +2975,7 @@ class Emitter:
     def intrinsic(node: ast.Call, target: stdlib.Builtin) -> str:
         if target.name == "__ccall":
             signature = node.args[0].node
-            assert isinstance(signature, ast.FunctionValue), "unchecked C call signature"
+            assert signature is ast.FunctionValue, "unchecked C call signature"
             function = signature.target
             address = self.expr(node.args[1])
             call = ast.Call(function.name, node.args[2:], [], [], function)
@@ -3076,7 +3079,7 @@ class Emitter:
     # out. A nested one's closure holds the closure with its cells.
     def specialized_value(expr: ast.Expr, node: ast.FunctionValue) -> str:
         ty = self.concrete_type(expr.ty)
-        assert isinstance(ty, types.CallableType), "unchecked generic function value"
+        assert ty is types.CallableType, "unchecked generic function value"
         symbol = node.symbol
         if symbol is none:
             record = node.target.record
@@ -3096,7 +3099,7 @@ class Emitter:
     # `receiver`.
     def bound_method(receiver: ast.Expr, method: types.Function, object: str) -> str:
         ty = self.concrete_type(receiver.ty)
-        assert isinstance(ty, types.ClassType), "unchecked receiver"
+        assert ty is types.ClassType, "unchecked receiver"
         symbol = self.specialization(method, ty.args, [])
         self.wrap(symbol + ".bound", BoundWrapper(symbol + ".bound", symbol, method, ty))
         return self.new_closure(symbol + ".bound", [object])
@@ -3117,7 +3120,7 @@ class Emitter:
         if len(node.type_args) > 0:
             # A nested generic function, called directly.
             name = node.callee.node
-            assert isinstance(name, ast.Name) and isinstance(ty, types.FunctionType), "unchecked generic call"
+            assert name is ast.Name and ty is types.FunctionType, "unchecked generic call"
             symbol = name.symbol
             assert symbol is not none, "unbound generic call"
             function = symbol.function
@@ -3151,27 +3154,27 @@ class Emitter:
         return result
 
     def emit_later(later: Later):
-        if isinstance(later, Lifted):
+        if later is Lifted:
             bindings = self.bindings
             self.emit_function(later.function, later.symbol, ["l %env"], later.bindings)
             self.bindings = bindings
-        else if isinstance(later, GeneratorBody):
+        else if later is GeneratorBody:
             bindings = self.bindings
             self.emit_generator_body(later)
             self.bindings = bindings
-        else if isinstance(later, ValueWrapper):
+        else if later is ValueWrapper:
             self.emit_value_wrapper(later)
-        else if isinstance(later, BoundWrapper):
+        else if later is BoundWrapper:
             self.emit_bound_wrapper(later)
-        else if isinstance(later, BuiltinWrapper):
+        else if later is BuiltinWrapper:
             self.emit_builtin_wrapper(later)
-        else if isinstance(later, SpecializedValue):
+        else if later is SpecializedValue:
             bindings = self.bindings
             self.emit_specialized_value(later)
             self.bindings = bindings
-        else if isinstance(later, Adapter):
+        else if later is Adapter:
             self.emit_adapter(later)
-        else if isinstance(later, NativeIterator):
+        else if later is NativeIterator:
             bindings = self.bindings
             self.emit_native_iterator(later)
             self.bindings = bindings
@@ -3323,9 +3326,9 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
             privileged[root] = true
         module_paths[root] = module.path
         for decl in module.declarations:
-            if isinstance(decl, ast.FunctionDecl):
+            if decl is ast.FunctionDecl:
                 module_names[decl.id] = root
-            else if isinstance(decl, ast.ClassDecl):
+            else if decl is ast.ClassDecl:
                 for method in decl.methods:
                     module_names[method.id] = root
     result = Emitter(target_os, modules[0].name, module_names, {}, [], {}, 0, 0, false, false, [], [], {}, functions, [], {}, {}, [], [], module_paths, privileged, stdlib.exceptions(), [], [], [], [], {})
@@ -3336,7 +3339,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
         result.exception_descriptors.append(result.descriptor(name, false))
     for module in modules:
         for decl in module.declarations:
-            if isinstance(decl, ast.ClassDecl):
+            if decl is ast.ClassDecl:
                 # An uncaught exception reports its class by the name types
                 # write, qualified outside the entry module.
                 name = decl.name
@@ -3344,7 +3347,7 @@ def emitter(modules: list[ast.Module], target_os: str) -> Emitter:
                     name = decl.type_name
                     result.exception_descriptors.append(result.descriptor(decl.type_name, module.privileged))
                 result.descriptors[result.descriptor(decl.type_name, module.privileged)] = [name]
-            else if isinstance(decl, ast.EnumDecl):
+            else if decl is ast.EnumDecl:
                 texts = [decl.name]
                 for member in decl.members:
                     texts.append(decl.name + "." + member.name)
@@ -3399,7 +3402,7 @@ def frame_name(function: ast.FunctionDecl) -> str:
     if parent is not none:
         return frame_name(parent) + "." + function.name
     owner = function.owner
-    if isinstance(owner, ast.ClassDecl):
+    if owner is ast.ClassDecl:
         return owner.name + "." + function.name
     return function.name
 
@@ -3415,7 +3418,7 @@ def enclosing_vars(function: ast.FunctionDecl) -> list[types.TypeVar]:
         function = parent
         parent = function.parent
     owner = function.owner
-    if isinstance(owner, ast.ClassDecl):
+    if owner is ast.ClassDecl:
         decl = owner.record
         assert decl is not none, "class without a record"
         result.extend(decl.typevars)
@@ -3447,10 +3450,8 @@ def equality_kind(t: types.Type) -> str:
 def protocol_conversion(source: types.Type, target: types.Type) -> bool:
     for member in types.members(source):
         for to in types.members(target):
-            if types.assignable(to, member):
-                if isinstance(to, types.ProtocolType) and not types.same(to, member):
-                    return true
-                break
+            if to is types.ProtocolType and types.assignable(to, member) and not types.same(to, member):
+                return true
     return false
 
 def representation_changes(source: types.Type, target: types.Type) -> bool:
@@ -3492,15 +3493,15 @@ def adapts(source: types.Type, target: types.Type) -> bool:
 # The function or callable member of `t`, or none.
 def function_member(t: types.Type) -> types.FunctionType | types.CallableType | none:
     for m in types.members(t):
-        if isinstance(m, types.FunctionType):
+        if m is types.FunctionType:
             return m
-        if isinstance(m, types.CallableType):
+        if m is types.CallableType:
             return m
     return none
 
 # The parameters a function value's code takes after its closure.
 def value_params(t: types.FunctionType | types.CallableType) -> list[types.Param]:
-    if isinstance(t, types.FunctionType):
+    if t is types.FunctionType:
         return types.function_params(t)
     result: list[types.Param] = []
     for param in t.params:
@@ -3508,9 +3509,9 @@ def value_params(t: types.FunctionType | types.CallableType) -> list[types.Param
     return result
 
 def value_result(t: types.Type) -> types.Type:
-    if isinstance(t, types.FunctionType):
+    if t is types.FunctionType:
         return types.function_result(t)
-    assert isinstance(t, types.CallableType), "call of a value that is not a function"
+    assert t is types.CallableType, "call of a value that is not a function"
     return t.result
 
 # The parameters of a closure's code: the closure, then `args`.
@@ -3526,17 +3527,17 @@ def wrapper_args(count: int) -> list[str]:
     return result
 
 def is_union(t: types.Type) -> bool:
-    return isinstance(types.expand(t), types.UnionType)
+    return types.expand(t) is types.UnionType
 
 def may_be_none(t: types.Type) -> bool:
     return is_union(t) or types.kind(t) == "none"
 
 def is_none(t: types.Type) -> bool:
-    return isinstance(t, types.Prim) and t.name == "none"
+    return t is types.Prim and t.name == "none"
 
 def is_os(expr: ast.Expr) -> bool:
     node = expr.node
-    return isinstance(node, ast.Name) and node.symbol is none and node.name == "__os"
+    return node is ast.Name and node.symbol is none and node.name == "__os"
 
 def typed(args: list[str]) -> list[str]:
     result: list[str] = []
@@ -3547,7 +3548,7 @@ def typed(args: list[str]) -> list[str]:
 # The QBE type of an extern parameter or result annotated `annotation`
 # whose Willow type is `ty`.
 def c_type(annotation: ast.TypeExpr | none, ty: types.Type) -> str:
-    if isinstance(annotation, ast.TypeName) and annotation.module == "" and annotation.name == "cint":
+    if annotation is ast.TypeName and annotation.module == "" and annotation.name == "cint":
         return "w"
     if types.kind(ty) == "float":
         return "d"

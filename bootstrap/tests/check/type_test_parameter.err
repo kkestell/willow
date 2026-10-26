@@ -1,0 +1,1 @@
+type_test_parameter.wlo:2:21: error: type parameter 'T' cannot be used in a type test

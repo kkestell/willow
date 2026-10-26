@@ -109,9 +109,9 @@ def parse(line: str) -> Expr:
     return expr
 
 def evaluate(expr: Expr) -> float:
-    if isinstance(expr, Number):
+    if expr is Number:
         return expr.value
-    if isinstance(expr, Negate):
+    if expr is Negate:
         return -evaluate(expr.operand)
     left = evaluate(expr.left)
     right = evaluate(expr.right)

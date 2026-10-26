@@ -3,15 +3,15 @@ import json
 def kind(value: json.Json) -> str:
     if value is none:
         return "null"
-    if isinstance(value, bool):
+    if value is bool:
         return "bool"
-    if isinstance(value, int):
+    if value is int:
         return "int"
-    if isinstance(value, float):
+    if value is float:
         return "float"
-    if isinstance(value, str):
+    if value is str:
         return "str"
-    if isinstance(value, list):
+    if value is list:
         return "list"
     return "dict"
 

@@ -23,7 +23,7 @@ def main():
         test = path[len(root):].startswith("test_")
         error: diagnostic.Diagnostic | none = none
         result = loader.load(path, false)
-        if isinstance(result, diagnostic.Diagnostic):
+        if result is diagnostic.Diagnostic:
             error = result
         else:
             error = bind.bind(result, test)

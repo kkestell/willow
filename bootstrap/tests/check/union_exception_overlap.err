@@ -1,0 +1,1 @@
+union_exception_overlap.wlo:1:29: error: union members Exception and ValueError overlap

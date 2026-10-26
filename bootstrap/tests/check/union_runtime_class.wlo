@@ -1,0 +1,6 @@
+class Box[T]:
+    item: T
+def test(value: Box[int] | Box[str]):
+    pass
+def main():
+    pass

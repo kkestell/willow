@@ -9,7 +9,7 @@ def widen(value: Narrow) -> Wide:
     return value
 
 def show(value: Wide):
-    if isinstance(value, tuple):
+    if value is tuple:
         print(value[0](3))
         print(value[1])
     else:

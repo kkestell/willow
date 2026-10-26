@@ -21,7 +21,7 @@ def main():
     # A float position stays a float in an int | float target.
     w: int | float = 1
     w, z = (2.5, 0)
-    print(isinstance(w, float))
+    print((w is float))
     print(w)
     for name, count in [("a", 1), ("b", 2)]:
         print(f"{name}={count}")

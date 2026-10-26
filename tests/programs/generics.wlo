@@ -97,7 +97,7 @@ def generic_depth[T](n: Nested[T]) -> int:
     return best + 1
 
 def leaves[T](t: Tree[T]) -> list[T]:
-    if isinstance(t, list):
+    if t is list:
         return t
     found: list[T] = []
     for k in t:
@@ -145,7 +145,7 @@ def main():
     print(pick[int]())
     # A float in an int | float type argument passes through unconverted.
     v = first[int | float]([2.5, 1])
-    print(isinstance(v, float))
+    print((v is float))
     print(v)
     # T | none with T = int | none is int | none.
     w: int | none = pick[int | none](none, 7)

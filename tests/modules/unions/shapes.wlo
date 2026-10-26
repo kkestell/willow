@@ -7,6 +7,6 @@ class Square:
 type Shape = Circle | Square
 
 def area(shape: Shape) -> float:
-    if isinstance(shape, Circle):
+    if shape is Circle:
         return 3.0 * shape.radius * shape.radius
     return shape.side * shape.side

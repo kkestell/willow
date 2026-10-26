@@ -22,7 +22,7 @@ def main():
     options.kind = Kind.FANCY
     print(options.describe())
     kind = options.kind
-    if isinstance(kind, Kind):
+    if kind is Kind:
         print(kind == Kind.FANCY)
     other = Options("other", 7)
     print(other.describe())

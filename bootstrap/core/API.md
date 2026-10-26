@@ -291,7 +291,7 @@ return it without leaking or overtaking another waiter.
 ## Inline in stage 0
 
 Integer and float arithmetic and comparisons with their overflow and division
-checks, `and`, `or`, `not`, `range` loops, `is none`, `isinstance` on a
+checks, `and`, `or`, `not`, `range` loops, `is` type tests on a
 non-union, field loads and stores, `float(n)` for an `int`, and `assert`.
 
 ## Intrinsics

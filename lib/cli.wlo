@@ -31,27 +31,27 @@ class Args:
 
     def get_str(name: str) -> str:
         value = self._get(name, "str")
-        assert isinstance(value, str)
+        assert value is str
         return value
 
     def get_int(name: str) -> int:
         value = self._get(name, "int")
-        assert isinstance(value, int)
+        assert value is int
         return value
 
     def get_float(name: str) -> float:
         value = self._get(name, "float")
-        assert isinstance(value, float)
+        assert value is float
         return value
 
     def get_bool(name: str) -> bool:
         value = self._get(name, "bool")
-        assert isinstance(value, bool)
+        assert value is bool
         return value
 
     def get_list(name: str) -> list[str]:
         value = self._get(name, "list")
-        assert isinstance(value, list)
+        assert value is list
         return value[:]
 
 def _letter(text: str) -> bool:
@@ -162,11 +162,11 @@ class Parser:
                     left = left + " " + entry.name.upper().replace("-", "_")
                     note = ""
                     value = entry.default
-                    if isinstance(value, str):
+                    if value is str:
                         default = value
-                    else if isinstance(value, int):
+                    else if value is int:
                         default = str(value)
-                    else if isinstance(value, float):
+                    else if value is float:
                         default = str(value)
                     else:
                         default = str(value)

@@ -11,19 +11,19 @@ import sys
 
 # A JSON value as text when it is a string, otherwise "".
 def _text(value: json.Json) -> str:
-    if isinstance(value, str):
+    if value is str:
         return value
     return ""
 
 def reply(store: dict[str, json.Json], request: json.Json) -> json.Json:
-    if not isinstance(request, dict):
+    if request is not dict:
         return {"error": "expected an object"}
     op = _text(request.get("op"))
     key = request.get("key")
-    if op == "set" and isinstance(key, str):
+    if op == "set" and (key is str):
         store[key] = request.get("value")
         return {"ok": true}
-    else if op == "get" and isinstance(key, str):
+    else if op == "get" and (key is str):
         return {"value": store.get(key)}
     else if op == "keys":
         names: list[json.Json] = []
@@ -47,7 +47,7 @@ def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:
             except json.JsonError as error:
                 channel.send({"error": error.message})
                 continue
-            if isinstance(request, dict) and _text(request.get("op")) == "shutdown":
+            if request is dict and _text(request.get("op")) == "shutdown":
                 channel.send({"ok": true})
                 return true
             channel.send(reply(store, request))

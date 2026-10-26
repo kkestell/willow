@@ -191,64 +191,64 @@ def var_key(v: TypeVar) -> str:
 # dict, tuple, record, protocol, enum, callable, function, typevar, union, or
 # lazy.
 def kind(t: Type) -> str:
-    if isinstance(t, Prim):
+    if t is Prim:
         return t.name
-    if isinstance(t, ListType):
+    if t is ListType:
         return "list"
-    if isinstance(t, DictType):
+    if t is DictType:
         return "dict"
-    if isinstance(t, TupleType):
+    if t is TupleType:
         return "tuple"
-    if isinstance(t, ClassType):
+    if t is ClassType:
         return "record"
-    if isinstance(t, ProtocolType):
+    if t is ProtocolType:
         return "protocol"
-    if isinstance(t, EnumType):
+    if t is EnumType:
         return "enum"
-    if isinstance(t, CallableType):
+    if t is CallableType:
         return "callable"
-    if isinstance(t, FunctionType):
+    if t is FunctionType:
         return "function"
-    if isinstance(t, TypeVar):
+    if t is TypeVar:
         return "typevar"
-    if isinstance(t, UnionType):
+    if t is UnionType:
         return "union"
     return "lazy"
 
 # The text diagnostics give `t`.
 def display(t: Type) -> str:
-    if isinstance(t, Prim):
+    if t is Prim:
         return t.name
-    if isinstance(t, ListType):
+    if t is ListType:
         return f"list[{display(t.element)}]"
-    if isinstance(t, DictType):
+    if t is DictType:
         return f"dict[{display(t.key)}, {display(t.value)}]"
-    if isinstance(t, TupleType):
+    if t is TupleType:
         if len(t.elements) == 0:
             return "tuple[]"
         return "tuple[" + join(t.elements, ", ") + "]"
-    if isinstance(t, ClassType):
+    if t is ClassType:
         return specialized(t.decl.type_name, t.args)
-    if isinstance(t, ProtocolType):
+    if t is ProtocolType:
         return specialized(t.decl.type_name, t.args)
-    if isinstance(t, EnumType):
+    if t is EnumType:
         return t.decl.type_name
-    if isinstance(t, CallableType):
+    if t is CallableType:
         return "(" + join(t.params, ", ") + ") -> " + display(t.result)
-    if isinstance(t, FunctionType):
+    if t is FunctionType:
         receiver = t.receiver
         if t.bound and receiver is not none:
             return "function " + display(receiver) + "." + t.fn.name
         return "function " + t.fn.type_name
-    if isinstance(t, TypeVar):
+    if t is TypeVar:
         return t.name
-    if isinstance(t, UnionType):
+    if t is UnionType:
         if t.alias != "":
             return t.alias
         names: list[str] = []
         for m in t.members:
             # A callable's result would otherwise absorb the members after it.
-            if isinstance(m, CallableType):
+            if m is CallableType:
                 names.append("(" + display(m) + ")")
             else:
                 names.append(display(m))
@@ -268,14 +268,14 @@ def specialized(type_name: str, args: list[Type]) -> str:
 
 # The type a Lazy stands for, or `t` itself.
 def expand(t: Type) -> Type:
-    if isinstance(t, Lazy):
+    if t is Lazy:
         target = t.target
         assert target is not none, f"alias {t.name} is used before it is resolved"
         return target
     return t
 
 def members(t: Type) -> list[Type]:
-    if isinstance(t, UnionType):
+    if t is UnionType:
         return t.members
     return [t]
 
@@ -286,7 +286,7 @@ def has(t: Type, kind_name: str) -> bool:
     return false
 
 def is_optional(t: Type) -> bool:
-    return isinstance(t, UnionType) and has(t, "none")
+    return t is UnionType and has(t, "none")
 
 def printable(t: Type) -> bool:
     for m in members(t):
@@ -298,7 +298,7 @@ def printable(t: Type) -> bool:
 # are comparable.
 def comparable(t: Type) -> bool:
     for m in members(t):
-        if isinstance(m, TupleType):
+        if m is TupleType:
             for element in m.elements:
                 if not comparable(element):
                     return false
@@ -309,13 +309,13 @@ def comparable(t: Type) -> bool:
 # Whether `<` and the other orderings apply: both are the same ordered scalar
 # type, or tuples of equal arity whose positions are ordered.
 def ordered(a: Type, b: Type) -> bool:
-    if isinstance(a, TupleType) and isinstance(b, TupleType):
+    if a is TupleType and b is TupleType:
         if len(a.elements) == len(b.elements):
             for i in range(len(a.elements)):
                 if not ordered(a.elements[i], b.elements[i]):
                     return false
             return true
-    return isinstance(a, Prim) and isinstance(b, Prim) and a.name == b.name and a.name in ["int", "float", "str"]
+    return a is Prim and b is Prim and a.name == b.name and a.name in ["int", "float", "str"]
 
 # In a type with both int and float members, floats are boxed at run time so
 # that they differ from ints.
@@ -330,15 +330,15 @@ def is_key(t: Type) -> bool:
 # protocols, enums, functions, and type parameters.
 def key(t: Type) -> str:
     t = expand(t)
-    if isinstance(t, ClassType):
+    if t is ClassType:
         return "record " + identity(t.decl.type_name, t.decl.library)
-    if isinstance(t, ProtocolType):
+    if t is ProtocolType:
         return "protocol " + identity(t.decl.type_name, t.decl.library)
-    if isinstance(t, EnumType):
+    if t is EnumType:
         return "enum " + identity(t.decl.type_name, t.decl.library)
-    if isinstance(t, FunctionType):
+    if t is FunctionType:
         return "function " + str(t.fn.id)
-    if isinstance(t, TypeVar):
+    if t is TypeVar:
         return "typevar " + var_key(t)
     return kind(t)
 
@@ -363,31 +363,31 @@ def same(a: Type, b: Type) -> bool:
 # `assumed` holds the pairs of lazy types already being compared, by id, so
 # recursive aliases terminate.
 def same_in(a: Type, b: Type, assumed: list[str]) -> bool:
-    if isinstance(a, Lazy) and isinstance(b, Lazy):
+    if a is Lazy and b is Lazy:
         pair = f"{a.id} = {b.id}"
         if pair in assumed:
             return true
         assumed.append(pair)
     a = expand(a)
     b = expand(b)
-    if isinstance(a, Prim):
-        return isinstance(b, Prim) and a.name == b.name
-    if isinstance(a, ListType):
-        return isinstance(b, ListType) and same_in(a.element, b.element, assumed)
-    if isinstance(a, DictType):
-        return isinstance(b, DictType) and same_in(a.key, b.key, assumed) and same_in(a.value, b.value, assumed)
-    if isinstance(a, TupleType):
-        return isinstance(b, TupleType) and all_same(a.elements, b.elements, assumed)
-    if isinstance(a, ClassType):
-        return isinstance(b, ClassType) and same_class(a.decl, b.decl) and all_same(a.args, b.args, assumed)
-    if isinstance(a, ProtocolType):
-        return isinstance(b, ProtocolType) and same_protocol(a.decl, b.decl) and all_same(a.args, b.args, assumed)
-    if isinstance(a, EnumType):
-        return isinstance(b, EnumType) and same_enum(a.decl, b.decl)
-    if isinstance(a, CallableType):
-        return isinstance(b, CallableType) and all_same(a.params, b.params, assumed) and same_in(a.result, b.result, assumed)
-    if isinstance(a, FunctionType):
-        if not isinstance(b, FunctionType):
+    if a is Prim:
+        return b is Prim and a.name == b.name
+    if a is ListType:
+        return b is ListType and same_in(a.element, b.element, assumed)
+    if a is DictType:
+        return b is DictType and same_in(a.key, b.key, assumed) and same_in(a.value, b.value, assumed)
+    if a is TupleType:
+        return b is TupleType and all_same(a.elements, b.elements, assumed)
+    if a is ClassType:
+        return b is ClassType and same_class(a.decl, b.decl) and all_same(a.args, b.args, assumed)
+    if a is ProtocolType:
+        return b is ProtocolType and same_protocol(a.decl, b.decl) and all_same(a.args, b.args, assumed)
+    if a is EnumType:
+        return b is EnumType and same_enum(a.decl, b.decl)
+    if a is CallableType:
+        return b is CallableType and all_same(a.params, b.params, assumed) and same_in(a.result, b.result, assumed)
+    if a is FunctionType:
+        if b is not FunctionType:
             return false
         if a.fn.id != b.fn.id or a.bound != b.bound:
             return false
@@ -396,10 +396,10 @@ def same_in(a: Type, b: Type, assumed: list[str]) -> bool:
         if ra is none or rb is none:
             return ra is none and rb is none
         return same_in(ra, rb, assumed)
-    if isinstance(a, TypeVar):
-        return isinstance(b, TypeVar) and var_key(a) == var_key(b)
-    if isinstance(a, UnionType):
-        if not isinstance(b, UnionType) or len(a.members) != len(b.members):
+    if a is TypeVar:
+        return b is TypeVar and var_key(a) == var_key(b)
+    if a is UnionType:
+        if b is not UnionType or len(a.members) != len(b.members):
             return false
         for m in a.members:
             found = false
@@ -423,7 +423,7 @@ def all_same(xs: list[Type], ys: list[Type], assumed: list[str]) -> bool:
 # The substitution a specialization gives its declaration's type parameters,
 # keyed by var_key.
 def record_map(t: ClassType | ProtocolType) -> dict[str, Type]:
-    if isinstance(t, ClassType):
+    if t is ClassType:
         return bind_vars(t.decl.typevars, t.args)
     return bind_vars(t.decl.typevars, t.args)
 
@@ -458,10 +458,10 @@ def function_result(t: FunctionType) -> Type:
 # types are not substituted. Built-in collections, strings, and bytes have
 # an `iter` method.
 def method(t: Type, name: str) -> Method | none:
-    if isinstance(t, ClassType):
+    if t is ClassType:
         fns = t.decl.methods
         native = t.decl.native and t.decl.prefix != ""
-    else if isinstance(t, ProtocolType):
+    else if t is ProtocolType:
         fns = t.decl.methods
         native = false
     else:
@@ -519,13 +519,13 @@ def match_params(want: Method, have: Method) -> list[int] | none:
 
 def tuple_member(t: Type) -> TupleType | none:
     for m in members(t):
-        if isinstance(m, TupleType):
+        if m is TupleType:
             return m
     return none
 
 def callable_member(t: Type) -> CallableType | none:
     for m in members(t):
-        if isinstance(m, CallableType):
+        if m is CallableType:
             return m
     return none
 
@@ -556,7 +556,7 @@ def converts(source: Type, target: Type) -> bool:
             held = to_tuple
         assert held is not none
         items_type = items(held)
-        if not isinstance(items_type, str):
+        if items_type is not str:
             for element in held.elements:
                 if converts(element, items_type):
                     return true
@@ -572,14 +572,14 @@ def converts(source: Type, target: Type) -> bool:
 # Whether `t` holds a float whose representation a conversion could change.
 def has_float(t: Type) -> bool:
     t = expand(t)
-    if isinstance(t, Prim):
+    if t is Prim:
         return t.name == "float"
     parts: list[Type] = []
-    if isinstance(t, UnionType):
+    if t is UnionType:
         parts = t.members
-    else if isinstance(t, TupleType):
+    else if t is TupleType:
         parts = t.elements
-    else if isinstance(t, CallableType):
+    else if t is CallableType:
         if has_float(t.result):
             return true
         parts = t.params
@@ -605,17 +605,17 @@ def representable(want: Type, have: Type, want_generic: bool, have_generic: bool
 # elements, dictionary keys, one-code-point strings, octets, or tuple items.
 def iteration_item(t: Type) -> Type | none:
     t = expand(t)
-    if isinstance(t, ListType):
+    if t is ListType:
         return expand(t.element)
-    if isinstance(t, DictType):
+    if t is DictType:
         return t.key
-    if isinstance(t, Prim) and t.name == "str":
+    if t is Prim and t.name == "str":
         return prim("str")
-    if isinstance(t, Prim) and t.name == "bytes":
+    if t is Prim and t.name == "bytes":
         return prim("int")
-    if isinstance(t, TupleType):
+    if t is TupleType:
         item = items(t)
-        if isinstance(item, str):
+        if item is str:
             return none
         return item
     return none
@@ -668,19 +668,19 @@ def satisfies(target: ProtocolType, source: Type, assuming: list[str]) -> bool:
         if ok:
             want = method(target, fn.name)
             have = method(source, fn.name)
-            ok = compatible(want, have, isinstance(source, ProtocolType), assuming)
+            ok = compatible(want, have, (source is ProtocolType), assuming)
     assuming.pop()
     return ok
 
 def is_exception(t: Type) -> bool:
-    return isinstance(t, ClassType) and t.decl.exception
+    return t is ClassType and t.decl.exception
 
 # Whether a value of `source`, a function or callable, can serve callable
 # `target`: it accepts the target's positional arguments, any parameters
 # past them have defaults, and its result fits the target's.
 def serves(target: CallableType, source: Type, assuming: list[str]) -> bool:
     params: list[Type] = []
-    if isinstance(source, FunctionType):
+    if source is FunctionType:
         result = function_result(source)
         declared = function_params(source)
         for i in range(len(declared)):
@@ -690,7 +690,7 @@ def serves(target: CallableType, source: Type, assuming: list[str]) -> bool:
             if i >= len(target.params) and param.default is none:
                 return false
             params.append(param.ty)
-    else if isinstance(source, CallableType):
+    else if source is CallableType:
         if len(source.params) != len(target.params):
             return false
         result = source.result
@@ -710,19 +710,19 @@ def assignable(target: Type, source: Type) -> bool:
 def assignable_in(target: Type, source: Type, assuming: list[str]) -> bool:
     target = expand(target)
     source = expand(source)
-    if isinstance(source, UnionType):
+    if source is UnionType:
         for m in source.members:
             if not assignable_in(target, m, assuming):
                 return false
         return true
-    if isinstance(target, UnionType):
+    if target is UnionType:
         for m in target.members:
             if assignable_in(m, source, assuming):
                 return true
         return false
-    if isinstance(target, CallableType):
+    if target is CallableType:
         return same(target, source) or serves(target, source, assuming)
-    if isinstance(target, TupleType) and isinstance(source, TupleType):
+    if target is TupleType and source is TupleType:
         if len(target.elements) == len(source.elements):
             for i in range(len(target.elements)):
                 if not assignable_in(target.elements[i], source.elements[i], assuming):
@@ -730,15 +730,15 @@ def assignable_in(target: Type, source: Type, assuming: list[str]) -> bool:
             return true
     if same(target, source):
         return true
-    if isinstance(target, ClassType) and target.decl.type_name == "Exception":
+    if target is ClassType and target.decl.type_name == "Exception":
         if target.decl.exception and is_exception(source):
             return true
-    if isinstance(target, ProtocolType):
+    if target is ProtocolType:
         holds = kind(source) in ["record", "protocol"] or iteration_item(source) is not none
         if holds and satisfies(target, source, assuming):
             return true
     # A bounded type parameter serves wherever its bound does.
-    if isinstance(source, TypeVar):
+    if source is TypeVar:
         bound = source.bound
         return bound is not none and assignable_in(target, bound, assuming)
     return false
@@ -750,44 +750,43 @@ def subset(t: Type, kept: list[Type]) -> Type:
         return t
     return union(kept)
 
-# Whether protocol type `p` can hold a value of `t`, a list, dict, or tuple
-# of any item types, because `p` asks only for a parameterless `iter`.
-def holds_any(p: Type, t: Type) -> bool:
-    if not isinstance(p, ProtocolType) or kind(t) not in ["list", "dict", "tuple"]:
+# Open types do not fix their set of runtime classes.
+def is_open(t: Type) -> bool:
+    t = expand(t)
+    return t is ProtocolType or t is TypeVar
+
+# Whether every runtime class covered by `source` is covered by `target`.
+# Type arguments and callable signatures do not affect runtime classes.
+def covers(target: Type, source: Type) -> bool:
+    target = expand(target)
+    source = expand(source)
+    if is_open(target) or is_open(source):
         return false
-    for fn in p.decl.methods:
-        if fn.name != "iter":
-            return false
-        signature = method(p, "iter")
-        if signature is none or len(signature.params) > 0:
-            return false
-    return true
+    if target is ClassType:
+        if target.decl.type_name == "Exception":
+            return is_exception(source)
+        return source is ClassType and same_class(target.decl, source.decl)
+    if target is EnumType:
+        return source is EnumType and same_enum(target.decl, source.decl)
+    left = kind(target)
+    right = kind(source)
+    if left == "function":
+        left = "callable"
+    if right == "function":
+        right = "callable"
+    return left == right
 
-# The generic class or protocol `t` specializes, as its key, or "".
-def generic_key(t: Type) -> str:
-    if isinstance(t, ClassType) and len(t.args) > 0:
-        return key(t)
-    if isinstance(t, ProtocolType) and len(t.args) > 0:
-        return key(t)
-    return ""
+def overlaps(a: Type, b: Type) -> bool:
+    if is_open(a) or is_open(b):
+        return kind(a) != "none" and kind(b) != "none"
+    return covers(a, b) or covers(b, a)
 
-def generic_name(t: Type) -> str:
-    if isinstance(t, ClassType):
-        return t.decl.type_name
-    if isinstance(t, ProtocolType):
-        return t.decl.type_name
-    return ""
-
-# The message for adding member `m` to a union with `parts`, or "". Lists,
-# dicts, tuples, and callables are counted first, so their component types
-# are never compared.
+# The message for adding member `m` to a union with `parts`, or "".
 def conflict(parts: list[Type], m: Type) -> str:
     for other in parts:
-        if kind(other) == kind(m) and kind(m) in ["list", "dict", "tuple", "callable"]:
-            return "a union can have only one " + kind(m) + " member"
-        if generic_key(m) != "" and generic_key(other) == generic_key(m):
-            return "a union can have only one specialization of " + generic_name(m)
-        if assignable(other, m) or assignable(m, other) or holds_any(other, m) or holds_any(m, other):
+        if (is_open(other) and kind(m) != "none") or (is_open(m) and kind(other) != "none"):
+            return "an open type can be in a union only with none"
+        if overlaps(other, m):
             return "union members " + display(other) + " and " + display(m) + " overlap"
     return ""
 
@@ -843,12 +842,12 @@ def mentions_any(t: Type, vars: list[TypeVar]) -> bool:
 # recursive ones; when `only` is true, just the type parameters in `keys`
 # count.
 def has_typevar(t: Type, seen: list[int], keys: list[str], only: bool) -> bool:
-    if isinstance(t, Lazy):
+    if t is Lazy:
         if t.id in seen:
             return false
         seen.append(t.id)
     t = expand(t)
-    if isinstance(t, TypeVar):
+    if t is TypeVar:
         return not only or var_key(t) in keys
     for part in parts_of(t):
         if has_typevar(part, seen, keys, only):
@@ -860,23 +859,23 @@ def has_typevar(t: Type, seen: list[int], keys: list[str], only: bool) -> bool:
 # its specialized signature.
 def parts_of(t: Type) -> list[Type]:
     parts: list[Type] = []
-    if isinstance(t, FunctionType):
+    if t is FunctionType:
         if t.receiver is not none:
             parts.append(function_result(t))
-    else if isinstance(t, ListType):
+    else if t is ListType:
         parts.append(t.element)
-    else if isinstance(t, DictType):
+    else if t is DictType:
         parts.append(t.value)
-    else if isinstance(t, TupleType):
+    else if t is TupleType:
         parts.extend(t.elements)
-    else if isinstance(t, CallableType):
+    else if t is CallableType:
         parts.extend(t.params)
         parts.append(t.result)
-    else if isinstance(t, ClassType):
+    else if t is ClassType:
         parts.extend(t.args)
-    else if isinstance(t, ProtocolType):
+    else if t is ProtocolType:
         parts.extend(t.args)
-    else if isinstance(t, UnionType):
+    else if t is UnionType:
         parts.extend(t.members)
     return parts
 
@@ -886,21 +885,21 @@ def substitute(t: Type, bindings: dict[str, Type]) -> Type:
     t = expand(t)
     if not mentions(t):
         return t
-    if isinstance(t, TypeVar):
+    if t is TypeVar:
         return bindings.get(var_key(t), t)
-    if isinstance(t, ListType):
+    if t is ListType:
         return ListType(substitute(t.element, bindings))
-    if isinstance(t, DictType):
+    if t is DictType:
         return DictType(t.key, substitute(t.value, bindings))
-    if isinstance(t, TupleType):
+    if t is TupleType:
         return TupleType(substitute_all(t.elements, bindings))
-    if isinstance(t, CallableType):
+    if t is CallableType:
         return CallableType(substitute_all(t.params, bindings), substitute(t.result, bindings))
-    if isinstance(t, ClassType):
+    if t is ClassType:
         return ClassType(t.decl, substitute_all(t.args, bindings))
-    if isinstance(t, ProtocolType):
+    if t is ProtocolType:
         return ProtocolType(t.decl, substitute_all(t.args, bindings))
-    if isinstance(t, UnionType):
+    if t is UnionType:
         kept: list[Type] = []
         for member in t.members:
             for m in members(substitute(member, bindings)):

@@ -1,0 +1,4 @@
+def test(value: list[int] | list[str]):
+    pass
+def main():
+    pass

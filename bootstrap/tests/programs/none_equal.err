@@ -1,0 +1,1 @@
+none_equal.wlo:3:17: error: operator '==' cannot take a none operand; use 'is none'

@@ -632,6 +632,23 @@ static String value(Emitter *self, const Value *v) {
         line(self, str_format("%.*s =l call $%s(%.*s)", S(t), v->as.In.function, S(joined)));
         return t;
     }
+    case VALUE_TypeTest: {
+        String operand = value(self, v->as.TypeTest.operand);
+        String result = STR("0");
+        for (size_t i = 0; i < v->as.TypeTest.descriptors.len; i++) {
+            String descriptor = v->as.TypeTest.descriptors.data[i];
+            String held = temp(self);
+            if (!descriptor.len) {
+                line(self, str_format("%.*s =l ceql %.*s, 0", S(held), S(operand)));
+            } else {
+                line(self, str_format("%.*s =l call $W.core.is_instance(l %.*s, l $%.*s)", S(held), S(operand), S(descriptor)));
+            }
+            String combined = temp(self);
+            line(self, str_format("%.*s =l or %.*s, %.*s", S(combined), S(result), S(held)));
+            result = combined;
+        }
+        return result;
+    }
     case VALUE_Seq:
         value(self, v->as.Seq.first);
         return value(self, v->as.Seq.second);

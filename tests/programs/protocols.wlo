@@ -90,7 +90,7 @@ class Doubler:
     n: int
 
     def scale(by: int | float = 3) -> float:
-        if isinstance(by, float):
+        if by is float:
             return by * 2.0
         return -1.0
 
@@ -118,7 +118,7 @@ def take[T](source: Source[T]) -> T:
 
 def show(number: Number):
     r = number.value()
-    print(isinstance(r, float))
+    print((r is float))
     print(r)
 
 def main():

@@ -13,7 +13,7 @@ class iterator:
 
 def floats(xs: Iterable[int | float]):
     for x in xs:
-        print(isinstance(x, float))
+        print((x is float))
 
 def sum_all(xs: Iterable[int]) -> int:
     sum = 0
@@ -34,7 +34,7 @@ def main():
     mixed = iter((1, 2.5))
     print(next(mixed))
     r = next(mixed)
-    print(isinstance(r, float))
+    print((r is float))
     print(r)
 
     countdown = range(3, 0, -1)
