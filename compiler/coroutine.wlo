@@ -34,11 +34,12 @@ def function(name: str) -> str:
             "    ret",
             "}",
         ])
-    if name == "coroutine_start_address":
+    if name == "coroutine_stack":
         return "\n".join([
-            "function l $W.core.coroutine_start_address() {",
+            "function l $W.core.coroutine_stack(l %top) {",
             "@start",
-            "    ret $W.core.coroutine_start",
+            "    %sp =l call $W.coroutine.stack(l %top, l $W.core.coroutine_start)",
+            "    ret %sp",
             "}",
         ])
     if name == "coroutine_invoke":
@@ -173,15 +174,23 @@ def assembly(target: str) -> str:
     var switch = prefix + "W.coroutine.switch"
     var available = prefix + "W.coroutine.available"
     var prepare = prefix + "W.core.coroutine_prepare"
+    var stack = prefix + "W.coroutine.stack"
     var text = ".text\n.p2align 2\n.globl " + available + "\n" + available + ":\n"
     if target in ["arm64", "arm64_apple"]:
         text = text + "    mov w0, #1\n    ret\n"
+        text = text + ".p2align 2\n.globl " + stack + "\n" + stack + ":\n"
+        text = text + "    sub x0, x0, #160\n    str x1, [x0, #88]\n    ret\n"
         text = text + ".p2align 2\n.globl " + switch + "\n" + switch + ":\n"
         text = text + arm64(prepare)
     else:
-        assert target in ["amd64_sysv", "amd64_apple"], "unsupported coroutine target"
-        text = text + "    xor %eax, %eax\n    ret\n"
-        text = text + ".globl " + switch + "\n" + switch + ":\n    ud2\n"
+        assert target == "amd64_sysv", "unsupported coroutine target"
+        text = text + "    mov $1, %eax\n    ret\n"
+        text = text + ".p2align 4\n.globl " + stack + "\n" + stack + ":\n"
+        # The synthetic return leaves RSP eight bytes below the aligned top,
+        # just as a call would. Inherit the creator's floating-point controls.
+        text = text + "    lea -72(%rdi), %rax\n    mov %rsi, 56(%rax)\n    stmxcsr 48(%rax)\n    fnstcw 52(%rax)\n    ret\n"
+        text = text + ".p2align 4\n.globl " + switch + "\n" + switch + ":\n"
+        text = text + amd64(prepare)
     if not target.endswith("_apple"):
         text = text + ".section .note.GNU-stack,\"\",@progbits\n"
     return text
@@ -218,6 +227,36 @@ def arm64(prepare: str) -> str:
         "    ldp d12, d13, [sp, #128]",
         "    ldp d14, d15, [sp, #144]",
         "    add sp, sp, #160",
+        "    ret",
+        "",
+    ])
+
+# SysV preserves RBX, RBP, R12-R15, the x87 control word and MXCSR controls.
+# The return PC is already on the stack. Subtracting 56 aligns RSP for prepare.
+def amd64(prepare: str) -> str:
+    return "\n".join([
+        "    sub $56, %rsp",
+        "    mov %rbx, 0(%rsp)",
+        "    mov %rbp, 8(%rsp)",
+        "    mov %r12, 16(%rsp)",
+        "    mov %r13, 24(%rsp)",
+        "    mov %r14, 32(%rsp)",
+        "    mov %r15, 40(%rsp)",
+        "    stmxcsr 48(%rsp)",
+        "    fnstcw 52(%rsp)",
+        "    mov %rsp, 8(%rdi)",
+        "    mov %rsi, %rbx",
+        "    call " + prepare,
+        "    mov 8(%rbx), %rsp",
+        "    mov 0(%rsp), %rbx",
+        "    mov 8(%rsp), %rbp",
+        "    mov 16(%rsp), %r12",
+        "    mov 24(%rsp), %r13",
+        "    mov 32(%rsp), %r14",
+        "    mov 40(%rsp), %r15",
+        "    ldmxcsr 48(%rsp)",
+        "    fldcw 52(%rsp)",
+        "    add $56, %rsp",
         "    ret",
         "",
     ])

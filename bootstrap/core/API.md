@@ -225,7 +225,7 @@ task's stack.
 
 | Signature | Meaning |
 | --- | --- |
-| `coroutine_create(entry: ptr, argument: word) -> CoroutineContext` | Creates an unstarted coroutine; unsupported in stage 0 and on amd64 |
+| `coroutine_create(entry: ptr, argument: word) -> CoroutineContext` | Creates an unstarted coroutine; supported on arm64 and Linux amd64, but not in stage 0 |
 | `coroutine_resume(coroutine: CoroutineContext) -> word` | Runs until yield or completion, returning the yielded slot or 0 on completion; transfers a callback failure to the caller's pending exception |
 | `coroutine_yield(value: word)` | Suspends the running coroutine and returns to its resumer |
 | `coroutine_finished(coroutine: CoroutineContext) -> bool` | Whether the entry has returned, normally or with an exception |

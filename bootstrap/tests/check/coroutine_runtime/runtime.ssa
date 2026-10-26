@@ -43,19 +43,32 @@ function $collect(l %unused) {
     ret
 }
 
+# A suspended coroutine can itself have a suspended child. Each must retain
+# its own stack, caller and live values while another stack collects.
+function $nested(l %weak) {
+@start
+    %child =l call $W.core.coroutine_create(l $suspend, l %weak)
+    %first =l call $W.core.coroutine_resume(l %child)
+    %first.ok =l ceql %first, 11
+    call $require(l %first.ok)
+    call $W.core.coroutine_yield(l 21)
+    %next =l call $W.core.coroutine_resume(l %child)
+    %next.ok =l ceql %next, 12
+    call $require(l %next.ok)
+    %end =l call $W.core.coroutine_resume(l %child)
+    %done =l call $W.core.coroutine_finished(l %child)
+    call $require(l %done)
+    ret
+}
+
 function $coroutine_test() {
 @start
     %available =l call $W.core.coroutine_available()
-    jnz %available, @arm64, @unsupported
-@unsupported
-    # Ordinary builds work on amd64; coroutine creation reports an error.
-    %unsupported =l call $W.core.coroutine_create(l $collect, l 0)
-    %error =l loadl $W.pending
-    %has.error =l cnel %error, 0
-    call $require(l %has.error)
-    storel 0, $W.pending
-    ret
-@arm64
+    call $require(l %available)
+    # This reference must survive collection on a heap stack: native-stack
+    # registers saved by the switch are roots too.
+    %native.object =l call $GC_malloc(l 8)
+    storel 7373, %native.object
     %weak =l call $GC_malloc_atomic(l 8)
     %first =l call $W.core.coroutine_create(l $suspend, l %weak)
     %new.finished =l call $W.core.coroutine_finished(l %first)
@@ -69,16 +82,31 @@ function $coroutine_test() {
     %second.value =l call $W.core.coroutine_resume(l %second)
     %second.ok =l ceql %second.value, 11
     call $require(l %second.ok)
+    %weak3 =l call $GC_malloc_atomic(l 8)
+    %parent =l call $W.core.coroutine_create(l $nested, l %weak3)
+    %parent.value =l call $W.core.coroutine_resume(l %parent)
+    %parent.ok =l ceql %parent.value, 21
+    call $require(l %parent.ok)
     call $GC_gcollect()
+    call $require_alive(l %weak3)
     call $require_alive(l %weak)
     call $require_alive(l %weak2)
     %collector =l call $W.core.coroutine_create(l $collect, l 0)
     %collected =l call $W.core.coroutine_resume(l %collector)
+    %native.value =l loadl %native.object
+    %native.ok =l ceql %native.value, 7373
+    call $require(l %native.ok)
+    call $require_alive(l %weak3)
     call $require_alive(l %weak)
     call $require_alive(l %weak2)
     %collector.done =l call $W.core.coroutine_finished(l %collector)
     call $require(l %collector.done)
+    %parent.end =l call $W.core.coroutine_resume(l %parent)
+    %parent.done =l call $W.core.coroutine_finished(l %parent)
+    call $require(l %parent.done)
     %first.next =l call $W.core.coroutine_resume(l %first)
+    %first.next.ok =l ceql %first.next, 12
+    call $require(l %first.next.ok)
     %first.end =l call $W.core.coroutine_resume(l %first)
     %second.next =l call $W.core.coroutine_resume(l %second)
     %second.next.ok =l ceql %second.next, 12
