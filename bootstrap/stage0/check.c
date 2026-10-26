@@ -2008,6 +2008,13 @@ static TypedValue expr(Checker *self, const Expr *expression, const State *state
         if (strcmp(op, "-") == 0 && checked.ty.tag == TYPE_Int) {
             return typed(binary_value("sub", constant(0), checked.value), TY(Int));
         }
+        if (strcmp(op, "~") == 0 && checked.ty.tag == TYPE_Int) {
+            Value message = intern(self->strings, STR("integer overflow"));
+            Value fail = fail_call(self, "OverflowError", message);
+            Value *left = box_copy(&checked.value, sizeof(Value));
+            Value right = constant(-1);
+            return typed(VAL(CheckedInt, {"xor", left, box_copy(&right, sizeof(right)), box_copy(&fail, sizeof(fail))}), TY(Int));
+        }
         if (strcmp(op, "-") == 0 && checked.ty.tag == TYPE_Float) {
             return typed(VAL(FloatNeg, box_copy(&checked.value, sizeof(Value))), TY(Float));
         }
@@ -2127,6 +2134,19 @@ static TypedValue binary(
     if ((strcmp(op, "and") == 0 || strcmp(op, "or") == 0) && lt.tag == TYPE_Bool &&
         rt.tag == TYPE_Bool) {
         return typed(VAL(Logic, {strcmp(op, "and") == 0, left, right}), TY(Bool));
+    }
+    if (lt.tag == TYPE_Int && rt.tag == TYPE_Int &&
+        (strcmp(op, "&") == 0 || strcmp(op, "|") == 0 || strcmp(op, "^") == 0 ||
+         strcmp(op, "<<") == 0 || strcmp(op, ">>") == 0)) {
+        Value message = intern(self->strings, STR("integer overflow"));
+        Value fail = fail_call(self, "OverflowError", message);
+        if (strcmp(op, "<<") == 0 || strcmp(op, ">>") == 0) {
+            Value negative = fail_call(self, "ValueError", intern(self->strings, STR("negative shift count")));
+            return typed(VAL(Shift, {strcmp(op, ">>") == 0, left, right,
+                box_copy(&negative, sizeof(negative)), box_copy(&fail, sizeof(fail))}), TY(Int));
+        }
+        const char *instr = strcmp(op, "&") == 0 ? "and" : strcmp(op, "|") == 0 ? "or" : "xor";
+        return typed(VAL(CheckedInt, {instr, left, right, box_copy(&fail, sizeof(fail))}), TY(Int));
     }
     if ((strcmp(op, "//") == 0 || strcmp(op, "%") == 0) && lt.tag == TYPE_Int &&
         rt.tag == TYPE_Int) {

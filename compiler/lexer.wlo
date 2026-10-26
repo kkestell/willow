@@ -186,6 +186,9 @@ class Lexer:
 
     def read_number():
         var start = self.pos
+        if self.at(start) == "0" and self.at(start + 1) in ["x", "o", "b"]:
+            self.read_prefixed_integer()
+            return
         var p = start
         while is_digit(self.at(p)):
             p = p + 1
@@ -231,6 +234,39 @@ class Lexer:
                 return
             self.add(tokens.Kind.INT_LITERAL, text, start)
         self.pos = p
+
+    def read_prefixed_integer():
+        var start = self.pos
+        var base = 16
+        if self.at(start + 1) == "o":
+            base = 8
+        else if self.at(start + 1) == "b":
+            base = 2
+        var end = start + 2
+        while is_name_char(self.at(end)) or self.at(end) == ".":
+            end = end + 1
+        var valid = end > start + 2
+        var value = 0
+        var overflow = false
+        var p = start + 2
+        while p < end:
+            var digit = hex_value(self.at(p))
+            if digit < 0 or digit >= base:
+                valid = false
+            else if not overflow:
+                if value > (9223372036854775807 - digit) // base:
+                    overflow = true
+                else:
+                    value = value * base + digit
+            p = p + 1
+        if not valid:
+            self.fail(start, f"invalid number literal '{self.text(start, end)}'")
+            return
+        if overflow:
+            self.fail(start, "integer literal out of range")
+            return
+        self.add(tokens.Kind.INT_LITERAL, self.text(start, end), start)
+        self.pos = end
 
     # Reads the string literal at `pos`, or the f-string whose `f` is at `pos`.
     def read_string(formatted: bool):

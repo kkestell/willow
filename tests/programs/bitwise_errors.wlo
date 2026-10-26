@@ -1,0 +1,44 @@
+def value(label: str, number: int) -> int:
+    print(label)
+    return number
+
+def mode(value: int = -0x2a) -> int:
+    return value
+
+def main():
+    print(mode())
+    print(value("left", 3) & value("right", 6))
+    print(value("shifted", 3) << value("count", 2))
+    try:
+        print(~9223372036854775807)
+    except OverflowError as error:
+        print(error.message)
+    try:
+        print(-9223372036854775807 ^ 1)
+    except OverflowError as error:
+        print(error.message)
+    try:
+        print((-9223372036854775807 - 0) & -2)
+    except OverflowError as error:
+        print(error.message)
+    for count in [1, 63, 64, 9223372036854775807]:
+        try:
+            print(9223372036854775807 << count)
+        except OverflowError as error:
+            print(error.message)
+    try:
+        print(-1 << 63)
+    except OverflowError as error:
+        print(error.message)
+    try:
+        print(-3 << 62)
+    except OverflowError as error:
+        print(error.message)
+    try:
+        print(value("before error", 1) << value("negative count", -1))
+    except ValueError as error:
+        print(error.message)
+    try:
+        print(0 >> -1)
+    except ValueError as error:
+        print(error.message)
