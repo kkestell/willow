@@ -919,30 +919,29 @@ class Checker:
             self.fail(expr.line, expr.col, f"type {types.display(object)} has no method '{name}'")
             return none_type()
         value = types.expand(object.value)
-        optional = value
-        if types.kind(value) != "none" and not types.is_optional(value):
-            optional = types.optional(value)
         params = [stdlib.arg("k", object.key)]
         if name == "get":
-            params.append(stdlib.defaulted("default", optional, stdlib.none_default()))
+            params.append(stdlib.defaulted("default", value, stdlib.none_default()))
         self.bind_args(expr, node, params, "parameter")
         if self.failed():
             return none_type()
         order = node.order
         assert order is not none, "unbound dict method"
-        for i in order:
+        # The written arguments come first in `order`; the rest are the
+        # defaults bind_args supplied.
+        for j in range(node.written):
+            i = order[j]
             param = params[i].ty
             assert param is not none, "untyped dict method parameter"
             self.check_against(node.args[i], state, param)
         if name == "pop":
             return value
-        default = node.args[1].ty
-        assert default is not none, "unchecked dict default"
-        result = optional
-        if types.assignable(value, default):
-            result = value
-        node.args[1].expected = result
-        return result
+        # `get(k)` returns `V | none`; `get(k, default)` returns `V`.
+        if node.written == 1:
+            node.args[1].expected = types.optional(value)
+            return types.optional(value)
+        node.args[1].expected = value
+        return value
 
     def check_len(expr: ast.Expr, node: ast.Call, state: dict[int, types.Type]) -> types.Type:
         self.check_arity(expr, "len", 1, len(node.args))

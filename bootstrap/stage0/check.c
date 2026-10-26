@@ -2673,25 +2673,22 @@ static TypedValue dict_get(Checker *self, DictCall call, ExprVec arguments, cons
     }
     TypedValue key = expr(self, &arguments.data[0], state);
     Value key_ir = coerce(self, arguments.data[0].pos, key.value, &key.ty, call.key);
-    TypedValue default_ = arguments.len > 1
-                              ? expr_expect(self, &arguments.data[1], state, call.value)
-                              : typed(constant(0), TY(None));
+    TypedValue default_;
     Type result;
-    if (type_assignable_to(&default_.ty, call.value)) {
+    if (arguments.len > 1) {
+        default_ = expr_expect(self, &arguments.data[1], state, call.value);
+        default_ = typed(coerce(self, arguments.data[1].pos, default_.value, &default_.ty,
+                           call.value),
+            *call.value);
         result = *call.value;
-    } else if (default_.ty.tag == TYPE_None) {
-        result = union_two(*call.value, TY(None));
     } else {
-        Type allowed = union_two(*call.value, TY(None));
-        fail(self->module->path, arguments.data[1].pos,
-            str_format("expected " FMT ", received " FMT, S(type_name(&allowed)),
-                S(type_name(&default_.ty))));
+        default_ = typed(constant(0), TY(None));
+        result = union_two(*call.value, TY(None));
     }
-    Value widened_default = widen(default_.value, &default_.ty, &result);
     Value present = widen(VAL(Item, 0), call.value, &result);
     Value get =
         VAL(DictGet, {box_copy(&call.dict, sizeof(Value)), box_copy(&key_ir, sizeof(key_ir)),
-                         box_copy(&widened_default, sizeof(widened_default)),
+                         box_copy(&default_.value, sizeof(default_.value)),
                          box_copy(&present, sizeof(present))});
     return typed(get, result);
 }
