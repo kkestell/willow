@@ -1,0 +1,27 @@
+import fs
+import io
+import subprocess
+
+def main():
+    var result = subprocess.run(["cat"], input="hello from stdin".encode(), capture_output=true)
+    print(f"exit status: {result.returncode}")
+    var output = result.stdout
+    if output is not none:
+        print(output.decode())
+    var error = result.stderr
+    if error is not none:
+        print(f"stderr bytes: {len(error)}")
+
+    var directory = fs.temp_dir(prefix="willow-subprocess-")
+    var path = fs.join(directory, "output.txt")
+    try:
+        with io.open(path, mode="w") as target:
+            # Arguments are passed directly, so spaces need no shell quoting.
+            var child = subprocess.spawn(["printf", "%s", "hello from a child"], stdout=target)
+            print(f"child exit status: {child.wait()}")
+            print(f"collected status: {child.poll()}")
+        print(fs.read_file(path))
+    finally:
+        if fs.exists(path):
+            fs.remove(path)
+        fs.rmdir(directory)

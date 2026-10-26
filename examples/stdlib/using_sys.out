@@ -1,0 +1,5 @@
+arguments: 0
+pid is positive: true
+environment snapshot matches: true
+hello from the working directory
+working directory restored: true
