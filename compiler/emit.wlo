@@ -423,8 +423,8 @@ class Emitter:
                 self.jump("ret")
         self.write("}")
 
-    # Stage 0 compiles core's `fail`, which ends the program. Stage 1 replaces
-    # its body with one that raises the built-in exception it names.
+    # Core's L0 `fail` and `fail_at` end the program; these bodies raise the
+    # built-in exception they name instead.
     def emit_fail(name: str):
         var params = "l %p.class_name, l %p.message"
         if name == "fail_at":

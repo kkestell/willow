@@ -182,16 +182,15 @@ literal `"none"`.
 | `os() -> str` | `__os`, the target's operating system |
 | `run(args: list[str]) -> int` | Runs `args[0]`, searched for in `PATH`, with the remaining arguments and no shell, through the shared `process_start` helper using `posix_spawn`; the child inherits stdin, stdout, stderr, and the environment, with SIGPIPE's default action. Waits and returns the exit status, or 128 plus the signal number if a signal ended the child |
 
-## Exceptions under stage 1
+## Exceptions under stages 1 and 2
 
-Programs that stage 1 compiles raise exceptions instead of ending. The word
-`$W.pending` holds the pending exception, or 0. Stage 1 compiles its own body
-for `fail`, which creates the exception with `failure` and stores it in
-`$W.pending`. An exception object is a header, its location and frames, both
-`str` and 0 until it is raised, and its fields,
-`message` first. The frames are the report's lines after the first, each
-starting with a newline. The exception reporting functions run with
-`$W.pending` cleared.
+Programs that stages 1 and 2 compile raise exceptions instead of ending. The
+word `$W.pending` holds the pending exception, or 0. Stages 1 and 2 compile
+their own body for `fail`, which creates the exception with `failure` and
+stores it in `$W.pending`. An exception object is a header, its location and
+frames, both `str` and 0 until it is raised, and its fields, `message` first.
+The frames are the report's lines after the first, each starting with a
+newline. The exception reporting functions run with `$W.pending` cleared.
 
 | Signature | Meaning |
 | --- | --- |
@@ -201,13 +200,14 @@ starting with a newline. The exception reporting functions run with
 | `trace(e: ptr, function: str, path: str, line: int, col: int)` | Adds the frame `in function at path:line:col` to `e`, or `called from` after the first, which also sets the location |
 | `report(e: ptr)` | Writes the spec §13 report of an exception that left `main` to stderr |
 
-## Coroutines under stage 1
+## Coroutines under stages 1 and 2
 
 `CoroutineContext` is an internal core class; its field order is shared with
-stage 1's low-level helpers and switch assembly. An entry is a raw function
-address taking one `word` argument and returning no value. Generator and async
-lowering supply the addresses and slot conversions. Async tasks use one context
-per scheduled task; direct coroutine awaits run on that task's stack.
+the low-level helpers and switch assembly in `compiler/coroutine.wlo`. An entry
+is a raw function address taking one `word` argument and returning no value.
+Generator and async lowering supply the addresses and slot conversions. Async
+tasks use one context per scheduled task; direct coroutine awaits run on that
+task's stack.
 
 | Signature | Meaning |
 | --- | --- |
@@ -222,7 +222,7 @@ once; generator advancement converts an escaping `StopIteration` to `RuntimeErro
 Switches run with no pending exception. Finished contexts release their stack
 references after switching to the caller.
 
-## Async under stage 1
+## Async under stages 1 and 2
 
 A `Coroutine[T]` is a header pointing at `$W.Coroutine.type`, a body closure
 pointer, and a consumed flag. The body closure has its code address at byte 8

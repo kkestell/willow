@@ -91,7 +91,7 @@ extern def GC_alloc_unlock()
 extern def GC_add_roots(low: ptr, high: ptr)
 extern def GC_remove_roots(low: ptr, high: ptr)
 
-# Offsets are shared with the switch assembly and stage 1's core helpers.
+# Offsets are shared with the switch assembly and compiler/coroutine.wlo.
 # State is 0 (new), 1 (running), 2 (suspended), or 3 (finished).
 class CoroutineContext:
     sp: ptr
@@ -236,7 +236,8 @@ def coroutine_start():
     coroutine_switch(current, caller)
     exit(1)
 
-# Stage 1 replaces these bodies; stage 0 links core without switch assembly.
+# Stages 1 and 2 replace these bodies with compiler/coroutine.wlo's; stage 0
+# links core without switch assembly.
 def coroutine_available() -> bool:
     return false
 
@@ -289,8 +290,8 @@ def write_all(fd: int, buf: ptr, count: int):
 def write_str(fd: int, s: str):
     write_all(fd, str_bytes(s), str_size(s))
 
-# Reports a fatal L0 failure. Stage 1 compiles its
-# own body instead, which raises the exception through `failure`.
+# Reports a fatal L0 failure. Stages 1 and 2 replace this body with one that
+# raises the exception through `failure`.
 def fail(class_name: str, message: str):
     write_str(2, "error: ")
     write_str(2, class_name)
@@ -299,7 +300,7 @@ def fail(class_name: str, message: str):
     write_str(2, "\n")
     exit(1)
 
-# Exceptions, which only programs compiled by stage 1 raise (API.md).
+# Exceptions, which only programs compiled by stages 1 and 2 raise (API.md).
 
 # A new exception of the built-in class named `class_name`, whose descriptor
 # is in the array `descriptors`.
@@ -2602,8 +2603,8 @@ def str_from_bytes(p: ptr, size: int) -> str:
     return __str(__word(s))
 
 # Read buffers hold the next unread offset and the end offset, followed by
-# a read marker and 4096 octets. Both emitters provide the same zeroed
-# storage for stdin.
+# a read marker and 4096 octets. All three compilers replace this body with
+# the same zeroed storage for stdin.
 def stdin_buffer() -> ptr:
     fail("RuntimeError", "stdin buffer was not emitted")
     return __ptr(__word(0))
@@ -2673,7 +2674,7 @@ def file_readline(fd: int, buffer: ptr, path: str, fatal: bool) -> str | none:
 def input_line() -> str | none:
     return file_readline(0, stdin_buffer(), "<stdin>", true)
 
-# Stage 1 replaces this body to read the arguments saved by program entry.
+# Stages 1 and 2 replace this body to read the arguments saved by program entry.
 def sys_arguments() -> list[str]:
     fail("RuntimeError", "program arguments require stage 1")
     return []
@@ -3096,6 +3097,7 @@ def fs_same_file(source: str, destination: str) -> bool:
         return __load4(first, layout.device_offset) == __load4(second, layout.device_offset)
     return __int(__load8(first, layout.device_offset)) == __int(__load8(second, layout.device_offset))
 
+# Stages 1 and 2 replace this body with the address of a zeroed word.
 def http_cache() -> ptr:
     fail("RuntimeError", "HTTP library cache was not emitted")
     return __ptr(__word(0))
@@ -4034,6 +4036,7 @@ def float_round(x: float) -> int:
     return __dtosi(lower)
 
 # Async calls hold a body closure; only scheduled tasks allocate stacks.
+# Stages 1 and 2 replace the next two bodies with compiler/coroutine.wlo's.
 def async_coroutine(body: ptr) -> ptr:
     fail("RuntimeError", "coroutines require stage 1 on arm64")
     return __ptr(__word(0))
@@ -4108,6 +4111,8 @@ class AioLoop:
     waiting: dict[int, AioTask]
     descriptors: list[AioFdWait]
 
+# Stages 1 and 2 replace the bodies from here through `aio_resume` with
+# compiler/coroutine.wlo's.
 def aio_loop() -> AioLoop:
     fail("RuntimeError", "coroutines require stage 1 on arm64")
     return AioLoop(none, [], [], 0, {}, [])
@@ -4325,7 +4330,8 @@ def aio_sleep_body(body: ptr) -> word:
     return __word(0)
 
 # Some deferred library operations report their creation site while the frames
-# describe the task that eventually ran them.
+# describe the task that eventually ran them. Stages 1 and 2 replace this body
+# with one that raises the exception and sets its location through `locate`.
 def fail_at(class_name: str, message: str, path: str, line: int, col: int):
     fail(class_name, message)
 
@@ -4333,6 +4339,7 @@ def locate(e: ptr, path: str, line: int, col: int):
     __store8(e, 8, __word(path + ":" + int_to_str(line) + ":" + int_to_str(col)))
 
 
+# Stages 1 and 2 replace this body with compiler/coroutine.wlo's.
 def aio_cancel() -> ptr:
     return __ptr(__word(0))
 
@@ -4506,6 +4513,7 @@ def aio_give_permit(semaphore: AioSemaphore):
             return
     semaphore.value = semaphore.value + 1
 
+# Stages 1 and 2 replace the next two bodies with compiler/coroutine.wlo's.
 def aio_semaphore_acquire(semaphore: AioSemaphore) -> ptr:
     fail("RuntimeError", "coroutines require stage 1 on arm64")
     return __ptr(__word(0))
