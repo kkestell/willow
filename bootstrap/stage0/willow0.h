@@ -364,7 +364,7 @@ struct StmtKind {
     StmtTag tag;
     union {
         struct { Expr cond; Expr *message; } Assert;
-        struct { String target; TypeExpr *annotation; Expr value; } Assign;
+        struct { String target; TypeExpr *annotation; Expr *value; bool declaration; } Assign;
         Expr Expr;
         /// `if`/`else if` arms in order, then the `else` block.
         struct { IfArmVec arms; StmtVec *otherwise; } If;

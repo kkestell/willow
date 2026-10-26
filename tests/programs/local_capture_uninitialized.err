@@ -1,0 +1,1 @@
+local_capture_uninitialized.wlo:4:16: error: variable 'value' may be used before assignment

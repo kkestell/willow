@@ -1,0 +1,1 @@
+local_nested_function_assignment.wlo:4:5: error: cannot assign to nested function 'value'

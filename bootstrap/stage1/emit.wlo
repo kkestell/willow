@@ -228,20 +228,20 @@ class Emitter:
         self.frames = module not in self.privileged
         self.async_body = function.is_async
         for param in function.params:
-            self.line(f"%v.{param.name} =l alloc8 8")
             param_symbol = param.symbol
-            if param_symbol is not none and param_symbol.captured:
-                self.new_cell(param.name)
+            assert param_symbol is not none, "parameter without a symbol"
+            slot = self.local_slot(param_symbol)
+            self.line(f"{slot} =l alloc8 8")
+            self.fresh_binding(param_symbol)
             self.line(f"storel %p.{param.name}, {self.local_address(param_symbol, param.name)}")
         for local in function.locals:
-            self.line(f"%v.{local.name} =l alloc8 8")
-            if local.captured:
-                self.new_cell(local.name)
+            self.line(f"{self.local_slot(local)} =l alloc8 8")
         for i in range(len(function.captures)):
-            name = function.captures[i].symbol.name
-            self.line(f"%v.{name} =l alloc8 8")
+            captured = function.captures[i].symbol
+            slot = self.local_slot(captured)
+            self.line(f"{slot} =l alloc8 8")
             cell = self.load_field("%env", 16 + i * 8)
-            self.line(f"storel {cell}, %v.{name}")
+            self.line(f"storel {cell}, {slot}")
         self.block(function.body)
         # The checker proves a function with a result never reaches its end.
         if self.returns:
@@ -706,7 +706,16 @@ class Emitter:
 
     def emit_stmt(statement: ast.Stmt):
         node = statement.node
-        if isinstance(node, ast.Assign):
+        if isinstance(node, ast.Var):
+            self.fresh_pattern(node.target)
+            initializer = node.value
+            if initializer is not none:
+                value = self.expr(initializer)
+                if node.target.name != "":
+                    self.line(f"storel {value}, {self.local_address(node.target.symbol, node.target.name)}")
+                else:
+                    self.store_pattern(node.target, value, self.concrete_type(initializer.ty))
+        else if isinstance(node, ast.Assign):
             value = self.expr(node.value)
             self.line(f"storel {value}, {self.local_address(node.symbol, node.name)}")
         else if isinstance(node, ast.Unpack):
@@ -740,6 +749,7 @@ class Emitter:
         else if isinstance(node, ast.AsyncWith):
             self.emit_async_with(node)
         else if isinstance(node, ast.FunctionDef):
+            self.fresh_binding(node.symbol)
             closure = ""
             if len(node.function.type_params) > 0:
                 # Only the cells: each specialization's code is compiled
@@ -748,8 +758,6 @@ class Emitter:
             else:
                 closure = self.closure(node.function)
             self.line(f"storel {closure}, {self.local_address(node.symbol, node.function.name)}")
-        else if isinstance(node, ast.Nonlocal):
-            pass
         else if isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
                 self.leave(self.loop_protects())
@@ -884,6 +892,7 @@ class Emitter:
                     self.jump(f"jnz {matches}, {body}, {next}")
                 self.label(body)
                 if handler.name != "":
+                    self.fresh_binding(handler.symbol)
                     self.line(f"storel {exception}, {self.local_address(handler.symbol, handler.name)}")
                 self.handled.append(exception)
                 self.block(handler.body)
@@ -1014,6 +1023,7 @@ class Emitter:
         self.target = raising
         target = item.target
         if target is not none:
+            self.fresh_pattern(target)
             self.store_pattern(target, value, self.concrete_type(enter.ty))
         self.emit_with(node, index + 1)
         self.jump("jmp " + normal)
@@ -1215,6 +1225,7 @@ class Emitter:
             item = self.tuple_value(item_type, [key, value])
         else:
             item = self.core_call("dict_key_at", [object, entry], true)
+        self.fresh_pattern(node.target)
         self.store_pattern(node.target, item, item_type)
         self.loop_next.append(next)
         self.loop_end.append(end)
@@ -1335,6 +1346,7 @@ class Emitter:
 
     def for_body(node: ast.For, item: str, next: str, end: str):
         ty = self.concrete_type(node.item)
+        self.fresh_pattern(node.target)
         self.store_pattern(node.target, item, ty)
         self.loop_next.append(next)
         self.loop_end.append(end)
@@ -2880,21 +2892,33 @@ class Emitter:
 
     # Function values
 
-    # The address of the value of local `symbol`, named `name`: its stack
-    # slot, or the slot of its cell when a nested function captures it.
+    def local_slot(symbol: ast.Symbol) -> str:
+        return f"%v.{symbol.id}"
+
+    # A captured binding has a shared heap cell, renewed whenever its
+    # declaration runs; closures keep the cell from that execution.
+    def fresh_binding(symbol: ast.Symbol | none):
+        assert symbol is not none, "binding without a symbol"
+        if symbol.captured:
+            cell = self.call_text("$W.core.object_new", ["l 0", "l 1"], true)
+            self.line(f"storel {cell}, {self.local_slot(symbol)}")
+
+    def fresh_pattern(target: ast.Target):
+        if target.name != "":
+            self.fresh_binding(target.symbol)
+        for element in target.elements:
+            self.fresh_pattern(element)
+
     def local_address(symbol: ast.Symbol | none, name: str) -> str:
-        if symbol is none or not symbol.captured:
-            return f"%v.{name}"
+        assert symbol is not none, "local without a symbol"
+        slot = self.local_slot(symbol)
+        if not symbol.captured:
+            return slot
         cell = self.temp()
-        self.line(f"{cell} =l loadl %v.{name}")
+        self.line(f"{cell} =l loadl {slot}")
         address = self.temp()
         self.line(f"{address} =l add {cell}, 8")
         return address
-
-    # Stores a new cell in the stack slot of local `name`.
-    def new_cell(name: str):
-        cell = self.call_text("$W.core.object_new", ["l 0", "l 1"], true)
-        self.line(f"storel {cell}, %v.{name}")
 
     def load_field(object: str, offset: int) -> str:
         address = self.temp()
@@ -2931,7 +2955,7 @@ class Emitter:
         cells: list[str] = []
         for capture in function.captures:
             cell = self.temp()
-            self.line(f"{cell} =l loadl %v.{capture.symbol.name}")
+            self.line(f"{cell} =l loadl {self.local_slot(capture.symbol)}")
             cells.append(cell)
         return cells
 

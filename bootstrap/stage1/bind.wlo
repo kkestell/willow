@@ -1,7 +1,7 @@
 # Resolves names and types in a program's modules, the counterpart of
 # compiler/bind.lua: each module's declarations, their signatures, fields,
 # aliases, type parameters, and defaults as types.wlo types, the symbols of
-# parameters and locals, nested functions and `nonlocal`, captures, and the
+# parameters and locals, nested functions, captures, and the
 # names that expressions use, recorded in the tree as ast.wlo describes.
 # Errors have the Lua binder's wording and positions, and binding stops at
 # the first one.
@@ -756,108 +756,21 @@ class Binder:
 
     # Scopes
 
-    # Gives `function` one symbol per parameter and per assigned or loop name,
-    # recording the others in `function.locals` in order of first assignment.
-    # A nested function's scope falls back to `outer`, its enclosing scope.
-    # `nonlocal` names rebind the enclosing function's variables, so
-    # assignments after the declaration make no local of their own; they are
-    # left in `pending` until the declaration is reached.
-    def collect_symbols(module: ast.Module, function: ast.FunctionDecl, outer: Scope | none, pending: dict[str, bool]) -> Scope:
+    # Parameters are visible throughout a function; locals enter in source order.
+    def resolve_function(module: ast.Module, function: ast.FunctionDecl, outer: Scope | none, type_scope: TypeScope):
         scope = Scope({}, outer)
         record = function.record
         for i in range(len(function.params)):
             param = function.params[i]
+            if scope.find(param.name) is not none:
+                self.fail(module, param.line, param.col, f"cannot redeclare visible name '{param.name}'")
+                return
             symbol = ast.Symbol(self.new_id(), param.name, param.line, param.col, true, function)
             if record is not none and i < len(record.params):
                 symbol.ty = record.params[i].ty
             param.symbol = symbol
             scope.names[param.name] = symbol
-        self.collect(module, function, function.body, scope, pending)
-        return scope
-
-    def collect(module: ast.Module, function: ast.FunctionDecl, body: list[ast.Stmt], scope: Scope, pending: dict[str, bool]):
-        for statement in body:
-            node = statement.node
-            if isinstance(node, ast.Unpack):
-                self.collect_target(function, node.target, scope)
-            else if isinstance(node, ast.For):
-                # A loop variable's symbol is at its `for`.
-                if node.target.name != "":
-                    self.assign(function, node.target.name, statement.line, statement.col, scope)
-                else:
-                    self.collect_target(function, node.target, scope)
-                self.collect(module, function, node.body, scope, pending)
-            else if isinstance(node, ast.Assign):
-                self.assign(function, node.name, statement.line, statement.col, scope)
-            else if isinstance(node, ast.FunctionDef):
-                # A nested `def` names the function a call of the local reaches.
-                name = node.function.name
-                self.assign(function, name, statement.line, statement.col, scope)
-                if name in scope.names:
-                    scope.names[name].function = node.function
-            else if isinstance(node, ast.Nonlocal):
-                for ident in node.names:
-                    own: ast.Symbol | none = none
-                    if ident.name in scope.names:
-                        own = scope.names[ident.name]
-                    enclosing: ast.Symbol | none = none
-                    outer = scope.outer
-                    if outer is not none:
-                        enclosing = outer.find(ident.name)
-                    if own is not none and own.is_param or own is none and enclosing is none:
-                        self.fail(module, ident.line, ident.col, f"nonlocal '{ident.name}' must name a variable of an enclosing function")
-                        return
-                    if own is not none and (enclosing is none or own.id != enclosing.id):
-                        self.fail(module, ident.line, ident.col, f"'{ident.name}' is used before its nonlocal declaration")
-                        return
-                    if enclosing is not none:
-                        scope.names[ident.name] = enclosing
-                    pending[ident.name] = true
-            else if isinstance(node, ast.If):
-                self.collect(module, function, node.body, scope, pending)
-                self.collect(module, function, node.else_body, scope, pending)
-            else if isinstance(node, ast.While):
-                self.collect(module, function, node.body, scope, pending)
-            else if isinstance(node, ast.With):
-                for item in node.items:
-                    target = item.target
-                    if target is not none:
-                        self.collect_target(function, target, scope)
-                self.collect(module, function, node.body, scope, pending)
-            else if isinstance(node, ast.AsyncWith):
-                scope_target = node.target
-                if scope_target is not none:
-                    self.collect_target(function, scope_target, scope)
-                self.collect(module, function, node.body, scope, pending)
-            else if isinstance(node, ast.Try):
-                self.collect(module, function, node.body, scope, pending)
-                for handler in node.handlers:
-                    if handler.name != "":
-                        self.assign(function, handler.name, handler.line, handler.col, scope)
-                    self.collect(module, function, handler.body, scope, pending)
-                self.collect(module, function, node.finally_body, scope, pending)
-
-    def collect_target(function: ast.FunctionDecl, target: ast.Target, scope: Scope):
-        if target.name != "":
-            self.assign(function, target.name, target.line, target.col, scope)
-            return
-        for element in target.elements:
-            self.collect_target(function, element, scope)
-
-    # Makes a local for the first assignment of `name`.
-    def assign(function: ast.FunctionDecl, name: str, line: int, col: int, scope: Scope):
-        if name in scope.names:
-            return
-        symbol = ast.Symbol(self.new_id(), name, line, col, false, function)
-        scope.names[name] = symbol
-        function.locals.append(symbol)
-
-    # Resolves the body of `function`, whose enclosing scope is `outer`, with
-    # the type parameters of `type_scope` in scope.
-    def resolve_function(module: ast.Module, function: ast.FunctionDecl, outer: Scope | none, type_scope: TypeScope):
-        pending: dict[str, bool] = {}
-        scope = self.collect_symbols(module, function, outer, pending)
-        resolver = Resolver(self, module, function, scope, pending, type_scope, 0)
+        resolver = Resolver(self, module, function, scope, type_scope, 0)
         resolver.resolve_block(function.body, none)
 
 # Resolves the names in one function body.
@@ -866,7 +779,6 @@ class Resolver:
     module: ast.Module
     function: ast.FunctionDecl
     scope: Scope
-    pending: dict[str, bool]
     type_scope: TypeScope
     # Grows with each call resolved in this function, not in nested ones.
     calls: int
@@ -1061,9 +973,6 @@ class Resolver:
             if node.name in self.binder.builtins:
                 self.declared_value(expr, self.binder.builtins[node.name], node.name, false)
                 return
-        if node.name in self.pending:
-            self.fail(expr.line, expr.col, f"'{node.name}' is used before its nonlocal declaration")
-            return
         if symbol is none:
             if node.name == "__os" and self.module.privileged:
                 # The target's name, which the checker and emitter fold.
@@ -1281,39 +1190,63 @@ class Resolver:
         else if isinstance(named, types.Enum):
             ref.record = named
 
+    def declare(name: str, line: int, col: int) -> ast.Symbol:
+        symbol = ast.Symbol(self.binder.new_id(), name, line, col, false, self.function)
+        if self.scope.find(name) is not none:
+            self.fail(line, col, f"cannot redeclare visible name '{name}'")
+            return symbol
+        self.scope.names[name] = symbol
+        self.function.locals.append(symbol)
+        return symbol
+
+    def declare_target(target: ast.Target):
+        if target.name != "":
+            target.symbol = self.declare(target.name, target.line, target.col)
+            return
+        for element in target.elements:
+            self.declare_target(element)
+
     def resolve_target(target: ast.Target):
         if target.name != "":
-            target.symbol = self.scope.find(target.name)
+            symbol = self.scope.find(target.name)
+            if symbol is none:
+                self.fail(target.line, target.col, f"unknown variable '{target.name}'; use 'var' to declare it")
+            else if symbol.function is not none:
+                self.fail(target.line, target.col, f"cannot assign to nested function '{target.name}'")
+            else if symbol.owner.id != self.function.id:
+                self.capture(symbol, target.line, target.col)
+            target.symbol = symbol
             return
         for element in target.elements:
             self.resolve_target(element)
 
-    # Resolves `body`, inside `handling`, the innermost `try` with an
-    # `except` clause whose handler holds it, if any.
     def resolve_block(body: list[ast.Stmt], handling: ast.Try | none):
+        outer = self.scope
+        self.scope = Scope({}, outer)
         for statement in body:
             if self.failed():
-                return
+                break
             self.resolve_stmt(statement, handling)
+        self.scope = outer
 
     def resolve_stmt(statement: ast.Stmt, handling: ast.Try | none):
         node = statement.node
-        if isinstance(node, ast.Unpack):
+        if isinstance(node, ast.Var):
+            annotation = node.annotation
+            if annotation is not none:
+                node.declared = self.resolve_type(annotation)
+            value = node.value
+            if value is not none:
+                self.resolve_expr(value, false)
+            self.declare_target(node.target)
+        else if isinstance(node, ast.Unpack):
             self.resolve_expr(node.value, false)
             self.resolve_target(node.target)
         else if isinstance(node, ast.Assign):
             self.resolve_expr(node.value, false)
-            node.symbol = self.scope.find(node.name)
-            annotation = node.annotation
-            if annotation is not none:
-                node.declared = self.resolve_type(annotation)
-        else if isinstance(node, ast.Nonlocal):
-            for ident in node.names:
-                if ident.name in self.pending:
-                    self.pending.pop(ident.name)
-                symbol = self.scope.find(ident.name)
-                if symbol is not none:
-                    self.capture(symbol, ident.line, ident.col)
+            assigned_target = ast.Target(statement.line, statement.col, node.name, [])
+            self.resolve_target(assigned_target)
+            node.symbol = assigned_target.symbol
         else if isinstance(node, ast.FunctionDef):
             self.resolve_nested(node)
         else if isinstance(node, ast.FieldAssign):
@@ -1344,10 +1277,13 @@ class Resolver:
             node.calls = self.calls != before
         else if isinstance(node, ast.For):
             self.resolve_expr(node.iterable, false)
-            self.resolve_target(node.target)
+            outer = self.scope
+            self.scope = Scope({}, outer)
+            self.declare_target(node.target)
             before = self.calls
             self.resolve_block(node.body, handling)
             node.calls = self.calls != before
+            self.scope = outer
         else if isinstance(node, ast.Assert):
             self.resolve_expr(node.condition, false)
             message = node.message
@@ -1370,25 +1306,31 @@ class Resolver:
                 return
             node.handler = handling
         else if isinstance(node, ast.With):
+            outer = self.scope
+            self.scope = Scope({}, outer)
             # Entering and exiting call the managers' methods.
             for item in node.items:
                 self.resolve_expr(item.manager, false)
                 target = item.target
                 if target is not none:
-                    self.resolve_target(target)
+                    self.declare_target(target)
                 self.calls = self.calls + 2
             self.resolve_block(node.body, handling)
+            self.scope = outer
         else if isinstance(node, ast.AsyncWith):
             if not self.function.is_async:
                 self.fail(statement.line, statement.col, "'async with' is only allowed in an async function")
                 return
             self.resolve_expr(node.manager, false)
+            outer = self.scope
+            self.scope = Scope({}, outer)
             scope_target = node.target
             if scope_target is not none:
-                self.resolve_target(scope_target)
+                self.declare_target(scope_target)
             # The join lets other code run.
             self.calls = self.calls + 1
             self.resolve_block(node.body, handling)
+            self.scope = outer
         else if isinstance(node, ast.Try):
             self.resolve_block(node.body, handling)
             for handler in node.handlers:
@@ -1399,9 +1341,12 @@ class Resolver:
                     self.fail(handler.type_name.line, handler.type_name.col, f"'{named_name(named)}' is not an exception class")
                     return
                 handler.type_name.record = named
+                outer = self.scope
+                self.scope = Scope({}, outer)
                 if handler.name != "":
-                    handler.symbol = self.scope.find(handler.name)
+                    handler.symbol = self.declare(handler.name, handler.line, handler.col)
                 self.resolve_block(handler.body, node)
+                self.scope = outer
             self.resolve_block(node.finally_body, handling)
 
     # A nested function's signature resolves where it is defined, with the
@@ -1418,7 +1363,9 @@ class Resolver:
         self.binder.check_param_defaults(self.module, nested)
         if self.failed():
             return
-        node.symbol = self.scope.find(nested.name)
+        symbol = self.declare(nested.name, nested.line, nested.col)
+        symbol.function = nested
+        node.symbol = symbol
         type_scope = self.binder.enter_type_params(self.module, self.type_scope, nested.type_params, record.typevars)
         self.binder.resolve_function(self.module, nested, self.scope, type_scope)
 

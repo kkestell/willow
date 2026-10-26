@@ -553,15 +553,27 @@ class Parser:
             function = self.parse_function(false, false)
             return ast.Stmt(function.line, function.col, ast.FunctionDef(function))
         statement = ast.Stmt(token.line, token.col, ast.SimpleStatement.PASS)
-        if kind == tokens.Kind.NONLOCAL:
+        if kind == tokens.Kind.VAR:
             self.advance()
-            names: list[ast.Ident] = []
-            while true:
-                name = self.expect(tokens.Kind.NAME, "a variable name")
-                names.append(ast.Ident(name.line, name.col, name.text))
-                if not self.accept(tokens.Kind.COMMA):
-                    break
-            statement.node = ast.Nonlocal(names)
+            target = self.parse_target()
+            if target.name != "" and self.accept(tokens.Kind.COMMA):
+                elements = [target, self.parse_target()]
+                while self.accept(tokens.Kind.COMMA):
+                    elements.append(self.parse_target())
+                target = ast.Target(target.line, target.col, "", elements)
+            self.check_targets(target, {})
+            annotation: ast.TypeExpr | none = none
+            initializer: ast.Expr | none = none
+            if self.accept(tokens.Kind.COLON):
+                if target.name == "":
+                    self.fail(self.peek(), "a tuple declaration cannot have an annotation")
+                annotation = self.parse_type()
+            if self.accept(tokens.Kind.EQUAL):
+                initializer = self.parse_expression()
+                self.reject_chained_assignment()
+            else if annotation is none:
+                self.fail(self.peek(), "a declaration needs a type annotation or an initializer")
+            statement.node = ast.Var(target, annotation, initializer)
         else if kind == tokens.Kind.RETURN:
             self.advance()
             value: ast.Expr | none = none
@@ -754,15 +766,8 @@ class Parser:
                 self.fail(token, "cannot assign to this expression")
             self.reject_chained_assignment()
             return statement
-        if token.kind == tokens.Kind.COLON and (isinstance(node, ast.Index) or isinstance(node, ast.Field)):
-            self.fail(token, "only a name can have an annotation")
-        else if token.kind == tokens.Kind.COLON and isinstance(node, ast.Name):
-            self.advance()
-            annotation = self.parse_type()
-            if not self.accept(tokens.Kind.EQUAL):
-                self.fail(self.peek(), "annotated assignment needs an initializer")
-            statement.node = ast.Assign(node.name, annotation, self.parse_expression())
-            self.reject_chained_assignment()
+        if token.kind == tokens.Kind.COLON:
+            self.fail(token, "use 'var' to declare an annotated local")
         else if not is_call(node):
             self.fail_at(expr.line, expr.col, "only calls and await expressions can be used as statements")
         return statement

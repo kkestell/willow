@@ -1,0 +1,6 @@
+def main():
+    try:
+        raise ValueError("bad")
+    except ValueError as error:
+        print(error.message)
+    print(error.message)

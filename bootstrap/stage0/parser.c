@@ -13,7 +13,7 @@ typedef struct Parser {
 static const char *const COMPARISONS[] = {"==", "!=", "<", "<=", ">", ">=", "in"};
 static const char *const UNSUPPORTED_WORDS[] = {
     "as", "async", "await", "case", "del", "except", "finally", "from", "global",
-    "match", "nonlocal", "protocol", "raise", "try", "with", "yield"
+    "match", "protocol", "raise", "try", "with", "yield"
 };
 
 static bool word_is(const Kind *kind, const char *word) {
@@ -438,6 +438,22 @@ static Stmt statement(Parser *self) {
         expect(self, ":");
         StmtVec body = block(self);
         kind = (StmtKind){.tag = STMT_For, .as.For = {targets, iterable, body}};
+    } else if (accept(self, "var")) {
+        PosName target = name(self, "a variable name");
+        TypeExpr *annotation = NULL;
+        if (accept(self, ":")) {
+            TypeExpr ty = type_expr(self);
+            annotation = box_copy(&ty, sizeof(ty));
+        }
+        Expr *value = accept(self, "=") ? boxed_expr(expr(self)) : NULL;
+        if (!annotation && !value) {
+            parser_fail(self, pos(self), STR("a declaration needs a type annotation or an initializer"));
+        }
+        if (word_is(peek(self), "=")) {
+            parser_fail(self, pos(self), STR("chained assignment is not supported"));
+        }
+        end_of_line(self);
+        kind = (StmtKind){.tag = STMT_Assign, .as.Assign = {target.name, annotation, value, true}};
     } else if (accept(self, "return")) {
         Expr *value = peek(self)->tag == KIND_Newline ? NULL : boxed_expr(expr(self));
         end_of_line(self);
@@ -481,15 +497,7 @@ static StmtKind simple_statement(Parser *self) {
         parser_fail(self, target.pos, STR("cannot assign to 'self'"));
     }
     if (word_is(peek(self), ":")) {
-        if (target.kind.tag != EXPR_Name) {
-            parser_fail(self, pos(self), STR("only a name can have an annotation"));
-        }
-        self->i++;
-        TypeExpr ty = type_expr(self);
-        if (!word_is(peek(self), "=")) {
-            parser_fail(self, pos(self), STR("annotated assignment needs an initializer"));
-        }
-        annotation = box_copy(&ty, sizeof(ty));
+        parser_fail(self, pos(self), STR("use 'var' to declare an annotated local"));
     }
     if (accept(self, "=")) {
         Expr value = expr(self);
@@ -499,7 +507,7 @@ static StmtKind simple_statement(Parser *self) {
         end_of_line(self);
         switch (target.kind.tag) {
         case EXPR_Name:
-            return (StmtKind){.tag = STMT_Assign, .as.Assign = {target.kind.as.Name, annotation, value}};
+            return (StmtKind){.tag = STMT_Assign, .as.Assign = {target.kind.as.Name, annotation, boxed_expr(value), false}};
         case EXPR_Attr:
             return (StmtKind){.tag = STMT_SetField, .as.SetField = {
                 *target.kind.as.Attr.object, target.kind.as.Attr.name_pos, target.kind.as.Attr.name, value}};

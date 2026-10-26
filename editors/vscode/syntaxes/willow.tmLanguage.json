@@ -125,7 +125,7 @@
         { "name": "storage.modifier.async.willow", "match": "\\basync(?=\\s+with\\b)" },
         {
           "name": "keyword.control.willow",
-          "match": "\\b(if|else|while|for|in|return|yield|break|continue|pass|try|except|finally|raise|assert|with|import|as|nonlocal|await)\\b"
+          "match": "\\b(if|else|while|for|in|return|yield|break|continue|pass|try|except|finally|raise|assert|with|import|as|var|await)\\b"
         },
         { "name": "keyword.operator.logical.willow", "match": "\\b(and|or|not|is)\\b" },
         { "name": "keyword.other.reserved.willow", "match": "\\b(async|case|del|from|global|match)\\b" },

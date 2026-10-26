@@ -138,7 +138,7 @@ class AliasDecl:
     value: TypeExpr
     type_name: str = ""
 
-# A name with its position: an enum member or a `nonlocal` name.
+# A name with its position, such as an enum member.
 class Ident:
     line: int
     col: int
@@ -391,7 +391,14 @@ class Stmt:
     col: int
     node: StmtNode
 
-type StmtNode = Assign | Unpack | IndexAssign | FieldAssign | CallStmt | If | While | For | With | AsyncWith | Try | FunctionDef | Nonlocal | Return | Assert | Raise | Yield | SimpleStatement
+type StmtNode = Var | Assign | Unpack | IndexAssign | FieldAssign | CallStmt | If | While | For | With | AsyncWith | Try | FunctionDef | Return | Assert | Raise | Yield | SimpleStatement
+
+# An explicit local declaration; only annotated declarations may omit a value.
+class Var:
+    target: Target
+    annotation: TypeExpr | none
+    value: Expr | none
+    declared: types.Type | none = none
 
 # The binder's `declared`: the annotation's type.
 class Assign:
@@ -476,9 +483,6 @@ class Handler:
 class FunctionDef:
     function: FunctionDecl
     symbol: Symbol | none = none
-
-class Nonlocal:
-    names: list[Ident]
 
 class Return:
     value: Expr | none

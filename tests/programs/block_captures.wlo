@@ -1,0 +1,46 @@
+def counter(start: int) -> () -> int:
+    var count = start
+    def increment() -> int:
+        count = count + 1
+        return count
+    return increment
+
+def main():
+    var shared = 0
+    def write_only():
+        shared = 42
+    write_only()
+    print(shared)
+    var a = counter(0)
+    var b = counter(10)
+    print(a())
+    print(a())
+    print(b())
+    var readers: list[() -> int] = []
+    var writers: list[() -> int] = []
+    for i in range(3):
+        var value = i
+        def read() -> int:
+            return value
+        def increment() -> int:
+            value = value + 10
+            return value
+        readers.append(read)
+        writers.append(increment)
+    for write in writers:
+        print(write())
+    for read_value in readers:
+        print(read_value())
+    var targets: list[() -> int] = []
+    for j in range(3):
+        targets.append(() => j)
+    for target in targets:
+        print(target())
+    var repeated: list[() -> int] = []
+    var iteration = 0
+    while iteration < 2:
+        var saved = iteration
+        repeated.append(() => saved)
+        iteration = iteration + 1
+    for callback in repeated:
+        print(callback())

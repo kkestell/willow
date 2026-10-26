@@ -1,0 +1,32 @@
+def changed(value: int) -> int:
+    if true:
+        value = value + 1
+    return value
+
+def main():
+    var result: int
+    if true:
+        result = 3
+        var label = "left"
+        print(label)
+    else:
+        result = 4
+        var label = "right"
+        print(label)
+    print(result)
+    var first, (second, third) = (1, (2, 3))
+    first, second = (second, first)
+    print(first + second + third)
+    var optional: int | none = 5
+    print(optional + 1)
+    optional = none
+    assert optional is none
+    print(changed(7))
+    var nonlocal = 9
+    print(nonlocal)
+    if true:
+        var sibling = 10
+        print(sibling)
+    if true:
+        var sibling = "next"
+        print(sibling)

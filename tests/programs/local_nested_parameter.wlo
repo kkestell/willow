@@ -1,0 +1,4 @@
+def main():
+    var value = 1
+    def nested(value: int):
+        pass

@@ -406,6 +406,132 @@ static TypedValue isinstance(Checker *, Pos, ExprVec, const State *);
 static TypedValue dict_get(Checker *, DictCall, ExprVec, const State *);
 static bool is_sys_exit(const Checker *, const Expr *);
 static int os_test(const Checker *, const Expr *);
+/* Resolve locals in declaration order. Each child block copies the visible
+ * bindings, while generated slot names remain unique within the function. */
+static String source_name(String slot) {
+    for (size_t i = 0; i < slot.len; i++) {
+        if (slot.data[i] == '.') return (String){slot.data, i};
+    }
+    return slot;
+}
+
+static String bind_local(const Module *module, Map *visible, String name, Pos pos, size_t *next) {
+    if (map_contains(visible, name)) {
+        fail(module->path, pos, str_format("cannot redeclare visible name '" FMT "'", S(name)));
+    }
+    String slot = str_format(FMT ".%zu", S(name), ++*next);
+    map_insert(visible, name, box_copy(&slot, sizeof(slot)));
+    return slot;
+}
+
+static void bind_expr(Expr *expression, const Map *visible) {
+    if (!expression) return;
+    ExprKind *kind = &expression->kind;
+    switch (kind->tag) {
+    case EXPR_Name: {
+        const String *slot = map_get(visible, kind->as.Name);
+        if (slot) kind->as.Name = *slot;
+        break;
+    }
+    case EXPR_Call:
+        bind_expr(kind->as.Call.callee, visible);
+        for (size_t i = 0; i < kind->as.Call.args.len; i++) bind_expr(&kind->as.Call.args.data[i], visible);
+        break;
+    case EXPR_FStr:
+    case EXPR_List: {
+        ExprVec elements = kind->tag == EXPR_List ? kind->as.List : kind->as.FStr;
+        for (size_t i = 0; i < elements.len; i++) bind_expr(&elements.data[i], visible);
+        break;
+    }
+    case EXPR_Dict:
+        for (size_t i = 0; i < kind->as.Dict.len; i++) {
+            bind_expr(&kind->as.Dict.data[i].key, visible);
+            bind_expr(&kind->as.Dict.data[i].value, visible);
+        }
+        break;
+    case EXPR_Index:
+        bind_expr(kind->as.Index.object, visible);
+        bind_expr(kind->as.Index.index, visible);
+        break;
+    case EXPR_Slice:
+        bind_expr(kind->as.Slice.object, visible);
+        bind_expr(kind->as.Slice.start, visible);
+        bind_expr(kind->as.Slice.stop, visible);
+        break;
+    case EXPR_Attr: bind_expr(kind->as.Attr.object, visible); break;
+    case EXPR_Unary: bind_expr(kind->as.Unary.operand, visible); break;
+    case EXPR_Binary:
+        bind_expr(kind->as.Binary.left, visible);
+        bind_expr(kind->as.Binary.right, visible);
+        break;
+    case EXPR_IsNone: bind_expr(kind->as.IsNone.operand, visible); break;
+    case EXPR_Int: case EXPR_Float: case EXPR_Str: case EXPR_Bool:
+    case EXPR_None: case EXPR_TypeOf: break;
+    }
+}
+
+static void bind_block(const Module *module, StmtVec body, Map visible, size_t *next) {
+    visible = map_clone(&visible);
+    for (size_t i = 0; i < body.len; i++) {
+        Stmt *stmt = &body.data[i];
+        StmtKind *kind = &stmt->kind;
+        switch (kind->tag) {
+        case STMT_Assign: {
+            String name = kind->as.Assign.target;
+            bind_expr(kind->as.Assign.value, &visible);
+            if (kind->as.Assign.declaration) {
+                kind->as.Assign.target = bind_local(module, &visible, name, stmt->pos, next);
+            } else {
+                const String *slot = map_get(&visible, name);
+                if (!slot) {
+                    fail(module->path, stmt->pos, str_format("unknown variable '" FMT "'; use 'var' to declare it", S(name)));
+                }
+                kind->as.Assign.target = *slot;
+            }
+            break;
+        }
+        case STMT_If:
+            for (size_t j = 0; j < kind->as.If.arms.len; j++) {
+                IfArm *arm = &kind->as.If.arms.data[j];
+                bind_expr(&arm->cond, &visible);
+                bind_block(module, arm->body, visible, next);
+            }
+            if (kind->as.If.otherwise) bind_block(module, *kind->as.If.otherwise, visible, next);
+            break;
+        case STMT_While:
+            bind_expr(&kind->as.While.cond, &visible);
+            bind_block(module, kind->as.While.body, visible, next);
+            break;
+        case STMT_For: {
+            bind_expr(&kind->as.For.iterable, &visible);
+            Map loop = map_clone(&visible);
+            for (size_t j = 0; j < kind->as.For.targets.len; j++) {
+                PosName *target = &kind->as.For.targets.data[j];
+                target->name = bind_local(module, &loop, target->name, target->pos, next);
+            }
+            bind_block(module, kind->as.For.body, loop, next);
+            break;
+        }
+        case STMT_Expr: bind_expr(&kind->as.Expr, &visible); break;
+        case STMT_SetField:
+            bind_expr(&kind->as.SetField.object, &visible);
+            bind_expr(&kind->as.SetField.value, &visible);
+            break;
+        case STMT_SetIndex:
+            bind_expr(&kind->as.SetIndex.object, &visible);
+            bind_expr(&kind->as.SetIndex.index, &visible);
+            bind_expr(&kind->as.SetIndex.value, &visible);
+            break;
+        case STMT_Assert:
+            bind_expr(&kind->as.Assert.cond, &visible);
+            bind_expr(kind->as.Assert.message, &visible);
+            break;
+        case STMT_Return: bind_expr(kind->as.Return, &visible); break;
+        case STMT_Pass: case STMT_Break: case STMT_Continue: break;
+        }
+    }
+}
+
 static Function check_function(Scope, Strings *, const Func *, const Sig *, StmtVec, bool);
 
 static Map host_tables(void) {
@@ -946,6 +1072,17 @@ static Value narrowed(Value value, const Type *declared, const Type *current) {
 
 static Function check_function(
     Scope scope, Strings *strings, const Func *func, const Sig *sig, StmtVec body, bool method) {
+    Map visible = {0};
+    if (method) {
+        String self = STR("self");
+        map_insert(&visible, self, box_copy(&self, sizeof(self)));
+    }
+    for (size_t i = 0; i < func->params.len; i++) {
+        String param = func->params.data[i].name;
+        map_insert(&visible, param, box_copy(&param, sizeof(param)));
+    }
+    size_t next = 0;
+    bind_block(scope.module, body, visible, &next);
     Map names = {0};
     assigned_names(body, &names);
     Checker checker = {.module = scope.module,
@@ -1423,22 +1560,18 @@ static bool statement(Checker *self, const Stmt *stmt, State *state, OpVec *ops)
     case STMT_Assign: {
         String target = kind->as.Assign.target;
         const TypeExpr *annotation = kind->as.Assign.annotation;
-        const Expr *value = &kind->as.Assign.value;
+        const Expr *value = kind->as.Assign.value;
         const OptionalType *local = map_get(&self->locals, target);
         assert(local);
-        if (annotation) {
-            if (map_contains(&self->params, target)) {
-                fail(self->module->path, stmt->pos,
-                    str_format("cannot annotate parameter '" FMT "'", S(target)));
-            }
-            if (local->some) {
-                fail(self->module->path, stmt->pos,
-                    str_format("only the first assignment to '" FMT "' can have an annotation",
-                        S(target)));
-            }
-        }
         Type annotated = annotation ? resolve(self->names, self->module, annotation) : TY(None);
-        const Type *expected = local->some ? &local->ty : annotation ? &annotated : NULL;
+        if (annotation) {
+            map_insert(&self->locals, target, box(OptionalType, .some = true, .ty = annotated));
+            vec_push(self->order, target);
+        }
+        if (!value) {
+            return false;
+        }
+        const Type *expected = annotation ? &annotated : local->some ? &local->ty : NULL;
         TypedValue checked = expr_expect(self, value, state, expected);
         Op op = assign(self, target, value->pos, checked.value, &checked.ty,
             annotation ? &annotated : NULL, state);
@@ -1716,7 +1849,7 @@ static TypedValue expr(Checker *self, const Expr *expression, const State *state
             const Type *current = map_get(state, name);
             if (!declared->some || !current) {
                 fail(self->module->path, expression->pos,
-                    str_format("variable '" FMT "' may be used before assignment", S(name)));
+                    str_format("variable '" FMT "' may be used before assignment", S(source_name(name))));
             }
             Value value = narrowed(VAL(Local, name), &declared->ty, current);
             return typed(value, *current);

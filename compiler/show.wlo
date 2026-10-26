@@ -243,6 +243,15 @@ class Printer:
         return self.at(self.stmt_node(statement.node), statement.line, statement.col)
 
     def stmt_node(node: ast.StmtNode) -> str:
+        if isinstance(node, ast.Var):
+            text = "var " + self.target(node.target)
+            annotation = node.annotation
+            if annotation is not none:
+                text = text + ": " + self.annotation(annotation)
+            value = node.value
+            if value is not none:
+                text = text + " = " + self.expr(value)
+            return text
         if isinstance(node, ast.Assign):
             text = node.name
             annotation = node.annotation
@@ -293,11 +302,6 @@ class Printer:
             return text
         if isinstance(node, ast.FunctionDef):
             return self.function(node.function)
-        if isinstance(node, ast.Nonlocal):
-            names: list[str] = []
-            for name in node.names:
-                names.append(self.at(name.name, name.line, name.col))
-            return "nonlocal " + ", ".join(names)
         if isinstance(node, ast.Return):
             value = node.value
             if value is none:

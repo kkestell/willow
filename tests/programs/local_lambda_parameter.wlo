@@ -1,0 +1,3 @@
+def main():
+    var value = 1
+    var callback = (value: int) => value

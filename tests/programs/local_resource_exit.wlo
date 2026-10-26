@@ -1,0 +1,5 @@
+import io
+def main():
+    with io.open("missing") as resource:
+        pass
+    resource.close()

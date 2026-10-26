@@ -170,7 +170,15 @@ class Checker:
         node = statement.node
         line = statement.line
         col = statement.col
-        if isinstance(node, ast.Assign):
+        if isinstance(node, ast.Var):
+            declared = node.declared
+            if declared is not none:
+                self.annotate_pattern(node.target, declared)
+            value = node.value
+            if value is not none:
+                value.expected = declared
+                self.check_pattern(node.target, self.check_expr(value, state), state)
+        else if isinstance(node, ast.Assign):
             self.check_assign(statement, node, state)
         else if isinstance(node, ast.Unpack):
             self.check_pattern(node.target, self.check_expr(node.value, state), state)
@@ -220,9 +228,6 @@ class Checker:
             return self.check_async_with(node, state)
         else if isinstance(node, ast.FunctionDef):
             self.check_nested(statement, node, state)
-        else if isinstance(node, ast.Nonlocal):
-            # The binder has made later assignments rebind the outer variables.
-            pass
         else if isinstance(node, ast.SimpleStatement):
             if node == ast.SimpleStatement.BREAK:
                 return self.check_transfer(statement, "break", state)
@@ -235,20 +240,8 @@ class Checker:
     def check_assign(statement: ast.Stmt, node: ast.Assign, state: dict[int, types.Type]):
         symbol = node.symbol
         assert symbol is not none, "assignment without a symbol"
-        declared = node.declared
-        expected = symbol.ty
-        if declared is not none:
-            expected = declared
-        node.value.expected = expected
+        node.value.expected = symbol.ty
         value_type = self.check_expr(node.value, state)
-        if declared is not none:
-            if symbol.is_param:
-                self.fail(statement.line, statement.col, f"cannot annotate parameter '{node.name}'")
-            # Statements are checked in source order, so a type means an
-            # earlier assignment.
-            if symbol.ty is not none:
-                self.fail(statement.line, statement.col, f"only the first assignment to '{node.name}' can have an annotation")
-            symbol.ty = declared
         self.symbols[symbol.id] = symbol
         ty = symbol.ty
         if ty is not none:
@@ -257,6 +250,20 @@ class Checker:
         else:
             symbol.ty = value_type
             state[symbol.id] = value_type
+
+    def annotate_pattern(target: ast.Target, ty: types.Type):
+        if target.name != "":
+            symbol = target.symbol
+            assert symbol is not none, "declaration without a symbol"
+            symbol.ty = ty
+            self.symbols[symbol.id] = symbol
+            return
+        ty = types.expand(ty)
+        if not isinstance(ty, types.TupleType) or len(target.elements) != len(ty.elements):
+            self.fail(target.line, target.col, "tuple declaration needs a matching tuple annotation")
+            return
+        for i in range(len(target.elements)):
+            self.annotate_pattern(target.elements[i], ty.elements[i])
 
     def check_target(target: ast.Target, item: types.Type, state: dict[int, types.Type], line: int, col: int):
         symbol = target.symbol
@@ -2028,7 +2035,10 @@ def assigned_type(declared: types.Type, value: types.Type) -> types.Type:
 def assigned_symbols(body: list[ast.Stmt], result: dict[int, bool]):
     for statement in body:
         node = statement.node
-        if isinstance(node, ast.Assign):
+        if isinstance(node, ast.Var):
+            if node.value is not none:
+                target_symbols(node.target, result)
+        else if isinstance(node, ast.Assign):
             symbol = node.symbol
             if symbol is not none:
                 result[symbol.id] = true
