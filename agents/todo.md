@@ -22,12 +22,6 @@
   - Full `make bootstrap-test` verification is deferred to real Linux amd64
     hardware. Docker Desktop's Rosetta blocks the full suite on this host;
     see [Docker setup](../docs/bootstrap.md#linux-in-docker).
-- Add SHA-256 in a new `hash` module: `hash.sha256(data: bytes) -> bytes` and
-  a `Sha256` class with `update(data: bytes)`, `digest() -> bytes`, and
-  `hexdigest() -> str`, tested against the NIST vectors. Decision needed:
-  written in Willow after the bitwise operators (no dependency, but slow with
-  masking and overflow checks), or calling a platform library (CommonCrypto on
-  macOS, OpenSSL's libcrypto on Linux), or vendored C compiled into programs.
 
 ---
 

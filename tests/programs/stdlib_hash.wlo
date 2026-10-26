@@ -1,0 +1,55 @@
+import hash
+
+def main():
+    # NIST SHA-256 vectors: empty, 24, 448, 896, and 8,000,000 bits.
+    var messages = [
+        "",
+        "abc",
+        "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+        "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu",
+    ]
+    for message in messages:
+        print(hash.sha256(message.encode()).hex())
+    var parts: list[str] = []
+    for _ in range(1000):
+        parts.append("a")
+    var chunk = "".join(parts).encode()
+    var million = hash.sha256_hasher()
+    for _ in range(1000):
+        million.update(chunk)
+    print(million.hexdigest())
+
+    var data = messages[3].encode()
+    var split = hash.sha256_hasher()
+    split.update(data[:1])
+    split.update(data[1:63])
+    split.update(bytes([]))
+    split.update(data[63:65])
+    split.update(data[65:])
+    print(split.hexdigest())
+    # A single update can complete a pending block and consume further blocks.
+    split.update(data)
+    assert split.digest() == hash.sha256(data + data)
+    var whole = hash.sha256_hasher()
+    whole.update(data + data)
+    assert whole.digest() == split.digest()
+
+    var snapshot = hash.sha256_hasher()
+    snapshot.update("a".encode())
+    var first = snapshot.digest()
+    assert first == snapshot.digest()
+    assert first.hex() == snapshot.hexdigest()
+    snapshot.update("b".encode())
+    assert snapshot.hexdigest() == hash.sha256("ab".encode()).hex()
+    snapshot.update("c".encode())
+    print(snapshot.hexdigest())
+    assert first == hash.sha256("a".encode())
+    var fresh = hash.sha256_hasher()
+    assert fresh.digest() == hash.sha256(bytes([]))
+    fresh.update(bytes([0, 128, 255]))
+    print(fresh.hexdigest())
+    var octets: list[int] = []
+    for value in range(65):
+        octets.append(value)
+    for size in [55, 64, 65]:
+        print(hash.sha256(bytes(octets[:size])).hex())

@@ -2113,6 +2113,23 @@ system's reason. Examples are `cannot read <path>: <reason>`,
 `cannot remove directory <path>: <reason>`, `cannot resolve <path>: <reason>`, and
 `cannot create temporary file in <directory>: <reason>`.
 
+### `hash`
+
+| Declaration | Meaning |
+| --- | --- |
+| `sha256(data: bytes) -> bytes` | Return the 32-byte SHA-256 digest of `data` |
+| `sha256_hasher() -> Sha256` | Create an incremental SHA-256 computation with empty input |
+| `class Sha256` | An incremental SHA-256 computation with the methods below |
+| `Sha256.update(data: bytes) -> none` | Append `data` to the input |
+| `Sha256.digest() -> bytes` | Return the 32-byte digest of the input so far |
+| `Sha256.hexdigest() -> str` | Return the digest as 64 lowercase hexadecimal digits |
+
+SHA-256 follows [FIPS 180-4](https://doi.org/10.6028/NIST.FIPS.180-4).
+Updates hash the concatenation of their arguments; an empty update has no
+effect. `digest` and `hexdigest` leave the
+computation unchanged: repeated calls give the same result, and later updates
+append to the original input. Separate instances have independent state.
+
 ### `http`
 
 ```python

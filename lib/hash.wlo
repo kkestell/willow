@@ -1,0 +1,111 @@
+def _rotr(value: int, bits: int) -> int:
+    return (value >> bits) | ((value << (32 - bits)) & 0xffffffff)
+
+def _compress(state: list[int], data: bytes, offset: int):
+    # FIPS 180-4, sections 4.2.2 and 6.2.2. Words stay unsigned and 32 bits.
+    var constants = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+        0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+        0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+        0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+        0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+        0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+        0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+        0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    ]
+    var words: list[int] = []
+    for i in range(16):
+        var pos = offset + i * 4
+        words.append((data[pos] << 24) | (data[pos + 1] << 16) | (data[pos + 2] << 8) | data[pos + 3])
+    for i in range(16, 64):
+        var x = words[i - 15]
+        var y = words[i - 2]
+        var s0 = _rotr(x, 7) ^ _rotr(x, 18) ^ (x >> 3)
+        var s1 = _rotr(y, 17) ^ _rotr(y, 19) ^ (y >> 10)
+        words.append((words[i - 16] + s0 + words[i - 7] + s1) & 0xffffffff)
+    var a = state[0]
+    var b = state[1]
+    var c = state[2]
+    var d = state[3]
+    var e = state[4]
+    var f = state[5]
+    var g = state[6]
+    var h = state[7]
+    for i in range(64):
+        var sum1 = _rotr(e, 6) ^ _rotr(e, 11) ^ _rotr(e, 25)
+        var choose = (e & f) ^ (~e & g)
+        var t1 = h + sum1 + choose + constants[i] + words[i]
+        var sum0 = _rotr(a, 2) ^ _rotr(a, 13) ^ _rotr(a, 22)
+        var majority = (a & b) ^ (a & c) ^ (b & c)
+        var t2 = sum0 + majority
+        h = g
+        g = f
+        f = e
+        e = (d + t1) & 0xffffffff
+        d = c
+        c = b
+        b = a
+        a = (t1 + t2) & 0xffffffff
+    var result = [a, b, c, d, e, f, g, h]
+    for i in range(8):
+        state[i] = (state[i] + result[i]) & 0xffffffff
+
+class Sha256:
+    _state: list[int]
+    _pending: bytes
+    _length: int
+
+    def update(data: bytes):
+        self._length = self._length + len(data)
+        var offset = 0
+        var pending = self._pending
+        var state = self._state
+        if len(pending) > 0:
+            var take = min(64 - len(pending), len(data))
+            pending = pending + data[:take]
+            offset = take
+            if len(pending) == 64:
+                _compress(state, pending, 0)
+                pending = bytes([])
+        while len(data) - offset >= 64:
+            _compress(state, data, offset)
+            offset = offset + 64
+        self._pending = pending + data[offset:]
+
+    def digest() -> bytes:
+        var state = self._state[:]
+        var pending = self._pending
+        var padding: list[int] = [128]
+        while (len(pending) + len(padding)) % 64 != 56:
+            padding.append(0)
+        # Encode the bit length without forming a possibly overflowing int.
+        for shift in range(53, 4, -8):
+            padding.append((self._length >> shift) & 255)
+        padding.append((self._length & 31) << 3)
+        var tail = pending + bytes(padding)
+        for offset in range(0, len(tail), 64):
+            _compress(state, tail, offset)
+        var result: list[int] = []
+        for word in state:
+            for shift in range(24, -1, -8):
+                result.append((word >> shift) & 255)
+        return bytes(result)
+
+    def hexdigest() -> str:
+        return self.digest().hex()
+
+def sha256(data: bytes) -> bytes:
+    var hasher = sha256_hasher()
+    hasher.update(data)
+    return hasher.digest()
+
+def sha256_hasher() -> Sha256:
+    return Sha256([0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19], bytes([]), 0)
