@@ -1,0 +1,10 @@
+def first(error: ValueError):
+    raise error
+
+def main():
+    var error = ValueError("again")
+    try:
+        first(error)
+    except ValueError:
+        pass
+    raise error

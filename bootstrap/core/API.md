@@ -187,10 +187,12 @@ literal `"none"`.
 Programs that stages 1 and 2 compile raise exceptions instead of ending. The
 word `$W.pending` holds the pending exception, or 0. Stages 1 and 2 compile
 their own body for `fail`, which creates the exception with `failure` and
-stores it in `$W.pending`. An exception object is a header, its location and
-frames, both `str` and 0 until it is raised, and its fields, `message` first.
-The frames are the report's lines after the first, each starting with a
-newline. The exception reporting functions run with `$W.pending` cleared.
+stores it in `$W.pending`. An exception object is a header, pointers to its
+location and traceback tail (0 until recorded), and its fields, `message`
+first. Frame records hold the previous frame, function, path, line, column,
+and a task-start marker. The location points to the first frame unless
+`locate` sets an independent location. Reports format the records lazily.
+The exception reporting functions run with `$W.pending` cleared.
 
 | Signature | Meaning |
 | --- | --- |
