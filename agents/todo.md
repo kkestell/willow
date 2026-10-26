@@ -1,23 +1,5 @@
 # TODO
 
-- Replace the empty tuple type spelling `tuple[()]` with `tuple[]` in the
-  compiler, diagnostics, and editor support; migrate sources and tests and
-  add regression coverage. Validate on macOS and Linux.
-- Replace `lambda parameters: expression` with `(parameters) => expression`
-  in the compiler and editor support; migrate sources and examples, and add
-  regression coverage for parameter lists, precedence, and captures. Validate
-  on macOS and Linux.
-- Allow optional lambda parameter annotations, with expected types supplying
-  unannotated parameters and the expected return type, and expression bodies
-  determining return types. Update the compiler and editor support; cover
-  standalone annotated lambdas, contextual inference, empty displays in bodies,
-  missing types, and callable compatibility in regression tests.
-- Make method receivers implicit as the reserved name `self` and omit them from
-  class and protocol parameter lists. Reject `self` outside methods and as an
-  assignment target. Update compiler binding, signatures, diagnostics, and editor
-  support; migrate sources and examples, and cover method calls, bound methods,
-  protocol matching, receiver captures, and misuse of `self`. Validate on
-  macOS and Linux.
 - Base unions and type tests on runtime classes. Replace the union member
   restrictions with the disjoint-coverage rule, allowing open types (protocols
   and type parameters) only alongside `none`; this makes protocol-to-union
