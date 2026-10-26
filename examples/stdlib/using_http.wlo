@@ -1,0 +1,11 @@
+# Requires internet access; http provides a client but no local server API.
+import http
+
+def main():
+    var query = http.urlencode({"q": "Willow language"})
+    var headers = [http.Header("Accept", "text/html")]
+    var response = http.request("GET", "https://example.com/?" + query, headers=headers)
+    print(f"status: {response.status}")
+    print(f"content type: {http.header(response.headers, 'Content-Type')}")
+    if response.status == 200:
+        print(response.body.decode())

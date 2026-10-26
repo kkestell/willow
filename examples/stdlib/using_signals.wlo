@@ -1,0 +1,17 @@
+import aio
+import signals
+import subprocess
+import sys
+
+async def shutdown():
+    await signals.wait("SIGTERM")
+    print("received SIGTERM")
+
+async def main():
+    async with aio.task_group() as group:
+        group.start(shutdown())
+        # Let the waiter install its handler before sending the signal.
+        await aio.sleep(0.0)
+        var result = subprocess.run(["kill", "-s", "TERM", str(sys.getpid())])
+        assert result.returncode == 0, "could not send SIGTERM"
+    print("shutdown complete")

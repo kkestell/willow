@@ -1,0 +1,33 @@
+import aio
+
+async def serve(listener: aio.Listener):
+    for i in range(2):
+        with await listener.accept(timeout=5.0) as connection:
+            await connection.sendall("hello from aio".encode(), timeout=5.0)
+
+async def fetch(name: str, port: int, limit: aio.Semaphore) -> str:
+    await limit.acquire()
+    try:
+        await aio.sleep(0.0)
+        with await aio.connect("127.0.0.1", port) as connection:
+            var data = bytes([])
+            var chunk = await connection.recv(1024, timeout=5.0)
+            # TCP reads may split a message; the server closes after sending it.
+            while len(chunk) > 0:
+                data = data + chunk
+                chunk = await connection.recv(1024, timeout=5.0)
+            return f"{name}: {data.decode()}"
+    finally:
+        limit.release()
+
+async def main():
+    var limit = aio.semaphore(1)
+    var first: aio.Task[str]
+    var second: aio.Task[str]
+    with aio.listen("127.0.0.1", 0) as listener:
+        async with aio.task_group() as group:
+            group.start(serve(listener))
+            first = group.start(fetch("first", listener.local_port(), limit))
+            second = group.start(fetch("second", listener.local_port(), limit))
+        print(first.result())
+        print(second.result())

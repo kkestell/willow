@@ -1,0 +1,10 @@
+import net
+
+def main():
+    with net.listen("127.0.0.1", 0) as listener:
+        with net.connect("127.0.0.1", listener.local_port()) as client:
+            # The reader owns the accepted connection and closes it on exit.
+            with net.reader(listener.accept(timeout=5.0)) as request:
+                client.sendall("greeting\nhello".encode(), timeout=5.0)
+                print(request.read_until("\n".encode(), timeout=5.0).decode().strip())
+                print(request.read_exactly(5, timeout=5.0).decode())
