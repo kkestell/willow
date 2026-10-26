@@ -26,19 +26,20 @@ import subprocess
 import sys
 
 def main():
-    args = sys.args()
-    build = len(args) > 0 and args[0] == "--build"
+    var args = sys.args()
+    var build = len(args) > 0 and args[0] == "--build"
     if build:
         args = args[1:]
     if len(args) < 1:
         sys.eprint("usage: runner [--build] COMPILER PATH...")
         sys.exit(2)
-    compiler = fs.abspath(args[0])
-    work = fs.temp_dir()
+    var compiler = fs.abspath(args[0])
+    var work = fs.temp_dir()
     fs.mkdir(work + "/cases")
-    passed = 0
-    failed = 0
+    var passed = 0
+    var failed = 0
     for path in args[1:]:
+        var failures: list[str]
         if path.endswith(".wlo"):
             failures = program_case(compiler, path, build, work)
         else:
@@ -56,25 +57,26 @@ def main():
 
 # The failure lines of the program at `path`, or none when it passes.
 def program_case(compiler: str, path: str, build: bool, work: str) -> list[str]:
-    directory = fs.dirname(path)
+    var directory = fs.dirname(path)
     if directory == "":
         directory = "."
-    name = fs.basename(path)
-    base = path.removesuffix(".wlo")
-    stdin = "/dev/null"
+    var name = fs.basename(path)
+    var base = path.removesuffix(".wlo")
+    var stdin = "/dev/null"
     if fs.exists(base + ".in"):
         stdin = fs.abspath(base + ".in")
-    out = work + "/out"
-    err = work + "/err"
+    var out = work + "/out"
+    var err = work + "/err"
+    var status: int
     if build:
-        program = work + "/program"
+        var program = work + "/program"
         status = execute([compiler, "build", name, "-o", program], directory, none, stdin, out, err)
         if status == 0:
             status = execute([program], directory, none, stdin, out, err)
     else:
         status = execute([compiler, "run", name], directory, none, stdin, out, err)
-    expected_err = base + ".err"
-    expected_status = 0
+    var expected_err = base + ".err"
+    var expected_status = 0
     if fs.exists(expected_err):
         expected_status = 1
     if not build and fs.exists(base + ".stage1.err"):
@@ -82,7 +84,7 @@ def program_case(compiler: str, path: str, build: bool, work: str) -> list[str]:
         expected_status = 0
         if fs.stat(expected_err).size > 0:
             expected_status = 1
-    failures: list[str] = []
+    var failures: list[str] = []
     if status != expected_status:
         failures.append(f"FAIL {path}: exit status {status}, expected {expected_status}")
     failures.extend(compare(path, "stdout", base + ".out", out))
@@ -92,15 +94,15 @@ def program_case(compiler: str, path: str, build: bool, work: str) -> list[str]:
 # The failure lines of the command case in `directory`, or none when it
 # passes.
 def command_case(compiler: str, directory: str, work: str) -> list[str]:
-    copy = work + "/cases/" + fs.basename(directory)
+    var copy = work + "/cases/" + fs.basename(directory)
     subprocess.run(["rm", "-rf", copy])
     subprocess.run(["cp", "-R", directory, copy])
     fs.remove(copy + "/expected")
-    env = sys.environ()
+    var env = sys.environ()
     env["WILLOW"] = compiler
     env["ROOT"] = sys.getcwd()
-    output = work + "/output"
-    status = execute(["sh", "command"], copy, env, "/dev/null", output, output)
+    var output = work + "/output"
+    var status = execute(["sh", "command"], copy, env, "/dev/null", output, output)
     if status != 0:
         return [f"FAIL {directory}: exit status {status}"]
     return compare(directory, "output", directory + "/expected", output)
@@ -113,9 +115,9 @@ def compare(path: str, stream: str, expected: str, actual: str) -> list[str]:
         expected = "/dev/null"
     if fs.read_bytes(expected) == fs.read_bytes(actual):
         return []
-    result = subprocess.run(["diff", expected, actual], capture_output=true)
-    lines = [f"FAIL {path}: {stream} differs"]
-    stdout = result.stdout
+    var result = subprocess.run(["diff", expected, actual], capture_output=true)
+    var lines = [f"FAIL {path}: {stream} differs"]
+    var stdout = result.stdout
     assert stdout is not none
     for line in stdout.decode().split("\n"):
         if line != "":
@@ -126,13 +128,13 @@ def compare(path: str, stream: str, expected: str, actual: str) -> list[str]:
 # at those paths, which may be the same for stdout and stderr, and returns
 # its exit status. `env` replaces the environment unless it is none.
 def execute(args: list[str], cwd: str, env: dict[str, str] | none, stdin: str, stdout: str, stderr: str) -> int:
-    input = io.open(stdin)
-    output = io.open(stdout, "w")
-    error = output
+    var input = io.open(stdin)
+    var output = io.open(stdout, "w")
+    var error = output
     if stderr != stdout:
         error = io.open(stderr, "w")
-    process = subprocess.spawn(args, cwd=cwd, env=env, stdin=input, stdout=output, stderr=error)
-    status = process.wait()
+    var process = subprocess.spawn(args, cwd=cwd, env=env, stdin=input, stdout=output, stderr=error)
+    var status = process.wait()
     input.close()
     output.close()
     if stderr != stdout:

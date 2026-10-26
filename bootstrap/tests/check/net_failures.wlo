@@ -7,13 +7,13 @@ def main():
     assert sys.getenv("WILLOW_NET_TEST_SIGNAL_DEFAULT") is none
     core.signal(13, core.getenv(core.str_bytes("WILLOW_NET_TEST_SIGNAL_DEFAULT")))
     with net.listen("127.0.0.1", 0) as listener:
-        client = net.connect("localhost", listener.local_port())
-        server = listener.accept()
+        var client = net.connect("localhost", listener.local_port())
+        var server = listener.accept()
         server.close()
-        data = "x".encode()
+        var data = "x".encode()
         while len(data) < 65536:
             data = data + data
-        failed = false
+        var failed = false
         try:
             for i in range(100):
                 client.sendall(data, timeout=1.0)

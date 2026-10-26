@@ -4,7 +4,7 @@ def optional() -> int | none:
     return 1
 
 async def main():
-    value = optional()
+    var value = optional()
     async with aio.task_group():
         value = none
         await aio.sleep(0.0)

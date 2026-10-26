@@ -2,4 +2,4 @@ class Box[T]:
     value: T
 
 def main():
-    value: Box[int | none] = Box[int](1)
+    var value: Box[int | none] = Box[int](1)

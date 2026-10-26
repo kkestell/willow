@@ -15,9 +15,9 @@ def twice[T](f: (T) -> T, x: T) -> T:
 # Values specialized by the enclosing function's type argument; a float
 # and an int differ in representation inside a union.
 def wrap[T](x: T) -> list[T | none]:
-    f = identity[T]
-    g = () => f(x)
-    get = Box(x).get
+    var f = identity[T]
+    var g = () => f(x)
+    var get = Box(x).get
 
     def nested(y: T) -> T | none:
         return y
@@ -25,7 +25,7 @@ def wrap[T](x: T) -> list[T | none]:
     def pair[U](u: U) -> tuple[T, U]:
         return (x, u)
 
-    p = pair[str]
+    var p = pair[str]
     assert p("s")[1] == "s"
     assert pair(1)[1] == 1
     return [g(), get(), nested(x), none]
@@ -38,5 +38,5 @@ def main():
     for text in wrap("s"):
         print(text)
     print(twice(identity[int], 3))
-    halve: (float) -> float = identity
+    var halve: (float) -> float = identity
     print(halve(0.5))

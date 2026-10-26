@@ -9,14 +9,14 @@ async def tick(count: list[int]):
         count[0] = count[0] + 1
 
 async def main():
-    base = sys.args()[0]
-    directory = sys.args()[1]
-    target = fs.join(directory, "cancel.bin")
+    var base = sys.args()[0]
+    var directory = sys.args()[1]
+    var target = fs.join(directory, "cancel.bin")
     fs.write_file(target, "kept")
-    count = [0]
+    var count = [0]
     async with aio.task_group() as group:
         group.start(tick(count))
-        response = await http.request_async("GET", base + "/trickle", timeout=0.15)
+        var response = await http.request_async("GET", base + "/trickle", timeout=0.15)
         assert response.body == "xxxxx".encode()
         assert count[0] >= 20
         group.cancel()
@@ -25,7 +25,7 @@ async def main():
         assert false, "invalid request completed"
     except ValueError as error:
         assert error.message == "invalid method 'BAD METHOD'"
-    result = await http.download_async(base + "/bytes", target)
+    var result = await http.download_async(base + "/bytes", target)
     assert result.bytes_written == 256
     assert len(fs.read_bytes(target)) == 256
     fs.write_file(target, "kept")

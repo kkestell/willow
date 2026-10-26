@@ -1,0 +1,1 @@
+local_branch_uninitialized.wlo:5:11: error: variable 'value' may be used before assignment

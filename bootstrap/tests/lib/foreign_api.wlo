@@ -8,17 +8,17 @@ extern def strtod(text: ptr, end: ptr) -> float
 extern def snprintf(buffer: ptr, size: int, format: ptr, ...) -> cint
 
 def check():
-    library = core.dlopen(__ptr(__word(0)), 2)
+    var library = core.dlopen(__ptr(__word(0)), 2)
     assert not __addr_is_null(library)
-    symbols: dict[str, ptr] = {}
+    var symbols: dict[str, ptr] = {}
     for name in ["strcmp", "strlen", "malloc", "free", "strtod", "snprintf"]:
         symbols[name] = core.dlsym(library, core.str_bytes(name))
         assert not __addr_is_null(symbols[name])
     assert __ccall(strcmp, symbols["strcmp"], core.str_bytes("a"), core.str_bytes("b")) < 0
     assert __ccall(strlen, symbols["strlen"], core.str_bytes("abc")) == 3
     assert __ccall(strtod, symbols["strtod"], core.str_bytes("2.5"), __ptr(__word(0))) == 2.5
-    buffer = __ccall(malloc, symbols["malloc"], 64)
-    count = __ccall(snprintf, symbols["snprintf"], buffer, 64, core.str_bytes("%ld %.1f"), -7, 2.5)
+    var buffer = __ccall(malloc, symbols["malloc"], 64)
+    var count = __ccall(snprintf, symbols["snprintf"], buffer, 64, core.str_bytes("%ld %.1f"), -7, 2.5)
     assert core.str_from_bytes(buffer, count) == "-7 2.5"
     __ccall(free, symbols["free"], buffer)
     core.dlclose(library)

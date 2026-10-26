@@ -1,14 +1,14 @@
 # https://rosettacode.org/wiki/Generator/Exponential
 
 def power(n: int, m: int) -> int:
-    result = 1
+    var result = 1
     for i in range(m):
         result = result * n
     return result
 
 # The m'th powers of 0, 1, 2, and so on.
 def powers(m: int) -> Iterator[int]:
-    n = 0
+    var n = 0
     while true:
         yield power(n, m)
         n = n + 1
@@ -16,7 +16,7 @@ def powers(m: int) -> Iterator[int]:
 # The values that `excluded` lacks. Both sequences increase, so `excluded`
 # advances only as far as the current value.
 def without(values: Iterator[int], excluded: Iterator[int]) -> Generator[int]:
-    skip = next(excluded)
+    var skip = next(excluded)
     for value in values:
         while skip < value:
             skip = next(excluded)
@@ -24,7 +24,7 @@ def without(values: Iterator[int], excluded: Iterator[int]) -> Generator[int]:
             yield value
 
 def main():
-    squares = without(powers(2), powers(3))
+    var squares = without(powers(2), powers(3))
     for i in range(20):
         next(squares)
     for i in range(10):

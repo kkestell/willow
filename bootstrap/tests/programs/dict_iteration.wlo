@@ -1,7 +1,8 @@
 def main():
-    key: int | str = "before"
-    d = {1: 10, 2: 20, 3: 30}
-    for key, value in d.items():
+    var key: int | str = "before"
+    var d = {1: 10, 2: 20, 3: 30}
+    for key_item, value in d.items():
+        key = key_item
         if key == 2:
             continue
         print(key + value)
@@ -9,7 +10,7 @@ def main():
             break
     print(key)
 
-    maybe: dict[int, int | none] = {1: 10, 2: none}
+    var maybe: dict[int, int | none] = {1: 10, 2: none}
     for index, item in maybe.items():
         if index == 1:
             item = 11

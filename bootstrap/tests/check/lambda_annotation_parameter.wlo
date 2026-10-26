@@ -1,2 +1,2 @@
 def main():
-    f: (int | none) -> int = (x: int) => x
+    var f: (int | none) -> int = (x: int) => x

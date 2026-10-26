@@ -1,1 +1,1 @@
-unpack_non_tuple.wlo:2:5: error: cannot unpack a value of type list[int]
+unpack_non_tuple.wlo:2:9: error: cannot unpack a value of type list[int]

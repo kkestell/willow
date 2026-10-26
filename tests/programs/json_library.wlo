@@ -17,7 +17,7 @@ def kind(value: json.Json) -> str:
 
 def round_trip(text: str):
     try:
-        value = json.parse(text)
+        var value = json.parse(text)
         print(kind(value) + " " + json.dump(value))
     except json.JsonError as error:
         print(error.message)

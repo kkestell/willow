@@ -1,7 +1,7 @@
 # https://rosettacode.org/wiki/Hailstone_sequence
 
 def hailstone(n: int) -> list[int]:
-    sequence = [n]
+    var sequence = [n]
     while n != 1:
         if n % 2 == 0:
             n = n // 2
@@ -11,14 +11,14 @@ def hailstone(n: int) -> list[int]:
     return sequence
 
 def main():
-    sequence = hailstone(27)
+    var sequence = hailstone(27)
     print(f"hailstone(27) has {len(sequence)} elements")
     print(f"it starts {sequence[0]}, {sequence[1]}, {sequence[2]}, {sequence[3]}")
     print(f"and ends {sequence[-4]}, {sequence[-3]}, {sequence[-2]}, {sequence[-1]}")
-    longest = 1
-    longest_length = 1
+    var longest = 1
+    var longest_length = 1
     for n in range(1, 100000):
-        length = len(hailstone(n))
+        var length = len(hailstone(n))
         if length > longest_length:
             longest = n
             longest_length = length

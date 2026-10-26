@@ -1,22 +1,22 @@
-abs_argument.wlo:2:9: error: 'abs' cannot be applied to str
+abs_argument.wlo:2:13: error: 'abs' cannot be applied to str
 status 1
-all_argument.wlo:2:9: error: 'all' cannot be applied to list[int]
+all_argument.wlo:2:13: error: 'all' cannot be applied to list[int]
 status 1
 atan2_argument.wlo:3:27: error: expected float, received int
 status 1
-bytes_keyword.wlo:3:25: error: 'startswith' has no parameter 'sub'
+bytes_keyword.wlo:3:29: error: 'startswith' has no parameter 'sub'
 status 1
-bytes_static.wlo:2:15: error: type 'bytes' has no static method 'frombytes'
+bytes_static.wlo:2:19: error: type 'bytes' has no static method 'frombytes'
 status 1
 choice_inference.wlo:4:7: error: cannot infer type parameter 'T' of 'choice'
 status 1
-choice_result.wlo:4:16: error: expected str, received int
+choice_result.wlo:4:20: error: expected str, received int
 status 1
 constant_assignment.wlo:3:5: error: module 'math' cannot be used as a value
 status 1
-min_arguments.wlo:2:9: error: 'min' cannot be applied to int and float
+min_arguments.wlo:2:13: error: 'min' cannot be applied to int and float
 status 1
-semaphore_argument.wlo:4:23: error: expected int, received str
+semaphore_argument.wlo:4:27: error: expected int, received str
 status 1
 split_argument.wlo:2:15: error: expected str | none, received int
 status 1
@@ -24,7 +24,7 @@ split_keyword.wlo:2:15: error: 'split' has no parameter 'limit'
 status 1
 splitlines_argument.wlo:2:20: error: expected bool, received int
 status 1
-sum_callable.wlo:2:34: error: 'sum' expects 1 argument, received 2
+sum_callable.wlo:2:38: error: 'sum' expects 1 argument, received 2
 status 1
 wait_timeout.wlo:4:12: error: expected float | none, received int
 status 1

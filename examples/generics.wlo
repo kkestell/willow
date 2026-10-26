@@ -30,7 +30,7 @@ class User:
 
 # The bound `T: Named` lets the body call `name` on any `T`.
 def longest[T: Named](items: list[T]) -> T:
-    best = items[0]
+    var best = items[0]
     for item in items:
         if len(item.name()) > len(best.name()):
             best = item
@@ -41,14 +41,14 @@ def main():
     print(first(["x", "y"]))
     print(first[float]([2.5]))
 
-    word, number = swap((1, "one"))
+    var word, number = swap((1, "one"))
     print(f"{word} {number}")
 
-    numbers = Stack[int]([])
+    var numbers = Stack[int]([])
     numbers.push(1)
     numbers.push(2)
     print(numbers.pop())
     print(numbers.size())
 
-    users = [User("ada"), User("grace")]
+    var users = [User("ada"), User("grace")]
     print(longest(users).login)

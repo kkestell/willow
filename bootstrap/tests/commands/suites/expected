@@ -27,7 +27,7 @@ PASS tests/suites/async/test_groups.wlo test_double
 FAIL tests/suites/async/test_groups.wlo test_halve_odd
   tests/suites/async/test_groups.wlo:9:9: error: ValueError: odd
     in halve at tests/suites/async/test_groups.wlo:9:9
-    in task started at tests/suites/async/test_groups.wlo:19:15
+    in task started at tests/suites/async/test_groups.wlo:20:15
   test did not return (exit status 1)
 1 passed, 1 failed
 status 1

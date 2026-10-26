@@ -46,7 +46,7 @@ def relay(value: int | bool | none) -> int | bool | none:
     return value
 
 def main():
-    i = 0
+    var i = 0
     while i < 5:
         print(describe(pick(i)))
         i = i + 1
@@ -57,18 +57,18 @@ def main():
     print(both(none, 2))
     print(first(none, 7))
     print(first(5, none))
-    kept = relay(true)
+    var kept = relay(true)
     if kept is bool:
         print(kept)
     print(relay(none) is none)
-    value: int | str = 5
+    var value: int | str = 5
     value = value + 1
     if value is int:
         print(value)
     value = "six"
     print(value + "!")
-    total = 0
-    n: int | none = 0
+    var total = 0
+    var n: int | none = 0
     while n is not none:
         total = total + n
         if n == 4:

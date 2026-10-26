@@ -1,0 +1,4 @@
+def f(value: int):
+    var value = 2
+def main():
+    f(1)

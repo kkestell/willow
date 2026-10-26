@@ -1,2 +1,2 @@
 def main():
-    x = float(1.5)
+    var x = float(1.5)

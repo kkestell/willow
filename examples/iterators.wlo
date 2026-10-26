@@ -17,7 +17,7 @@ def main():
     for n in Countdown(3):
         print(n)
 
-    numbers = iter([10, 20])
+    var numbers = iter([10, 20])
     print(next(numbers))
     print(next(numbers))
     try:
@@ -25,7 +25,7 @@ def main():
     except StopIteration:
         print("exhausted")
 
-    ordered: list[str] = []
+    var ordered: list[str] = []
     for n in sorted(Countdown(4)):
         ordered.append(str(n))
     print(" ".join(ordered))

@@ -7,7 +7,7 @@ def add_all(items: list[int], extra: list[int]):
         items.append(item)
 
 def main():
-    totals: dict[str, int] = {}
+    var totals: dict[str, int] = {}
     for word in ["a", "b", "a"]:
         if word in totals:
             totals[word] = totals[word] + 1
@@ -19,31 +19,31 @@ def main():
     for i in range(3, 0, -1):
         print(i)                    # 3, 2, 1
 
-    maybe: list[int | none] = [1, none, 3]
+    var maybe: list[int | none] = [1, none, 3]
     print(len(maybe))
     print(maybe[1])
     print(none in maybe)
     print(2 not in maybe)
-    scores: dict[str, int | none] = {"ada": none}
+    var scores: dict[str, int | none] = {"ada": none}
     print(scores.get("ada"))
     print(scores.get("alan"))
     print("ada" in scores)
     print("alan" in scores)
     print(len(scores))
 
-    ages = {"ada": 36, "alan": 41, "grace": 85}
+    var ages = {"ada": 36, "alan": 41, "grace": 85}
     ages["alan"] = 42
     print(ages.pop("ada"))
     ages["ada"] = 37
     for name in ages:
         print(name)
         print(ages[name])
-    repeated = {1: "first", 2: "second", 1: "again"}
+    var repeated = {1: "first", 2: "second", 1: "again"}
     for key in repeated:
         print(key)
         print(repeated[key])
 
-    numbers = [1, 2]
+    var numbers = [1, 2]
     for n in numbers:
         if n < 4:
             numbers.append(n + 2)
@@ -54,8 +54,9 @@ def main():
         ages[name] = 0
     print(ages["grace"])
 
-    last = 0
-    for last in range(5):
+    var last = 0
+    for last_item in range(5):
+        last = last_item
         pass
     print(last)
     for i in range(2, 5):
@@ -67,22 +68,22 @@ def main():
     for i in range(5, 1):
         print(i)
 
-    alias = numbers
+    var alias = numbers
     alias.append(99)
     add_all(numbers, [7, 8])
     print(len(numbers))
     print(numbers[len(numbers) - 1])
 
-    order = [trace("first", 1), trace("second", 2)]
+    var order = [trace("first", 1), trace("second", 2)]
     order[trace("index", 0)] = trace("value", 10)
     print(order[0])
-    keyed = {trace("k1", 1): trace("v1", 1), trace("k2", 2): trace("v2", 2)}
+    var keyed = {trace("k1", 1): trace("v1", 1), trace("k2", 2): trace("v2", 2)}
     print(len(keyed))
 
-    grid: list[list[int]] = [[], [1]]
+    var grid: list[list[int]] = [[], [1]]
     grid[0].append(5)
     print(grid[0][0] + grid[1][0])
-    empty: dict[int, list[str]] = {}
+    var empty: dict[int, list[str]] = {}
     empty[3] = []
     empty[3].append("x")
     print(empty[3][0])

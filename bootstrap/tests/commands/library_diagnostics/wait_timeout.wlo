@@ -1,4 +1,4 @@
 import subprocess
 def main():
-    p = subprocess.spawn(['x'])
+    var p = subprocess.spawn(['x'])
     p.wait(1)

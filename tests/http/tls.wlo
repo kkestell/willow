@@ -9,10 +9,10 @@ def rejected(url: str, ca_file: str | none):
         assert error.message.startswith("cannot fetch " + url + ": ")
 
 def main():
-    port = sys.args()[0]
-    directory = sys.args()[1]
-    url = "https://localhost:" + port + "/hello.txt"
-    response = http.request("GET", url, ca_file=directory + "/cert.pem", timeout=2.0)
+    var port = sys.args()[0]
+    var directory = sys.args()[1]
+    var url = "https://localhost:" + port + "/hello.txt"
+    var response = http.request("GET", url, ca_file=directory + "/cert.pem", timeout=2.0)
     assert response.status == 200 and response.body.decode() == "secure hello\n"
     rejected(url, none)
     rejected("https://127.0.0.1:" + port + "/hello.txt", directory + "/cert.pem")

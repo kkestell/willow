@@ -2,13 +2,13 @@ class Box:
     n: int
 
 def ints(xs: list[int]) -> str:
-    parts: list[str] = []
+    var parts: list[str] = []
     for x in xs:
         parts.append(str(x))
     return "[" + ", ".join(parts) + "]"
 
 def floats(xs: list[float]) -> str:
-    parts: list[str] = []
+    var parts: list[str] = []
     for x in xs:
         parts.append(str(x))
     return "[" + ", ".join(parts) + "]"
@@ -39,16 +39,16 @@ def main():
         print(s[-100:100] + "|" + s[10:] + "|" + s[4:2] + "|" + s[3:3] + "|" + s[:])
 
     # List negative indexes and slices.
-    items = [1, 2, 3, 4]
+    var items = [1, 2, 3, 4]
     print(items[-1])
     items[-2] = 30
     print(ints(items))
     print(ints(items[1:3]) + ints(items[:-1]) + ints(items[5:]) + ints(items[3:1]))
-    copy = items[:]
+    var copy = items[:]
     copy.append(5)
     print(ints(items) + " " + ints(copy))
-    boxes = [Box(1), Box(2)]
-    shared = boxes[:]
+    var boxes = [Box(1), Box(2)]
+    var shared = boxes[:]
     shared[0].n = 10
     print(boxes[0].n)
 
@@ -56,24 +56,24 @@ def main():
     print(text("receiver", "abcdef")[show("start", 1):show("stop", -1)])
 
     # Joining a slice takes the slice's bounds and evaluation order.
-    letters = ["a", "b", "c", "d"]
+    var letters = ["a", "b", "c", "d"]
     print("-".join(letters[1:3]) + "|" + "".join(letters[-3:]) + "|" + ",".join(letters[:-5]) + "|" + "".join(letters[3:1]) + "|" + "".join(letters[:]))
     print(text("separator", "+").join(listed("list", letters)[show("start", 1):show("stop", -1)]))
 
     # Sorting.
-    nums = [3, -1, 2, 2, 0]
+    var nums = [3, -1, 2, 2, 0]
     print(ints(sorted(nums)) + ints(sorted(nums, true)) + ints(sorted(nums, reverse=true)) + ints(nums))
     nums.sort()
     print(ints(nums))
     nums.sort(reverse=true)
     print(ints(nums))
-    words = ["éclair", "apple", "Zebra", "banana", "ß"]
+    var words = ["éclair", "apple", "Zebra", "banana", "ß"]
     print(strs(sorted(words)))
-    inf = float("inf")
+    var inf = float("inf")
     print(floats(sorted([2.5, -inf, inf, -0.5])))
     print(floats(sorted([0.0, -0.0])) + floats(sorted([-0.0, 0.0])))
     print(floats(sorted([0.0, -0.0], reverse=true)) + floats(sorted([-0.0, 0.0], reverse=true)))
-    values = [1.0, float("nan"), 0.5]
+    var values = [1.0, float("nan"), 0.5]
     try:
         values.sort()
     except ValueError as e:
@@ -82,7 +82,7 @@ def main():
 
     # Case conversion.
     print("straße".upper() + " " + "ﬁ".upper() + " " + "Hello, World".upper() + " " + "ABC".lower())
-    dotted = "İ".lower()
+    var dotted = "İ".lower()
     print(dotted + " " + str(len(dotted)))
     print("ΟΔΥΣΣΕΥΣ".lower() + " " + "Σ".lower() + " " + "ΑΣ'".lower() + " " + "ΑΣΑ".lower() + " " + "ΑΣ.Α".lower())
     print("ǅ".lower() + "ǅ".upper())
@@ -92,13 +92,13 @@ def main():
         print("[" + "é→".ljust(width) + "][" + "é→".rjust(width) + "]")
 
     # Format specifications.
-    name = "Ada"
-    count = 7
-    ratio = 0.125
+    var name = "Ada"
+    var count = 7
+    var ratio = 0.125
     print(f"{name:<8}|{count:>5d}|{ratio:>7.2f}")
     print(f"[{name:>6}][{name:^6}][{name:^7}][{name:6s}][{count:<4d}][{count:^5}][{ratio:<8.3f}]")
     print(f"[{0.5:.0f}][{1.5:.0f}][{2.5:.0f}][{2.675:.2f}][{ratio:f}][{1e20:.1f}]")
-    nan = float("nan")
+    var nan = float("nan")
     print(f"[{nan:6f}][{inf:>6.1f}][{-inf:<6}][{-0.0:6}][{-0.0:.1f}]")
     print(f"[{'longer':3}][{12345:2d}][{true:6}][{none:6}][{ratio:9}][{count:}]")
     print(held(42) + held("ab"))

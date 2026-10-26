@@ -1,2 +1,2 @@
 def main():
-    x = 007
+    var x = 007

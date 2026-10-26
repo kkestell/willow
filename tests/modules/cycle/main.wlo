@@ -13,13 +13,13 @@ def is_even(n: int) -> bool:
     return util.is_odd(n - 1)
 
 def main():
-    s = shapes.square(3)
+    var s = shapes.square(3)
     print(shapes.area(s))
     print(is_even(10))
     print(util.is_odd(7))
     print(util.call_back(4))
-    t: Tag = util.tagged("x")
+    var t: Tag = util.tagged("x")
     print(t.label)
     print(shapes.main())
-    squares: list[shapes.Square] = [s, shapes.Square(2)]
+    var squares: list[shapes.Square] = [s, shapes.Square(2)]
     print(shapes.area(squares[1]))

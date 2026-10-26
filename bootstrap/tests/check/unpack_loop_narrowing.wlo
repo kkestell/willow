@@ -1,5 +1,6 @@
 def main():
-    value: int | none = 1
+    var value: int | none = 1
+    var other: int
     while false:
         value, other = (none, 0)
     print(value + 1)

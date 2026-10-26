@@ -1,0 +1,7 @@
+import aio
+async def task() -> int:
+    return 1
+async def main():
+    async with aio.TaskGroup() as group:
+        var handle = group.start(task())
+    print(handle.result())

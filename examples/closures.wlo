@@ -1,11 +1,10 @@
 # Closures: nested functions and lambdas capture variables from the enclosing
-# function, and `nonlocal` rebinds them.
+# lexical scopes, sharing reads and writes to each binding.
 
 def counter() -> () -> int:
-    count = 0
+    var count = 0
 
     def increment() -> int:
-        nonlocal count
         count = count + 1
         return count
 
@@ -15,20 +14,20 @@ def multiplier(factor: int) -> (int) -> int:
     return (n) => n * factor
 
 def main():
-    tick = counter()
+    var tick = counter()
     tick()
     tick()
     print(tick())
 
     # Each call to `counter` creates a separate `count`.
-    other = counter()
+    var other = counter()
     print(other())
 
-    triple = multiplier(3)
+    var triple = multiplier(3)
     print(triple(7))
 
     # A closure shares the variable, so it sees later assignments.
-    message = "before"
+    var message = "before"
 
     def show() -> str:
         return message

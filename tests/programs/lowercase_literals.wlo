@@ -10,8 +10,8 @@ def log(message: str) -> none:
     print(message)
 
 def main():
-    flag: bool = true
-    missing = find([1, 2], 3)
+    var flag: bool = true
+    var missing = find([1, 2], 3)
     print(flag)
     print(not flag)
     print(missing)

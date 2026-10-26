@@ -1,5 +1,5 @@
 # https://rosettacode.org/wiki/Tokenize_a_string
 
 def main():
-    words = "Hello,How,Are,You,Today".split(",")
+    var words = "Hello,How,Are,You,Today".split(",")
     print(".".join(words))

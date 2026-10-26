@@ -6,7 +6,7 @@ def describe(a: str, b: str) -> str:
     return a + " == " + b
 
 def repeat(text: str, count: int) -> str:
-    result = ""
+    var result = ""
     while count > 0:
         result = result + text
         count = count - 1

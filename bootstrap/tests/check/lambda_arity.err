@@ -1,1 +1,1 @@
-lambda_arity.wlo:2:23: error: expected (int) -> int, received a lambda with 2 parameters
+lambda_arity.wlo:2:27: error: expected (int) -> int, received a lambda with 2 parameters

@@ -1,5 +1,5 @@
 import textkit.table
 
 def test_columns_align():
-    text = textkit.table.render(["name", "n"], [["tea", "12"], ["scones", "3"]])
+    var text = textkit.table.render(["name", "n"], [["tea", "12"], ["scones", "3"]])
     assert text == "name    n\ntea     12\nscones  3", text

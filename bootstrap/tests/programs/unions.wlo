@@ -43,8 +43,8 @@ def positive(value: int | none) -> bool:
     return false
 
 def sum_nodes(head: Node | none) -> int:
-    total = 0
-    node = head
+    var total = 0
+    var node = head
     while node is not none:
         total = total + node.value
         node = node.next
@@ -76,13 +76,13 @@ def main():
     print(sum_nodes(none))
     print(first_word("hello there"))
 
-    value: int | str = 5
+    var value: int | str = 5
     value = value + 1
     print(value)
     value = "six"
     print(value + "!")
 
-    maybe: int | none = none
+    var maybe: int | none = none
     print(maybe)
     maybe = 7
     print(maybe)
@@ -90,11 +90,11 @@ def main():
     print(same(1, 1.0))
     print(same(1, 1))
     print(same(2.5, 2.5))
-    mixed: list[int | str] = [1, "two"]
+    var mixed: list[int | str] = [1, "two"]
     print(mixed[0])
     print(mixed[1])
     print("two" in mixed)
-    item = mixed[0]
+    var item = mixed[0]
     if item is int:
         print(item * 10)
     print(f"{maybe} {item}")

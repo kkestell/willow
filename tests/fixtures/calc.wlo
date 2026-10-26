@@ -33,9 +33,9 @@ class Token:
 
 # Splits a line into numbers and operators, ending with an empty token.
 def tokenize(line: str) -> list[Token]:
-    tokens: list[Token] = []
-    number = ""
-    column = 0
+    var tokens: list[Token] = []
+    var number = ""
+    var column = 0
     for ch in line + " ":
         column = column + 1
         if ch in "0123456789.":
@@ -69,30 +69,30 @@ class Parser:
         return self.tokens[self.index].text
 
     def take() -> Token:
-        token = self.tokens[self.index]
+        var token = self.tokens[self.index]
         if token.text != "":
             self.index = self.index + 1
         return token
 
     def sum() -> Expr:
-        left = self.product()
+        var left = self.product()
         while self.peek() == "+" or self.peek() == "-":
             left = Binary(operator(self.take().text), left, self.product())
         return left
 
     def product() -> Expr:
-        left = self.unary()
+        var left = self.unary()
         while self.peek() == "*" or self.peek() == "/":
             left = Binary(operator(self.take().text), left, self.unary())
         return left
 
     def unary() -> Expr:
-        token = self.take()
+        var token = self.take()
         if token.text == "-":
             return Negate(self.unary())
         if token.text == "(":
-            inner = self.sum()
-            closing = self.take()
+            var inner = self.sum()
+            var closing = self.take()
             if closing.text != ")":
                 raise ParseError("expected ')'", closing.column)
             return inner
@@ -102,8 +102,8 @@ class Parser:
             raise ParseError("expected a number", token.column)
 
 def parse(line: str) -> Expr:
-    parser = Parser(tokenize(line))
-    expr = parser.sum()
+    var parser = Parser(tokenize(line))
+    var expr = parser.sum()
     if parser.peek() != "":
         raise ParseError(f"unexpected '{parser.peek()}'", parser.take().column)
     return expr
@@ -113,8 +113,8 @@ def evaluate(expr: Expr) -> float:
         return expr.value
     if expr is Negate:
         return -evaluate(expr.operand)
-    left = evaluate(expr.left)
-    right = evaluate(expr.right)
+    var left = evaluate(expr.left)
+    var right = evaluate(expr.right)
     if expr.operator == Operator.ADD:
         return left + right
     else if expr.operator == Operator.SUBTRACT:
@@ -124,13 +124,13 @@ def evaluate(expr: Expr) -> float:
     return left / right
 
 def main():
-    prompt = terminal.isatty(io.stdin())
-    out = io.stdout()
+    var prompt = terminal.isatty(io.stdin())
+    var out = io.stdout()
     while true:
         if prompt:
             out.write_text("> ")
             out.flush()
-        line = input()
+        var line = input()
         if line is none:
             break
         if line.strip() == "":

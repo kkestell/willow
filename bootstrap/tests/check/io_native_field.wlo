@@ -1,5 +1,5 @@
 import io
 
 def main():
-    f = io.stdin()
+    var f = io.stdin()
     print(f._fd)

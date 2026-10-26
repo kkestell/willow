@@ -24,11 +24,11 @@ def num(flag: int) -> int | float | bool | str | none:
     return "héllo"
 
 def main():
-    i = 0
+    var i = 0
     while i < 12:
         print(num(i))
-        j = 0
-        line = ""
+        var j = 0
+        var line = ""
         while j < 12:
             if num(i) == num(j):
                 line = line + "="
@@ -37,12 +37,12 @@ def main():
             j = j + 1
         print(line)
         i = i + 1
-    maybe: int | none = none
+    var maybe: int | none = none
     print(maybe is none)
     print(maybe is not none)
     maybe = 7
     print(maybe == 7)
     print(7 != maybe)
-    text: str | none = "a"
+    var text: str | none = "a"
     print(text == "a")
     print(text)

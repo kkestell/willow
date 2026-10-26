@@ -6,6 +6,6 @@ class Point:
         return Point(self.x + dx, self.y)
 
 def distance_squared(a: Point, b: Point) -> float:
-    dx = a.x - b.x
-    dy = a.y - b.y
+    var dx = a.x - b.x
+    var dy = a.y - b.y
     return dx * dx + dy * dy

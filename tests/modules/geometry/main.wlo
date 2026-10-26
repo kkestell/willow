@@ -1,7 +1,7 @@
 import geometry
 
 def main():
-    origin = geometry.Point(0.0, 0.0)
-    corner = geometry.Point(3.0, 4.0)
+    var origin = geometry.Point(0.0, 0.0)
+    var corner = geometry.Point(3.0, 4.0)
     print(geometry.distance_squared(origin, corner))    # 25.0
     print(corner.moved(1.0).x)                          # 4.0

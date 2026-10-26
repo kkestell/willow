@@ -24,11 +24,11 @@ class ParseError(Exception):
         return f"line {self.line}: {self.message}"
 
 def shadowed(counter: Counter) -> int:
-    Counter = 10
+    var Counter = 10
     return counter.add(Counter)
 
 def main():
-    counter = Counter()
+    var counter = Counter()
     counter.add()
     print(counter.add(5))           # 6
     print(counter.add_twice(2))     # 10

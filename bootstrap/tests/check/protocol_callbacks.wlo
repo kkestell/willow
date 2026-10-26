@@ -23,9 +23,9 @@ def widen(value: Narrow) -> Wide:
     return value
 
 def main():
-    callback: (Source) -> int | none = read
+    var callback: (Source) -> int | none = read
     print(callback(Source(7)))
-    factory: (int) -> Reader = source
+    var factory: (int) -> Reader = source
     print(factory(8).get())
     widen(Source(9))
     widen(none)

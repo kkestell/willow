@@ -19,38 +19,38 @@ class Args:
     _kinds: dict[str, str]
 
     def _get(name: str, kind: str) -> _Value:
-        actual = self._kinds.get(name)
+        var actual = self._kinds.get(name)
         if actual is none:
             raise ValueError(f"no argument named '{name}'")
         if actual != kind:
-            article = "a"
+            var article = "a"
             if kind == "int":
                 article = "an"
             raise ValueError(f"'{name}' is not {article} {kind} argument")
         return self._values[name]
 
     def get_str(name: str) -> str:
-        value = self._get(name, "str")
+        var value = self._get(name, "str")
         assert value is str
         return value
 
     def get_int(name: str) -> int:
-        value = self._get(name, "int")
+        var value = self._get(name, "int")
         assert value is int
         return value
 
     def get_float(name: str) -> float:
-        value = self._get(name, "float")
+        var value = self._get(name, "float")
         assert value is float
         return value
 
     def get_bool(name: str) -> bool:
-        value = self._get(name, "bool")
+        var value = self._get(name, "bool")
         assert value is bool
         return value
 
     def get_list(name: str) -> list[str]:
-        value = self._get(name, "list")
+        var value = self._get(name, "list")
         assert value is list
         return value[:]
 
@@ -66,14 +66,14 @@ def _valid_name(name: str) -> bool:
     return true
 
 def _rows(lines: list[str], title: str, rows: list[tuple[str, str]]):
-    width = 0
+    var width = 0
     for left, help in rows:
         if len(left) > width:
             width = len(left)
     lines.append("")
     lines.append(title)
     for left, help in rows:
-        line = "  " + left
+        var line = "  " + left
         if help != "":
             line = "  " + left.ljust(width + 2) + help
         lines.append(line)
@@ -87,8 +87,8 @@ class Parser:
     _has_rest: bool
 
     def _add(entry: _Entry):
-        name = entry.name
-        short = entry.short
+        var name = entry.name
+        var short = entry.short
         if not _valid_name(name):
             raise ValueError(f"invalid name '{name}'")
         if short is not none:
@@ -131,7 +131,7 @@ class Parser:
         self._add(_Entry(name, "rest", "", help, none, false))
 
     def _usage() -> str:
-        parts = [f"usage: {self._prog} [options]"]
+        var parts = [f"usage: {self._prog} [options]"]
         for entry in self._entries:
             if entry.kind == "positional":
                 parts.append(entry.name)
@@ -140,28 +140,29 @@ class Parser:
         return " ".join(parts)
 
     def help() -> str:
-        lines = [self._usage()]
+        var lines = [self._usage()]
         if self._description != "":
             lines.append("")
             lines.append(self._description)
-        arguments: list[tuple[str, str]] = []
-        options = [("-h, --help", "show this help and exit")]
+        var arguments: list[tuple[str, str]] = []
+        var options = [("-h, --help", "show this help and exit")]
         for entry in self._entries:
             if entry.kind == "positional":
                 arguments.append((entry.name, entry.help))
             else if entry.kind == "rest":
                 arguments.append((entry.name + " ...", entry.help))
             else:
-                left = ""
-                short = entry.short
+                var left = ""
+                var short = entry.short
                 if short is not none:
                     left = f"-{short}, "
                 left = left + "--" + entry.name
-                help = entry.help
+                var help = entry.help
                 if entry.kind != "flag":
                     left = left + " " + entry.name.upper().replace("-", "_")
-                    note = ""
-                    value = entry.default
+                    var note = ""
+                    var value = entry.default
+                    var default: str
                     if value is str:
                         default = value
                     else if value is int:
@@ -198,19 +199,19 @@ class Parser:
             pass
         except OverflowError:
             pass
-        expected = "a number"
+        var expected = "a number"
         if entry.kind == "int":
             expected = "an integer"
         raise self._error(f"option '--{entry.name}' expects {expected}, received '{text}'")
 
     def parse(args: list[str]) -> Args:
-        values: dict[str, _Value] = {}
-        kinds: dict[str, str] = {}
-        positionals: list[str] = []
-        options_done = false
-        i = 0
+        var values: dict[str, _Value] = {}
+        var kinds: dict[str, str] = {}
+        var positionals: list[str] = []
+        var options_done = false
+        var i = 0
         while i < len(args):
-            arg = args[i]
+            var arg = args[i]
             i = i + 1
             if options_done or arg == "-" or not arg.startswith("-"):
                 positionals.append(arg)
@@ -219,11 +220,11 @@ class Parser:
             else if arg == "--help" or arg == "-h":
                 raise HelpRequested(self.help())
             else:
-                entry: _Entry | none = none
-                value: str | none = none
+                var entry: _Entry | none = none
+                var value: str | none = none
                 if arg.startswith("--"):
-                    name = arg[2:]
-                    equal = name.find("=")
+                    var name = arg[2:]
+                    var equal = name.find("=")
                     if equal is not none:
                         value = name[equal + 1:]
                         name = name[:equal]
@@ -245,9 +246,9 @@ class Parser:
                         value = args[i]
                         i = i + 1
                     values[entry.name] = self._convert(entry, value)
-        next_positional = 0
+        var next_positional = 0
         for entry in self._entries:
-            kind = entry.kind
+            var kind = entry.kind
             if kind == "positional":
                 if next_positional == len(positionals):
                     raise self._error(f"missing argument '{entry.name}'")

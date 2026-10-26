@@ -32,7 +32,7 @@ def tak_float(x: float, y: float, z: float) -> float:
     return z
 
 def main():
-    n = int(sys.args()[0])
+    var n = int(sys.args()[0])
     print(f"Ack(3,{n + 1}): {ack(3, n + 1)}")
     print(f"Fib({27.0 + float(n):.1f}): {fib_float(27.0 + float(n)):.1f}")
     print(f"Tak({3 * n},{2 * n},{n}): {tak(3 * n, 2 * n, n)}")

@@ -1,1 +1,1 @@
-lambda_annotation_unknown.wlo:2:13: error: unknown type 'Missing'
+lambda_annotation_unknown.wlo:2:17: error: unknown type 'Missing'

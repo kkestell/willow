@@ -15,7 +15,9 @@ async def take_second_recv(connection: aio.Connection):
 
 async def main():
     # The §14 echo example, with a task group.
-    with aio.listen("127.0.0.1", 0) as listener:
+    var listener: aio.Listener
+    with aio.listen("127.0.0.1", 0) as listener_item:
+        listener = listener_item
         async with aio.task_group() as group:
             group.start(echo(listener))
             with await aio.connect("127.0.0.1", listener.local_port()) as client:
@@ -23,9 +25,10 @@ async def main():
                 print((await client.recv(1024)).decode())
 
     # One echo without a group, then the end of the peer's side.
-    with aio.listen("127.0.0.1", 0) as listener:
+    with aio.listen("127.0.0.1", 0) as listener_item:
+        listener = listener_item
         print(listener.local_port() > 0)
-        client = await aio.connect("127.0.0.1", listener.local_port())
+        var client = await aio.connect("127.0.0.1", listener.local_port())
         await client.sendall("ping\n".encode())
         await echo(listener)
         print((await client.recv(1024)).decode())
@@ -34,7 +37,7 @@ async def main():
 
         # A live pair for timeouts, closing, and validation.
         client = await aio.connect("127.0.0.1", listener.local_port(), timeout=5.0)
-        server = await listener.accept(timeout=5.0)
+        var server = await listener.accept(timeout=5.0)
         try:
             await server.recv(10, timeout=0.1)
         except TimeoutError as t:
@@ -71,9 +74,11 @@ async def main():
             print(v.message)
 
     # A second recv in the same direction is refused, and the first completes.
-    with aio.listen("127.0.0.1", 0) as listener:
-        client = await aio.connect("127.0.0.1", listener.local_port())
-        server = await listener.accept(timeout=5.0)
+    with aio.listen("127.0.0.1", 0) as listener_item:
+        listener = listener_item
+        var client = await aio.connect("127.0.0.1", listener.local_port())
+        var server = await listener.accept(timeout=5.0)
+        var first: aio.Task[str]
         async with aio.task_group() as group:
             first = group.start(read(server))
             group.start(take_second_recv(server))
@@ -84,9 +89,10 @@ async def main():
         server.close()
 
     # Close in another task wakes the pending recv with the closed handle.
-    with aio.listen("127.0.0.1", 0) as listener:
-        client = await aio.connect("127.0.0.1", listener.local_port())
-        server = await listener.accept(timeout=5.0)
+    with aio.listen("127.0.0.1", 0) as listener_item:
+        listener = listener_item
+        var client = await aio.connect("127.0.0.1", listener.local_port())
+        var server = await listener.accept(timeout=5.0)
         try:
             async with aio.task_group() as group:
                 group.start(read(server))

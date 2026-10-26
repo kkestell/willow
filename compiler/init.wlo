@@ -84,27 +84,25 @@ class ParseError(Exception):
     line: int
 
 def parse(line: str, number: int) -> Reading:
-    parts = line.split(",")
+    var parts = line.split(",")
     if len(parts) != 2:
         raise ParseError("expected name,value", number)
-    value = float(parts[1].strip())
-    reading = Reading(parts[0].strip(), value)
+    var value = float(parts[1].strip())
+    var reading = Reading(parts[0].strip(), value)
     if value > 100.0:
         reading.level = Level.HIGH
     return reading
 
 def summarize(readings: list[Reading]) -> dict[str, float]:
-    totals: dict[str, float] = {}
+    var totals: dict[str, float] = {}
     for reading in readings:
-        previous = totals.get(reading.name)
-        if previous is none:
-            previous = 0.0
+        var previous = totals.get(reading.name, 0.0)
         totals[reading.name] = previous + reading.value
     return totals
 
 def main():
-    readings: list[Reading] = []
-    number = 0
+    var readings: list[Reading] = []
+    var number = 0
     for line in sys.args():
         number = number + 1
         try:
@@ -112,7 +110,7 @@ def main():
         except ParseError as error:
             sys.eprint(f"argument {error.line}: {error.message}")
             sys.exit(1)
-    totals = summarize(readings)
+    var totals = summarize(readings)
     for name in totals:
         print(f"{name:<10}{totals[name]:>8.1f}")
 ```
@@ -125,9 +123,10 @@ Rules that differ from Python:
   unions such as `int | none`, function types such as `(int) -> str`, classes,
   enums, and protocols. Generic functions and classes take type parameters:
   `def first[T](items: list[T]) -> T | none:`.
-- A local variable takes the type of its first assignment. Annotate it when
-  the value does not determine the type: `rows: list[str] = []`,
-  `best: str | none = none`.
+- `var` declares a local variable: `var count = 0`,
+  `var rows: list[str] = []`, or `var best: str | none = none`.
+  An annotation allows a declaration without an initializer: `var count: int`.
+  Each block has a lexical scope; assignment updates an existing binding.
 - Conditions must be `bool`. `if count:` and `if name:` are type errors.
 - `==` and `!=` compare scalars only. Lists, dictionaries, and class values
   cannot be compared with `==`.
@@ -161,7 +160,7 @@ Rules that differ from Python:
   begin with `_` are private to their module.
 - Built-in functions: `print`, `input`, `len`, `range`, `int`, `float`, `str`,
   `bytes`, `ord`, `chr`, `sorted`, `iter`, and `next`.
-- Also available: nested functions and `nonlocal`, lambdas, generators with
+- Also available: nested functions with shared captures, lambdas, generators with
   `yield` returning `Iterator[T]`, `with` for values that have `enter` and
   `exit` methods, and `async def`, `await`, and `async with aio.task_group()`
   for concurrency.
@@ -211,10 +210,10 @@ def fail(message: str):
 def init():
     if fs.exists("willow.json"):
         fail("error: willow.json already exists")
-    name = sys.getcwd()
+    var name = sys.getcwd()
     while name.endswith("/"):
         name = name[:-1]
-    parts = name.split("/")
+    var parts = name.split("/")
     name = parts[len(parts) - 1]
     if name == "":
         name = "app"
@@ -229,6 +228,7 @@ def init():
     create("AGENTS.md", agents_text().replace("@NAME@", name))
     create(".gitignore", gitignore_text().replace("@NAME@", name))
     if not fs.exists(".git"):
+        var status: int
         try:
             status = subprocess.run(["git", "init", "-q"]).returncode
         except OSError:
@@ -244,6 +244,6 @@ def create(path: str, text: str):
     try:
         fs.write_file(path, text)
     except OSError as error:
-        parts = error.message.split(": ")
+        var parts = error.message.split(": ")
         fail(f"error: cannot write {path}: {path}: {parts[len(parts) - 1]}")
     print("created " + path)

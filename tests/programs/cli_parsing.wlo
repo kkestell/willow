@@ -1,7 +1,7 @@
 import cli
 
 def build() -> cli.Parser:
-    parser = cli.parser("tool", description="Process some files.")
+    var parser = cli.parser("tool", description="Process some files.")
     parser.add_str("output", "out.txt", help="Where to write", short="o")
     parser.add_int("count", 3, help="How many")
     parser.add_float("ratio", 0.5)
@@ -12,7 +12,7 @@ def build() -> cli.Parser:
     return parser
 
 def show(args: cli.Args) -> str:
-    extra = ", ".join(args.get_list("extra"))
+    var extra = ", ".join(args.get_list("extra"))
     return f"{args.get_str('output')} {args.get_int('count')} {args.get_float('ratio')} {args.get_str('name')} {args.get_bool('verbose')} {args.get_str('source')} [{extra}]"
 
 def attempt(parser: cli.Parser, args: list[str]):
@@ -24,7 +24,7 @@ def attempt(parser: cli.Parser, args: list[str]):
         print(f"help: {len(help.message.split(chr(10)))} lines")
 
 def schema(kind: str):
-    parser = cli.parser("bad")
+    var parser = cli.parser("bad")
     try:
         if kind == "name":
             parser.add_flag("2fast")
@@ -50,7 +50,7 @@ def schema(kind: str):
         print(f"{kind}: {error.message}")
 
 def main():
-    parser = build()
+    var parser = build()
     print(parser.help())
     attempt(parser, ["--name", "Ada", "in.txt"])
     attempt(parser, ["-o", "x.txt", "--count=7", "--ratio", "2", "--name=Ada", "-v", "-v", "in.txt", "a", "b"])
@@ -67,7 +67,7 @@ def main():
     attempt(parser, ["--name", "Ada", "in.txt", "--ratio=fast"])
     attempt(parser, ["--name", "Ada", "in.txt", "--verbose=yes"])
     attempt(parser, ["--name", "Ada", "in.txt", "--source", "x"])
-    plain = cli.parser("plain")
+    var plain = cli.parser("plain")
     plain.add_positional("one")
     try:
         plain.parse(["a", "b"])
@@ -78,7 +78,7 @@ def main():
     for kind in ["name", "hyphens", "short", "reserved", "duplicate", "short duplicate", "rest twice", "after rest"]:
         schema(kind)
 
-    args = parser.parse(["--name", "Ada", "in.txt", "a"])
+    var args = parser.parse(["--name", "Ada", "in.txt", "a"])
     for getter in ["missing", "type"]:
         try:
             if getter == "missing":
@@ -87,6 +87,6 @@ def main():
                 args.get_int("name")
         except ValueError as wrong:
             print(wrong.message)
-    extras = args.get_list("extra")
+    var extras = args.get_list("extra")
     extras.append("changed")
     print(len(args.get_list("extra")))

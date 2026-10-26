@@ -5,10 +5,10 @@ import time
 def quoted(text: str | none) -> str:
     if text is none:
         return "null"
-    parts = ["\""]
-    digits = "0123456789abcdef"
+    var parts = ["\""]
+    var digits = "0123456789abcdef"
     for c in text:
-        code = ord(c)
+        var code = ord(c)
         if code < 32 or c in "\"\\":
             parts.append("\\u00" + digits[code // 16] + digits[code % 16])
         else:
@@ -17,33 +17,33 @@ def quoted(text: str | none) -> str:
     return "".join(parts)
 
 def respond(connection: net.Connection, status: str, headers: list[str], body: bytes):
-    lines = ["HTTP/1.1 " + status + " Status", "Content-Length: " + str(len(body)), "Connection: close"]
+    var lines = ["HTTP/1.1 " + status + " Status", "Content-Length: " + str(len(body)), "Connection: close"]
     lines.extend(headers)
     connection.sendall(("\r\n".join(lines) + "\r\n\r\n").encode() + body)
 
 def handle(connection: net.Connection, port: int):
-    reader = net.reader(connection)
-    head = reader.read_until("\r\n\r\n".encode()).decode()
+    var reader = net.reader(connection)
+    var head = reader.read_until("\r\n\r\n".encode()).decode()
     if head == "":
         return
-    lines = head.split("\r\n")
-    request = lines[0].split(" ")
-    method = request[0]
-    path = request[1]
-    headers: dict[str, str] = {}
+    var lines = head.split("\r\n")
+    var request = lines[0].split(" ")
+    var method = request[0]
+    var path = request[1]
+    var headers: dict[str, str] = {}
     for line in lines[1:]:
-        split = line.find(":")
+        var split = line.find(":")
         if split is not none:
             headers[line[:split].lower()] = line[split + 1:].strip()
-    wanted = int(headers.get("content-length", "0"))
-    body = reader.read_exactly(wanted)
+    var wanted = int(headers.get("content-length", "0"))
+    var body = reader.read_exactly(wanted)
     if path == "/json":
         respond(connection, "200", ["Content-Type: application/json"], '{"name": "Willow", "ports": [80, 443]}'.encode())
     else if path.startswith("/status/"):
-        code = path.removeprefix("/status/")
+        var code = path.removeprefix("/status/")
         respond(connection, code, ["X-Code: " + code], ("status " + code).encode())
     else if path.startswith("/echo"):
-        text = '{"method": ' + quoted(method) + ', "path": ' + quoted(path) + ', "x_test": ' + quoted(headers.get("x-test")) + ', "content_type": ' + quoted(headers.get("content-type")) + ', "body": ' + quoted(body.decode()) + '}'
+        var text = '{"method": ' + quoted(method) + ', "path": ' + quoted(path) + ', "x_test": ' + quoted(headers.get("x-test")) + ', "content_type": ' + quoted(headers.get("content-type")) + ', "body": ' + quoted(body.decode()) + '}'
         respond(connection, "200", ["Content-Type: application/json"], text.encode())
     else if path == "/binary":
         respond(connection, "200", [], body)
@@ -52,7 +52,7 @@ def handle(connection: net.Connection, port: int):
     else if path == "/latin1-header":
         connection.sendall("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\nX-Name: caf".encode() + bytes([233]) + "\r\nX-Twice: one\r\nX-Twice: two\r\nX-Space: ".encode() + bytes([160]) + "ok".encode() + bytes([160]) + "\r\n\r\nok".encode())
     else if path.startswith("/redirect/"):
-        count = int(path.removeprefix("/redirect/"))
+        var count = int(path.removeprefix("/redirect/"))
         if count == 0:
             respond(connection, "200", [], "done".encode())
         else:

@@ -1,9 +1,11 @@
 import exception_module.errors
 
 def main():
+    var error: exception_module.errors.ParseError
     try:
         raise exception_module.errors.ParseError(line=3, message="bad")
-    except exception_module.errors.ParseError as error:
+    except exception_module.errors.ParseError as error_item:
+        error = error_item
         print(f"{error.message} {error.line} {error.column}")
     error = exception_module.errors.ParseError("keyword", column=7, line=4)
     print(f"{error.message} {error.line} {error.column}")

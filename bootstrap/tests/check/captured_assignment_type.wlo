@@ -1,8 +1,8 @@
 def main():
-    x = 1
+    var x = 1
 
     def inner():
-        nonlocal x
+
         x = "s"
 
     inner()

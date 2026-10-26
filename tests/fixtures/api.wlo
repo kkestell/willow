@@ -8,15 +8,17 @@ import json
 import sys
 
 def main():
-    args = sys.args()
+    var args = sys.args()
     if len(args) < 1 or len(args) > 2:
         sys.eprint("usage: api <url> [json-body]")
         sys.exit(2)
+    var response: http.Response
     try:
+        var headers: list[http.Header]
         if len(args) == 1:
             response = http.request("GET", args[0], headers=[http.Header("Accept", "application/json")])
         else:
-            body = json.dump(json.parse(args[1])).encode()
+            var body = json.dump(json.parse(args[1])).encode()
             headers = [http.Header("Content-Type", "application/json"), http.Header("Accept", "application/json")]
             response = http.request("POST", args[0], headers=headers, body=body)
     except json.JsonError as invalid:
@@ -29,11 +31,11 @@ def main():
         sys.eprint(timeout.message)
         sys.exit(1)
     print(f"status {response.status}")
-    content_type = http.header(response.headers, "Content-Type")
+    var content_type = http.header(response.headers, "Content-Type")
     if content_type is none or not content_type.startswith("application/json"):
         print(response.body.decode())
         sys.exit(1)
-    doc = json.parse(response.body.decode())
+    var doc = json.parse(response.body.decode())
     if doc is dict:
         for key in doc:
             print(f"{key}: {json.dump(doc[key])}")

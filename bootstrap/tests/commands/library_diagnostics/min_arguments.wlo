@@ -1,2 +1,2 @@
 def main():
-    x = min(1, 2.0)
+    var x = min(1, 2.0)

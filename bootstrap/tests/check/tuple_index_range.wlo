@@ -1,2 +1,2 @@
 def main():
-    value = (1, "x")[-3]
+    var value = (1, "x")[-3]

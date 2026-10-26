@@ -79,7 +79,7 @@ def add_helper(table: dict[str, Builtin], name: str, params: list[BuiltinParam],
 # The built-in functions. `bytes.fromhex` is listed by that name, which the
 # binder resolves.
 def builtins() -> dict[str, Builtin]:
-    table: dict[str, Builtin] = {}
+    var table: dict[str, Builtin] = {}
     add(table, "print", [any_arg("")], prim("none"))
     add(table, "str", [any_arg("")], prim("str"))
     add(table, "int", [any_arg("")], prim("int"))
@@ -91,7 +91,7 @@ def builtins() -> dict[str, Builtin]:
     add(table, "input", [], optional("str"))
     add(table, "ord", [arg("", prim("str"))], prim("int"))
     add(table, "chr", [arg("", prim("int"))], prim("str"))
-    sorted_params = [any_arg("items")]
+    var sorted_params = [any_arg("items")]
     sorted_params.extend(sort_params())
     add(table, "sorted", sorted_params, none)
     add(table, "bytes", [arg("", list_of("int"))], prim("bytes"))
@@ -106,22 +106,22 @@ def builtins() -> dict[str, Builtin]:
     add(table, "any", [any_arg("items")], prim("bool"))
     add(table, "all", [any_arg("items")], prim("bool"))
     add(table, "list", [any_arg("items")], none)
-    start = defaulted("start", prim("int"), int_default("0"))
+    var start = defaulted("start", prim("int"), int_default("0"))
     add(table, "enumerate", [any_arg("items"), start], none)
     add(table, "zip", [any_arg("a"), any_arg("b")], none)
     return table
 
 # The parameters of `sorted` after `items`, and of `list.sort`.
 def sort_params() -> list[BuiltinParam]:
-    reverse = defaulted("reverse", prim("bool"), bool_default(false))
+    var reverse = defaulted("reverse", prim("bool"), bool_default(false))
     return [reverse, BuiltinParam("key", none, none_default(), true)]
 
 # The string methods, with the spec's parameter names and defaults. Each
 # lowers to core's `str_<name>`.
 def str_methods() -> dict[str, Builtin]:
-    table: dict[str, Builtin] = {}
-    text = prim("str")
-    flag = prim("bool")
+    var table: dict[str, Builtin] = {}
+    var text = prim("str")
+    var flag = prim("bool")
     add(table, "find", [arg("sub", text)], optional("int"))
     add(table, "split", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
     add(table, "rsplit", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
@@ -148,8 +148,8 @@ def str_methods() -> dict[str, Builtin]:
     return table
 
 def bytes_methods() -> dict[str, Builtin]:
-    table: dict[str, Builtin] = {}
-    data = prim("bytes")
+    var table: dict[str, Builtin] = {}
+    var data = prim("bytes")
     add(table, "decode", [], prim("str"))
     add(table, "find", [arg("sub", data)], optional("int"))
     add(table, "startswith", [arg("prefix", data)], prim("bool"))
@@ -161,7 +161,7 @@ def bytes_methods() -> dict[str, Builtin]:
 # The intrinsics that core calls. `__type` has its
 # own syntax, and `__os` is a name.
 def intrinsics() -> dict[str, Builtin]:
-    table: dict[str, Builtin] = {}
+    var table: dict[str, Builtin] = {}
     add(table, "__ccall", [], none)
     add(table, "__alloc", [arg("", prim("int"))], prim("ptr"))
     add(table, "__alloc_atomic", [arg("", prim("int"))], prim("ptr"))
@@ -185,13 +185,13 @@ def intrinsics() -> dict[str, Builtin]:
 
 # An exception class: a class with only a `message` field.
 def exception(name: str, type_name: str) -> types.Class:
-    message = types.Field("message", prim("str"), none)
+    var message = types.Field("message", prim("str"), none)
     return types.Class(name, type_name, [], [message], [], true, false, "")
 
 # The built-in exception classes.
 def exceptions() -> dict[str, types.Class]:
-    table: dict[str, types.Class] = {}
-    names = "Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError TimeoutError StopIteration"
+    var table: dict[str, types.Class] = {}
+    var names = "Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError TimeoutError StopIteration"
     for name in names.split(" "):
         table[name] = exception(name, name)
     return table
@@ -208,8 +208,8 @@ def standard_protocol(name: str, id: int) -> types.Protocol:
 
 # Adds a method with the parameters `params` after `self`.
 def protocol_method(decl: types.Protocol, name: str, params: list[types.Param], result: types.Type):
-    receiver = types.Param("self", types.protocol_self(decl), none, false)
-    all_params = [receiver]
+    var receiver = types.Param("self", types.protocol_self(decl), none, false)
+    var all_params = [receiver]
     all_params.extend(params)
     decl.methods.append(types.Function(0, name, decl.type_name + "." + name, [], all_params, result))
 
@@ -218,13 +218,13 @@ def param(name: str, ty: types.Type) -> types.Param:
 
 # The standard protocols, each generic in `T`.
 def protocols() -> dict[str, types.Protocol]:
-    iterable = standard_protocol("Iterable", -2)
+    var iterable = standard_protocol("Iterable", -2)
     protocol_method(iterable, "iter", [], types.iterator(iterable.typevars[0]))
-    manager = standard_protocol("ContextManager", -3)
+    var manager = standard_protocol("ContextManager", -3)
     protocol_method(manager, "enter", [], manager.typevars[0])
     protocol_method(manager, "exit", [param("error", optional_exception())], prim("none"))
-    generator = standard_protocol("Generator", -4)
-    t = generator.typevars[0]
+    var generator = standard_protocol("Generator", -4)
+    var t = generator.typevars[0]
     protocol_method(generator, "iter", [], types.iterator(t))
     protocol_method(generator, "next", [], t)
     protocol_method(generator, "close", [], prim("none"))
@@ -255,7 +255,7 @@ def has_coroutine(t: types.Type) -> bool:
 # An ordinary class of a provided module, with `fields` names and `kinds`
 # types.
 def provided_class(module: str, name: str, names: list[str], kinds: list[types.Type]) -> types.Class:
-    fields: list[types.Field] = []
+    var fields: list[types.Field] = []
     for i in range(len(names)):
         fields.append(types.Field(names[i], kinds[i], none))
     return types.Class(name, module + "." + name, [], fields, [], false, false, "", true)
@@ -275,8 +275,8 @@ def native_method(decl: types.Class, name: str, params: list[types.Param], resul
 
 # A native method generic in `typevars`.
 def generic_method(decl: types.Class, name: str, typevars: list[types.TypeVar], params: list[types.Param], result: types.Type):
-    receiver = types.Param("self", types.class_self(decl), none, false)
-    all_params = [receiver]
+    var receiver = types.Param("self", types.class_self(decl), none, false)
+    var all_params = [receiver]
     all_params.extend(params)
     decl.methods.append(types.Function(0, name, decl.type_name + "." + name, typevars, all_params, result))
 
@@ -293,7 +293,7 @@ def new_module(name: str) -> Module:
     return Module(name, {}, {}, {}, {})
 
 def io_file() -> types.Class:
-    file = native_class("io", "File", "file")
+    var file = native_class("io", "File", "file")
     native_method(file, "read", [param("size", prim("int"))], prim("bytes"))
     native_method(file, "readline", [], optional("str"))
     native_method(file, "write", [param("data", prim("bytes"))], prim("none"))
@@ -316,26 +316,26 @@ def modules() -> dict[str, Module]:
 # name them. Their methods lower to helpers named after their prefixes. Each
 # has an `iter` method over items of a type parameter `T` of its own.
 def dispatched() -> list[types.Class]:
-    result: list[types.Class] = []
-    id = -10
+    var result: list[types.Class] = []
+    var id = -10
     for name in "list dict str bytes tuple range".split(" "):
         result.append(dispatched_class(name, name, types.TypeVar(id, "T", none)))
         id = id - 1
-    t = types.TypeVar(-16, "T", none)
-    iterator = dispatched_class("<iterator>", "iterator", t)
+    var t = types.TypeVar(-16, "T", none)
+    var iterator = dispatched_class("<iterator>", "iterator", t)
     native_method(iterator, "next", [], t)
     result.append(iterator)
     t = types.TypeVar(-17, "T", none)
-    generator = dispatched_class("<generator>", "generator", t)
+    var generator = dispatched_class("<generator>", "generator", t)
     native_method(generator, "next", [], t)
     native_method(generator, "close", [], prim("none"))
-    generators = protocols()["Generator"]
+    var generators = protocols()["Generator"]
     native_method(generator, "enter", [], types.ProtocolType(generators, [t]))
     native_method(generator, "exit", [param("error", optional_exception())], prim("none"))
     result.append(generator)
     return result
 
 def dispatched_class(tag: str, prefix: str, t: types.TypeVar) -> types.Class:
-    decl = types.Class(tag, tag, [], [], [], false, true, prefix)
+    var decl = types.Class(tag, tag, [], [], [], false, true, prefix)
     native_method(decl, "iter", [], types.iterator(t))
     return decl

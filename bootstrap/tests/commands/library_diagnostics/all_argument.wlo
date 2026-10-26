@@ -1,2 +1,2 @@
 def main():
-    x = all([1])
+    var x = all([1])

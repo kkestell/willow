@@ -23,13 +23,13 @@ def is_stop(light: Light = Light.RED) -> bool:
     return light == Light.RED
 
 def main():
-    light = Light.RED
+    var light = Light.RED
     for i in range(4):
         print(light)
         light = next_light(light)
 
-    seconds = {Light.RED: 30, Light.YELLOW: 5, Light.GREEN: 25}
-    total = 0
+    var seconds = {Light.RED: 30, Light.YELLOW: 5, Light.GREEN: 25}
+    var total = 0
     for color in seconds:
         total = total + seconds[color]
     print(f"one cycle takes {total} seconds")

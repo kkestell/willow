@@ -42,21 +42,21 @@ def label(n: int) -> str:
 
 async def main():
     # A call evaluates its arguments but runs none of the body.
-    pending = echo(label(1))
+    var pending = echo(label(1))
     print("called")
     print(await pending)
 
     print(await square(3) + await square(4))
     print(await first(["a", "b"]))
     print(await drain(Fixed("fixed")))
-    counter = Counter(0)
+    var counter = Counter(0)
     print(await drain(counter))
     print(await counter.read())
 
-    suffix = "!"
+    var suffix = "!"
     async def shout(text: str) -> str:
         return text + suffix
-    run: (str) -> Coroutine[str] = shout
+    var run: (str) -> Coroutine[str] = shout
     print(await run("nested"))
 
     try:
@@ -69,8 +69,8 @@ async def main():
         print(f"caught {error.message}")
 
     # A coroutine is consumed once; aliases share that state.
-    c = square(5)
-    alias = c
+    var c = square(5)
+    var alias = c
     print(await c)
     try:
         await alias
@@ -78,5 +78,5 @@ async def main():
         print(consumed.message)
 
     # An unused coroutine never runs.
-    unused = echo("never")
+    var unused = echo("never")
     print("done")

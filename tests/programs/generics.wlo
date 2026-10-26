@@ -4,7 +4,7 @@ def first[T](items: list[T]) -> T:
     return items[0]
 
 def repeat[T](x: T, n: int) -> list[T]:
-    result: list[T] = []
+    var result: list[T] = []
     for i in range(n):
         result.append(x)
     return result
@@ -24,7 +24,7 @@ def empty[T]() -> list[T]:
     return []
 
 def map_list[T, U](f: (T) -> U, xs: list[T]) -> list[U]:
-    result: list[U] = []
+    var result: list[U] = []
     for x in xs:
         result.append(f(x))
     return result
@@ -45,18 +45,18 @@ def inferred():
     print(first([3, 4]))
     print(first(["a"]))
     # int and int | none infer int | none.
-    both = pair_same(1, maybe())
+    var both = pair_same(1, maybe())
     print(len(both))
     print(pick(none, 5))
     # The expected result decides what the arguments leave open.
-    xs: list[int] = empty()
+    var xs: list[int] = empty()
     print(len(xs))
-    y: int | none = first([1])
+    var y: int | none = first([1])
     print(y)
     # A lambda's parameter types come from the other arguments; its result infers U.
-    doubled = map_list((x) => x * 2, [1, 2])
+    var doubled = map_list((x) => x * 2, [1, 2])
     print(doubled[1])
-    words = map_list((x) => str(x) + "!", [7])
+    var words = map_list((x) => str(x) + "!", [7])
     print(words[0])
     print(count([1, 2]))
     # A result the callee fixes is checked against it.
@@ -78,9 +78,9 @@ def swap(p: Pair[int, str]) -> Pair[str, int]:
 def depth(n: Nested[int]) -> int:
     if n is none:
         return 0
-    best = 0
+    var best = 0
     for child in n:
-        d = depth(child)
+        var d = depth(child)
         if d > best:
             best = d
     return best + 1
@@ -89,9 +89,9 @@ def depth(n: Nested[int]) -> int:
 def generic_depth[T](n: Nested[T]) -> int:
     if n is none:
         return 0
-    best = 0
+    var best = 0
     for child in n:
-        d = generic_depth[T](child)
+        var d = generic_depth[T](child)
         if d > best:
             best = d
     return best + 1
@@ -99,7 +99,7 @@ def generic_depth[T](n: Nested[T]) -> int:
 def leaves[T](t: Tree[T]) -> list[T]:
     if t is list:
         return t
-    found: list[T] = []
+    var found: list[T] = []
     for k in t:
         found.extend(leaves(t[k]))
     return found
@@ -128,12 +128,12 @@ def aliases_bounds_values():
     print(swap((1, "a"))[0])
     print(depth([[none], [[none]]]))
     print(generic_depth[str]([[none], [[none]]]))
-    tree: Tree[int] = {"a": [1, 2], "b": {"c": [3]}}
+    var tree: Tree[int] = {"a": [1, 2], "b": {"c": [3]}}
     print(len(leaves(tree)))
     print(label(Named("a")))
     send(io.stdout(), "sent\n")
     # Explicit type arguments or an expected callable make generic values.
-    f = first[int]
+    var f = first[int]
     print(f([7]))
     print(apply(identity, "same"))
 
@@ -144,13 +144,13 @@ def main():
     print(pick[int](none, fallback=5))
     print(pick[int]())
     # A float in an int | float type argument passes through unconverted.
-    v = first[int | float]([2.5, 1])
+    var v = first[int | float]([2.5, 1])
     print((v is float))
     print(v)
     # T | none with T = int | none is int | none.
-    w: int | none = pick[int | none](none, 7)
+    var w: int | none = pick[int | none](none, 7)
     print(w)
-    p = pair[int, str](1, "a")
+    var p = pair[int, str](1, "a")
     print(p[1])
 
     def wrap[U](u: U) -> list[U]:

@@ -1,1 +1,1 @@
-protocol_signature.wlo:9:22: error: expected Reader, received Source
+protocol_signature.wlo:9:26: error: expected Reader, received Source

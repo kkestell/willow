@@ -1,1 +1,1 @@
-main.wlo:5:45: error: expected fixture_store.Item, received fixture_store.Item
+main.wlo:5:49: error: expected fixture_store.Item, received fixture_store.Item

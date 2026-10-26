@@ -1,5 +1,5 @@
 def vowels(word: str) -> int:
-    count = 0
+    var count = 0
     for letter in word.lower():
         if letter in "aeiou":
             count = count + 1

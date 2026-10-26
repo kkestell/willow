@@ -6,17 +6,17 @@ import sys
 import time
 
 def main():
-    start = time.monotonic()
-    directory = sys.getenv("LISTING_DIR")
+    var start = time.monotonic()
+    var directory = sys.getenv("LISTING_DIR")
     if directory is none:
         directory = sys.getcwd()
-    counts: dict[str, int] = {}
-    sizes: dict[str, int] = {}
+    var counts: dict[str, int] = {}
+    var sizes: dict[str, int] = {}
     print(f"{'name':<16}{'kind':<10}{'size':>8}  modified")
     for name in fs.listdir(directory):
-        info = fs.stat(fs.join(directory, name), follow_symlinks=false)
+        var info = fs.stat(fs.join(directory, name), follow_symlinks=false)
         print(f"{name:<16}{info.kind:<10}{info.size:>8d}  {time.utc(info.modified)}")
-        seen = counts.get(info.kind)
+        var seen = counts.get(info.kind)
         if seen is none:
             counts[info.kind] = 1
             sizes[info.kind] = info.size
@@ -26,5 +26,5 @@ def main():
     print("")
     for kind in sorted(counts):
         print(f"{kind:<10}{counts[kind]:>4d} entries{sizes[kind]:>10d} bytes")
-    elapsed = time.monotonic() - start
+    var elapsed = time.monotonic() - start
     print(f"listed {directory} in {elapsed:.3f}s")

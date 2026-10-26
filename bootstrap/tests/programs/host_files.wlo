@@ -3,7 +3,7 @@ import fs
 # L0 has no way to remove a file, so the file stays next to this test and
 # .gitignore lists it.
 def main():
-    path = "host_files.tmp"
+    var path = "host_files.tmp"
     fs.write_file(path, "first line\nsecond line\n")
     print(fs.read_file(path))
     fs.write_file(path, "café\r\n")

@@ -1,5 +1,5 @@
 def main():
-    items = [1]
+    var items = [1]
     print(len(items))
     assert len(items) == 0
     print("unreachable")

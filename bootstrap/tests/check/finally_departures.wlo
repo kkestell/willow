@@ -4,7 +4,7 @@ class Stop(Exception):
 # Each finally clause below is emitted once per way of leaving its try, and
 # each copy holds its own try statement.
 def nested(limit: int) -> int:
-    i = 0
+    var i = 0
     while i < limit:
         try:
             try:

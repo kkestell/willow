@@ -41,14 +41,15 @@ def parse_number(number: str, text: str) -> float:
 def parse_shape(text: str) -> Shape:
     if text.startswith("r"):
         return Circle(parse_number(text[1:], text))
-    parts = text.split("x")
+    var parts = text.split("x")
     if len(parts) != 2:
         raise ShapeError("expected WIDTHxHEIGHT or rRADIUS", text)
     return Rect(parse_number(parts[0], text), parse_number(parts[1], text))
 
 def main():
-    total = 0.0
+    var total = 0.0
     for text in sys.args():
+        var shape: Shape
         try:
             shape = parse_shape(text)
         except ShapeError as error:

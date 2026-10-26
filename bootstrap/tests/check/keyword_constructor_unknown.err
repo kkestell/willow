@@ -1,1 +1,1 @@
-keyword_constructor_unknown.wlo:6:11: error: 'P' has no field 'other'
+keyword_constructor_unknown.wlo:6:15: error: 'P' has no field 'other'

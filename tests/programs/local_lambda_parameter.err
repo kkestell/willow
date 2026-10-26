@@ -1,0 +1,1 @@
+local_lambda_parameter.wlo:3:21: error: cannot redeclare visible name 'value'

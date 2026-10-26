@@ -17,7 +17,7 @@ class Account:
         return f"{self.owner} has {self.balance}"
 
 def main():
-    account = Account("Ada")
+    var account = Account("Ada")
     account.deposit(100)
     print(account.withdraw(30))
     print(account.withdraw(500))

@@ -18,25 +18,25 @@ def rows() -> Generator[Row]:
     yield Row("bob", 1)
 
 def names(xs: list[Row]) -> str:
-    texts: list[str] = []
+    var texts: list[str] = []
     for x in xs:
         texts.append(f"{x.name}:{x.score}")
     return " ".join(texts)
 
 def ints(xs: list[int]) -> str:
-    texts: list[str] = []
+    var texts: list[str] = []
     for x in xs:
         texts.append(str(x))
     return " ".join(texts)
 
 def main():
-    data = [Row("cy", 2), Row("ada", 3), Row("bob", 2), Row("dee", 1)]
+    var data = [Row("cy", 2), Row("ada", 3), Row("bob", 2), Row("dee", 1)]
     print(names(sorted(data, key=(row) => row.score)))
     print(names(sorted(data, key=(row) => (row.score, row.name))))
     print(names(sorted(data, reverse=true, key=(row) => row.score)))
     print(names(sorted(data, key=by_name)))
     print(names(sorted(data, key=Ranker(10).rank)))
-    words = ["bb", "a", "ccc"]
+    var words = ["bb", "a", "ccc"]
     words.sort(key=len)
     print(" ".join(words))
 
@@ -46,7 +46,7 @@ def main():
     print(names(sorted(rows(), key=logged)))
 
     # A key's own effects stay, but the list is not reordered.
-    xs = [3, 1, 2]
+    var xs = [3, 1, 2]
     def growing(x: int) -> int:
         xs.append(0)
         return x
@@ -65,7 +65,7 @@ def main():
     except ValueError as failure:
         print(failure.message)
     print(names(data))
-    nan = float("nan")
+    var nan = float("nan")
     try:
         data.sort(key=(row) => nan)
     except ValueError as again:

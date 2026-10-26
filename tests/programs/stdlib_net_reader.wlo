@@ -1,14 +1,14 @@
 import net
 
 def pair(listener: net.Listener) -> list[net.Connection]:
-    client = net.connect("127.0.0.1", listener.local_port(), timeout=5.0)
+    var client = net.connect("127.0.0.1", listener.local_port(), timeout=5.0)
     return [client, listener.accept(timeout=5.0)]
 
 def main():
-    listener = net.listen("127.0.0.1", 0)
-    ends = pair(listener)
-    client = ends[0]
-    reader = net.reader(ends[1])
+    var listener = net.listen("127.0.0.1", 0)
+    var ends = pair(listener)
+    var client = ends[0]
+    var reader = net.reader(ends[1])
 
     # Excess bytes stay buffered for the next call.
     client.sendall("GET /\r\nHost: x\r\n\r\nbodyEXTRA".encode())
@@ -87,7 +87,7 @@ def main():
     except ValueError as error:
         print(error.message)
 
-    second = pair(listener)
+    var second = pair(listener)
     with net.reader(second[1]) as scoped:
         second[0].sendall("scoped\n".encode())
         print(scoped.read_until("\n".encode()).decode().strip())

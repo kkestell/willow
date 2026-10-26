@@ -3,5 +3,5 @@ class Point:
     y: int
 
 def main():
-    point = Point(1, 2)
+    var point = Point(1, 2)
     point.x = "one"

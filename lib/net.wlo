@@ -2,12 +2,12 @@ import core
 import time
 
 def _wait(fd: int, events: int, deadline: float | none) -> bool:
-    descriptor = core.net_pollfd(fd, events)
-    ready = 0
+    var descriptor = core.net_pollfd(fd, events)
+    var ready = 0
     while ready <= 0:
-        milliseconds = -1
+        var milliseconds = -1
         if deadline is not none:
-            remaining = (deadline - time.monotonic()) * 1000.0
+            var remaining = (deadline - time.monotonic()) * 1000.0
             if remaining <= 0.0:
                 return false
             milliseconds = int(min(core.ceil(remaining), 2147483647.0))
@@ -31,9 +31,9 @@ class Connection:
         if size < 1:
             raise ValueError("size must be positive")
         core.net_check_timeout(timeout)
-        deadline = core.net_deadline(timeout)
-        buffer = core.str_alloc(size)
-        count = core.net_try_recv(self._fd, buffer, size)
+        var deadline = core.net_deadline(timeout)
+        var buffer = core.str_alloc(size)
+        var count = core.net_try_recv(self._fd, buffer, size)
         while count < 0:
             if not _wait(self._fd, 1, deadline):
                 core.net_timed_out("recv", timeout)
@@ -43,11 +43,11 @@ class Connection:
     def sendall(data: bytes, timeout: float | none = none):
         self._usable()
         core.net_check_timeout(timeout)
-        deadline = core.net_deadline(timeout)
-        sent = 0
+        var deadline = core.net_deadline(timeout)
+        var sent = 0
         try:
             while sent < len(data):
-                count = core.net_try_send(self._fd, __ptr(__word(data)), sent, len(data))
+                var count = core.net_try_send(self._fd, __ptr(__word(data)), sent, len(data))
                 if count >= 0:
                     sent = sent + count
                 else if not _wait(self._fd, 4, deadline):
@@ -78,8 +78,8 @@ class Listener:
     def accept(timeout: float | none = none) -> Connection:
         self._usable()
         core.net_check_timeout(timeout)
-        deadline = core.net_deadline(timeout)
-        fd = core.net_try_accept(self._fd)
+        var deadline = core.net_deadline(timeout)
+        var fd = core.net_try_accept(self._fd)
         while fd < 0:
             if not _wait(self._fd, 1, deadline):
                 core.net_timed_out("accept", timeout)
@@ -105,10 +105,10 @@ class Listener:
 def connect(host: str, port: int, timeout: float | none = 30.0) -> Connection:
     core.net_check_host(host, port, 1)
     core.net_check_timeout(timeout)
-    addresses = core.net_resolve(host, port)
-    deadline = core.net_deadline(timeout)
-    state = core.NetConnect(host, port, addresses, 0, -1, "no addresses")
-    connected = false
+    var addresses = core.net_resolve(host, port)
+    var deadline = core.net_deadline(timeout)
+    var state = core.NetConnect(host, port, addresses, 0, -1, "no addresses")
+    var connected = false
     try:
         while not core.net_connect_step(state):
             if not _wait(state.fd, 4, deadline):
@@ -132,11 +132,12 @@ class Reader:
             raise ValueError("I/O operation on closed reader")
 
     def _fill(what: str, timeout: float | none, deadline: float | none) -> bool:
-        remaining: float | none = none
+        var remaining: float | none = none
         if deadline is not none:
             remaining = deadline - time.monotonic()
             if remaining <= 0.0:
                 core.net_timed_out(what, timeout)
+        var chunk: bytes
         try:
             chunk = self._connection.recv(65536, remaining)
         except TimeoutError:
@@ -146,7 +147,7 @@ class Reader:
         return len(chunk) > 0
 
     def _take(count: int) -> bytes:
-        data = self._buffer[:count]
+        var data = self._buffer[:count]
         self._buffer = self._buffer[count:]
         return data
 
@@ -155,7 +156,7 @@ class Reader:
         if size < 0:
             raise ValueError("size must not be negative")
         core.net_check_timeout(timeout)
-        deadline = core.net_deadline(timeout)
+        var deadline = core.net_deadline(timeout)
         while len(self._buffer) < size:
             if not self._fill("read_exactly", timeout, deadline):
                 raise OSError(f"unexpected end of stream: expected {size} bytes, received {len(self._buffer)}")
@@ -168,8 +169,8 @@ class Reader:
         if max_bytes < 1:
             raise ValueError("max_bytes must be positive")
         core.net_check_timeout(timeout)
-        deadline = core.net_deadline(timeout)
-        at = self._buffer.find(separator)
+        var deadline = core.net_deadline(timeout)
+        var at = self._buffer.find(separator)
         while at is none or at + len(separator) > max_bytes:
             if at is not none or len(self._buffer) >= max_bytes:
                 raise ValueError(f"separator not found within {max_bytes} bytes")

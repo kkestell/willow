@@ -1,0 +1,1 @@
+local_redeclaration.wlo:4:13: error: cannot redeclare visible name 'value'

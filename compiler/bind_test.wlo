@@ -14,27 +14,27 @@ import sys
 # The modules of `program`, the entry first, after binding, or the first
 # error. A `test` program is a test file.
 def bind_program(program: list[str], test: bool) -> list[ast.Module] | str:
-    sources: list[loader.Source] = []
-    modules: list[ast.Module] = []
-    i = 1
+    var sources: list[loader.Source] = []
+    var modules: list[ast.Module] = []
+    var i = 1
     while i < len(program):
-        name = "main"
-        source = program[i]
+        var name = "main"
+        var source = program[i]
         if i > 1:
             name = program[i]
             source = program[i + 1]
             i = i + 1
         i = i + 1
-        path = "/".join(name.split(".")) + ".wlo"
-        lexed = lexer.lex(path, source)
+        var path = "/".join(name.split(".")) + ".wlo"
+        var lexed = lexer.lex(path, source)
         if lexed is diagnostic.Diagnostic:
             return lexed.format()
-        parsed = parser.parse(path, lexed, false)
+        var parsed = parser.parse(path, lexed, false)
         if parsed is diagnostic.Diagnostic:
             return parsed.format()
         sources.append(loader.Source(name, parsed))
         modules.append(parsed)
-    error = bind.bind(sources, test)
+    var error = bind.bind(sources, test)
     if error is not none:
         return error.format()
     return modules
@@ -42,10 +42,10 @@ def bind_program(program: list[str], test: bool) -> list[ast.Module] | str:
 # The first error in the program, or each function's locals, with `*` on
 # captured ones, its captures, and its body after binding.
 def describe(program: list[str]) -> str:
-    modules = bind_program(program, false)
+    var modules = bind_program(program, false)
     if modules is str:
         return modules
-    lines: list[str] = []
+    var lines: list[str] = []
     for module in modules:
         for function in bind.functions(module):
             describe_function(function, lines)
@@ -54,33 +54,33 @@ def describe(program: list[str]) -> str:
 # The first error in the program, or the types of its modules' functions and
 # fields, as bind_files --signatures writes them.
 def signatures(program: list[str], test: bool) -> str:
-    modules = bind_program(program, test)
+    var modules = bind_program(program, test)
     if modules is str:
         return modules
-    lines: list[str] = []
+    var lines: list[str] = []
     for module in modules:
         for line in bind.signatures(module):
             lines.append(f"{module.name}: {line}")
     return "\n".join(lines)
 
 def describe_function(function: ast.FunctionDecl, lines: list[str]):
-    locals: list[str] = []
+    var locals: list[str] = []
     for symbol in function.locals:
         if symbol.captured:
             locals.append(symbol.name + "*")
         else:
             locals.append(symbol.name)
-    captures: list[str] = []
+    var captures: list[str] = []
     for capture in function.captures:
         captures.append(capture.symbol.name)
-    printer = show.Printer(false)
+    var printer = show.Printer(false)
     lines.append(f"{function.name} [{', '.join(locals)}] [{', '.join(captures)}] {printer.block(function.body)}")
     nested_functions(function.body, lines)
 
 # Describes the functions nested in `body`.
 def nested_functions(body: list[ast.Stmt], lines: list[str]):
     for statement in body:
-        node = statement.node
+        var node = statement.node
         if node is ast.FunctionDef:
             describe_function(node.function, lines)
         else if node is ast.If:
@@ -95,10 +95,10 @@ def nested_functions(body: list[ast.Stmt], lines: list[str]):
 # distinct ids: declarations, methods, protocol methods, and nested functions
 # and lambdas at any depth.
 def function_names(program: list[str]) -> str:
-    modules = bind_program(program, false)
+    var modules = bind_program(program, false)
     if modules is str:
         return modules
-    found: list[ast.FunctionDecl] = []
+    var found: list[ast.FunctionDecl] = []
     for module in modules:
         for decl in module.declarations:
             if decl is ast.FunctionDecl:
@@ -109,8 +109,8 @@ def function_names(program: list[str]) -> str:
             else if decl is ast.ProtocolDecl:
                 for method in decl.methods:
                     collect_functions(method, found)
-    names: list[str] = []
-    ids: dict[int, bool] = {}
+    var names: list[str] = []
+    var ids: dict[int, bool] = {}
     for function in found:
         if function.id == 0 or function.id in ids:
             return f"{function.type_name} has id {function.id}, which is not unique"
@@ -124,21 +124,29 @@ def collect_functions(function: ast.FunctionDecl, found: list[ast.FunctionDecl])
 
 def collect_in_block(body: list[ast.Stmt], found: list[ast.FunctionDecl]):
     for statement in body:
-        node = statement.node
+        var node = statement.node
         if node is ast.FunctionDef:
             collect_functions(node.function, found)
         else if node is ast.If:
             collect_in_block(node.body, found)
             collect_in_block(node.else_body, found)
+        else if node is ast.Var:
+            var initializer = node.value
+            if initializer is not none:
+                var value = initializer.node
+                if value is ast.Lambda:
+                    var function = value.function
+                    if function is not none:
+                        collect_functions(function, found)
         else if node is ast.Assign:
-            value = node.value.node
+            var value = node.value.node
             if value is ast.Lambda:
-                function = value.function
+                var function = value.function
                 if function is not none:
                     collect_functions(function, found)
 
 def main():
-    cases = [
+    var cases = [
         # Declarations
         ["main.wlo:2:11: error: 'self' is only available inside methods", "def main():\n    print(self)\n"],
         ["main.wlo:3:16: error: 'self' is only available inside methods", "def main():\n    def f() -> int:\n        return self\n"],
@@ -158,20 +166,20 @@ def main():
         ["main.wlo:1:1: error: program has no main function", "class main:\n    x: int\n"],
         ["main.wlo:1:5: error: main must take no parameters and return none", "def main(x: int):\n    pass\n"],
         # Names
-        ["main.wlo:2:9: error: unknown name 'y'", "def main():\n    x = y\n"],
+        ["main.wlo:2:13: error: unknown name 'y'", "def main():\n    var x = y\n"],
         ["main.wlo:2:5: error: unknown function 'g'", "def main():\n    g()\n"],
-        ["main.wlo:3:9: error: module 'a' cannot be used as a value", "import a\ndef main():\n    x = a\n", "a", "def g():\n    pass\n"],
-        ["main.wlo:4:9: error: class 'C' cannot be used as a value", "class C:\n    x: int\ndef main():\n    y = C\n"],
-        ["main.wlo:3:9: error: alias 'T' cannot be used as a value", "type T = int\ndef main():\n    y = T\n"],
+        ["main.wlo:3:13: error: module 'a' cannot be used as a value", "import a\ndef main():\n    var x = a\n", "a", "def g():\n    pass\n"],
+        ["main.wlo:4:13: error: class 'C' cannot be used as a value", "class C:\n    x: int\ndef main():\n    var y = C\n"],
+        ["main.wlo:3:13: error: alias 'T' cannot be used as a value", "type T = int\ndef main():\n    var y = T\n"],
         ["main.wlo:4:5: error: enum 'E' cannot be called", "enum E:\n    A\ndef main():\n    E()\n"],
         ["main.wlo:3:5: error: alias 'T' cannot be called", "type T = int\ndef main():\n    T()\n"],
         ["main.wlo:4:5: error: protocol 'P' cannot be called", "protocol P:\n    def m()\ndef main():\n    P()\n"],
-        ["main.wlo:5:11: error: enum 'E' has no member 'B'", "enum E:\n    A\ndef main():\n    x = E.A\n    y = E.B\n"],
+        ["main.wlo:5:15: error: enum 'E' has no member 'B'", "enum E:\n    A\ndef main():\n    var x = E.A\n    var y = E.B\n"],
         ["main.wlo:4:7: error: enum 'E' has no method 'm'", "enum E:\n    A\ndef main():\n    E.m()\n"],
         ["main.wlo:4:7: error: cannot assign to a member of enum 'E'", "enum E:\n    A\ndef main():\n    E.A = E.A\n"],
         ["main.wlo:3:7: error: module 'a' has no function, class, enum, or alias 'nope'", "import a\ndef main():\n    a.nope()\n", "a", "def g():\n    pass\n"],
         ["main.wlo:3:7: error: '_p' is private to module 'a'", "import a\ndef main():\n    a._p()\n", "a", "def _p():\n    pass\n"],
-        ["main.wlo:3:13: error: enum 'a.E' has no member 'B'", "import a\ndef main():\n    x = a.E.B\n", "a", "enum E:\n    A\n"],
+        ["main.wlo:3:17: error: enum 'a.E' has no member 'B'", "import a\ndef main():\n    var x = a.E.B\n", "a", "enum E:\n    A\n"],
         ["main.wlo:4:7: error: alias 'a.T' cannot be called", "import a\ndef main():\n    a.g()\n    a.T()\n", "a", "def g():\n    pass\ntype T = int\n"],
         ["main.wlo:4:5: error: 'f' is not generic", "def f(x: int):\n    pass\ndef main():\n    f[int](1)\n"],
         # Statements
@@ -181,31 +189,26 @@ def main():
         ["main.wlo:2:5: error: bare 'raise' is only allowed in an 'except' clause", "def main():\n    raise\n"],
         ["main.wlo:6:12: error: 'C' is not an exception class", "class C:\n    x: int\ndef main():\n    try:\n        pass\n    except C:\n        pass\n"],
         ["main.wlo:4:12: error: unknown type 'E'", "def main():\n    try:\n        pass\n    except E:\n        pass\n"],
-        ["main.wlo:2:15: error: unknown module 'q'", "def main():\n    b = (1 is q.T)\n"],
+        ["main.wlo:2:19: error: unknown module 'q'", "def main():\n    var b = (1 is q.T)\n"],
         # Scopes
-        ["main.wlo:2:14: error: nonlocal 'x' must name a variable of an enclosing function", "def main():\n    nonlocal x\n"],
-        ["main.wlo:3:18: error: nonlocal 'n' must name a variable of an enclosing function", "def main():\n    def g(n: int):\n        nonlocal n\n"],
-        ["main.wlo:5:18: error: 'x' is used before its nonlocal declaration", "def main():\n    x = 1\n    def g():\n        x = 2\n        nonlocal x\n"],
-        ["main.wlo:4:13: error: 'x' is used before its nonlocal declaration", "def main():\n    x = 1\n    def g():\n        y = x\n        nonlocal x\n        x = 2\n"],
-        ["main [x*, g] [] { x = 1; def g() -> none { nonlocal x; x = (x + 1) }; (g)() }\ng [] [x] { nonlocal x; x = (x + 1) }", "def main():\n    x = 1\n    def g():\n        nonlocal x\n        x = x + 1\n    g()\n"],
-        ["main [x*, h] [] { x = 1; def h() -> none { def k() -> none { y = x } } }\nh [k] [x] { def k() -> none { y = x } }\nk [y] [x] { y = x }", "def main():\n    x = 1\n    def h():\n        def k():\n            y = x\n"],
-        ["f [] [] { return none }\nmain [a, b, c, e, k, v, i] [] { <a, b> = f(); for c in f() { pass }; try { pass } except E as e { pass }; for <k, v> in f() { i = 1 } }",
-            "class E(Exception):\n    pass\ndef f():\n    return none\ndef main():\n    a, b = f()\n    for c in f():\n        pass\n    try:\n        pass\n    except E as e:\n        pass\n    for k, v in f():\n        i = 1\n", ],
-        ["f [] [] { pass }\nmain [g, y] [] { g = f; (g)(1); y = E.A; a.h(E.A) }\nh [] [] { pass }", "import a\nenum E:\n    A\ndef f(x: int):\n    pass\ndef main():\n    g = f\n    g(1)\n    y = E.A\n    a.h(E.A)\n", "a", "def h(x: int):\n    pass\n"],
-        ["main [x*, f] [] { x = 1; f = ((y) => (x + y)) }", "def main():\n    x = 1\n    f = (y) => x + y\n"],
-        ["f [] [] { pass }\nmain [f] [] { f = 1; (f)() }", "def f():\n    pass\ndef main():\n    f = 1\n    f()\n"],
-        ["main [g, v, w] [] { def g[T](x: T) -> T { return x }; v = g; w = g[int]; (g)(1) }\ng [] [] { return x }", "def main():\n    def g[T](x: T) -> T:\n        return x\n    v = g\n    w = g[int]\n    g(1)\n"],
-        ["main [h, x] [] { h = []; x = (h[0])(1) }", "def main():\n    h = []\n    x = h[0](1)\n"],
-        ["main [c, v, e, b] [] { c = a.C(1); v = h; e = E.A; try { pass } except a.Bad as b { raise } }\nh [] [] { pass }", "import a\ndef main():\n    c = a.C(1)\n    v = a.h\n    e = a.E.A\n    try:\n        pass\n    except a.Bad as b:\n        raise\n", "a", "class C:\n    x: int\nenum E:\n    A\nclass Bad(Exception):\n    pass\ndef h():\n    pass\n"],
-        ["main.wlo:3:11: error: '_E' is private to module 'a'", "import a\ndef main():\n    e = a._E.A\n", "a", "enum _E:\n    A\n"],
+        ["main [x*, g] [] { var x = 1; def g() -> none { x = (x + 1) }; (g)() }\ng [] [x] { x = (x + 1) }", "def main():\n    var x = 1\n    def g():\n\n        x = x + 1\n    g()\n"],
+        ["main [x*, h] [] { var x = 1; def h() -> none { def k() -> none { var y = x } } }\nh [k] [x] { def k() -> none { var y = x } }\nk [y] [x] { var y = x }", "def main():\n    var x = 1\n    def h():\n        def k():\n            var y = x\n"],
+        ["f [] [] { return none }\nmain [a, b, c, e, k, v, i] [] { var <a, b> = f(); for c in f() { pass }; try { pass } except E as e { pass }; for <k, v> in f() { var i = 1 } }", "class E(Exception):\n    pass\ndef f():\n    return none\ndef main():\n    var a, b = f()\n    for c in f():\n        pass\n    try:\n        pass\n    except E as e:\n        pass\n    for k, v in f():\n        var i = 1\n"],
+        ["f [] [] { pass }\nmain [g, y] [] { var g = f; (g)(1); var y = E.A; a.h(E.A) }\nh [] [] { pass }", "import a\nenum E:\n    A\ndef f(x: int):\n    pass\ndef main():\n    var g = f\n    g(1)\n    var y = E.A\n    a.h(E.A)\n", "a", "def h(x: int):\n    pass\n"],
+        ["main [x*, f] [] { var x = 1; var f = ((y) => (x + y)) }", "def main():\n    var x = 1\n    var f = (y) => x + y\n"],
+        ["f [] [] { pass }\nmain [f] [] { var f = 1; (f)() }", "def f():\n    pass\ndef main():\n    var f = 1\n    f()\n"],
+        ["main [g, v, w] [] { def g[T](x: T) -> T { return x }; var v = g; var w = g[int]; (g)(1) }\ng [] [] { return x }", "def main():\n    def g[T](x: T) -> T:\n        return x\n    var v = g\n    var w = g[int]\n    g(1)\n"],
+        ["main [h, x] [] { var h = []; var x = (h[0])(1) }", "def main():\n    var h = []\n    var x = h[0](1)\n"],
+        ["main [c, v, e, b] [] { var c = a.C(1); var v = h; var e = E.A; try { pass } except a.Bad as b { raise } }\nh [] [] { pass }", "import a\ndef main():\n    var c = a.C(1)\n    var v = a.h\n    var e = a.E.A\n    try:\n        pass\n    except a.Bad as b:\n        raise\n", "a", "class C:\n    x: int\nenum E:\n    A\nclass Bad(Exception):\n    pass\ndef h():\n    pass\n"],
+        ["main.wlo:3:15: error: '_E' is private to module 'a'", "import a\ndef main():\n    var e = a._E.A\n", "a", "enum _E:\n    A\n"],
         ["main.wlo:6:13: error: bare 'raise' is only allowed in an 'except' clause", "def main():\n    try:\n        pass\n    except E:\n        def g():\n            raise\nclass E(Exception):\n    pass\n"],
-        ["main.wlo:2:15: error: 'await' is only allowed in an async function", "async def main():\n    f = () => await g()\nasync def g():\n    pass\n"],
-        ["main.wlo:2:16: error: unknown name 'z'", "def main():\n    f = (y) => z\n"],
-        ["main.wlo:2:13: error: duplicate parameter 'y'", "def main():\n    f = (y, y) => y\n"],
-        ["main.wlo:3:19: error: duplicate parameter 'a'", "def main():\n    x = 1\n    def g(a: int, a: int):\n        pass\n"],
+        ["main.wlo:2:19: error: 'await' is only allowed in an async function", "async def main():\n    var f = () => await g()\nasync def g():\n    pass\n"],
+        ["main.wlo:2:20: error: unknown name 'z'", "def main():\n    var f = (y) => z\n"],
+        ["main.wlo:2:17: error: duplicate parameter 'y'", "def main():\n    var f = (y, y) => y\n"],
+        ["main.wlo:3:19: error: duplicate parameter 'a'", "def main():\n    var x = 1\n    def g(a: int, a: int):\n        pass\n"],
         ["main.wlo:3:7: error: 'a.h' is not generic", "import a\ndef main():\n    a.h[int](1)\n", "a", "def h(x: int):\n    pass\n"],
-        ["main [p, x*, g] [] { p = 1; for x in p { def g() -> none { y = x } } }\ng [y] [x] { y = x }", "def main():\n    p = 1\n    for x in p:\n        def g():\n            y = x\n"],
-        ["first [] [] { return x }\nmain [xs, i] [] { xs = i; i = xs[i]; first[int](xs) }", "def first[T](x: T) -> T:\n    return x\ndef main():\n    xs = i\n    i = xs[i]\n    first[int](xs)\n"],
+        ["main [p, x*, g] [] { var p = 1; for x in p { def g() -> none { var y = x } } }\ng [y] [x] { var y = x }", "def main():\n    var p = 1\n    for x in p:\n        def g():\n            var y = x\n"],
+        ["main.wlo:4:14: error: unknown name 'i'", "def first[T](x: T) -> T:\n    return x\ndef main():\n    var xs = i\n    var i = xs[i]\n    first[int](xs)\n"],
         # Types
         ["main.wlo:1:10: error: alias 'A' expands to itself", "type A = A | int\ndef main():\n    pass\n"],
         ["main.wlo:2:16: error: alias 'A' expands to itself", "type A = B\ntype B = int | A\ndef main():\n    pass\n"],
@@ -220,11 +223,11 @@ def main():
         ["main.wlo:5:14: error: type argument int does not satisfy the bound Named of 'T'", "protocol Named:\n    def name() -> str\nclass Box[T: Named]:\n    v: T\ndef g(b: Box[int]):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:7:14: error: an open type can be in a union only with none", "protocol P:\n    def m() -> int\nclass C:\n    x: int\n    def m() -> int:\n        return 1\ndef f(x: P | C):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:26: error: an open type can be in a union only with none", "def f(x: Iterable[int] | list[str]):\n    pass\ndef main():\n    pass\n"],
-        ["main.wlo:2:24: error: an open type can be in a union only with none", "def main():\n    x: Iterable[int] | list[str] = []\n"],
+        ["main.wlo:2:28: error: an open type can be in a union only with none", "def main():\n    var x: Iterable[int] | list[str] = []\n"],
         # Bounds are checked once the lazy types in the argument are
         # resolved.
         ["main.wlo:3:14: error: type argument list[float] does not satisfy the bound Iterable[int | float] of 'T'", "class Box[T: Iterable[int | float]]:\n    item: T\ndef f(b: Box[list[float]]):\n    pass\ndef main():\n    pass\n"],
-        ["main [b] [] { b: Box[list[int]] = Box([1]) }", "class Box[T: Iterable[int]]:\n    item: T\ndef main():\n    b: Box[list[int]] = Box([1])\n"],
+        ["main [b] [] { var b: Box[list[int]] = Box([1]) }", "class Box[T: Iterable[int]]:\n    item: T\ndef main():\n    var b: Box[list[int]] = Box([1])\n"],
         ["main.wlo:1:16: error: expected int, received str", "def f(x: int = 'a'):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:3:16: error: enum 'E' has no member 'C'", "enum E:\n    A\ndef f(x: E = E.C):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:3:16: error: unknown enum 'K'", "class K:\n    x: int\ndef f(x: int = K.x):\n    pass\ndef main():\n    pass\n"],
@@ -232,7 +235,7 @@ def main():
         ["main.wlo:2:14: error: expected str, received int", "class C:\n    x: str = 1\ndef main():\n    pass\n"],
         ["main.wlo:1:11: error: main must take no parameters and return none", "async def main() -> int:\n    return 1\n"],
         ["main.wlo:1:5: error: main must take no parameters and return none", "def main() -> int:\n    return 1\n"],
-        ["main.wlo:3:17: error: class 'handles.Connection' cannot be used as a value", "import handles\ndef main():\n    x = handles.Connection\n", "handles", "class Connection:\n    value: int\n"],
+        ["main.wlo:3:21: error: class 'handles.Connection' cannot be used as a value", "import handles\ndef main():\n    var x = handles.Connection\n", "handles", "class Connection:\n    value: int\n"],
         ["main.wlo:3:29: error: type 'Coroutine' needs type arguments", "async def g() -> int:\n    return 1\ndef f(c: Coroutine[int], d: Coroutine) -> none:\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:9: error: exception classes cannot be generic", "class E[T](Exception):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:7: error: cannot redefine built-in class 'ValueError'", "class ValueError:\n    x: int\ndef main():\n    pass\n"],
@@ -241,17 +244,17 @@ def main():
         ["main.wlo:2:11: error: type parameter 'T' hides another type parameter", "def f[T](x: T) -> T:\n    def g[T](y: T) -> T:\n        return y\n    return x\ndef main():\n    pass\n"],
         ["main.wlo:2:15: error: dictionary keys must be int, str, or an enum", "type K = int | str\ndef f(d: dict[K, int]):\n    pass\ndef main():\n    pass\n"],
         ["main.wlo:1:12: error: extern functions are only allowed in core", "extern def write(fd: int) -> int\ndef main():\n    pass\n"],
-        ["main.wlo:2:9: error: intrinsic '__type' is only available in core", "def main():\n    x = __type(str)\n"],
+        ["main.wlo:2:13: error: intrinsic '__type' is only available in core", "def main():\n    var x = __type(str)\n"],
     ]
-    ok = true
+    var ok = true
     for program in cases:
-        actual = describe(program)
+        var actual = describe(program)
         if actual != program[0]:
             print(f"FAIL {program[1]}")
             print(f"  expected: {program[0]}")
             print(f"  actual:   {actual}")
             ok = false
-    signature_cases = [
+    var signature_cases = [
         ["main: def f(box: C, index: int) -> none\nmain: def main() -> none\nmain: field C.items: list[int]", "class C:\n    items: list[int]\ndef f(box: C, index: int):\n    box.items[index]()\ndef main():\n    pass\n"],
         ["main: def f(box: C) -> none\nmain: def main() -> none\nmain: field C.items: dict[E, int]", "enum E:\n    A\nclass C:\n    items: dict[E, int]\ndef f(box: C):\n    box.items[E.A]()\ndef main():\n    pass\n"],
         ["main: def f(t: Tree, j: J) -> list[Tree]\nmain: def main() -> none", "type Tree = int | list[Tree]\ntype J = none | dict[str, J]\ndef f(t: Tree, j: J) -> list[Tree]:\n    return [t]\ndef main():\n    pass\n"],
@@ -270,38 +273,38 @@ def main():
         ["main: def f(a: tuple[int, str], b: tuple[], c: tuple[int]) -> none\nmain: def main() -> none", "def f(a: tuple[int, str], b: tuple[], c: tuple[int]):\n    pass\ndef main():\n    pass\n"],
     ]
     for program in signature_cases:
-        actual = signatures(program, false)
+        var actual = signatures(program, false)
         if actual != program[0]:
             print(f"FAIL signatures {program[1]}")
             print(f"  expected: {program[0]}")
             print(f"  actual:   {actual}")
             ok = false
     # A test file needs no main; its tests take no parameters and return none.
-    test_cases = [
+    var test_cases = [
         ["main: def test_b() -> none\nmain: def test_a() -> none\nmain: def test_c() -> Coroutine[none]", "def test_b():\n    pass\ndef test_a():\n    pass\nasync def test_c():\n    pass\n"],
         ["main.wlo:1:5: error: test function 'test_a' must take no parameters and return none", "def test_a(x: int):\n    pass\n"],
         ["main.wlo:1:5: error: test function 'test_b' must take no parameters and return none", "def test_b() -> int:\n    return 1\ndef test_a():\n    pass\n"],
     ]
     for program in test_cases:
-        actual = signatures(program, true)
+        var actual = signatures(program, true)
         if actual != program[0]:
             print(f"FAIL test file {program[1]}")
             print(f"  expected: {program[0]}")
             print(f"  actual:   {actual}")
             ok = false
-    tested = bind_program(["", "def test_b():\n    pass\ndef helper():\n    pass\ndef test_a():\n    pass\n"], true)
+    var tested = bind_program(["main: def test_b() -> none\nmain: def helper() -> none\nmain: def test_a() -> none", "def test_b():\n    pass\ndef helper():\n    pass\ndef test_a():\n    pass\n"], true)
     if tested is str:
         print(f"FAIL tests in name order: {tested}")
         ok = false
     else:
-        order: list[str] = []
+        var order: list[str] = []
         for function in tested[0].tests:
             order.append(function.name)
         if " ".join(order) != "test_a test_b":
             print("FAIL tests in name order: " + " ".join(order))
             ok = false
-    names = function_names(["", "import a\nprotocol P:\n    def f() -> int\n    def g() -> int\nclass C:\n    x: int\n    def m() -> int:\n        return 1\ndef h() -> int:\n    return 1\ndef main():\n    if true:\n        def g[T](x: T) -> T:\n            return x\n    else:\n        def g[T](x: T) -> T:\n            f = () => x\n            return x\n", "a", "class D:\n    y: int\n    def n():\n        pass\n"])
-    expected = "P.f P.g C.m h main main.g main.g main.g.<lambda> a.D.n"
+    var names = function_names(["", "import a\nprotocol P:\n    def f() -> int\n    def g() -> int\nclass C:\n    x: int\n    def m() -> int:\n        return 1\ndef h() -> int:\n    return 1\ndef main():\n    if true:\n        def g[T](x: T) -> T:\n            return x\n    else:\n        def g[T](x: T) -> T:\n            var f = () => x\n            return x\n", "a", "class D:\n    y: int\n    def n():\n        pass\n"])
+    var expected = "P.f P.g C.m h main main.g main.g main.g.<lambda> a.D.n"
     if names != expected:
         print("FAIL function ids and type names")
         print(f"  expected: {expected}")

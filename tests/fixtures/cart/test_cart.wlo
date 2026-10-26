@@ -1,7 +1,7 @@
 import cart
 
 def _sample() -> cart.Cart:
-    order = cart.Cart([])
+    var order = cart.Cart([])
     order.add("tea", 450, quantity=2)
     order.add("scone", 325)
     return order
@@ -13,13 +13,13 @@ def test_empty_cart_totals_zero():
     assert cart.Cart([]).total() == 0
 
 def test_discount_rounds_down():
-    order = _sample()
+    var order = _sample()
     order.apply_discount(10)
-    total = order.total()
+    var total = order.total()
     assert total == 1103, f"expected 1103, received {total}"
 
 def test_discount_out_of_range():
-    order = _sample()
+    var order = _sample()
     try:
         order.apply_discount(101)
     except ValueError as error:

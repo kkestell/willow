@@ -2,12 +2,12 @@
 # specifications for alignment, width, and precision.
 
 def main():
-    name = "Ada"
-    year = 1843
+    var name = "Ada"
+    var year = 1843
     print(f"{name} wrote the first program in {year}.")
     print(f"{name} has {len(name)} letters; {{braces}} are literal")
 
-    items = [("tea", 3, 2.5), ("cake", 1, 4.25), ("bread", 12, 0.8)]
+    var items = [("tea", 3, 2.5), ("cake", 1, 4.25), ("bread", 12, 0.8)]
     print(f"{'item':<8s}{'qty':>5s}{'price':>8s}")
     for label, quantity, price in items:
         print(f"{label:<8s}{quantity:>5d}{price:>8.2f}")

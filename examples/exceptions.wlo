@@ -11,7 +11,7 @@ def parse_line(text: str, line: int) -> int:
         raise ParseError(f"not a number: {text}", line)
 
 def total(lines: list[str]) -> int:
-    sum = 0
+    var sum = 0
     for i in range(len(lines)):
         sum = sum + parse_line(lines[i], i + 1)
     return sum

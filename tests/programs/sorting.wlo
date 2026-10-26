@@ -10,7 +10,7 @@ def words(xs: list[str]) -> str:
     return " ".join(xs)
 
 def ints(xs: list[int]) -> str:
-    texts: list[str] = []
+    var texts: list[str] = []
     for x in xs:
         texts.append(str(x))
     return " ".join(texts)
@@ -25,21 +25,21 @@ def main():
     print(ints(numbers([1, 3, 2])))
     print(words(sorted(["b", "a"], reverse=true)))
 
-    pairs = [("b", 2), ("a", 9), ("b", 1), ("a", 1)]
+    var pairs = [("b", 2), ("a", 9), ("b", 1), ("a", 1)]
     for name, n in sorted(pairs):
         print(f"{name} {n}")
-    nested = [((2, "x"), 1), ((1, "z"), 2), ((1, "y"), 3)]
+    var nested = [((2, "x"), 1), ((1, "z"), 2), ((1, "y"), 3)]
     for key, n in sorted(nested, reverse=true):
         print(f"{key[0]} {key[1]} {n}")
     pairs.sort(reverse=true)
     print(f"{pairs[0][0]} {pairs[0][1]}")
 
-    nan = float("nan")
+    var nan = float("nan")
     try:
         sorted([1.0, nan])
     except ValueError as error:
         print(error.message)
-    with_nan = [(2, 1.0), (1, nan)]
+    var with_nan = [(2, 1.0), (1, nan)]
     try:
         with_nan.sort()
     except ValueError as again:

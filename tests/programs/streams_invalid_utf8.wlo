@@ -1,7 +1,7 @@
 import io
 
 def main():
-    stdin = io.stdin()
+    var stdin = io.stdin()
     print(stdin.readline())
     try:
         stdin.readline()

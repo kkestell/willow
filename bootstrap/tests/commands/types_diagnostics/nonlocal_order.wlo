@@ -1,5 +1,0 @@
-def main():
-    x = 1
-    def g():
-        print(x)
-        nonlocal x

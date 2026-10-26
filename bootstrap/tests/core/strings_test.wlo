@@ -25,21 +25,21 @@ def main():
 
     # Every ASCII table slot, including NUL and DEL, also supports cached hashing.
     for code in range(128):
-        text = core.str_chr(code)
-        character = text[0]
+        var text = core.str_chr(code)
+        var character = text[0]
         assert character == text
         assert text[-1] == text
         assert core.str_hash(character) == core.str_hash(text)
         for item in text:
             assert item == character
-    mixed = "\x00A\x7fé€😀"
+    var mixed = "\x00A\x7fé€😀"
     assert len(mixed) == 6
     assert mixed[0] == "\x00"
     assert mixed[2] == "\x7f"
     assert mixed[3] == "é"
     assert mixed[4] == "€"
     assert mixed[-1] == "😀"
-    parts: list[str] = []
+    var parts: list[str] = []
     for character in mixed:
         parts.append(character)
     assert "".join(parts) == mixed

@@ -3,7 +3,7 @@ import io
 
 def main():
     core.close(1)
-    caught = false
+    var caught = false
     try:
         io.stdout().write_text("hello")
     except OSError as error:

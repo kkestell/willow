@@ -2,12 +2,12 @@ import core
 import io
 
 def main():
-    pipe = core.process_pipe()
-    path = "/dev/fd/" + str(pipe[1])
+    var pipe = core.process_pipe()
+    var path = "/dev/fd/" + str(pipe[1])
     with io.open(path, "w") as output:
         core.close(pipe[0])
         core.close(pipe[1])
-        caught = false
+        var caught = false
         try:
             output.write_text("hello")
         except OSError as error:

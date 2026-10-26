@@ -1,1 +1,1 @@
-builtin_value_type.wlo:2:9: error: function 'len' needs an expected callable type
+builtin_value_type.wlo:2:13: error: function 'len' needs an expected callable type

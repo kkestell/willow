@@ -1,9 +1,9 @@
 # https://rosettacode.org/wiki/Roman_numerals/Encode
 
 def to_roman(n: int) -> str:
-    values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
-    numerals = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
-    result = ""
+    var values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+    var numerals = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
+    var result = ""
     for i in range(len(values)):
         while n >= values[i]:
             result = result + numerals[i]

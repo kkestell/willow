@@ -3,7 +3,7 @@ import core
 extern def nanosleep(request: ptr, remaining: ptr) -> cint
 
 def time() -> float:
-    stamp = __alloc_atomic(16)
+    var stamp = __alloc_atomic(16)
     if core.clock_gettime(0, stamp) != 0:
         raise OSError("cannot read clock: " + core.os_reason())
     return float(__int(__load8(stamp, 0))) + float(__int(__load8(stamp, 8))) / 1000000000.0
@@ -14,12 +14,12 @@ def monotonic() -> float:
 def sleep(seconds: float):
     if not (seconds >= 0.0 and seconds - seconds == 0.0):
         raise ValueError("sleep length must be finite and nonnegative")
-    request = __alloc_atomic(16)
-    remaining = __alloc_atomic(16)
+    var request = __alloc_atomic(16)
+    var remaining = __alloc_atomic(16)
     while seconds > 0.0:
-        duration = min(seconds, 2147483647.0)
-        whole = int(duration)
-        nanos = int(core.ceil((duration - float(whole)) * 1000000000.0))
+        var duration = min(seconds, 2147483647.0)
+        var whole = int(duration)
+        var nanos = int(core.ceil((duration - float(whole)) * 1000000000.0))
         if nanos == 1000000000:
             whole = whole + 1
             nanos = 0
@@ -36,24 +36,24 @@ def _digits(value: int, width: int) -> str:
     return str(value).rjust(width).replace(" ", "0")
 
 def utc(timestamp: float) -> str:
-    seconds = core.floor(timestamp)
+    var seconds = core.floor(timestamp)
     if not (seconds >= -62135596800.0 and seconds <= 253402300799.0):
         raise ValueError("timestamp out of range")
-    whole = int(seconds)
-    days = whole // 86400
-    rest = whole % 86400
+    var whole = int(seconds)
+    var days = whole // 86400
+    var rest = whole % 86400
     # Convert days since the Unix epoch to a civil date.
-    z = days + 719468
-    era = z // 146097
-    doe = z - era * 146097
-    yoe = (doe - doe // 1460 + doe // 36524 - doe // 146096) // 365
-    doy = doe - (365 * yoe + yoe // 4 - yoe // 100)
-    mp = (5 * doy + 2) // 153
-    day = doy - (153 * mp + 2) // 5 + 1
-    month = mp + 3
+    var z = days + 719468
+    var era = z // 146097
+    var doe = z - era * 146097
+    var yoe = (doe - doe // 1460 + doe // 36524 - doe // 146096) // 365
+    var doy = doe - (365 * yoe + yoe // 4 - yoe // 100)
+    var mp = (5 * doy + 2) // 153
+    var day = doy - (153 * mp + 2) // 5 + 1
+    var month = mp + 3
     if mp >= 10:
         month = mp - 9
-    year = yoe + era * 400
+    var year = yoe + era * 400
     if month <= 2:
         year = year + 1
     return _digits(year, 4) + "-" + _digits(month, 2) + "-" + _digits(day, 2) + "T" + _digits(rest // 3600, 2) + ":" + _digits(rest % 3600 // 60, 2) + ":" + _digits(rest % 60, 2) + "Z"

@@ -6,15 +6,15 @@ def unit_name(unit: lib.geometry.Unit) -> str:
     return "in"
 
 def main():
-    points: lib.geometry.Points = [lib.geometry.origin()]
+    var points: lib.geometry.Points = [lib.geometry.origin()]
     points.append(lib.geometry.Point(3, 4, lib.geometry.Unit.INCH))
     for point in points:
         print(point.label())
     print(lib.geometry.Unit.INCH)
-    found: lib.geometry.Point | none = points[1]
+    var found: lib.geometry.Point | none = points[1]
     if found is lib.geometry.Point:
         print(found.x)
-    counts: dict[lib.geometry.Unit, int] = {lib.geometry.Unit.CM: 1}
+    var counts: dict[lib.geometry.Unit, int] = {lib.geometry.Unit.CM: 1}
     counts[lib.geometry.Unit.INCH] = 2
     for unit, count in counts.items():
         print(str(unit) + " " + str(count))

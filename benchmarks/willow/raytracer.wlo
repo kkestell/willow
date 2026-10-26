@@ -47,23 +47,23 @@ def infinity() -> float:
 
 # The distance along the ray to the sphere, or infinity if the ray misses it.
 def ray_sphere(sphere: Sphere, origin: Vec, direction: Vec) -> float:
-    v = sub(sphere.center, origin)
-    b = dot(v, direction)
-    disc = b * b - dot(v, v) + sphere.radius * sphere.radius
+    var v = sub(sphere.center, origin)
+    var b = dot(v, direction)
+    var disc = b * b - dot(v, v) + sphere.radius * sphere.radius
     if disc < 0.0:
         return infinity()
-    d = math.sqrt(disc)
-    t2 = b + d
+    var d = math.sqrt(disc)
+    var t2 = b + d
     if t2 < 0.0:
         return infinity()
-    t1 = b - d
+    var t1 = b - d
     if t1 > 0.0:
         return t1
     return t2
 
 def intersect(scene: Scene, origin: Vec, direction: Vec, hit: Hit):
     if scene is Sphere:
-        distance = ray_sphere(scene, origin, direction)
+        var distance = ray_sphere(scene, origin, direction)
         if distance >= hit.distance:
             return
         hit.distance = distance
@@ -86,47 +86,47 @@ def shadowed(scene: Scene, origin: Vec, direction: Vec) -> bool:
     return false
 
 def ray_trace(light: Vec, origin: Vec, direction: Vec, scene: Scene) -> float:
-    hit = Hit(infinity(), Vec(0.0, 0.0, 0.0))
+    var hit = Hit(infinity(), Vec(0.0, 0.0, 0.0))
     intersect(scene, origin, direction, hit)
     if hit.distance == infinity():
         return 0.0
-    g = dot(hit.normal, light)
+    var g = dot(hit.normal, light)
     if g >= 0.0:
         return 0.0
     # Start the shadow ray just off the surface, by the square root of the
     # float epsilon, so that it does not hit the sphere it leaves.
-    point = add(add(origin, scale(hit.distance, direction)), scale(1.4901161193847656e-08, hit.normal))
+    var point = add(add(origin, scale(hit.distance, direction)), scale(1.4901161193847656e-08, hit.normal))
     if shadowed(scene, point, scale(-1.0, light)):
         return 0.0
     return -g
 
 def create(level: int, center: Vec, radius: float) -> Scene:
-    sphere = Sphere(center, radius)
+    var sphere = Sphere(center, radius)
     if level == 1:
         return sphere
-    children: list[Scene] = [sphere]
-    offset = 3.0 * radius / math.sqrt(12.0)
+    var children: list[Scene] = [sphere]
+    var offset = 3.0 * radius / math.sqrt(12.0)
     for dz in [-1.0, 1.0]:
         for dx in [-1.0, 1.0]:
             children.append(create(level - 1, add(center, scale(offset, Vec(dx, 1.0, dz))), 0.5 * radius))
     return Group(Sphere(center, 3.0 * radius), children)
 
 def main():
-    n = int(sys.args()[0])
-    samples = 4
-    size = float(n)
-    light = unitise(Vec(-1.0, -3.0, 2.0))
-    scene = create(6, Vec(0.0, -1.0, 0.0), 1.0)
-    eye = Vec(0.0, 0.0, -4.0)
-    out = io.stdout()
+    var n = int(sys.args()[0])
+    var samples = 4
+    var size = float(n)
+    var light = unitise(Vec(-1.0, -3.0, 2.0))
+    var scene = create(6, Vec(0.0, -1.0, 0.0), 1.0)
+    var eye = Vec(0.0, 0.0, -4.0)
+    var out = io.stdout()
     out.write_text(f"P5\n{n} {n}\n255\n")
     for y in range(n - 1, -1, -1):
-        row: list[int] = []
+        var row: list[int] = []
         for x in range(n):
-            g = 0.0
+            var g = 0.0
             for dx in range(samples):
                 for dy in range(samples):
-                    direction = unitise(Vec(
+                    var direction = unitise(Vec(
                         float(x) + float(dx) / float(samples) - size / 2.0,
                         float(y) + float(dy) / float(samples) - size / 2.0,
                         size,

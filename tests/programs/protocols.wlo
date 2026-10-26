@@ -64,10 +64,10 @@ class Host:
     tag: str
 
     def greet(name: str | none = "friend", *, polite: bool = true, loud: bool = true) -> str:
-        who = "nobody"
+        var who = "nobody"
         if name is not none:
             who = name
-        text = self.tag + " greets " + who
+        var text = self.tag + " greets " + who
         if polite:
             text = text + " politely"
         if loud:
@@ -117,18 +117,18 @@ def take[T](source: Source[T]) -> T:
     return source.get()
 
 def show(number: Number):
-    r = number.value()
+    var r = number.value()
     print((r is float))
     print(r)
 
 def main():
-    shapes: list[Shape] = [Rect(2.0, 3.0), Circle(1.0)]
+    var shapes: list[Shape] = [Rect(2.0, 3.0), Circle(1.0)]
     for shape in shapes:
         print(shape.area())
         print(shape.scaled(2.0).area())
-    area: Area = shapes[0]
+    var area: Area = shapes[0]
     print(area.area())
-    later = () => area.area()
+    var later = () => area.area()
     print(later())
 
     def nested() -> float:
@@ -136,13 +136,13 @@ def main():
 
     print(nested())
 
-    out: Writer = io.stdout()
+    var out: Writer = io.stdout()
     out.write_text(text="written\n")
 
     print(take(Box(4)))
     print(take(Circle(4.0)))
 
-    greeter: Greeter = Host("Ann")
+    var greeter: Greeter = Host("Ann")
     print(greeter.greet())
     print(greeter.greet(none, loud=false))
     print(greeter.greet("Bo"))
@@ -150,13 +150,13 @@ def main():
     show(Half(0))
     show(Three(0))
 
-    scaler: Scaler = Doubler(0)
+    var scaler: Scaler = Doubler(0)
     print(scaler.scale(1.5))
     print(scaler.scale())
 
-    pair: Pair = One(1)
+    var pair: Pair = One(1)
     print(pair.pair()[0])
     print(Two(2).pair()[1])
 
-    described: Described = Oops("bad", 7)
+    var described: Described = Oops("bad", 7)
     print(described.describe())

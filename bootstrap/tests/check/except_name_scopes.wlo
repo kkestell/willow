@@ -1,0 +1,9 @@
+def main():
+    try:
+        raise KeyError("one")
+    except KeyError as error:
+        assert error.message == "one"
+    try:
+        raise IndexError("two")
+    except IndexError as error:
+        assert error.message == "two"

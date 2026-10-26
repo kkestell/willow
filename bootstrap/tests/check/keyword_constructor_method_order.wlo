@@ -15,8 +15,8 @@ def receiver(pair: Pair) -> Pair:
     return pair
 
 def main():
-    pair = Pair(b=value("b", 2), a=value("a", 1))
+    var pair = Pair(b=value("b", 2), a=value("a", 1))
     print(f"{pair.a} {pair.b} {pair.c}")
     print(receiver(pair).show(c=value("c", 3), b=value("b", 2)))
-    counts = {"x": 1}
+    var counts = {"x": 1}
     print(counts.get(default=value("default", 4), k="x"))

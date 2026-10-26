@@ -27,7 +27,7 @@ def next_value(n: int) -> int:
     return n + 1
 
 def find(target: int) -> int:
-    n = 0
+    var n = 0
     while true:
         n = n + 1
         if n < target:
@@ -36,8 +36,8 @@ def find(target: int) -> int:
     return -1
 
 def main():
-    i = 0
-    total = 0
+    var i = 0
+    var total = 0
     while next_value(i) <= 10:
         i = i + 1
         if i == 3:
@@ -46,9 +46,9 @@ def main():
             break
         total = total + i
     print(total)
-    row = 0
+    var row = 0
     while row < 3:
-        col = 0
+        var col = 0
         while true:
             if col == row:
                 break

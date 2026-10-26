@@ -15,14 +15,14 @@ import show
 import sys
 
 def main():
-    args = sys.args()
-    mode = ""
+    var args = sys.args()
+    var mode = ""
     if len(args) > 0 and args[0].startswith("--"):
         mode = args[0]
         args = args[1:]
-    failed = false
+    var failed = false
     for path in args:
-        lexed = lexer.lex(path, fs.read_file(path))
+        var lexed = lexer.lex(path, fs.read_file(path))
         if lexed is diagnostic.Diagnostic:
             sys.eprint(lexed.format())
             failed = true
@@ -30,7 +30,7 @@ def main():
             for token in lexed:
                 print(f"{path}:{token.line}:{token.col}: {token.kind} {token.text}")
         else:
-            parsed = parser.parse(path, lexed, false)
+            var parsed = parser.parse(path, lexed, false)
             if parsed is diagnostic.Diagnostic:
                 sys.eprint(parsed.format())
                 failed = true

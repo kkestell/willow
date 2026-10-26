@@ -6,7 +6,7 @@ def greet(name: str, greeting: str = "Hello") -> str:
 
 # Parameters after `*` must be passed by name.
 def describe(path: str, *, size: int, hidden: bool = false) -> str:
-    text = f"{path} ({size} bytes)"
+    var text = f"{path} ({size} bytes)"
     if hidden:
         text = text + ", hidden"
     return text
@@ -20,7 +20,7 @@ def sum_of_squares(numbers: list[int]) -> int:
     def square(n: int) -> int:
         return n * n
 
-    total = 0
+    var total = 0
     for n in numbers:
         total = total + square(n)
     return total

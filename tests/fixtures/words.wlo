@@ -2,19 +2,19 @@
 # frequent first.
 
 def keys(items: dict[int, list[str]]) -> list[int]:
-    result: list[int] = []
+    var result: list[int] = []
     for key in items:
         result.append(key)
     return result
 
 def main():
-    counts: dict[str, int] = {}
-    total = 0
-    line = input()
+    var counts: dict[str, int] = {}
+    var total = 0
+    var line = input()
     while line is not none:
         for word in line.lower().split(" "):
             if word != "":
-                seen = counts.get(word)
+                var seen = counts.get(word)
                 if seen is none:
                     counts[word] = 1
                 else:
@@ -22,9 +22,9 @@ def main():
                 total = total + 1
         line = input()
 
-    by_count: dict[int, list[str]] = {}
+    var by_count: dict[int, list[str]] = {}
     for word in counts:
-        count = counts[word]
+        var count = counts[word]
         if count not in by_count:
             by_count[count] = []
         by_count[count].append(word)
@@ -32,5 +32,5 @@ def main():
     print(f"{'word':<12}{'count':>6}{'share':>9}")
     for count in sorted(keys(by_count), reverse=true):
         for word in sorted(by_count[count]):
-            share = count / total * 100.0
+            var share = count / total * 100.0
             print(f"{word:<12}{count:>6d}{share:>8.1f}%")

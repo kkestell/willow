@@ -1,1 +1,1 @@
-sort_key_type.wlo:2:25: error: cannot sort by a key of type list[int]
+sort_key_type.wlo:2:29: error: cannot sort by a key of type list[int]

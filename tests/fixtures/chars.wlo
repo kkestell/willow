@@ -2,10 +2,11 @@ import fs
 import sys
 
 def main():
-    args = sys.args()
+    var args = sys.args()
     if len(args) != 1:
         sys.eprint("usage: chars <file>")
         sys.exit(2)
+    var text: str
     try:
         text = fs.read_file(args[0])
     except OSError as error:

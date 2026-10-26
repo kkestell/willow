@@ -7,7 +7,7 @@ import geometry
 import text.pad
 
 def main():
-    origin = geometry.Point(0.0, 0.0)
-    corner = geometry.Point(3.0, 4.0)
+    var origin = geometry.Point(0.0, 0.0)
+    var corner = geometry.Point(3.0, 4.0)
     print(geometry.distance_squared(origin, corner))
     print(text.pad.boxed("modules"))

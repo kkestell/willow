@@ -10,12 +10,12 @@ import tokens
 # text and others by kind, with a string's text after a colon; or the first
 # error as "line:col: message".
 def describe(source: str) -> str:
-    result = lexer.lex("test.wlo", source)
+    var result = lexer.lex("test.wlo", source)
     if result is diagnostic.Diagnostic:
         return f"{result.line}:{result.col}: {result.message}"
-    words: list[str] = []
+    var words: list[str] = []
     for token in result:
-        name = str(token.kind).removeprefix("Kind.")
+        var name = str(token.kind).removeprefix("Kind.")
         if token.text != "" and name != "NAME" and name != "STRING_LITERAL" and name != "FSTRING_TEXT" and name != "FIELD_END" and name != "INT_LITERAL" and name != "FLOAT_LITERAL":
             words.append(token.text)
         else if token.text != "" and name != "NAME":
@@ -25,7 +25,7 @@ def describe(source: str) -> str:
     return " ".join(words)
 
 def check(source: str, expected: str) -> bool:
-    actual = describe(source)
+    var actual = describe(source)
     if actual == expected:
         return true
     print(f"FAIL {source}")
@@ -35,14 +35,14 @@ def check(source: str, expected: str) -> bool:
 
 # The line and column of the token with index `index` in `source`.
 def position(source: str, index: int) -> str:
-    result = lexer.lex("test.wlo", source)
+    var result = lexer.lex("test.wlo", source)
     if result is diagnostic.Diagnostic:
         return result.format()
-    token = result[index]
+    var token = result[index]
     return f"{token.line}:{token.col}"
 
 def main():
-    cases = [
+    var cases = [
         ["() => 1", "( ) => INT_LITERAL:1 NEWLINE EOF"],
         ["self selfish\n", "self NAME NEWLINE EOF"],
         ["def inc(x: int) -> int:\n    return x + 1\n", "def NAME ( NAME : int ) -> int : NEWLINE INDENT return NAME + INT_LITERAL:1 NEWLINE DEDENT EOF"],
@@ -112,12 +112,12 @@ def main():
         ["x = @\n", "1:5: unexpected character '@'"],
         ["x = é\n", "1:5: unexpected character 'é'"],
     ]
-    ok = true
+    var ok = true
     for pair in cases:
         if not check(pair[0], pair[1]):
             ok = false
     # Positions after a triple-quoted string and inside a multi-line field.
-    positions = [
+    var positions = [
         [position("x = \"\"\"a\n    b\r\nc\\t\"\"\" + y\n", 3), "3:8"],
         [position("x = f\"\"\"\n{a +\n b}\"\"\"\n", 6), "3:2"],
         [position("def f():\r\n    pass\r\n", 7), "2:5"],

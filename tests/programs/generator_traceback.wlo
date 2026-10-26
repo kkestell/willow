@@ -3,7 +3,7 @@ def numbers() -> Iterator[int]:
     raise ValueError("bad item")
 
 def total() -> int:
-    sum = 0
+    var sum = 0
     for n in numbers():
         sum = sum + n
     return sum

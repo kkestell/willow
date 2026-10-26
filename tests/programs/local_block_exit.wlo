@@ -1,0 +1,4 @@
+def main():
+    if true:
+        var value = 1
+    print(value)

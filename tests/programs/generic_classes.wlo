@@ -17,7 +17,7 @@ class Node[T]:
     next: Node[T] | none = none
 
 def length[T](node: Node[T] | none) -> int:
-    count = 0
+    var count = 0
     while node is not none:
         count = count + 1
         node = node.next
@@ -30,19 +30,19 @@ def describe(x: Box[int] | none) -> str:
 
 def main():
     # The constructor infers T, or takes it explicitly.
-    b = Box(1)
+    var b = Box(1)
     print(b.get())
     b.set(5)
     print(b.value)
-    s = Box[str]("a")
+    var s = Box[str]("a")
     print(s.get())
-    lengths = s.map((x) => len(x) + 10)
+    var lengths = s.map((x) => len(x) + 10)
     print(lengths.get())
-    chain = Node(1, Node(2, Node(3)))
+    var chain = Node(1, Node(2, Node(3)))
     print(length(chain))
     print(describe(b))
     print(describe(none))
     # A float in an int | float specialization stays a float.
-    f = Box[int | float](2.5)
-    v = f.get()
+    var f = Box[int | float](2.5)
+    var v = f.get()
     print((v is float))

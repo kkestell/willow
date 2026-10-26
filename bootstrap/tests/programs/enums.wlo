@@ -31,7 +31,7 @@ def same(a: Color | Mode, b: Color | Mode) -> bool:
     return a == b
 
 def main():
-    color = Color.GREEN
+    var color = Color.GREEN
     print(color)
     print(str(Color.BLUE))
     print(f"[{Mode.QUIET}]")
@@ -44,15 +44,15 @@ def main():
     print(describe(none))
     print(same(Color.RED, Mode.RED))
     print(same(Mode.QUIET, Mode.QUIET))
-    pixel = Pixel(Color.BLUE)
+    var pixel = Pixel(Color.BLUE)
     print(pixel.color)
     print(pixel.bright)
     pixel.color = Color.RED
     print(pixel.color)
-    palette = [Color.RED, Color.BLUE]
+    var palette = [Color.RED, Color.BLUE]
     print(Color.BLUE in palette)
     print(Color.GREEN in palette)
-    counts: dict[Color, int] = {Color.BLUE: 2}
+    var counts: dict[Color, int] = {Color.BLUE: 2}
     counts[Color.RED] = 1
     counts[Color.BLUE] = counts[Color.BLUE] + 1
     for key, count in counts.items():

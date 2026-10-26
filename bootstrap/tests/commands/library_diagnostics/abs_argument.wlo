@@ -1,2 +1,2 @@
 def main():
-    x = abs('a')
+    var x = abs('a')

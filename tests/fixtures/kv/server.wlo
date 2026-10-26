@@ -18,15 +18,15 @@ def _text(value: json.Json) -> str:
 def reply(store: dict[str, json.Json], request: json.Json) -> json.Json:
     if request is not dict:
         return {"error": "expected an object"}
-    op = _text(request.get("op"))
-    key = request.get("key")
+    var op = _text(request.get("op"))
+    var key = request.get("key")
     if op == "set" and (key is str):
         store[key] = request.get("value")
         return {"ok": true}
     else if op == "get" and (key is str):
         return {"value": store.get(key)}
     else if op == "keys":
-        names: list[json.Json] = []
+        var names: list[json.Json] = []
         for name in sorted(store):
             names.append(name)
         return {"keys": names}
@@ -36,8 +36,9 @@ def reply(store: dict[str, json.Json], request: json.Json) -> json.Json:
 def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:
     with channel:
         while true:
+            var request: json.Json
             try:
-                line = channel.read_line()
+                var line = channel.read_line()
                 if line is none:
                     return false
                 request = json.parse(line)
@@ -54,7 +55,7 @@ def serve(channel: framing.Channel, store: dict[str, json.Json]) -> bool:
     return false
 
 def main():
-    args = sys.args()
+    var args = sys.args()
     if len(args) != 1:
         sys.eprint("usage: server <port-file>")
         sys.exit(2)
@@ -62,7 +63,7 @@ def main():
         # Publishing by rename means a reader never sees a partial port number.
         fs.write_file(args[0] + ".tmp", str(listener.local_port()))
         fs.rename(args[0] + ".tmp", args[0])
-        store: dict[str, json.Json] = {}
+        var store: dict[str, json.Json] = {}
         while true:
             try:
                 if serve(framing.channel(listener.accept()), store):

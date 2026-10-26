@@ -28,21 +28,21 @@ def pending_value() -> Coroutine[int] | none:
     return identity(7)
 
 async def main():
-    values = Scale([1.5])
+    var values = Scale([1.5])
     print(await values.first(fallback=0.0))
     print(await through(Number()))
-    run: (float) -> Coroutine[float] = identity
+    var run: (float) -> Coroutine[float] = identity
     print(await run(2.5))
-    suffix = "before"
-    async def nested[T](value: T, end: str = "!") -> tuple[T, str]:
+    var suffix = "before"
+    async def nested[T](value_arg: T, end: str = "!") -> tuple[T, str]:
         await aio.sleep(0.0)
-        return (value, suffix + end)
-    pending = nested(3.5)
+        return (value_arg, suffix + end)
+    var pending = nested(3.5)
     suffix = "after"
-    value, text = await pending
+    var value, text = await pending
     print(value)
     print(text)
     print(await identity(none))
-    pending_number = pending_value()
+    var pending_number = pending_value()
     if pending_number is not none:
         print(await pending_number)

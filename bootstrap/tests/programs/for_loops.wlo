@@ -9,7 +9,7 @@ def main():
         print(i)
     for j in range(0):
         print(j)
-    xs = [[1, 2], [3]]
+    var xs = [[1, 2], [3]]
     for row in xs:
         for v in row:
             if v == 2:
@@ -20,7 +20,8 @@ def main():
         print(k)
     for k in range(-9223372036854775806, -9223372036854775807, -5):
         print(k)
-    last = -1
-    for last in range(3):
+    var last = -1
+    for last_item in range(3):
+        last = last_item
         pass
     print(last)

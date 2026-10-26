@@ -62,8 +62,8 @@ class FunctionDecl:
     return_type: TypeExpr
     body: list[Stmt]
     is_async: bool
-    # The binder's: the symbols assigned in the body in order of first
-    # assignment, the enclosing functions' variables it uses, an id that
+    # The binder's: local symbols in declaration order,
+    # the enclosing functions' variables it uses, an id that
     # tells functions apart, given where the binder first declares the
     # function, the enclosing function, the class or protocol of a method,
     # the name types write ("f", "module.f", "Class.m", "f.g",
@@ -139,7 +139,7 @@ class AliasDecl:
     value: TypeExpr
     type_name: str = ""
 
-# A name with its position: an enum member or a `nonlocal` name.
+# A name with its position, such as an enum member.
 class Ident:
     line: int
     col: int
@@ -394,9 +394,16 @@ class Stmt:
     col: int
     node: StmtNode
 
-type StmtNode = Assign | Unpack | IndexAssign | FieldAssign | CallStmt | If | While | For | With | AsyncWith | Try | FunctionDef | Nonlocal | Return | Assert | Raise | Yield | SimpleStatement
+type StmtNode = Var | Assign | Unpack | IndexAssign | FieldAssign | CallStmt | If | While | For | With | AsyncWith | Try | FunctionDef | Return | Assert | Raise | Yield | SimpleStatement
 
-# The binder's `declared`: the annotation's type.
+# An explicit local declaration; only annotated declarations may omit a value.
+class Var:
+    target: Target
+    annotation: TypeExpr | none
+    value: Expr | none
+    declared: types.Type | none = none
+
+# An assignment to an existing binding.
 class Assign:
     name: str
     annotation: TypeExpr | none
@@ -480,9 +487,6 @@ class FunctionDef:
     function: FunctionDecl
     symbol: Symbol | none = none
 
-class Nonlocal:
-    names: list[Ident]
-
 class Return:
     value: Expr | none
 
@@ -504,9 +508,9 @@ enum SimpleStatement:
     BREAK
     CONTINUE
 
-# The binder's: a parameter, or a variable assigned in a function body, at its
-# first assignment. `id` tells symbols apart. A local that a nested `def`
-# assigns has the function a call of it reaches.
+# A parameter or local binding at its declaration. `id` tells symbols apart,
+# including equal names in sibling blocks. A nested function's binding records
+# the function that a call of it reaches.
 class Symbol:
     id: int
     name: str

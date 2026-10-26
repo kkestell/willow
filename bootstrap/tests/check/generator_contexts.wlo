@@ -28,8 +28,8 @@ def own(manager: ContextManager[Generator[int]]):
         assert next(source) == 1
 
 def main():
-    log: list[str] = []
-    source = guarded(log)
+    var log: list[str] = []
+    var source = guarded(log)
     assert len(log) == 0
     own(source)
     assert ",".join(log) == "enter outer,enter inner,finally,exit inner,exit outer"
@@ -46,11 +46,11 @@ def main():
             def inner() -> Generator[int]:
                 yield 2
             assert next(inner()) == 2
-    pending = cleanup()
+    var pending = cleanup()
     assert next(pending) == 1
     pending.close()
 
-    holder: list[Generator[int]] = []
+    var holder: list[Generator[int]] = []
     def reentrant() -> Generator[int]:
         holder[0].close()
         yield 1

@@ -3,7 +3,7 @@ import io
 import subprocess
 
 def main():
-    result = subprocess.run(["tool"], cwd="subprocess_path", env={"PATH": "."}, capture_output=true)
+    var result = subprocess.run(["tool"], cwd="subprocess_path", env={"PATH": "."}, capture_output=true)
     assert result.stdout == "child path".encode()
     assert subprocess.run(["true"], env={}).returncode == 0
     assert subprocess.run(["sh", "-c", "kill -PIPE $$"]).returncode == -13
@@ -26,7 +26,7 @@ def main():
         except ValueError:
             pass
 
-    path = "subprocess_sync.tmp"
+    var path = "subprocess_sync.tmp"
     try:
         with io.open(path, "w") as writer:
             writer.write_text("one\ntwo\n")
@@ -39,7 +39,7 @@ def main():
                 assert error.message == "stdin has buffered input"
             assert reader.readline() == "two"
             assert reader.readline() is none
-            child = subprocess.spawn(["cat"], stdin=reader)
+            var child = subprocess.spawn(["cat"], stdin=reader)
             assert child.wait() == 0
             assert child.poll() == 0
             child.terminate()
@@ -47,7 +47,7 @@ def main():
     finally:
         subprocess.run(["rm", "-f", path])
 
-    fds = core.process_pipe()
+    var fds = core.process_pipe()
     core.close(fds[1])
     try:
         with io.open("/dev/fd/" + str(fds[0])) as pipe:

@@ -3,4 +3,4 @@ class P:
     y: int = 2
 
 def main():
-    p = P(other=1)
+    var p = P(other=1)

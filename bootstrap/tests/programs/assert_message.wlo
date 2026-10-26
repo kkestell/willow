@@ -1,5 +1,5 @@
 def main():
-    count = 2
+    var count = 2
     assert count > 0
     assert count == 2, "not reached"
     print(count)

@@ -1,9 +1,9 @@
 # https://rosettacode.org/wiki/Sorting_algorithms/Merge_sort
 
 def merge(left: list[int], right: list[int]) -> list[int]:
-    result: list[int] = []
-    i = 0
-    j = 0
+    var result: list[int] = []
+    var i = 0
+    var j = 0
     while i < len(left) and j < len(right):
         if left[i] <= right[j]:
             result.append(left[i])
@@ -20,16 +20,16 @@ def merge(left: list[int], right: list[int]) -> list[int]:
 def merge_sort(items: list[int]) -> list[int]:
     if len(items) <= 1:
         return items
-    middle = len(items) // 2
+    var middle = len(items) // 2
     return merge(merge_sort(items[:middle]), merge_sort(items[middle:]))
 
 def show(items: list[int]) -> str:
-    words: list[str] = []
+    var words: list[str] = []
     for item in items:
         words.append(str(item))
     return " ".join(words)
 
 def main():
-    items = [4, 65, 2, -31, 0, 99, 2, 83, 782, 1]
+    var items = [4, 65, 2, -31, 0, 99, 2, 83, 782, 1]
     print(show(items))
     print(show(merge_sort(items)))

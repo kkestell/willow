@@ -6,13 +6,13 @@ def main():
     print(fs.join("a", "b") + " " + fs.join("a/", "b") + " " + fs.join("a", "/b") + " " + fs.join("", "b") + " " + fs.join("a", ""))
     for p in ["a/b", "a/b/", "/", "a", "//a", "a//b", ""]:
         print(f"[{fs.basename(p)}] [{fs.dirname(p)}]")
-    base = fs.join("/tmp", "wlo_host_" + str(int(time.time() * 1000000.0)))
+    var base = fs.join("/tmp", "wlo_host_" + str(int(time.time() * 1000000.0)))
     fs.mkdir(fs.join(base, "x/y"), parents=true)
     fs.mkdir(base, exist_ok=true)
     fs.write_file(fs.join(base, "é.txt"), "hi")
     fs.write_file(fs.join(base, "b.txt"), "hello")
     print(", ".join(fs.listdir(base)))
-    st: fs.Stat = fs.stat(fs.join(base, "b.txt"), follow_symlinks=false)
+    var st: fs.Stat = fs.stat(fs.join(base, "b.txt"), follow_symlinks=false)
     print(f"{st.kind} {st.size} {st.modified > 0.0}")
     print(fs.stat(fs.join(base, "x")).kind)
     print(fs.exists(fs.join(base, "nope")))
@@ -44,11 +44,11 @@ def main():
         fs.write_file("a\x00b", "")
     except ValueError as v:
         print(v.message)
-    w = sys.getenv("WILLOW")
+    var w = sys.getenv("WILLOW")
     if w is not none:
         print(w.endswith("/willow"))
     print(sys.getenv("NO_SUCH_VARIABLE_X"))
-    env = sys.environ()
+    var env = sys.environ()
     print("WILLOW" in env)
     env["WILLOW"] = "x"
     print(sys.getenv("WILLOW") != "x")
@@ -59,7 +59,7 @@ def main():
         print(time.utc(253402300800.0))
     except ValueError as v:
         print(v.message)
-    start = time.monotonic()
+    var start = time.monotonic()
     time.sleep(0.01)
     print(time.monotonic() - start >= 0.01)
     try:

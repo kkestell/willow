@@ -41,8 +41,8 @@ class Countdown:
         return self.current + 1
 
 def drain[T](source: Source[T]) -> list[T]:
-    items: list[T] = []
-    item = source.read()
+    var items: list[T] = []
+    var item = source.read()
     while item is not none:
         items.append(item)
         item = source.read()

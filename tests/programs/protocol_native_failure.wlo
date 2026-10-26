@@ -4,5 +4,5 @@ protocol Writer:
     def write_text(text: str)
 
 def main():
-    w: Writer = io.stdin()
+    var w: Writer = io.stdin()
     w.write_text("x")

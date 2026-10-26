@@ -5,7 +5,9 @@ def visible(text: str) -> str:
     return text.replace("\x1b", "ESC")
 
 def main():
-    for color in ["default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]:
+    var color: str
+    for color_item in ["default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]:
+        color = color_item
         print(f"{color}: {visible(terminal.style('x', color=color))}")
     print(visible(terminal.style("bold", bold=true)))
     print(visible(terminal.style("both", color="cyan", bold=true)))
@@ -14,7 +16,7 @@ def main():
         terminal.style("x", color="purple", enabled=false)
     except ValueError as e:
         print(e.message)
-    out = io.stdout()
+    var out = io.stdout()
     print(f"{terminal.isatty(out)} {terminal.color_enabled(out)} {terminal.isatty(io.stdin())}")
     terminal.progress("working")
     terminal.finish_progress()

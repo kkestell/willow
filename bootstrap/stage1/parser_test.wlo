@@ -12,45 +12,45 @@ import sys
 # The tree of `source` as show writes it, or its first error as
 # "line:col: message".
 def parse(source: str) -> ast.Module | str:
-    lexed = lexer.lex("test.wlo", source)
+    var lexed = lexer.lex("test.wlo", source)
     if lexed is diagnostic.Diagnostic:
         return f"{lexed.line}:{lexed.col}: {lexed.message}"
-    parsed = parser.parse("test.wlo", lexed, false)
+    var parsed = parser.parse("test.wlo", lexed, false)
     if parsed is diagnostic.Diagnostic:
         return f"{parsed.line}:{parsed.col}: {parsed.message}"
     return parsed
 
 def module(source: str) -> str:
-    parsed = parse(source)
+    var parsed = parse(source)
     if parsed is str:
         return parsed
     return show.Printer(false).module(parsed)
 
 # Wraps statements in `main`, indenting each line one level.
 def in_main(statements: str) -> str:
-    lines: list[str] = []
+    var lines: list[str] = []
     for line in statements.split("\n"):
         lines.append("    " + line)
     return "def main():\n" + "\n".join(lines) + "\n"
 
 # The body of `main` with `statements`.
 def body(statements: str) -> str:
-    parsed = parse(in_main(statements))
+    var parsed = parse(in_main(statements))
     if parsed is str:
         return parsed
-    main = parsed.declarations[0]
+    var main = parsed.declarations[0]
     if main is ast.FunctionDecl:
         return show.Printer(false).block(main.body)
     return "not a function"
 
 # The value of `x = text` in `main`.
 def expr(text: str) -> str:
-    parsed = parse(in_main("x = " + text))
+    var parsed = parse(in_main("x = " + text))
     if parsed is str:
         return parsed
-    main = parsed.declarations[0]
+    var main = parsed.declarations[0]
     if main is ast.FunctionDecl:
-        assign = main.body[0].node
+        var assign = main.body[0].node
         if assign is ast.Assign:
             return show.Printer(false).expr(assign.value)
     return "not an assignment"
@@ -64,7 +64,7 @@ def check(what: str, source: str, actual: str, expected: str) -> bool:
     return false
 
 def main():
-    modules = [
+    var modules = [
         ["class A:\n    def f(self):\n        pass\n", "2:11: expected a parameter name, found 'self'"],
         ["protocol P:\n    def f(self)\n", "2:11: expected a parameter name, found 'self'"],
         ["def f(self: int):\n    pass\n", "1:7: expected a parameter name, found 'self'"],
@@ -73,7 +73,7 @@ def main():
         ["class A:\n    def f():\n        self: int = 1\n", "3:9: cannot assign to 'self'"],
         ["class A:\n    def f():\n        self, x = (1, 2)\n", "3:9: cannot assign to 'self'"],
         ["class A:\n    def f():\n        for self in [1]:\n            pass\n", "3:13: expected a loop variable name, found 'self'"],
-        ["class A:\n    def f():\n        nonlocal self\n", "3:18: expected a variable name, found 'self'"],
+        ["class A:\n    def f():\n        nonlocal self\n", "3:9: only calls and await expressions can be used as statements"],
 
         ["def f():\n    pass\n\ndef g(a: int, b: bool,\n      c: str, d: none,) -> int:\n    return a\n", "def f() -> none { pass }\ndef g(a: int, b: bool, c: str, d: none) -> int { return a }"],
         ["def f(x) -> int:\n    return x\n", "1:8: expected ':', found ')'"],
@@ -94,7 +94,7 @@ def main():
         ["def f(a: int, *):\n    pass\n", "1:15: '*' must be followed by a keyword-only parameter"],
         ["def f(*):\n    pass\n", "1:7: '*' must be followed by a keyword-only parameter"],
         ["def f(a: int = 1, b: int, *, c: int):\n    pass\n", "1:19: parameter 'b' without a default follows one with a default"],
-        ["def f(x: int | none) -> str | none:\n    y: bool | none = none\n    return none\n", "def f(x: int | none) -> str | none { y: bool | none = none; return none }"],
+        ["def f(x: int | none) -> str | none:\n    var y: bool | none = none\n    return none\n", "def f(x: int | none) -> str | none { var y: bool | none = none; return none }"],
         ["def f(x: int | ):\n    pass\n", "1:16: expected a type, found ')'"],
         ["import shapes\ntype Json = none | bool | list[Json] | dict[str, Json]\ntype S = shapes.Shape\n", "import shapes\ntype Json = none | bool | list[Json] | dict[str, Json]\ntype S = shapes.Shape"],
         ["type T: int\n", "1:7: expected '=', found ':'"],
@@ -143,11 +143,11 @@ def main():
         ["def f(...):\n    pass\n", "1:7: expected a parameter name, found '.'"],
         ["def extern(extern: int) -> int:\n    return extern\n", "def extern(extern: int) -> int { return extern }"],
     ]
-    bodies = [
-        ["x = 1\ny: int = x + 2\nf(x, y)\nif x == 1:\n    return\nwhile y > 0:\n    pass\n    break\n    continue\nreturn f(y)", "{ x = 1; y: int = (x + 2); f(x, y); if (x == 1) { return }; while (y > 0) { pass; break; continue }; return f(y) }"],
+    var bodies = [
+        ["var x = 1\nvar y: int = x + 2\nf(x, y)\nif x == 1:\n    return\nwhile y > 0:\n    pass\n    break\n    continue\nreturn f(y)", "{ var x = 1; var y: int = (x + 2); f(x, y); if (x == 1) { return }; while (y > 0) { pass; break; continue }; return f(y) }"],
         ["if a:\n    pass\nelse if b:\n    pass\nelse if c:\n    pass\nelse:\n    pass", "{ if a { pass } else { if b { pass } else { if c { pass } else { pass } } } }"],
         ["if a:\n    pass\nelse if b:\n    pass", "{ if a { pass } else { if b { pass } } }"],
-        ["elif = 1", "{ elif = 1 }"],
+        ["var elif = 1", "{ var elif = 1 }"],
         ["if a: pass", "2:11: expected end of line, found 'pass'"],
         ["if a:\n# nothing\nx = 1", "4:5: expected an indented block, found 'x'"],
         ["x + 1", "2:7: only calls and await expressions can be used as statements"],
@@ -156,10 +156,10 @@ def main():
         ["a = b = 1", "2:11: chained assignment is not supported"],
         ["a += 1", "2:7: unsupported operator '+='"],
         ["f(a := 1)", "2:9: unsupported operator ':='"],
-        ["x: int", "2:11: annotated assignment needs an initializer"],
+        ["var x: int", "{ var x: int }"],
         ["f() = 1", "2:9: cannot assign to this expression"],
         ["Iterator = 1", "2:5: expected a statement, found 'Iterator'"],
-        ["a, b = t\n(a, (b, c)) = t\ne, = t", "{ <a, b> = t; <a, <b, c>> = t; <e> = t }"],
+        ["var a, b = t\nvar (a, (b, c)) = t\nvar e, = t", "{ var <a, b> = t; var <a, <b, c>> = t; var <e> = t }"],
         ["for k, (x, y) in items:\n    pass\nfor (x) in items:\n    pass", "{ for <k, <x, y>> in items { pass }; for x in items { pass } }"],
         ["a, a = t", "2:8: duplicate target 'a'"],
         ["for k, (x, k) in items:\n    pass", "2:16: duplicate target 'k'"],
@@ -177,8 +177,8 @@ def main():
         ["x = a is none | b", "2:19: unsupported operator '|'"],
         ["x = [1, 2}", "2:14: expected ',' or ']', found '}'"],
         ["xs[i] = v + 1\nxs.append(2)\np.x = p.x + 1", "{ xs[i] = (v + 1); xs.append(2); p.x = (p.x + 1) }"],
-        ["xs[0]: int = 1", "2:10: only a name can have an annotation"],
-        ["p.x: int = 1", "2:8: only a name can have an annotation"],
+        ["xs[0]: int = 1", "2:10: use 'var' to declare an annotated local"],
+        ["p.x: int = 1", "2:8: use 'var' to declare an annotated local"],
         ["xs[0]", "2:7: only calls and await expressions can be used as statements"],
         ["raise E('x')\nraise", "{ raise E(\"x\"); raise }"],
         ["raise E() from e", "2:15: expected end of line, found 'from'"],
@@ -193,12 +193,12 @@ def main():
         ["for k pass", "2:11: expected 'in', found 'pass'"],
         ["x = f'{1 +}'", "2:15: expected an expression, found '}'"],
         ["x = f'{a b}'", "2:14: expected '}', found 'b'"],
-        ["x: float = 2.5\nfloat(1)\nx = int", "{ x: float = 2.5; float(1); x = int }"],
+        ["var x: float = 2.5\nfloat(1)\nx = int", "{ var x: float = 2.5; float(1); x = int }"],
         ["int = 1", "2:5: cannot assign to 'int'"],
         ["x = a == not b", "2:14: expected an expression, found 'not'"],
         ["x = 0 <= y < 10", "2:16: comparison chains are not supported"],
         ["(f)(x)\nf(x)(y)\nf(1, g(2), 's',)", "{ (f)(x); (f(x))(y); f(1, g(2), \"s\") }"],
-        ["f(1,\n  2)\nx = (a +\n        b)", "{ f(1, 2); x = (a + b) }"],
+        ["f(1,\n  2)\nvar x = (a +\n        b)", "{ f(1, 2); var x = (a + b) }"],
         ["f(1", "3:1: expected ',' or ')', found end of file"],
         ["x = a[1:2:3]", "2:14: slice steps are not supported"],
         ["a[1:2] = x", "2:12: cannot assign to this expression"],
@@ -207,9 +207,9 @@ def main():
         ["assert", "2:11: expected an expression, found end of line"],
         ["xs[i] = 1", "{ xs[i] = 1 }"],
         ["xs[i | j] = 1", "2:10: unsupported operator '|'"],
-        ["nonlocal a, b", "{ nonlocal a, b }"],
+        ["nonlocal a, b", "2:5: only calls and await expressions can be used as statements"],
         ["x = (a=1) => a", "2:11: expected ',' or ')', found '='"],
-        ["def g(x: int) -> int:\n    return x\ny = g(1)", "{ def g(x: int) -> int { return x }; y = g(1) }"],
+        ["def g(x: int) -> int:\n    return x\nvar y = g(1)", "{ def g(x: int) -> int { return x }; var y = g(1) }"],
         ["with a as x, b as (y, z):\n    pass\nwith f():\n    pass", "{ with a as x, b as <y, z> { pass }; with f() { pass } }"],
         ["with a as (x, x):\n    pass", "2:19: duplicate target 'x'"],
         ["yield x + 1", "{ yield (x + 1) }"],
@@ -217,13 +217,13 @@ def main():
         ["async def g():\n    pass\nawait f()", "{ async def g() -> none { pass }; (await f()) }"],
         ["x = await -c", "2:15: expected an expression, found '-'"],
         ["x = await await c", "2:15: expected an expression, found 'await'"],
-        ["async with aio.task_group() as g:\n    pass\nasync with g:\n    pass", "{ async with aio.task_group() as g { pass }; async with g { pass } }"],
+        ["var g: int\nasync with aio.task_group() as g_item:\n    g = g_item\n    pass\nasync with g:\n    pass", "{ var g: int; async with aio.task_group() as g_item { g = g_item; pass }; async with g { pass } }"],
         ["async with g as (a, b):\n    pass", "2:21: expected a name, found '('"],
-        ["del = 1\nfrom = 2\nglobal = 3", "{ del = 1; from = 2; global = 3 }"],
+        ["var del = 1\nvar from = 2\nvar global = 3", "{ var del = 1; var from = 2; var global = 3 }"],
         ["match = 1", "2:5: 'match' is not supported"],
         ["case = 1", "2:5: 'case' is not supported"],
     ]
-    exprs = [
+    var exprs = [
         ["a or b and not c == d + e * -f", "(a or (b and (not (c == (d + (e * (- f)))))))"],
         ["a - b - c", "((a - b) - c)"],
         ["not not true", "(not (not true))"],
@@ -277,7 +277,7 @@ def main():
         ["__type(list[int])", "2:20: expected ')', found '['"],
         ["__type", "__type"],
     ]
-    ok = true
+    var ok = true
     for pair in modules:
         if not check("module", pair[0], module(pair[0]), pair[1]):
             ok = false
@@ -288,14 +288,14 @@ def main():
         if not check("expr", pair[0], expr(pair[0]), pair[1]):
             ok = false
     # Positions that diagnostics in later passes rely on.
-    positions = [
+    var positions = [
         ["def f():\n    pass\n\ndef g(a: int, b: bool,\n      c: str) -> int:\n    return a\n", "def f@1:5() -> none@1:5 { pass@2:5 }\ndef g@4:5(a@4:7: int@4:10, b@4:15: bool@4:18, c@5:7: str@5:10) -> int@5:18 { return a@6:12@6:5 }"],
-        ["def f():\n    x = a + b + c\n", "def f@1:5() -> none@1:5 { x = ((a@2:9 + b@2:13)@2:11 + c@2:17)@2:15@2:5 }"],
+        ["def f():\n    var x = a + b + c\n", "def f@1:5() -> none@1:5 { var x = ((a@2:13 + b@2:17)@2:15 + c@2:21)@2:19@2:5 }"],
         ["def f():\n    if a:\n        pass\n    else if b:\n        pass\n", "def f@1:5() -> none@1:5 { if a@2:8 { pass@3:9 } else { if b@4:13 { pass@5:9 }@4:10 }@2:5 }"],
     ]
     for pair in positions:
-        parsed = parse(pair[0])
-        actual = ""
+        var parsed = parse(pair[0])
+        var actual = ""
         if parsed is str:
             actual = parsed
         else:

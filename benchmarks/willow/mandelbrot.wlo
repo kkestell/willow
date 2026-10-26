@@ -5,20 +5,20 @@
 import sys
 
 def main():
-    n = int(sys.args()[0])
-    size = float(n)
-    checksum = 0
+    var n = int(sys.args()[0])
+    var size = float(n)
+    var checksum = 0
     for y in range(n):
-        ci = 2.0 * float(y) / size - 1.0
-        byte = 0
-        bits = 0
+        var ci = 2.0 * float(y) / size - 1.0
+        var byte = 0
+        var bits = 0
         for x in range(n):
-            cr = 2.0 * float(x) / size - 1.5
-            zr = 0.0
-            zi = 0.0
-            zr2 = 0.0
-            zi2 = 0.0
-            i = 0
+            var cr = 2.0 * float(x) / size - 1.5
+            var zr = 0.0
+            var zi = 0.0
+            var zr2 = 0.0
+            var zi2 = 0.0
+            var i = 0
             while i < 50 and zr2 + zi2 <= 4.0:
                 zi = 2.0 * zr * zi + ci
                 zr = zr2 - zi2 + cr

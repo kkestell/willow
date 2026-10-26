@@ -2,8 +2,8 @@
 # Language Benchmarks Game.
 
 def main():
-    total = 0
-    line = input()
+    var total = 0
+    var line = input()
     while line is not none:
         total = total + int(line)
         line = input()

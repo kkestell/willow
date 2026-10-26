@@ -16,7 +16,7 @@ class Transaction:
             self.log.append(f"roll back {self.name}: {error.message}")
 
 def main():
-    log: list[str] = []
+    var log: list[str] = []
 
     with Transaction("first", log) as transaction:
         log.append(f"work in {transaction.name}")

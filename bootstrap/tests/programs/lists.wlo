@@ -1,11 +1,11 @@
 def total(values: list[int]) -> int:
-    result = 0
+    var result = 0
     for v in values:
         result = result + v
     return result
 
 def show(values: list[int]):
-    text = "["
+    var text = "["
     for v in values:
         if text != "[":
             text = text + ", "
@@ -17,7 +17,7 @@ def fill(values: list[int], count: int):
         values.append(i * i)
 
 def main():
-    items = [10, 20, 30]
+    var items = [10, 20, 30]
     print(len(items))
     print(items[0])
     print(items[-1])
@@ -37,43 +37,46 @@ def main():
     print(99 not in items)
     print(total(items))
 
-    shared = items
+    var shared = items
     shared.append(1)
     print(len(items))
 
-    empty: list[int] = []
+    var empty: list[int] = []
     print(len(empty))
     fill(empty, 4)
     show(empty)
 
-    grow = [1, 2]
+    var grow = [1, 2]
     for v in grow:
         if v < 4:
             grow.append(v + 2)
     show(grow)
 
-    names: list[str] = []
+    var names: list[str] = []
     names.append("ada")
     names.append("alan")
     print(names[1])
 
-    grid = [[1, 2], [3]]
+    var grid = [[1, 2], [3]]
     grid[1].append(4)
     grid.append([])
     print(len(grid))
     show(grid[1])
 
-    maybe: list[int | none] = [1, none, 3]
+    var maybe: list[int | none] = [1, none, 3]
     print(maybe[1])
     print(none in maybe)
 
-    counted: list[int] = []
-    i = -1
-    for i in range(3):
+    var counted: list[int] = []
+    var i = -1
+    for i_item in range(3):
+        i = i_item
         counted.append(i)
-    for i in range(10, 4, -3):
+    for i_item in range(10, 4, -3):
+        i = i_item
         counted.append(i)
-    for i in range(5, 5):
+    for i_item in range(5, 5):
+        i = i_item
         counted.append(i)
     show(counted)
     print(i)

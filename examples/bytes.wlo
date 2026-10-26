@@ -2,16 +2,16 @@
 # integers.
 
 def main():
-    data = "café".encode()
+    var data = "café".encode()
     print(len(data))
     print(data[-1])
     print(data[:3].decode())
     print(data == "café".encode())
 
-    greeting = bytes([72, 105]) + bytes([33])
+    var greeting = bytes([72, 105]) + bytes([33])
     print(greeting.decode())
 
-    total = 0
+    var total = 0
     for octet in data:
         total = total + octet
     print(total)

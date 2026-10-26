@@ -8,14 +8,14 @@ def once[T](value: T) -> Generator[T]:
     yield value
 
 def floats(start: float) -> Generator[float]:
-    number = start + 0.25
-    text = "kept across suspension"
+    var number = start + 0.25
+    var text = "kept across suspension"
     yield number
     assert text == "kept across suspension"
     yield number + 1.0
 
 def nested() -> Generator[float]:
-    child = floats(2.5)
+    var child = floats(2.5)
     yield next(child)
     yield next(child)
 
@@ -28,8 +28,8 @@ def consume(source: Iterable[tuple[float, int | none]]) -> tuple[float, int | no
     return next(iter(source))
 
 def main():
-    left = floats(1.5)
-    right = nested()
+    var left = floats(1.5)
+    var right = nested()
     assert next(left) == 1.75
     assert next(right) == 2.75
     assert next(left) == 2.75
@@ -41,14 +41,14 @@ def main():
     next(once(none))
     assert consume(once((1.5, 2))) == (1.5, 2)
     assert next(Box(2.5).values()) == 2.5
-    callback: (float) -> Generator[float] = once
+    var callback: (float) -> Generator[float] = once
     assert next(callback(3.5)) == 3.5
 
-    captured = 1
+    var captured = 1
     def changing() -> Generator[int]:
         yield captured
         yield captured
-    generator = changing()
+    var generator = changing()
     captured = 2
     assert next(generator) == 2
     captured = 3
@@ -60,7 +60,7 @@ def main():
         except ValueError as error:
             yield error.message
             raise
-    saved = handled()
+    var saved = handled()
     assert next(saved) == "saved"
     try:
         next(saved)
@@ -73,10 +73,10 @@ def main():
     except StopIteration:
         pass
 
-    numbered = list(enumerate(once(4)))
+    var numbered = list(enumerate(once(4)))
     assert len(numbered) == 1
     assert numbered[0] == (0, 4)
-    zipped = list(zip(once(2.5), once(0)))
+    var zipped = list(zip(once(2.5), once(0)))
     assert len(zipped) == 1
     assert zipped[0] == (2.5, 0)
     assert sum(once(3)) == 3

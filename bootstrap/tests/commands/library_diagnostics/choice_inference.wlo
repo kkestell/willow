@@ -1,4 +1,4 @@
 import random
 def main():
-    r = random.generator(1)
+    var r = random.generator(1)
     r.choice(3)

@@ -1,5 +1,5 @@
 import fixture_store
 
 def main():
-    h = fixture_store.handle(1)
-    s = str(h)
+    var h = fixture_store.handle(1)
+    var s = str(h)

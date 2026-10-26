@@ -5,7 +5,7 @@ class Task[T]:
 
     def result() -> T:
         # A typed list load restores T from core's unboxed result slot.
-        values: list[T] = []
+        var values: list[T] = []
         core.list_append(__ptr(__word(values)), core.aio_task_result(self._task))
         return values[0]
 
@@ -59,13 +59,13 @@ class Connection:
         if size < 1:
             raise ValueError("size must be positive")
         core.net_check_timeout(timeout)
-        deadline = core.net_deadline(timeout)
-        buffer = core.str_alloc(size)
+        var deadline = core.net_deadline(timeout)
+        var buffer = core.str_alloc(size)
         self._receiving = true
         try:
-            count = core.net_try_recv(self._fd, buffer, size)
+            var count = core.net_try_recv(self._fd, buffer, size)
             while count < 0:
-                ready = core.aio_wait_fd(self._fd, 1, deadline)
+                var ready = core.aio_wait_fd(self._fd, 1, deadline)
                 self._usable()
                 if not ready:
                     core.net_timed_out("recv", timeout)
@@ -80,17 +80,17 @@ class Connection:
             raise RuntimeError("sendall is already in progress")
         self._usable()
         core.net_check_timeout(timeout)
-        deadline = core.net_deadline(timeout)
+        var deadline = core.net_deadline(timeout)
         self._sending = true
-        complete = false
-        sent = 0
+        var complete = false
+        var sent = 0
         try:
             while sent < len(data):
-                count = core.net_try_send(self._fd, __ptr(__word(data)), sent, len(data))
+                var count = core.net_try_send(self._fd, __ptr(__word(data)), sent, len(data))
                 if count >= 0:
                     sent = sent + count
                 else:
-                    ready = core.aio_wait_fd(self._fd, 4, deadline)
+                    var ready = core.aio_wait_fd(self._fd, 4, deadline)
                     self._usable()
                     if not ready:
                         core.net_timed_out("send", timeout)
@@ -102,7 +102,7 @@ class Connection:
 
     def close():
         if self._fd >= 0:
-            fd = self._fd
+            var fd = self._fd
             self._fd = -1
             core.aio_close_fd(fd, core.aio_loop())
 
@@ -127,12 +127,12 @@ class Listener:
             raise RuntimeError("accept is already in progress")
         self._usable()
         core.net_check_timeout(timeout)
-        deadline = core.net_deadline(timeout)
+        var deadline = core.net_deadline(timeout)
         self._accepting = true
         try:
-            fd = core.net_try_accept(self._fd)
+            var fd = core.net_try_accept(self._fd)
             while fd < 0:
-                ready = core.aio_wait_fd(self._fd, 1, deadline)
+                var ready = core.aio_wait_fd(self._fd, 1, deadline)
                 self._usable()
                 if not ready:
                     core.net_timed_out("accept", timeout)
@@ -147,7 +147,7 @@ class Listener:
 
     def close():
         if self._fd >= 0:
-            fd = self._fd
+            var fd = self._fd
             self._fd = -1
             core.aio_close_fd(fd, core.aio_loop())
 
@@ -162,10 +162,10 @@ async def connect(host: str, port: int, timeout: float | none = 30.0) -> Connect
     core.aio_checkpoint()
     core.net_check_host(host, port, 1)
     core.net_check_timeout(timeout)
-    addresses = core.net_resolve(host, port)
-    deadline = core.net_deadline(timeout)
-    state = core.NetConnect(host, port, addresses, 0, -1, "no addresses")
-    connected = false
+    var addresses = core.net_resolve(host, port)
+    var deadline = core.net_deadline(timeout)
+    var state = core.NetConnect(host, port, addresses, 0, -1, "no addresses")
+    var connected = false
     try:
         while not core.net_connect_step(state):
             if not core.aio_wait_fd(state.fd, 4, deadline):

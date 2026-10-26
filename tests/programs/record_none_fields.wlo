@@ -13,17 +13,17 @@ def nothing() -> Node | none:
 
 def main():
     # none fields, passed explicitly or taken from a default, read as none.
-    a = Node(1, none, none)
-    b = Node(2, none)
+    var a = Node(1, none, none)
+    var b = Node(2, none)
     print(a.left is none and a.right is none and b.left is none and b.right is none)
     # Assigning an omitted field stores it; the other stays none.
     b.left = a
     b.right = Node(3, none)
-    left = b.left
-    right = b.right
+    var left = b.left
+    var right = b.right
     if left is not none and right is not none:
         print(left.value + right.value)
     print(a.left is none)
     # Only a literal none is omitted; other arguments are still evaluated in order.
-    c = Node(note("value"), nothing())
+    var c = Node(note("value"), nothing())
     print(c.left is none)

@@ -11,16 +11,16 @@ def checked_draw(source: random.Random | none) -> float:
     return draw(source)
 
 def show(items: list[int]) -> str:
-    parts: list[str] = []
+    var parts: list[str] = []
     for item in items:
         parts.append(str(item))
     return ", ".join(parts)
 
 def main():
     assert checked_draw(random.generator(7)) == random.generator(7).random()
-    a = random.generator(42)
-    b = random.generator(42)
-    c = random.generator(-7)
+    var a = random.generator(42)
+    var b = random.generator(42)
+    var c = random.generator(-7)
     print(f"{a.random()} {a.randint(1, 6)} {a.randint(-5, 5)}")
     # Interleaved use of other handles does not disturb a stream.
     c.random()
@@ -29,30 +29,30 @@ def main():
     print(f"{b.randint(1, 6)} {b.randint(-5, 5)}")
     print(c.random() != a.random())
 
-    low = 9007199254740991
-    seen: list[int] = []
+    var low = 9007199254740991
+    var seen: list[int] = []
     for _ in range(300):
-        x = a.random()
+        var x = a.random()
         assert x >= 0.0 and x < 1.0
-        n = a.randint(3, 5)
+        var n = a.randint(3, 5)
         assert n >= 3 and n <= 5
         seen.append(n)
     assert 3 in seen and 4 in seen and 5 in seen
     assert a.randint(7, 7) == 7
     for _ in range(20):
-        big = a.randint(-low, low)
+        var big = a.randint(-low, low)
         assert big >= -low and big <= low
     print(a.randint(-low, low) != a.randint(-low, low))
 
     # Ranges wider than 2^53 and at the extremes of int, and extreme seeds.
-    wide = random.generator(low)
-    other = random.generator(-low)
+    var wide = random.generator(low)
+    var other = random.generator(-low)
     print(wide.random() != other.random())
-    negative = 0
-    huge = 0
-    top = 0
+    var negative = 0
+    var huge = 0
+    var top = 0
     for _ in range(200):
-        value = wide.randint(-low, low)
+        var value = wide.randint(-low, low)
         if value < 0:
             negative = negative + 1
         if value > 4503599627370496 or value < -4503599627370496:
@@ -65,14 +65,14 @@ def main():
     assert top > 60 and top < 140
     assert wide.randint(low, low) == low and wide.randint(-low, -low) == -low
 
-    items = [1, 2, 3, 4, 5, 6, 7, 8]
+    var items = [1, 2, 3, 4, 5, 6, 7, 8]
     a.shuffle(items)
     assert show(sorted(items)) == "1, 2, 3, 4, 5, 6, 7, 8"
     print(show(random.generator(1).choice([[1, 2], [3, 4]])))
     print(show(items))
-    words = ["x", "y"]
+    var words = ["x", "y"]
     assert a.choice(words) in words
-    one: list[str] = []
+    var one: list[str] = []
     a.shuffle(one)
 
     try:

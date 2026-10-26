@@ -13,9 +13,10 @@ class Random:
 
 # Sorts items[1] through items[n]. items[0] is unused.
 def heapsort(n: int, items: list[float]):
-    ir = n
-    l = n // 2 + 1
+    var ir = n
+    var l = n // 2 + 1
     while true:
+        var rra: float
         if l > 1:
             l = l - 1
             rra = items[l]
@@ -26,8 +27,8 @@ def heapsort(n: int, items: list[float]):
             if ir == 1:
                 items[1] = rra
                 return
-        i = l
-        j = l * 2
+        var i = l
+        var j = l * 2
         while j <= ir:
             if j < ir and items[j] < items[j + 1]:
                 j = j + 1
@@ -40,9 +41,9 @@ def heapsort(n: int, items: list[float]):
         items[i] = rra
 
 def main():
-    n = int(sys.args()[0])
-    random = Random()
-    items = [0.0]
+    var n = int(sys.args()[0])
+    var random = Random()
+    var items = [0.0]
     for _ in range(n):
         items.append(random.next(1.0))
     heapsort(n, items)

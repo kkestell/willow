@@ -15,8 +15,8 @@ class C_:
         return self.x
 
 def end(local: int) -> int:
-    nil = local + 1
-    then = nil * 2
+    var nil = local + 1
+    var then = nil * 2
     return then
 
 def is_number(value: number | int) -> bool:
@@ -26,19 +26,19 @@ def is_string(value: string | str) -> bool:
     return value is string
 
 def main():
-    repeat = end(4)
+    var repeat = end(4)
     print(repeat)
-    x_ = 1
-    x = 2
+    var x_ = 1
+    var x = 2
     print(x_ + x)
     print(end(1))
-    __wlo_t1 = 7
+    var __wlo_t1 = 7
     print(__wlo_t1 + end(0))
     print(is_number(1))
     print(is_number(number.A))
     print(is_string("s"))
     print(is_string(string(1)))
-    __wlo_enum_E_ = 1
-    __wlo_class_C_ = 1
+    var __wlo_enum_E_ = 1
+    var __wlo_class_C_ = 1
     print(E_.A)
     print(C_(2).get())

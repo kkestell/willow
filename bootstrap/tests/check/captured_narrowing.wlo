@@ -1,6 +1,6 @@
 def run(x: int | none):
     def reset():
-        nonlocal x
+
         x = none
 
     if x is not none:

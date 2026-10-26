@@ -2,4 +2,4 @@ import fixture_store
 import fixture_user
 
 def main():
-    item: fixture_store.Item = fixture_user.item()
+    var item: fixture_store.Item = fixture_user.item()

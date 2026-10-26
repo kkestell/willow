@@ -61,7 +61,7 @@ class File:
         if self._closed:
             raise ValueError("I/O operation on closed file")
         if reading != (self._mode == "r"):
-            direction = "writing"
+            var direction = "writing"
             if reading:
                 direction = "reading"
             raise ValueError(name + " must be open for " + direction)
@@ -89,7 +89,7 @@ class _Lines:
         return self
 
     def next() -> str:
-        line = self._file.readline()
+        var line = self._file.readline()
         if line is none:
             raise StopIteration("")
         return line
@@ -97,16 +97,16 @@ class _Lines:
 def open(path: str, mode: str = "r") -> File:
     if mode not in ["r", "w", "a"]:
         raise ValueError(f"invalid mode '{mode}'")
-    flags = 0
+    var flags = 0
     if mode == "w":
         flags = core.write_flags()
     else if mode == "a":
         flags = core.append_flags()
-    fd = core.open(core.path_bytes(path), flags, 438)
+    var fd = core.open(core.path_bytes(path), flags, 438)
     if fd < 0:
         core.fail_os("open", path)
     if not core.close_on_exec(fd):
-        reason = core.os_reason()
+        var reason = core.os_reason()
         core.close(fd)
         raise OSError("cannot open " + path + ": " + reason)
     return File(fd, path, mode, false, core.file_buffer())

@@ -1,0 +1,4 @@
+def main():
+    def value():
+        pass
+    value = value

@@ -13,18 +13,18 @@ def value() -> float:
     return 9.5
 
 def main():
-    items = [1.25]
-    alias = items
+    var items = [1.25]
+    var alias = items
     receiver(items)[grow(alias)] = value()
     assert len(items) == 9 and items[-1] == 9.5
     assert receiver(items)[grow(alias)] == 7.0
     assert len(items) == 17 and items[-len(items)] == 1.25
-    refs = [items]
+    var refs = [items]
     refs[-1] = alias
     refs[0][0] = 2.5
     assert items[0] == 2.5
 
-    empty: list[int] = []
+    var empty: list[int] = []
     try:
         try:
             empty[0] = 1

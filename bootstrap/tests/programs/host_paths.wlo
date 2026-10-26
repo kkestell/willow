@@ -9,7 +9,7 @@ def main():
     print(fs.exists("host_paths_missing"))
     print(fs.exists("host_paths_dangling.link"))
     print(fs.exists("host_paths.wlo/inside"))
-    real = fs.realpath("host_paths.wlo")
+    var real = fs.realpath("host_paths.wlo")
     print(real.startswith("/"))
     print(real.endswith("/bootstrap/tests/programs/host_paths.wlo"))
     print(fs.realpath("host_paths.link") == real)

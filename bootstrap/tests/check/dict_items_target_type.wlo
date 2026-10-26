@@ -1,5 +1,6 @@
 def main():
-    value = "s"
-    d = {"one": 1}
-    for key, value in d.items():
+    var value = "s"
+    var d = {"one": 1}
+    for key, value_item in d.items():
+        value = value_item
         pass

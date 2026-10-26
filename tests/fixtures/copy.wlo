@@ -4,10 +4,10 @@ import io
 import sys
 
 def copy(source_path: str, target_path: str) -> int:
-    total = 0
+    var total = 0
     with io.open(source_path) as source, io.open(target_path, mode="w") as target:
         while true:
-            chunk = source.read(65536)
+            var chunk = source.read(65536)
             if len(chunk) == 0:
                 break
             target.write(chunk)
@@ -15,7 +15,7 @@ def copy(source_path: str, target_path: str) -> int:
     return total
 
 def main():
-    args = sys.args()
+    var args = sys.args()
     if len(args) != 2:
         sys.eprint("usage: copy <source> <target>")
         sys.exit(2)

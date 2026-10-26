@@ -1,8 +1,8 @@
 import keyword_defaults.settings
 
 def main():
-    Mode = 42
-    options = keyword_defaults.settings.Options()
+    var Mode = 42
+    var options = keyword_defaults.settings.Options()
     assert options.mode == keyword_defaults.settings.Mode.ON
     assert str(options.number) == "2.5"
     assert str(options.zero) == "-0.0"
@@ -11,6 +11,6 @@ def main():
     assert keyword_defaults.settings.choose() == keyword_defaults.settings.Mode.ON
     assert keyword_defaults.settings.choose(mode=none) is none
     assert keyword_defaults.settings.choose(mode=keyword_defaults.settings.Mode.OFF) == keyword_defaults.settings.Mode.OFF
-    other = keyword_defaults.settings.Options(mode=none, number=-1)
+    var other = keyword_defaults.settings.Options(mode=none, number=-1)
     assert other.mode is none
     assert str(other.number) == "-1"

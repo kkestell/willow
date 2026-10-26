@@ -17,10 +17,10 @@ class Job:
     log: io.File
 
 def start(number: int, command: str, logs: str, stdin: io.File) -> Job:
-    log = io.open(fs.join(logs, f"{number}.log"), mode="w")
-    env = sys.environ()
+    var log = io.open(fs.join(logs, f"{number}.log"), mode="w")
+    var env = sys.environ()
     env["JOB_NUMBER"] = str(number)
-    process = subprocess.spawn(["sh", "-c", command], env=env, stdin=stdin, stdout=log, stderr=log)
+    var process = subprocess.spawn(["sh", "-c", command], env=env, stdin=stdin, stdout=log, stderr=log)
     return Job(number, command, process, log)
 
 def outcome(status: int) -> str:
@@ -29,35 +29,38 @@ def outcome(status: int) -> str:
     return f"exit status {status}"
 
 def main():
-    parser = cli.parser("jobs", description="Run shell commands in parallel.")
+    var parser = cli.parser("jobs", description="Run shell commands in parallel.")
+    var help: cli.HelpRequested
     parser.add_float("limit", 60.0, help="Seconds before running jobs are killed", short="l")
     parser.add_positional("logs", help="Directory for the job logs")
     parser.add_rest("command", help="Shell commands to run")
+    var args: cli.Args
     try:
         args = parser.parse(sys.args())
-    except cli.HelpRequested as help:
+    except cli.HelpRequested as help_item:
+        help = help_item
         io.stdout().write_text(help.message)
         sys.exit(0)
     except cli.UsageError as usage:
         sys.eprint(usage.message)
         sys.exit(2)
-    logs = args.get_str("logs")
+    var logs = args.get_str("logs")
     fs.mkdir(logs, parents=true, exist_ok=true)
 
     # Jobs get empty input instead of sharing this program's stdin.
-    running: list[Job] = []
+    var running: list[Job] = []
     with io.open("/dev/null") as nothing:
         for command in args.get_list("command"):
             running.append(start(len(running) + 1, command, logs, nothing))
 
-    deadline = time.monotonic() + args.get_float("limit")
-    failed = 0
+    var deadline = time.monotonic() + args.get_float("limit")
+    var failed = 0
     while len(running) > 0:
         time.sleep(0.05)
-        expired = time.monotonic() > deadline
-        waiting: list[Job] = []
+        var expired = time.monotonic() > deadline
+        var waiting: list[Job] = []
         for job in running:
-            status = job.process.poll()
+            var status = job.process.poll()
             if status is none and expired:
                 job.process.kill()
                 status = job.process.wait()

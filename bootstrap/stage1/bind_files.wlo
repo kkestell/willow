@@ -13,16 +13,16 @@ import loader
 import sys
 
 def main():
-    args = sys.args()
-    signatures = len(args) > 0 and args[0] == "--signatures"
+    var args = sys.args()
+    var signatures = len(args) > 0 and args[0] == "--signatures"
     if signatures:
         args = args[1:]
-    failed = false
+    var failed = false
     for path in args:
-        root = loader.directory_of(path)
-        test = path[len(root):].startswith("test_")
-        error: diagnostic.Diagnostic | none = none
-        result = loader.load(path, false)
+        var root = loader.directory_of(path)
+        var test = path[len(root):].startswith("test_")
+        var error: diagnostic.Diagnostic | none = none
+        var result = loader.load(path, false)
         if result is diagnostic.Diagnostic:
             error = result
         else:
@@ -34,10 +34,10 @@ def main():
         if error is not none:
             # Paths in messages, such as a missing module's, start with the
             # directory too.
-            message = error.message
+            var message = error.message
             if root != "":
                 message = message.replace(root, "")
-            relative = diagnostic.Diagnostic(error.path.removeprefix(root), error.line, error.col, message)
+            var relative = diagnostic.Diagnostic(error.path.removeprefix(root), error.line, error.col, message)
             sys.eprint(f"{path}: {relative.format()}")
             failed = true
     if failed:

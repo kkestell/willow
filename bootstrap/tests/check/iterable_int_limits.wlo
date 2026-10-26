@@ -1,6 +1,6 @@
 def main():
-    maximum = 9223372036854775807
-    minimum = -9223372036854775807
+    var maximum = 9223372036854775807
+    var minimum = -9223372036854775807
     assert abs(minimum) == maximum
     assert sum([maximum - 1, 1]) == maximum
     assert sum([minimum + 1, -1]) == minimum
@@ -10,14 +10,14 @@ def main():
             assert false
         except OverflowError as error:
             assert error.message == "integer overflow"
-    terminal = enumerate([1], maximum)
+    var terminal = enumerate([1], maximum)
     assert next(terminal) == (maximum, 1)
     try:
         next(terminal)
         assert false
     except StopIteration as stop:
         assert stop.message == ""
-    overflow = enumerate([1, 2], maximum)
+    var overflow = enumerate([1, 2], maximum)
     assert next(overflow) == (maximum, 1)
     try:
         next(overflow)
@@ -26,7 +26,7 @@ def main():
         assert error.message == "integer overflow"
     assert list(range(maximum - 1, maximum, 2))[0] == maximum - 1
     assert list(range(minimum + 1, minimum, -2))[0] == minimum + 1
-    extremes = list(range(minimum, maximum, maximum))
+    var extremes = list(range(minimum, maximum, maximum))
     assert len(extremes) == 2
     assert extremes[0] == minimum
     assert extremes[1] == 0

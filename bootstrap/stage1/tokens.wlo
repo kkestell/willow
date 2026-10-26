@@ -40,7 +40,6 @@ enum Kind:
     IN
     IS
     MATCH
-    NONLOCAL
     NOT
     OR
     PASS
@@ -50,6 +49,7 @@ enum Kind:
     SELF
     TRY
     TYPE
+    VAR
     WHILE
     WITH
     YIELD
@@ -130,7 +130,6 @@ def keywords() -> dict[str, Kind]:
         "in": Kind.IN,
         "is": Kind.IS,
         "match": Kind.MATCH,
-        "nonlocal": Kind.NONLOCAL,
         "not": Kind.NOT,
         "or": Kind.OR,
         "pass": Kind.PASS,
@@ -140,6 +139,7 @@ def keywords() -> dict[str, Kind]:
         "self": Kind.SELF,
         "try": Kind.TRY,
         "type": Kind.TYPE,
+        "var": Kind.VAR,
         "while": Kind.WHILE,
         "with": Kind.WITH,
         "yield": Kind.YIELD,

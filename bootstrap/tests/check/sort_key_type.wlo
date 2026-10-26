@@ -1,2 +1,2 @@
 def main():
-    x = sorted([1], key=(x) => [x])
+    var x = sorted([1], key=(x) => [x])

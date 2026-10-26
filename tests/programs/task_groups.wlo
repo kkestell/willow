@@ -77,7 +77,11 @@ async def precedence(log: Log, catch: bool):
 
 async def main():
     # The §15 example.
-    async with aio.task_group() as group:
+    var group: aio.TaskGroup
+    var first: aio.Task[int]
+    var second: aio.Task[int]
+    async with aio.task_group() as group_item:
+        group = group_item
         first = group.start(square(3))
         second = group.start(square(4))
     print(first.result() + second.result())
@@ -85,8 +89,9 @@ async def main():
 
     # Tasks run in the order they became ready, and children may start in a
     # group passed to them.
-    log = Log([])
-    async with aio.task_group() as group:
+    var log = Log([])
+    async with aio.task_group() as group_item:
+        group = group_item
         group.start(sleeper(log, "slow", 0.02))
         group.start(sleeper(log, "fast", 0.01))
         log.lines.append("body")
@@ -94,7 +99,9 @@ async def main():
 
     # cancel() stops the body and children; the group absorbs its own stop.
     log = Log([])
-    async with aio.task_group() as group:
+    var handle: aio.Task[int]
+    async with aio.task_group() as group_item:
+        group = group_item
         handle = group.start(sleeper(log, "child", 10.0))
         group.start(stopper(group, 0.01))
         await aio.sleep(10.0)
@@ -131,7 +138,7 @@ async def main():
             pass
     except RuntimeError as entered:
         print(entered.message)
-    pending = square(5)
+    var pending = square(5)
     try:
         group.start(pending)
     except RuntimeError as closed:
@@ -139,8 +146,9 @@ async def main():
     print(await pending)
 
     # result() does not wait.
-    async with aio.task_group() as group:
-        unfinished = group.start(sleeper(Log([]), "later", 0.01))
+    async with aio.task_group() as group_item:
+        group = group_item
+        var unfinished = group.start(sleeper(Log([]), "later", 0.01))
         try:
             unfinished.result()
         except RuntimeError as early:

@@ -3,9 +3,9 @@ import fs
 # L0 has no way to remove a file, so the file stays next to this test and
 # .gitignore lists it.
 def main():
-    path = "files.tmp"
+    var path = "files.tmp"
     fs.write_file(path, "first line\nsecond line\n")
-    text = fs.read_file(path)
+    var text = fs.read_file(path)
     print(len(text))
     for line in text.split("\n"):
         print("[" + line + "]")

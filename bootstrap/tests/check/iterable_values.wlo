@@ -49,11 +49,11 @@ def main():
             pass
     except StopIteration as stop:
         assert stop.message == "creation"
-    value = bounded_optional([7])
+    var value = bounded_optional([7])
     assert value is not none
     assert value == 7
     assert next(wrap(Failing())) == (0, 7)
-    failure = Failing()
+    var failure = Failing()
     assert next(failure) == 7
     try:
         for n in failure:
@@ -61,32 +61,32 @@ def main():
     except ValueError as error:
         assert error.message == "advance"
     assert take(((1.5, 2),)) == (1.5, 2)
-    mixed = iter((1.5, 2))
+    var mixed = iter((1.5, 2))
     assert next(mixed) is float
     assert next(mixed) is int
-    values = PairSource([(2.5, 3)])
+    var values = PairSource([(2.5, 3)])
     assert next(pairs(values)) == ((2.5, 3), (2.5, 3))
     assert next(numbered(values)) == (4, (2.5, 3))
-    convert: (list[int]) -> Iterator[int] = iter
-    advance: (Iterator[int]) -> int = next
+    var convert: (list[int]) -> Iterator[int] = iter
+    var advance: (Iterator[int]) -> int = next
     assert advance(convert([9])) == 9
-    items: list[int | none] = [none]
+    var items: list[int | none] = [none]
     items.extend([3])
     assert items[1] == 3
-    collected = [1, 2]
+    var collected = [1, 2]
     collected.extend(collected)
     assert len(collected) == 4
-    before = len(collected)
+    var before = len(collected)
     try:
         collected.extend(Failing())
     except ValueError:
         pass
     assert len(collected) == before
-    values_by_key = {"a": 1, "b": 2}
+    var values_by_key = {"a": 1, "b": 2}
     assert list(values_by_key.keys())[0] == "a"
     assert list(values_by_key.values())[1] == 2
     assert list(values_by_key.items())[1] == ("b", 2)
-    view = values_by_key.items()
+    var view = values_by_key.items()
     values_by_key["c"] = 3
     try:
         next(view)

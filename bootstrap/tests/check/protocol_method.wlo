@@ -9,5 +9,5 @@ class Source:
         pass
 
 def main():
-    reader: Reader = Source()
+    var reader: Reader = Source()
     reader.extra()

@@ -2,4 +2,4 @@ def pick[T](x: T, *, other: T) -> T:
     return other
 
 def main():
-    f = pick[int]
+    var f = pick[int]

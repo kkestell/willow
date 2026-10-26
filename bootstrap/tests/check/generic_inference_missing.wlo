@@ -2,4 +2,4 @@ def empty[T]() -> list[T]:
     return []
 
 def main():
-    value = empty()
+    var value = empty()

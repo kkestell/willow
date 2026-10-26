@@ -16,6 +16,7 @@ def describe(value: int | str | none) -> str:
     return "text " + value
 
 def render(value: Json) -> str:
+    var parts: list[str]
     if value is none:
         return "null"
     else if value is bool:
@@ -29,7 +30,7 @@ def render(value: Json) -> str:
     else if value is str:
         return value
     else if value is list:
-        parts: list[str] = []
+        parts = []
         for item in value:
             parts.append(render(item))
         return "[" + ", ".join(parts) + "]"
@@ -54,9 +55,9 @@ def main():
     print(describe("x"))
     print(describe(none))
 
-    one: Number = 1
-    one_float: Number = 1.0
-    numbers: list[Number] = [one, one_float, -0.0, 2.5, float("nan")]
+    var one: Number = 1
+    var one_float: Number = 1.0
+    var numbers: list[Number] = [one, one_float, -0.0, 2.5, float("nan")]
     for n in numbers:
         print(n)
         print(f"{n} {str(n)}")
@@ -67,22 +68,22 @@ def main():
     print(one_float == 1.0)
     print(1.0 in numbers)
     print(3 in numbers)
-    floats = [1.0, 2.0]
+    var floats = [1.0, 2.0]
     print(contains(1, floats))
     print(contains(2.0, floats))
 
-    pets: list[Cat | Dog] = [Cat("Tom"), Dog("Rex", 3)]
+    var pets: list[Cat | Dog] = [Cat("Tom"), Dog("Rex", 3)]
     for pet in pets:
         print(greet(pet))
 
-    data: Json = {"name": "willow", "tags": ["small", "typed"], "version": 1, "ratio": 0.5,
+    var data: Json = {"name": "willow", "tags": ["small", "typed"], "version": 1, "ratio": 0.5,
                   "nested": {"ok": true, "none": none, "empty": []}}
     print(render(data))
     if data is dict:
         data["version"] = 2.0
     print(render(data))
 
-    maybe: int | str | none = none
+    var maybe: int | str | none = none
     if maybe is not none:
         print("unreachable")
     maybe = "text"

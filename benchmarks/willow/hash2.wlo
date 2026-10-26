@@ -4,14 +4,14 @@
 import sys
 
 def main():
-    n = int(sys.args()[0])
-    first: dict[str, int] = {}
+    var n = int(sys.args()[0])
+    var first: dict[str, int] = {}
     for i in range(10000):
         first[f"foo_{i}"] = i
-    second: dict[str, int] = {}
+    var second: dict[str, int] = {}
     for _ in range(n):
         for key in first:
-            current = second.get(key)
+            var current = second.get(key)
             if current is none:
                 second[key] = first[key]
             else:

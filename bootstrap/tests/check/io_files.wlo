@@ -2,10 +2,12 @@ import core
 import io
 
 def main():
-    path = "io_files.tmp"
-    long = "x".ljust(4095) + "é"
+    var path = "io_files.tmp"
+    var long = "x".ljust(4095) + "é"
     try:
-        with io.open(path, "w") as target:
+        var target: io.File
+        with io.open(path, "w") as target_item:
+            target = target_item
             target.write_text("one\r\n\n" + long + "\n")
             target.write(bytes([255, 10]))
             target.flush()
@@ -15,14 +17,16 @@ def main():
             except ValueError as error:
                 assert error.message == "file is not open for reading"
         target.close()
-        with io.open(path, "a") as target:
+        with io.open(path, "a") as target_item:
+            target = target_item
             target.write_text("last\r")
 
-        source = io.open(path)
-        alias = source
+        var source = io.open(path)
+        var alias = source
+        var one: Iterator[str]
         try:
             one = iter(source)
-            two = iter(source)
+            var two = iter(source)
             assert next(one) == "one"
             assert source.read(1) == bytes([10])
             assert next(two) == long

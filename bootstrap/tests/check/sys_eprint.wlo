@@ -5,6 +5,6 @@ enum Mode:
 
 def main():
     sys.eprint(Mode.AUTO)
-    output: (Mode) -> none = sys.eprint
+    var output: (Mode) -> none = sys.eprint
     output(Mode.AUTO)
     sys.getenv("")

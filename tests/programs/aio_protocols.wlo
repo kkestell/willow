@@ -21,6 +21,6 @@ async def welcome(greeter: Greeter):
     print(await greeter.greet("guest"))
 
 async def main():
-    host = Host()
+    var host = Host()
     show(host)
     await welcome(host)

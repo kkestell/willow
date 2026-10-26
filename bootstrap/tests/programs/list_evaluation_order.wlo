@@ -7,7 +7,7 @@ def g(label: str) -> list[int]:
     return [1, 2, 3]
 
 def main():
-    xs = [1, 2, 3]
+    var xs = [1, 2, 3]
     g("object")[f("index", 0)] = f("value", 5)
     print(f("item", 1) in [f("first", 1), f("second", 2)])
     print(f("sliced", 0) in g("list")[f("start", 0):f("stop", 2)])

@@ -3,4 +3,4 @@ class Options:
     level: int = 0
 
 def main():
-    options = Options()
+    var options = Options()

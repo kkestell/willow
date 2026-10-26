@@ -1,0 +1,2 @@
+def main():
+    var a, b: tuple[int, int] = (1, 2)

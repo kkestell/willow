@@ -4,5 +4,5 @@ def f() -> int:
     return 7
 
 def main():
-    f = 1
+    var f = 1
     print(prog_self.f())

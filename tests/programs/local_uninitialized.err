@@ -1,0 +1,1 @@
+local_uninitialized.wlo:3:11: error: variable 'value' may be used before assignment

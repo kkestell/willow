@@ -2,9 +2,9 @@
 
 # columns[r] is the column of the queen in row r.
 def safe(columns: list[int], column: int) -> bool:
-    row = len(columns)
+    var row = len(columns)
     for r in range(row):
-        c = columns[r]
+        var c = columns[r]
         if c == column or c - column == r - row or c - column == row - r:
             return false
     return true
@@ -20,7 +20,7 @@ def solve(n: int, columns: list[int], solutions: list[list[int]]):
             columns.pop()
 
 def queens(n: int) -> list[list[int]]:
-    solutions: list[list[int]] = []
+    var solutions: list[list[int]] = []
     solve(n, [], solutions)
     return solutions
 
@@ -29,7 +29,7 @@ def main():
         print(f"{n:>2} queens: {len(queens(n))} solutions")
     print("")
     for column in queens(8)[0]:
-        row = ""
+        var row = ""
         for c in range(8):
             if c == column:
                 row = row + " Q"

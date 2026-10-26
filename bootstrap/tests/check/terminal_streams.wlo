@@ -4,8 +4,8 @@ import sys
 import terminal
 
 def main():
-    path = fs.temp_file()
-    file = io.open(path)
+    var path = fs.temp_file()
+    var file = io.open(path)
     file.close()
     fs.remove(path)
     try:

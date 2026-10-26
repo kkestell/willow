@@ -138,7 +138,7 @@ def function(name: str) -> str:
             "}",
         ])
     if name in ["aio_task_address", "aio_sleep_address"]:
-        entry = "$W.core.aio_task_run"
+        var entry = "$W.core.aio_task_run"
         if name == "aio_sleep_address":
             entry = "$W.core.aio_sleep_body"
         return "\n".join([
@@ -167,13 +167,13 @@ def data() -> str:
     return "data $W.coroutine.current = { l 0 }\ndata $W.aio.loop = { l 0 }\ndata $W.aio.cancel = { l 0 }"
 
 def assembly(target: str) -> str:
-    prefix = ""
+    var prefix = ""
     if target.endswith("_apple"):
         prefix = "_"
-    switch = prefix + "W.coroutine.switch"
-    available = prefix + "W.coroutine.available"
-    prepare = prefix + "W.core.coroutine_prepare"
-    text = ".text\n.p2align 2\n.globl " + available + "\n" + available + ":\n"
+    var switch = prefix + "W.coroutine.switch"
+    var available = prefix + "W.coroutine.available"
+    var prepare = prefix + "W.core.coroutine_prepare"
+    var text = ".text\n.p2align 2\n.globl " + available + "\n" + available + ":\n"
     if target in ["arm64", "arm64_apple"]:
         text = text + "    mov w0, #1\n    ret\n"
         text = text + ".p2align 2\n.globl " + switch + "\n" + switch + ":\n"

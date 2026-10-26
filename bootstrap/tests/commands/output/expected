@@ -4,7 +4,7 @@ status 0
 7
 status 0
 1
-bad.wlo:2:11: error: operator '+' cannot be applied to int and str
+bad.wlo:2:15: error: operator '+' cannot be applied to int and str
 status 1
 old
 error: output prog.wlo is the input file

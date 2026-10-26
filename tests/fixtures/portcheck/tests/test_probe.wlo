@@ -2,9 +2,9 @@ import aio
 import portcheck.probe
 
 def test_parse_target():
-    target = portcheck.probe.parse_target("example.com:443")
+    var target = portcheck.probe.parse_target("example.com:443")
     assert target.host == "example.com" and target.port == 443
-    six = portcheck.probe.parse_target("[::1]:8080")
+    var six = portcheck.probe.parse_target("[::1]:8080")
     assert six.host == "::1" and six.port == 8080
     for text in ["example.com", ":80", "host:", "host:http", "host:70000"]:
         try:
@@ -15,13 +15,14 @@ def test_parse_target():
 
 async def test_open_port():
     with aio.listen("127.0.0.1", 0) as listener:
-        target = portcheck.probe.Target("127.0.0.1", listener.local_port())
-        result = await portcheck.probe.check(target, 2.0)
+        var target = portcheck.probe.Target("127.0.0.1", listener.local_port())
+        var result = await portcheck.probe.check(target, 2.0)
         assert result.open, result.detail
 
 async def test_closed_port():
+    var port: int
     with aio.listen("127.0.0.1", 0) as listener:
         port = listener.local_port()
-    result = await portcheck.probe.check(portcheck.probe.Target("127.0.0.1", port), 2.0)
+    var result = await portcheck.probe.check(portcheck.probe.Target("127.0.0.1", port), 2.0)
     assert not result.open
     assert result.detail.startswith("cannot connect to 127.0.0.1:"), result.detail

@@ -24,22 +24,24 @@ class ManifestError(Exception):
 def read() -> Project | none:
     if not fs.exists("willow.json"):
         return none
+    var text: str
     try:
         text = fs.read_file("willow.json")
     except OSError as error:
         raise ManifestError(loader.read_reason(error))
+    var data: json.Json
     try:
         data = json.parse(text)
     except json.JsonError as invalid_json:
         raise ManifestError("willow.json: " + invalid_json.message)
     if data is not dict:
         raise invalid("expected an object")
-    entry = "main.wlo"
-    source = "."
-    tests = "tests"
-    dependencies: list[str] = []
+    var entry = "main.wlo"
+    var source = "."
+    var tests = "tests"
+    var dependencies: list[str] = []
     for key in data:
-        value = data[key]
+        var value = data[key]
         if key == "dependencies":
             if value is not list:
                 raise invalid("'dependencies' must be a list of strings")
@@ -63,17 +65,17 @@ def read() -> Project | none:
                 tests = value
         else:
             raise invalid(f"unknown key '{key}'")
-    stem = entry.removesuffix(".wlo")
-    valid = entry.endswith(".wlo") and not entry.startswith("/")
+    var stem = entry.removesuffix(".wlo")
+    var valid = entry.endswith(".wlo") and not entry.startswith("/")
     for component in stem.split("/"):
         if not loader.is_identifier(component):
             valid = false
     if not valid:
         raise invalid("'entry' must be a .wlo path inside the source root with identifier components")
-    prefixes: list[str] = []
+    var prefixes: list[str] = []
     for dependency in dependencies:
         prefixes.append(prefix(dependency))
-    test_directory = under(tests)
+    var test_directory = under(tests)
     if test_directory == "":
         test_directory = "."
     return Project(prefix(source) + entry, stem.replace("/", "."), prefix(source), prefixes, test_directory)
@@ -94,7 +96,7 @@ def under(path: str) -> str:
 
 # The directory prefix of `path`: "" for the manifest's directory.
 def prefix(path: str) -> str:
-    directory = under(path)
+    var directory = under(path)
     if directory == "/" or directory == "":
         return directory
     return directory + "/"

@@ -1,2 +1,2 @@
 def main():
-    x = bytes.frombytes('')
+    var x = bytes.frombytes('')

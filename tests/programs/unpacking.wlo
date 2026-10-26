@@ -3,23 +3,26 @@ def source() -> tuple[int, tuple[str, float]]:
     return (1, ("a", 2.5))
 
 def main():
-    a = 1
-    b = 2
+    var a = 1
+    var b = 2
     a, b = (b, a)
     print(f"{a} {b}")
     # The source is evaluated once.
-    n, (s, f) = source()
+    var n, (s, f) = source()
     print(f"{n} {s} {f}")
     # A target may be the source itself.
-    v: tuple[int, int] | int = (5, 6)
+    var v: tuple[int, int] | int = (5, 6)
+    var other: int
     v, other = v
     print(f"{v} {other}")
     # An int position narrows an optional target.
-    x: int | none = none
+    var x: int | none = none
+    var y: int
     x, y = (3, 4)
     print(x + y)
     # A float position stays a float in an int | float target.
-    w: int | float = 1
+    var w: int | float = 1
+    var z: int
     w, z = (2.5, 0)
     print((w is float))
     print(w)
@@ -27,11 +30,13 @@ def main():
         print(f"{name}={count}")
     for i, (p, q) in [(1, (2, 3))]:
         print(i + p + q)
-    (c, d) = (7, 8)
+    var (c, d) = (7, 8)
     print(c * d)
-    e, = (9,)
+    var e, = (9,)
     print(e)
     # Both targets are definitely assigned after either branch.
+    var low: int
+    var high: int
     if a > b:
         low, high = (b, a)
     else:

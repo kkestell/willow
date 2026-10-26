@@ -2,7 +2,7 @@
 
 def divides(a: int, b: int) -> bool:
     try:
-        quotient = a // b
+        var quotient = a // b
     except ZeroDivisionError:
         return false
     return true
