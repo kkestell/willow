@@ -671,10 +671,17 @@ Both operands of a division operator must have the same numeric type:
 | `%` | `int` remainder | `float` remainder |
 
 The remainder has the same sign as the divisor, and for integers
-`(a // b) * b + a % b == a`. Dividing by zero, including by `-0.0`, raises
-`ZeroDivisionError` with the message `division by zero`. Results are the same as
-in Python: `7 // -2` is `-4`, `7 % -2` is `-1`, `-7.5 // 2.0` is `-4.0`, and
-`1 / 3` is `0.3333333333333333`.
+`(a // b) * b + a % b == a`. For floats, `//` is the floor of the exact
+quotient, not of the rounded `/` result, so `1.0 // 0.1` is `9.0`, and `%` is
+`a - (a // b) * b` rounded once. A zero quotient has the sign of `a / b`, and a
+zero remainder has the sign of the divisor. A NaN operand, or an infinite
+dividend, gives NaN for both. A finite dividend and an infinite divisor give a
+quotient of zero and a remainder equal to the dividend when the two have the
+same sign or the dividend is zero, and otherwise a quotient of `-1.0` and a
+remainder equal to the divisor. Dividing by zero, including by `-0.0`, raises
+`ZeroDivisionError` with the message `division by zero`. For example,
+`7 // -2` is `-4`, `7 % -2` is `-1`, `-7.5 // 2.0` is `-4.0`, `-7.5 % 2.0` is
+`0.5`, and `1 / 3` is `0.3333333333333333`.
 
 ### Conversions
 
@@ -737,11 +744,23 @@ Length, ordering, indexing, slicing, iteration, and the indexes returned by
 | `ord(c)` | `int` | The code point of `c`, which must be a single code point |
 | `chr(n)` | `str` | The single-code-point string for code point `n` |
 
-These operations return the same results as in Python, except that `strip`
-removes only space, tab, LF, VT, FF, and CR, as do `lstrip`, `rstrip`, and the
-`sep=none` form of `split` and `rsplit`. `split` and `rsplit` with an empty
-separator raise `ValueError` with the message `empty separator`. A negative
-`maxsplit` places no limit on the splits. `ord` of a string whose
+ASCII whitespace is space, tab, LF, VT, FF, and CR. The empty string occurs at
+every index from 0 through `len(s)`, so `s.find("")` is `0`, `"" in s` is true, and
+`startswith("")` and `endswith("")` are true. `s.replace("", new)` inserts
+`new` before every code point and at the end.
+
+`split` with a separator returns every piece, including empty ones, so
+`"a,,b".split(",")` is `["a", "", "b"]` and `"".split(",")` is `[""]`. Without
+a separator, runs of ASCII whitespace separate the pieces and whitespace at
+either end is ignored, so a string that is empty or all whitespace gives `[]`.
+A nonnegative `maxsplit` limits the number of splits, made from the left by
+`split` and from the right by `rsplit`; the rest of the string becomes the last
+piece for `split` and the first for `rsplit`, and in the form without a
+separator that piece keeps its whitespace on the far side. A negative
+`maxsplit` places no limit on the splits. `split` and `rsplit` with an empty
+separator raise `ValueError` with the message `empty separator`. `splitlines`
+gives `[]` for the empty string and no empty last line when the string ends
+with a line ending. `ord` of a string whose
 length is not 1 raises `ValueError` with the message `expected one character`.
 `chr` of a surrogate, or of a value outside the range 0 through 0x10FFFF, raises
 `ValueError` with the message `invalid code point`. An index outside the string
@@ -750,8 +769,7 @@ be modified by assigning to an index.
 
 The classification methods are ASCII only: `isdigit`, `isalpha`, `isalnum`, and
 `isspace` are false for any non-ASCII code point, as they are for the empty
-string. This differs from Python for characters such as `é` and `²`. Case
-conversion and code-point indexing are unchanged.
+string, so they are false for characters such as `é` and `²`.
 
 `lower` and `upper` use the default full case mappings of Unicode 17.0,
 including the Final_Sigma rule for `Σ`. They apply no locale-specific rules and
@@ -822,11 +840,16 @@ print(f"{'total':<12s}{12:>6d}{2.5:>10.2f}")
 
 - A string is written as its contents, without quotation marks.
 - An integer is written in decimal.
-- A float is written as Python's `repr` writes it. This is the shortest decimal
-  text that reads back as the same value. Scientific notation is used when the
-  decimal exponent is less than -4 or at least 16. Otherwise fixed notation is
-  used, with at least one digit after the decimal point. Non-finite values are
-  written as `inf`, `-inf`, and `nan`.
+- A float is written with the fewest significant digits that read back as the
+  same value; when several values with that many digits do, the one nearest
+  the float is used, and of two equally near, the one whose last digit is even,
+  so `1000000000000000.25` is written as `1000000000000000.2`. Zeros keep their
+  sign, as in `0.0` and `-0.0`. Scientific notation is used when the decimal exponent is
+  less than -4 or at least 16: the digits, with a decimal point after the first
+  only if there are more, then `e`, a sign, and at least two exponent digits, as
+  in `1e+16`, `1.5e+300`, `1e-05`, and `5e-324`. Otherwise fixed notation is
+  used, with at least one digit after the decimal point, as in `2.5`, `100.0`,
+  and `0.0001`. Non-finite values are written as `inf`, `-inf`, and `nan`.
 - Booleans are written as `true` and `false`, and `none` is written as `none`.
 
 ### Displays
@@ -1126,7 +1149,10 @@ also propagate. A loop does not close its iterator on early exit; the iterator
 can be resumed. Use `with` for an owned iterator that needs cleanup.
 
 - `range(stop)`, `range(start, stop)`, and `range(start, stop, step)` take
-  integers and produce the same sequence as in Python. A step of zero raises
+  integers, with `start` defaulting to 0 and `step` to 1. They produce `start`,
+  `start + step`, `start + 2 * step`, and so on, while the value is less than
+  `stop` for a positive step or greater than `stop` for a negative step, so
+  `range(10, 0, -3)` produces 10, 7, 4, and 1. A step of zero raises
   `ValueError` with the message `range step must not be zero`. The range value
   satisfies `Iterable[int]`; each `iter` call starts a fresh traversal.
 - The iterable and the arguments to `range` are evaluated once, before the first
@@ -1935,7 +1961,7 @@ kind (`'<name>' is not an int argument`). Each call to `parse` returns a separat
 | `write_file(path: str, text: str) -> none` | Create the file, or replace its contents, with `text` |
 | `join(a: str, b: str) -> str` | `a` and `b` joined with `/`; if `b` is absolute, the result is `b` |
 | `basename(path: str) -> str` | The text after the last `/`, or empty if the path ends with `/` |
-| `dirname(path: str) -> str` | The text before the last `/`, or empty if there is no `/` |
+| `dirname(path: str) -> str` | The text through the last `/`, without trailing slashes unless it is all slashes, or empty if there is no `/` |
 | `listdir(path: str) -> list[str]` | The names of the entries in the directory, excluding `.` and `..`, sorted by code point |
 | `stat(path: str, follow_symlinks: bool = true) -> Stat` | Metadata for the file |
 | `exists(path: str) -> bool` | Whether the path exists, following symlinks |
@@ -1959,11 +1985,12 @@ Paths are strings. A relative path is relative to the working directory.
 `read_file` and `write_file` read and write text exactly as it is, without
 translating line endings. `write_file` does not replace the file atomically.
 
-`join`, `basename`, and `dirname` operate only on the text of the path, in the
-same way as Python's `posixpath`. They do not access the filesystem, follow
-symlinks, or resolve `..`. For example, `join("a", "")` is `a/`, `join("", "b")`
-is `b`, and a leading sequence of slashes is kept together, so `dirname("//a")`
-is `//`.
+`join`, `basename`, and `dirname` operate only on the text of the path. They do
+not access the filesystem, follow symlinks, or resolve `..`. `join` adds a `/`
+between `a` and `b` only when `a` is not empty and does not already end with
+one, so `join("a", "")` is `a/`, `join("a/", "b")` is `a/b`, and
+`join("", "b")` is `b`. For example, `dirname("/a")` is `/`,
+`dirname("a//b")` is `a`, and `dirname("//a")` is `//`.
 
 `read_bytes` and `write_bytes` follow `read_file` and `write_file`, except that
 they do not decode. `copy_file` streams the data of `source` to `destination`,
@@ -1972,9 +1999,16 @@ timestamps, and it does not replace the destination atomically. If `source` and
 `destination` are the same file, or `source` cannot be read, `copy_file` raises
 `OSError` before it changes the destination.
 
-`normpath` and `abspath` operate on the text of the path in the same way as
-Python's `posixpath`, so `normpath("")` is `.` and exactly two leading slashes are
-kept. `abspath` joins a relative path to the working directory first. `realpath`
+`normpath` and `abspath` operate on the text of the path. `normpath` collapses
+repeated slashes, removes `.` components and trailing slashes, and removes each
+`..` together with the component before it when that component is not `..`. A
+`..` with no such component is kept in a relative path and removed directly
+after the root. Exactly two leading
+slashes are kept as two; one, or three or more, become one. An empty result is
+`.`. So `normpath("a/./b/../c/")` is `a/c`, `normpath("../../a/..")` is
+`../..`, `normpath("/../a")` is `/a`, `normpath("//a/../b")` is `//b`, and
+`normpath("")` is `.`. `abspath` joins a relative path to the working directory
+first. `realpath`
 asks the system to resolve the path, which must exist, and raises `OSError`
 otherwise.
 
@@ -2412,7 +2446,7 @@ def main():
 
 Each `Random` has its own state, so the same seed always produces the same
 sequence of results from the same calls, in this version of Willow. The
-sequence is not compatible with Python's. The generator is a small 32-bit PRNG
+generator is a small 32-bit PRNG
 for simulations, tests, and games. It is not secure; use `secure_bytes` for
 secrets. `randint` accepts any `a <= b` in the `int` range. `choice` of an empty
 list and `randint` with `a > b` raise `ValueError`. `secure_bytes` with a
