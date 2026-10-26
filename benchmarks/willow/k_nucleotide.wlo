@@ -29,11 +29,7 @@ def count(sequence: list[str], k: int) -> dict[str, int]:
     var counts: dict[str, int] = {}
     for i in range(len(sequence) - k + 1):
         var kmer = "".join(sequence[i:i + k])
-        var current = counts.get(kmer)
-        if current is none:
-            counts[kmer] = 1
-        else:
-            counts[kmer] = current + 1
+        counts[kmer] = counts.get(kmer, 0) + 1
     return counts
 
 def print_frequencies(sequence: list[str], k: int):
@@ -44,10 +40,7 @@ def print_frequencies(sequence: list[str], k: int):
     print("")
 
 def print_count(sequence: list[str], kmer: str):
-    var found = count(sequence, len(kmer)).get(kmer)
-    if found is none:
-        found = 0
-    print(f"{found}\t{kmer}")
+    print(f"{count(sequence, len(kmer)).get(kmer, 0)}\t{kmer}")
 
 def main():
     var n = int(sys.args()[0])
