@@ -16,12 +16,12 @@
 
 ---
 
-- Finish amd64 validation before the other tasks, which are tested on it.
+- Support amd64 — complete, but unverified on real amd64 hardware.
   - Implemented: Linux Docker test environment, `amd64_sysv` coroutine
     switching, and removal of Intel macOS support.
-  - Remaining: a full `make bootstrap-test` pass on Linux amd64 with native
-    execution or QEMU. Docker Desktop's Rosetta blocks the full suite on
-    this host; see [Docker setup](../docs/bootstrap.md#linux-in-docker).
+  - Full `make bootstrap-test` verification is deferred to real Linux amd64
+    hardware. Docker Desktop's Rosetta blocks the full suite on this host;
+    see [Docker setup](../docs/bootstrap.md#linux-in-docker).
   - Add PCRE2 to the Docker dependencies when `re` exists.
 - Add integer bitwise operators and integer literal prefixes. `fs.chmod`'s
   mode wants `0o` literals, and a SHA-256 written in Willow would need the
