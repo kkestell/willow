@@ -1073,7 +1073,7 @@ class Checker:
         if self.failed():
             return none_type()
         var kind = types.kind(operand)
-        if node.op in ["+", "-"] and kind in ["int", "float"] or node.op == "not" and kind == "bool":
+        if node.op in ["+", "-"] and kind in ["int", "float"] or node.op == "not" and kind == "bool" or node.op == "~" and kind == "int":
             return operand
         self.fail(expr.line, expr.col, f"operator '{node.op}' cannot be applied to {types.display(operand)}")
         return none_type()
@@ -1104,6 +1104,10 @@ class Checker:
             if types.ordered(left, right):
                 ty = types.prim("bool")
             supported = pair in ["int int", "float float", "str str", "tuple tuple"]
+        else if op in ["&", "|", "^", "<<", ">>"]:
+            if pair == "int int":
+                ty = types.prim("int")
+                supported = true
         else if op in ["+", "-", "*", "/", "//", "%"]:
             ty = arithmetic_type(op, pair)
             supported = pair in ["int int", "float float"] or op == "+" and pair in ["str str", "bytes bytes"]

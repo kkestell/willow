@@ -2051,6 +2051,18 @@ class Emitter:
                         self.line(f"{t} =l and {left}, {bit(shift) - 1}")
                     return t
             return self.floor_divide(op, left, right)
+        if op == "<<" or op == ">>":
+            return self.shift(op, left, right)
+        if op in ["&", "|", "^"]:
+            var instr = "and"
+            if op == "|":
+                instr = "or"
+            else if op == "^":
+                instr = "xor"
+            t = self.temp()
+            self.line(f"{t} =l {instr} {left}, {right}")
+            self.check_integer_minimum(t)
+            return t
         if op in ["+", "-", "*"]:
             return self.checked(arithmetic_instruction(op), left, right)
         t = self.temp()
@@ -2138,6 +2150,11 @@ class Emitter:
             var t = self.temp()
             self.line(f"{t} =l ceql {value}, 0")
             return t
+        if node.op == "~":
+            var t = self.temp()
+            self.line(f"{t} =l xor {value}, -1")
+            self.check_integer_minimum(t)
+            return t
         if types.kind(ty) == "float":
             var d = self.as_float(value)
             var t = self.temp()
@@ -2189,6 +2206,38 @@ class Emitter:
         var t = self.temp()
         self.line(f"{t} =l {float_comparison_instruction(op)} {a}, {b}")
         return t
+
+    def check_integer_minimum(value: str):
+        var minimum = self.temp()
+        self.line(f"{minimum} =l ceql {value}, -9223372036854775808")
+        self.guard(minimum, "OverflowError", "integer overflow")
+
+    def shift(op: str, left: str, right: str) -> str:
+        var cond = self.temp()
+        self.line(f"{cond} =l csltl {right}, 0")
+        self.guard(cond, "ValueError", "negative shift count")
+        # Clamp before shifting: QBE and native shifts mask large counts.
+        var count = self.temp()
+        var large = self.new_label()
+        var ready = self.new_label()
+        self.line(f"{count} =l copy {right}")
+        self.line(f"{cond} =l csgel {right}, 63")
+        self.jump(f"jnz {cond}, {large}, {ready}")
+        self.label(large)
+        self.line(f"{count} =l copy 63")
+        self.jump(f"jmp {ready}")
+        self.label(ready)
+        var result = self.temp()
+        if op == ">>":
+            self.line(f"{result} =l sar {left}, {count}")
+        else:
+            self.line(f"{result} =l shl {left}, {count}")
+            var original = self.temp()
+            self.line(f"{original} =l sar {result}, {count}")
+            self.line(f"{cond} =l cnel {original}, {left}")
+            self.guard(cond, "OverflowError", "integer overflow")
+            self.check_integer_minimum(result)
+        return result
 
     def check_divisor(right: str):
         var zero = self.temp()

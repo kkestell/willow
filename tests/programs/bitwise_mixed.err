@@ -1,0 +1,1 @@
+bitwise_mixed.wlo:2:13: error: operator '|' cannot be applied to int and bool

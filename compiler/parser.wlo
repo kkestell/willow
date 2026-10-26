@@ -5,6 +5,7 @@
 
 import ast
 import diagnostic
+import lexer
 import tokens
 
 class Parser:
@@ -219,10 +220,9 @@ class Parser:
             return ast.Expr(token.line, token.col, ast.Unary("not", self.parse_not()))
         return self.parse_comparison()
 
-    # Comparison operands are sums, so `a == not b` fails and chains are
-    # rejected.
+    # Comparison operands exclude `not`; chains are rejected.
     def parse_comparison() -> ast.Expr:
-        var left = self.parse_operand()
+        var left = self.parse_bitwise_or()
         var negated_in = self.peek().kind == tokens.Kind.NOT and self.ahead(1).kind == tokens.Kind.IN
         if not is_comparison(self.peek().kind) and not negated_in:
             return left
@@ -230,7 +230,7 @@ class Parser:
         var node: ast.ExprNode = ast.Constant.NONE
         if negated_in:
             self.advance()
-            node = ast.Binary("not in", left, self.parse_operand())
+            node = ast.Binary("not in", left, self.parse_bitwise_or())
         else if token.kind == tokens.Kind.IS:
             var negated = self.accept(tokens.Kind.NOT)
             if self.accept(tokens.Kind.NONE):
@@ -244,23 +244,41 @@ class Parser:
                 if name.kind == tokens.Kind.NAME:
                     self.qualify(ref, name.text, "a type name")
                 node = ast.TypeTest(left, ref, negated)
-            self.reject_bitwise_or()
+            if self.peek().kind == tokens.Kind.PIPE:
+                self.fail(self.peek(), "unsupported operator '|'")
         else:
-            node = ast.Binary(token.text, left, self.parse_operand())
+            node = ast.Binary(token.text, left, self.parse_bitwise_or())
         if is_comparison(self.peek().kind) or self.peek().kind == tokens.Kind.NOT and self.ahead(1).kind == tokens.Kind.IN:
             self.fail(self.peek(), "comparison chains are not supported")
         return ast.Expr(token.line, token.col, node)
 
-    def parse_operand() -> ast.Expr:
-        var node = self.parse_sum()
-        self.reject_bitwise_or()
-        return node
+    def parse_bitwise_or() -> ast.Expr:
+        var left = self.parse_bitwise_xor()
+        while self.peek().kind == tokens.Kind.PIPE:
+            var token = self.advance()
+            left = ast.Expr(token.line, token.col, ast.Binary(token.text, left, self.parse_bitwise_xor()))
+        return left
 
-    # An expression before `|` ends at a comparison operand, so this is where
-    # bitwise or is reported.
-    def reject_bitwise_or():
-        if self.peek().kind == tokens.Kind.PIPE:
-            self.fail(self.peek(), "unsupported operator '|'")
+    def parse_bitwise_xor() -> ast.Expr:
+        var left = self.parse_bitwise_and()
+        while self.peek().kind == tokens.Kind.CARET:
+            var token = self.advance()
+            left = ast.Expr(token.line, token.col, ast.Binary(token.text, left, self.parse_bitwise_and()))
+        return left
+
+    def parse_bitwise_and() -> ast.Expr:
+        var left = self.parse_shift()
+        while self.peek().kind == tokens.Kind.AMPERSAND:
+            var token = self.advance()
+            left = ast.Expr(token.line, token.col, ast.Binary(token.text, left, self.parse_shift()))
+        return left
+
+    def parse_shift() -> ast.Expr:
+        var left = self.parse_sum()
+        while self.peek().kind == tokens.Kind.LEFT_SHIFT or self.peek().kind == tokens.Kind.RIGHT_SHIFT:
+            var token = self.advance()
+            left = ast.Expr(token.line, token.col, ast.Binary(token.text, left, self.parse_sum()))
+        return left
 
     def parse_sum() -> ast.Expr:
         var left = self.parse_product()
@@ -278,7 +296,7 @@ class Parser:
 
     def parse_unary() -> ast.Expr:
         var token = self.peek()
-        if token.kind == tokens.Kind.MINUS or token.kind == tokens.Kind.PLUS:
+        if token.kind == tokens.Kind.MINUS or token.kind == tokens.Kind.PLUS or token.kind == tokens.Kind.TILDE:
             self.advance()
             return ast.Expr(token.line, token.col, ast.Unary(token.text, self.parse_unary()))
         return self.parse_await()
@@ -397,7 +415,7 @@ class Parser:
         var kind = token.kind
         if kind == tokens.Kind.INT_LITERAL:
             self.advance()
-            return ast.Expr(token.line, token.col, ast.Int(token.text))
+            return ast.Expr(token.line, token.col, ast.Int(integer_text(token.text)))
         if kind == tokens.Kind.FLOAT_LITERAL:
             self.advance()
             return ast.Expr(token.line, token.col, ast.Float(float(token.text)))
@@ -780,7 +798,7 @@ class Parser:
         var kind = literal.kind
         if kind == tokens.Kind.INT_LITERAL:
             self.advance()
-            var text = literal.text
+            var text = integer_text(literal.text)
             if sign == "-" and text != "0":
                 text = "-" + text
             return ast.Expr(token.line, token.col, ast.Int(text))
@@ -1168,8 +1186,24 @@ def starts_expression(kind: tokens.Kind) -> bool:
         return true
     if kind == tokens.Kind.TRUE or kind == tokens.Kind.FALSE or kind == tokens.Kind.NONE or kind == tokens.Kind.INT or kind == tokens.Kind.FLOAT or kind == tokens.Kind.STR or kind == tokens.Kind.BYTES:
         return true
-    return kind == tokens.Kind.LPAREN or kind == tokens.Kind.LBRACKET or kind == tokens.Kind.LBRACE or kind == tokens.Kind.MINUS or kind == tokens.Kind.PLUS or kind == tokens.Kind.NOT or kind == tokens.Kind.AWAIT
+    return kind == tokens.Kind.LPAREN or kind == tokens.Kind.LBRACKET or kind == tokens.Kind.LBRACE or kind == tokens.Kind.TILDE or kind == tokens.Kind.MINUS or kind == tokens.Kind.PLUS or kind == tokens.Kind.NOT or kind == tokens.Kind.AWAIT
 
 # Whether a statement may consist of the expression `node` alone.
 def is_call(node: ast.ExprNode) -> bool:
     return node is ast.Call or node is ast.MethodCall or node is ast.CallValue or node is ast.SpecializedCall or node is ast.Await
+
+# The lexer has checked the digits and range; AST integers use decimal text.
+def integer_text(text: str) -> str:
+    var base = 10
+    if text[:2] == "0x":
+        base = 16
+    else if text[:2] == "0o":
+        base = 8
+    else if text[:2] == "0b":
+        base = 2
+    if base == 10:
+        return text
+    var value = 0
+    for c in text[2:]:
+        value = value * base + lexer.hex_value(c)
+    return str(value)

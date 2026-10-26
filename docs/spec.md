@@ -97,10 +97,11 @@ constructs in this specification is an error.
 ### Numeric literals
 
 An integer literal is a sequence of decimal digits with no leading zeros, except
-for `0` itself. A minus sign before a literal is the unary minus operator, not
+for `0` itself, or a lowercase prefix `0x`, `0o`, or `0b` followed by one or
+more hexadecimal, octal, or binary digits. Hexadecimal digits may be uppercase
+or lowercase; prefixed digits may have leading zeros. Underscores are not
+supported. A minus sign before a literal is the unary minus operator, not
 part of the literal. An integer literal outside the `int` range (§4) is an error.
-Hexadecimal literals, binary literals, and underscores in literals are not
-supported.
 
 A float literal has a fractional part, an exponent, or both, as in `1.0`, `0.25`,
 `1e9`, and `2.5e-3`. A decimal point must have digits on both sides, and the
@@ -514,24 +515,29 @@ Operator precedence, from lowest to highest:
 2. `and`
 3. `not`
 4. `==`, `!=`, `<`, `<=`, `>`, `>=`, `is`, `is not`, `in`, `not in`
-5. Binary `+`, `-`
-6. `*`, `/`, `//`, `%`
-7. Unary `+`, `-`
-8. `await`
-9. Postfix operations: calls, indexing `a[i]`, slicing `a[i:j]`, and field or
+5. `|`
+6. `^`
+7. `&`
+8. `<<`, `>>`
+9. Binary `+`, `-`
+10. `*`, `/`, `//`, `%`
+11. Unary `+`, `-`, `~`
+12. `await`
+13. Postfix operations: calls, indexing `a[i]`, slicing `a[i:j]`, and field or
    method access `a.name`
-10. Literals, names, parenthesized expressions, and displays
+14. Literals, names, parenthesized expressions, and displays
 
 Lambda expressions bind less tightly than all these operations; the expression
 after `=>` extends as far to the right as its enclosing expression allows.
 
 Binary operators are left-associative. Postfix operations are applied from left
 to right, as in `text.strip().split(",")`. The value operands of a level 4
-operator must be expressions at level 5 or higher; the right operand of `is`
-or `is not` is a type name (§4). As a result, `not a == b` means
+operator must be expressions at level 5 or higher, including bitwise expressions.
+The right operand of `is` or `is not` is a single type name (§4), so
+`x is int | none` is an error (`unsupported operator '|'`). As a result, `not a == b` means
 `not (a == b)`, and `a == not b` is a syntax error. Chained comparisons such as
 `0 <= x < 10` are errors. The operand of `await` must be an expression at
-level 9 or higher, so `await -x` is a syntax error and nested awaits are
+level 13 or higher, so `await -x` is a syntax error and nested awaits are
 written `await (await c)`.
 
 ### Calls
@@ -655,6 +661,17 @@ from the parameters.
 Integer `+`, `-`, `*`, unary `+`, and unary `-` are exact. A result outside the
 `int` range raises `OverflowError` with the message `integer overflow`. There is
 no integer negative zero.
+
+Binary `&`, `|`, `^`, `<<`, and `>>`, and unary `~`, take only `int`
+operands and return `int`. Bitwise operations act on the 64-bit two's-complement
+value. A result of -2^63 raises `OverflowError` with the message
+`integer overflow`; for example, `~9223372036854775807` raises this error.
+`a << n` is the exact product of `a` and 2^n, raising the same overflow error
+when out of range. `a >> n` is the floor of `a / 2^n`, so a count of 63 or
+more produces `0` for a nonnegative value and `-1` for a negative value.
+A negative shift count raises `ValueError` with the message
+`negative shift count`. Thus `x & mask == 0` means `(x & mask) == 0`, and
+`items[i | j]` indexes with the value of `i | j`.
 
 ### Floats
 

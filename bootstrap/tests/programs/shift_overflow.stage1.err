@@ -1,0 +1,2 @@
+shift_overflow.wlo:2:14: error: OverflowError: integer overflow
+  in main at shift_overflow.wlo:2:14

@@ -23,26 +23,6 @@
     hardware. Docker Desktop's Rosetta blocks the full suite on this host;
     see [Docker setup](../docs/bootstrap.md#linux-in-docker).
   - Add PCRE2 to the Docker dependencies when `re` exists.
-- Add integer bitwise operators and integer literal prefixes. `fs.chmod`'s
-  mode wants `0o` literals, and a SHA-256 written in Willow would need the
-  operators.
-  - Binary `&`, `|`, `^`, `<<`, and `>>`, and unary `~`, on `int` operands
-    only. They act on the 64-bit two's-complement value. A result of -2^63,
-    which is outside the `int` range, raises `OverflowError` with the message
-    `integer overflow`, as `~9223372036854775807` does.
-  - A negative shift count raises `ValueError` with the message
-    `negative shift count`. `a << n` is `a * 2**n` and raises `OverflowError`
-    when that is out of range. `a >> n` is the floor of `a / 2**n`, so a count
-    of 63 or more gives `0` or `-1`.
-  - Precedence, from lowest: comparisons, `|`, `^`, `&`, `<<` and `>>`, then
-    binary `+` and `-`. Unary `~` binds like unary `+` and `-`. Comparison
-    operands may be bitwise expressions, so `x & mask == 0` means
-    `(x & mask) == 0`. Update §5's precedence list and its operand rule.
-  - `is` still takes a single type name, so `x is int | none` stays an error
-    (`unsupported operator '|'`). `items[i | j]` is an index; test it.
-  - Integer literals with `0x`, `0o`, and `0b` prefixes. The prefix is
-    lowercase; hex digits may be either case. Underscores stay unsupported,
-    and a literal outside the `int` range is an error.
 - Add text operations.
   - `s.count(sub) -> int`: the number of non-overlapping occurrences, counted
     from the left. `s.count("")` is `len(s) + 1`, since the empty string

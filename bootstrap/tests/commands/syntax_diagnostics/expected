@@ -8,7 +8,7 @@ duplicate_target.wlo:2:12: error: duplicate target 'a'
 status 1
 fstring_comment.wlo:2:13: error: f-string fields cannot contain '#'
 status 1
-hex_literal.wlo:2:13: error: invalid number literal '0x1F'
+hex_literal.wlo:2:13: error: invalid number literal '0x1G'
 status 1
 indentation.wlo:2:3: error: indentation must be a multiple of four spaces
 status 1

@@ -1,0 +1,2 @@
+bitwise_overflow.wlo:2:11: error: OverflowError: integer overflow
+  in main at bitwise_overflow.wlo:2:11

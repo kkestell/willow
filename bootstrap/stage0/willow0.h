@@ -538,6 +538,7 @@ typedef enum ValueTag {
     VALUE_FloatNeg,
     VALUE_Logic,
     VALUE_CheckedInt,
+    VALUE_Shift,
     VALUE_FloorDivide,
     VALUE_Divide,
     VALUE_ListDisplay,
@@ -574,7 +575,7 @@ struct Value {
         Value *FloatNeg;
         /// Short-circuit `and`, or `or` when `and` is false.
         struct { bool and; Value *left; Value *right; } Logic;
-        /// Integer `add`, `sub`, or `mul`, which calls `fail` when the result is
+        /// Integer arithmetic or bitwise instruction, calling `fail` when the result is
         /// outside the symmetric int range.
         struct {
             const char *instr;
@@ -582,6 +583,13 @@ struct Value {
             Value *right;
             Value *fail;
         } CheckedInt;
+        struct {
+            bool right;
+            Value *left;
+            Value *count;
+            Value *negative;
+            Value *overflow;
+        } Shift;
         /// Integer `//`, or `%` when `modulo`, which calls `fail` for a zero divisor.
         struct {
             bool modulo;

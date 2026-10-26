@@ -16,12 +16,12 @@ static const char *const RESERVED[] = {
     "Coroutine"
 };
 static const char *const OPERATORS[] = {
-    "...", "->", "=>", "==", "!=", "<=", ">=", "//", "<", ">", "=", "+", "-", "*", "/",
-    "%", "|", "(", ")", "[", "]", "{", "}", ",", ":", "."
+    "...", "->", "=>", "==", "!=", "<=", ">=", "//", "<<", ">>", "<", ">", "=", "+", "-", "*", "/",
+    "%", "|", "&", "^", "~", "(", ")", "[", "]", "{", "}", ",", ":", "."
 };
 static const char *const UNSUPPORTED[] = {
-    "**=", "//=", "<<=", ">>=", "**", "<<", ">>", "+=", "-=", "*=", "/=", "%=",
-    "&=", "|=", "^=", ":=", "&", "^", "~"
+    "**=", "//=", "<<=", ">>=", "**", "+=", "-=", "*=", "/=", "%=",
+    "&=", "|=", "^=", ":="
 };
 static const char *const TABS = "tabs are not allowed outside strings and comments";
 #define NO_CHAR UINT32_MAX
@@ -230,8 +230,52 @@ static size_t skip_digits(const Lexer *self, size_t i) {
     return i;
 }
 
+static void lex_prefixed_integer(Lexer *self) {
+    size_t start = self->i;
+    uint32_t prefix = peek(self, start + 1);
+    int base = prefix == 'x' ? 16 : prefix == 'o' ? 8 : 2;
+    size_t end = start + 2;
+    bool overflow = false;
+    int64_t value = 0;
+    for (;;) {
+        uint32_t c = peek(self, end);
+        if (!(alphabetic(c) || digit(c) || c == '_' || c == '.')) {
+            break;
+        }
+        end++;
+    }
+    bool valid = end > start + 2;
+    for (size_t i = start + 2; i < end; i++) {
+        uint32_t c = peek(self, i);
+        int d = digit(c) ? (int)(c - '0') : c >= 'a' && c <= 'f' ? (int)(c - 'a') + 10 :
+            c >= 'A' && c <= 'F' ? (int)(c - 'A') + 10 : -1;
+        if (d < 0 || d >= base) {
+            valid = false;
+        } else if (!overflow) {
+            if (value > (INT64_MAX - d) / base) {
+                overflow = true;
+            } else {
+                value = value * base + d;
+            }
+        }
+    }
+    if (!valid) {
+        lexer_fail(self, start, str_format("invalid number literal '%s'", text_between(self, start, end).data));
+    }
+    if (overflow) {
+        lexer_fail(self, start, STR("integer literal out of range"));
+    }
+    add(self, (Kind){.tag = KIND_Int, .as.Int = value}, start);
+    self->i = end;
+}
+
 static void lex_number(Lexer *self) {
     size_t start = self->i;
+    if (peek(self, start) == '0' && (peek(self, start + 1) == 'x' ||
+            peek(self, start + 1) == 'o' || peek(self, start + 1) == 'b')) {
+        lex_prefixed_integer(self);
+        return;
+    }
     size_t digits_end = skip_digits(self, start);
     size_t end = digits_end;
     if (peek(self, end) == '.' && digit(peek(self, end + 1))) {

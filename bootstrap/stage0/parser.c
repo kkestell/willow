@@ -59,7 +59,7 @@ static bool starts_expression(const Kind *kind) {
         return true;
     case KIND_Word:
         return WORD_IN(kind, "self", "true", "false", "none", "int", "float", "str", "bytes",
-                       "(", "[", "{", "-", "+", "not", "await");
+                       "(", "[", "{", "-", "+", "~", "not", "await");
     default: return false;
     }
 }
@@ -151,6 +151,10 @@ static Expr expr(Parser *self);
 static Expr logical(Parser *self, const char *op);
 static Expr negation(Parser *self);
 static Expr comparison(Parser *self);
+static Expr bitwise_or(Parser *self);
+static Expr bitwise_xor(Parser *self);
+static Expr bitwise_and(Parser *self);
+static Expr shift(Parser *self);
 static Expr sum(Parser *self);
 static Expr term(Parser *self);
 static Expr unary(Parser *self);
@@ -550,7 +554,7 @@ static Expr negation(Parser *self) {
 }
 
 static Expr comparison(Parser *self) {
-    Expr left = sum(self);
+    Expr left = bitwise_or(self);
     Pos at = pos(self);
     Pos op_pos;
     ExprKind kind;
@@ -575,24 +579,71 @@ static Expr comparison(Parser *self) {
             }
             target = boxed_expr(named);
         }
+        if (word_is(peek(self), "|")) {
+            parser_fail(self, pos(self), STR("unsupported operator '|'"));
+        }
         kind = (ExprKind){.tag = EXPR_TypeTest, .as.TypeTest = {boxed_expr(left), negated, op_pos, target}};
     } else if (word_is(peek(self), "not") && word_is(&self->tokens.data[self->i + 1].kind, "in")) {
         op_pos = pos(self);
         self->i += 2;
-        Expr right = sum(self);
+        Expr right = bitwise_or(self);
         kind = (ExprKind){.tag = EXPR_Binary, .as.Binary = {"not in", op_pos, boxed_expr(left), boxed_expr(right)}};
     } else {
         const char *op = binary_op(self, COMPARISONS, sizeof(COMPARISONS) / sizeof(*COMPARISONS), &op_pos);
         if (!op) {
             return left;
         }
-        Expr right = sum(self);
+        Expr right = bitwise_or(self);
         kind = (ExprKind){.tag = EXPR_Binary, .as.Binary = {op, op_pos, boxed_expr(left), boxed_expr(right)}};
     }
     if (word_in(peek(self), COMPARISONS, sizeof(COMPARISONS) / sizeof(*COMPARISONS)) || word_is(peek(self), "is")) {
         parser_fail(self, pos(self), STR("comparison chains are not supported"));
     }
     return (Expr){at, kind};
+}
+
+static Expr bitwise_or(Parser *self) {
+    Expr left = bitwise_xor(self);
+    Pos op_pos;
+    const char *op;
+    while ((op = BINARY_OP(self, &op_pos, "|"))) {
+        Expr right = bitwise_xor(self);
+        left = (Expr){op_pos, {.tag = EXPR_Binary, .as.Binary = {op, op_pos, boxed_expr(left), boxed_expr(right)}}};
+    }
+    return left;
+}
+
+static Expr bitwise_xor(Parser *self) {
+    Expr left = bitwise_and(self);
+    Pos op_pos;
+    const char *op;
+    while ((op = BINARY_OP(self, &op_pos, "^"))) {
+        Expr right = bitwise_and(self);
+        left = (Expr){op_pos, {.tag = EXPR_Binary, .as.Binary = {op, op_pos, boxed_expr(left), boxed_expr(right)}}};
+    }
+    return left;
+}
+
+static Expr bitwise_and(Parser *self) {
+    Expr left = shift(self);
+    Pos op_pos;
+    const char *op;
+    while ((op = BINARY_OP(self, &op_pos, "&"))) {
+        Expr right = shift(self);
+        left = (Expr){op_pos, {.tag = EXPR_Binary, .as.Binary = {op, op_pos, boxed_expr(left), boxed_expr(right)}}};
+    }
+    return left;
+}
+
+static Expr shift(Parser *self) {
+    Expr left = sum(self);
+    Pos op_pos;
+    const char *op;
+    while ((op = BINARY_OP(self, &op_pos, "<<", ">>"))) {
+        Expr right = sum(self);
+        left = (Expr){op_pos, {.tag = EXPR_Binary, .as.Binary = {op, op_pos, boxed_expr(left), boxed_expr(right)}}};
+    }
+    return left;
 }
 
 static Expr sum(Parser *self) {
@@ -619,7 +670,7 @@ static Expr term(Parser *self) {
 
 static Expr unary(Parser *self) {
     Pos at;
-    const char *op = BINARY_OP(self, &at, "-", "+");
+    const char *op = BINARY_OP(self, &at, "-", "+", "~");
     if (op) {
         Expr operand = unary(self);
         return (Expr){at, {.tag = EXPR_Unary, .as.Unary = {op, boxed_expr(operand)}}};

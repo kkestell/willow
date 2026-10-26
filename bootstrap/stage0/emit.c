@@ -499,6 +499,34 @@ static String value(Emitter *self, const Value *v) {
         line(self, str_format("%.*s =l phi %.*s %.*s, %.*s %.*s", S(t), S(left_block), S(l), S(right_block), S(r)));
         return t;
     }
+    case VALUE_Shift: {
+        String l = value(self, v->as.Shift.left);
+        String r = value(self, v->as.Shift.count);
+        String cond = temp(self);
+        line(self, str_format("%.*s =l csltl %.*s, 0", S(cond), S(r)));
+        guard(self, cond, v->as.Shift.negative);
+        String count = temp(self);
+        String large = new_label(self);
+        String ready = new_label(self);
+        line(self, str_format("%.*s =l copy %.*s", S(count), S(r)));
+        line(self, str_format("%.*s =l csgel %.*s, 63", S(cond), S(r)));
+        jump(self, str_format("jnz %.*s, %.*s, %.*s", S(cond), S(large), S(ready)));
+        label(self, large);
+        line(self, str_format("%.*s =l copy 63", S(count)));
+        jump(self, str_format("jmp %.*s", S(ready)));
+        label(self, ready);
+        String t = temp(self);
+        line(self, str_format("%.*s =l %s %.*s, %.*s", S(t), v->as.Shift.right ? "sar" : "shl", S(l), S(count)));
+        if (!v->as.Shift.right) {
+            String original = temp(self);
+            line(self, str_format("%.*s =l sar %.*s, %.*s", S(original), S(t), S(count)));
+            line(self, str_format("%.*s =l cnel %.*s, %.*s", S(cond), S(original), S(l)));
+            guard(self, cond, v->as.Shift.overflow);
+            line(self, str_format("%.*s =l ceql %.*s, -9223372036854775808", S(cond), S(t)));
+            guard(self, cond, v->as.Shift.overflow);
+        }
+        return t;
+    }
     case VALUE_CheckedInt: {
         String l = value(self, v->as.CheckedInt.left);
         String r = value(self, v->as.CheckedInt.right);
@@ -803,7 +831,7 @@ static String overflow(Emitter *self, const char *instr, String l, String r, Str
         }
         line(self, str_format("%.*s =l and %.*s, %.*s", S(a), S(a), S(b)));
         line(self, str_format("%.*s =l csltl %.*s, 0", S(wrapped), S(a)));
-    } else {
+    } else if (strcmp(instr, "mul") == 0) {
         /* For multiplication, dividing back detects wrapping. Substitute 1
          * for the divisor when the left operand is 0 or the result -2^63. */
         String zero = temp(self);
@@ -820,6 +848,10 @@ static String overflow(Emitter *self, const char *instr, String l, String r, Str
         line(self, str_format("%.*s =l cnel %.*s, %.*s", S(a), S(a), S(r)));
         line(self, str_format("%.*s =l ceql %.*s, 0", S(b), S(zero)));
         line(self, str_format("%.*s =l and %.*s, %.*s", S(wrapped), S(a), S(b)));
+    }
+    if (strcmp(instr, "and") == 0 || strcmp(instr, "or") == 0 || strcmp(instr, "xor") == 0) {
+        line(self, str_format("%.*s =l ceql %.*s, -9223372036854775808", S(min), S(t)));
+        return min;
     }
     line(self, str_format("%.*s =l ceql %.*s, -9223372036854775808", S(min), S(t)));
     line(self, str_format("%.*s =l or %.*s, %.*s", S(wrapped), S(wrapped), S(min)));

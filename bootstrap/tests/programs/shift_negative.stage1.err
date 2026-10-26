@@ -1,0 +1,2 @@
+shift_negative.wlo:2:13: error: ValueError: negative shift count
+  in main at shift_negative.wlo:2:13

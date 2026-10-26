@@ -84,6 +84,11 @@ enum Kind:
     SLASH_SLASH
     PERCENT
     PIPE
+    AMPERSAND
+    CARET
+    TILDE
+    LEFT_SHIFT
+    RIGHT_SHIFT
     LPAREN
     RPAREN
     LBRACKET
@@ -94,7 +99,7 @@ enum Kind:
     COLON
     DOT
 
-# A token's text is the identifier for NAME, the source digits for numbers,
+# A token's text is the identifier for NAME, the source text for numbers,
 # the decoded value for STRING_LITERAL and FSTRING_TEXT, the format
 # specification for FIELD_END, the source text for keywords and operators, and
 # empty otherwise. Columns count code points.
@@ -176,6 +181,11 @@ def operators() -> dict[str, Kind]:
         "//": Kind.SLASH_SLASH,
         "%": Kind.PERCENT,
         "|": Kind.PIPE,
+        "&": Kind.AMPERSAND,
+        "^": Kind.CARET,
+        "~": Kind.TILDE,
+        "<<": Kind.LEFT_SHIFT,
+        ">>": Kind.RIGHT_SHIFT,
         "(": Kind.LPAREN,
         ")": Kind.RPAREN,
         "[": Kind.LBRACKET,
@@ -190,4 +200,4 @@ def operators() -> dict[str, Kind]:
 # Operators from other languages that Willow reports by name instead of
 # lexing as a sequence of shorter operators.
 def unsupported_operators() -> list[str]:
-    return ["**=", "//=", "<<=", ">>=", "**", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", ":=", "&", "^", "~"]
+    return ["**=", "//=", "<<=", ">>=", "**", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", ":="]
