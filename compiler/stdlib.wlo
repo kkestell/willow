@@ -6,7 +6,7 @@
 import ast
 import types
 
-# A built-in function, or a function of a provided module.
+# A built-in function.
 class Builtin:
     name: str
     params: list[BuiltinParam]
@@ -23,16 +23,6 @@ class BuiltinParam:
     ty: types.Type | none
     default: ast.Expr | none
     keyword_only: bool
-
-# A compiler-provided module. It has no source; a program's own module of the
-# same name shadows it.
-class Module:
-    name: str
-    functions: dict[str, Builtin]
-    classes: dict[str, types.Class]
-    aliases: dict[str, types.Type]
-    # Float constants, which binding replaces with their values.
-    constants: dict[str, float]
 
 def prim(name: str) -> types.Type:
     return types.prim(name)
@@ -257,64 +247,12 @@ def has_coroutine(t: types.Type) -> bool:
             return true
     return false
 
-# An ordinary class of a provided module, with `fields` names and `kinds`
-# types.
-def provided_class(module: str, name: str, names: list[str], kinds: list[types.Type]) -> types.Class:
-    var fields: list[types.Field] = []
-    for i in range(len(names)):
-        fields.append(types.Field(names[i], kinds[i], none))
-    return types.Class(name, module + "." + name, [], fields, [], false, false, "", true)
-
-# A native type: a provided class with no fields that only its module's
-# functions create. Its methods lower to helpers named after `prefix`.
-def native_class(module: str, name: str, prefix: str) -> types.Class:
-    return types.Class(name, module + "." + name, [], [], [], false, true, prefix, true)
-
-def class_type(decl: types.Class) -> types.Type:
-    return types.class_self(decl)
-
-# Adds a method with the parameters `params` after `self`; a parameter named
-# "" is positional-only.
+# Adds a runtime-dispatched method with the parameters `params` after `self`.
 def native_method(decl: types.Class, name: str, params: list[types.Param], result: types.Type):
-    generic_method(decl, name, [], params, result)
-
-# A native method generic in `typevars`.
-def generic_method(decl: types.Class, name: str, typevars: list[types.TypeVar], params: list[types.Param], result: types.Type):
     var receiver = types.Param("self", types.class_self(decl), none, false)
     var all_params = [receiver]
     all_params.extend(params)
-    decl.methods.append(types.Function(0, name, decl.type_name + "." + name, typevars, all_params, result))
-
-def default_param(name: str, ty: types.Type, default: ast.Expr) -> types.Param:
-    return types.Param(name, ty, default, false)
-
-# Gives a native type the context-manager methods: `enter` returns the open
-# handle and `exit` closes it.
-def scoped(decl: types.Class):
-    native_method(decl, "enter", [], class_type(decl))
-    native_method(decl, "exit", [param("error", optional_exception())], prim("none"))
-
-def new_module(name: str) -> Module:
-    return Module(name, {}, {}, {}, {})
-
-def io_file() -> types.Class:
-    var file = native_class("io", "File", "file")
-    native_method(file, "read", [param("size", prim("int"))], prim("bytes"))
-    native_method(file, "readline", [], optional("str"))
-    native_method(file, "write", [param("data", prim("bytes"))], prim("none"))
-    native_method(file, "write_text", [param("text", prim("str"))], prim("none"))
-    native_method(file, "flush", [], prim("none"))
-    native_method(file, "close", [], prim("none"))
-    native_method(file, "iter", [], types.iterator(prim("str")))
-    scoped(file)
-    return file
-
-def none_param(name: str, ty: types.Type) -> types.Param:
-    return default_param(name, ty, none_default())
-
-# The compiler-provided modules, by name.
-def modules() -> dict[str, Module]:
-    return {}
+    decl.methods.append(types.Function(0, name, decl.type_name + "." + name, [], all_params, result))
 
 # Run-time types of built-in values that protocol dispatch finds converters
 # for, named by their dispatch tags, which no class can have. Programs cannot

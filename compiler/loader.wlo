@@ -16,11 +16,6 @@ import lib_source
 import parser
 import source
 
-# Whether `name` is a standard library module with no source in lib/, which
-# stdlib.wlo declares instead.
-def is_stdlib(name: str) -> bool:
-    return false
-
 # A module read from source: its full name, as in "app.util", and its syntax
 # tree, whose path is the file it was read from.
 class Source:
@@ -90,9 +85,8 @@ class Loader:
             self.load_import(path, item, privileged)
 
     # Loads the module that the import `item` in the module at `importer`
-    # names, unless it is loaded or is a standard library module that
-    # stdlib.wlo declares. A program's module is looked for in the program's
-    # files first; a library module's imports, and core, never are.
+    # names, unless it is loaded. A program's module is looked for in the
+    # program's files first; a library module's imports, and core, never are.
     #
     # Modules are found with fs.exists, so this differs from spec §12 in one
     # way: a path through a file that is not a directory, as `a/b.wlo` is
@@ -126,7 +120,7 @@ class Loader:
         var text = lib_source.text(item.name)
         if text != "":
             self.add(item.name, "lib/" + item.name + ".wlo", text, true)
-        else if not is_stdlib(item.name):
+        else:
             self.fail(importer, item, f"cannot load module '{item.name}': {path}: No such file or directory")
 
     def add_core():
@@ -165,8 +159,7 @@ def file_roots(path: str) -> Roots:
 # The modules of the program whose entry file is at `path` and has the text
 # `text`: the entry first, then each module in the order a depth-first walk
 # of the imports first reaches it, and last core if `with_core` and nothing
-# imported it. Standard library modules that stdlib.wlo declares are not
-# included. Returns the first error instead when a module cannot be loaded,
+# imported it. Returns the first error instead when a module cannot be loaded,
 # lexed, or parsed. Clashes between imports are the binder's to report, in
 # its order.
 def load(path: str, text: str, roots: Roots, with_core: bool) -> list[Source] | diagnostic.Diagnostic:

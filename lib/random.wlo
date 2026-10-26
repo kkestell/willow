@@ -1,24 +1,10 @@
 import core
 
-def _xor(a: int, b: int) -> int:
-    var result = 0
-    var bit = 1
-    while a > 0 or b > 0:
-        if a % 2 != b % 2:
-            result = result + bit
-        a = a // 2
-        b = b // 2
-        bit = bit * 2
-    return result
-
 def _mul(a: int, b: int) -> int:
     return (a * (b % 65536) + (a * (b // 65536) % 65536) * 65536) % 4294967296
 
 def _rotl(value: int, bits: int) -> int:
-    var scale = 1
-    for i in range(bits):
-        scale = scale * 2
-    return value * scale % 4294967296 + value // (4294967296 // scale)
+    return ((value << bits) & 0xffffffff) | (value >> (32 - bits))
 
 def _cover(value: int) -> int:
     var limit = 1
@@ -39,11 +25,11 @@ class Random:
         var s3 = self._s3
         var result = _rotl(s1 * 5 % 4294967296, 7) * 9 % 4294967296
         var t = s1 * 512 % 4294967296
-        s2 = _xor(s2, s0)
-        s3 = _xor(s3, s1)
-        s1 = _xor(s1, s2)
-        s0 = _xor(s0, s3)
-        s2 = _xor(s2, t)
+        s2 = s2 ^ s0
+        s3 = s3 ^ s1
+        s1 = s1 ^ s2
+        s0 = s0 ^ s3
+        s2 = s2 ^ t
         s3 = _rotl(s3, 11)
         self._s0 = s0
         self._s1 = s1
@@ -100,9 +86,9 @@ def generator(seed: int) -> Random:
     var words: list[int] = []
     for i in range(4):
         state = (state + 2654435769) % 4294967296
-        var z = _mul(_xor(state, state // 65536), 2246822507)
-        z = _mul(_xor(z, z // 8192), 3266489909)
-        words.append(_xor(z, z // 65536))
+        var z = _mul(state ^ (state >> 16), 2246822507)
+        z = _mul(z ^ (z >> 13), 3266489909)
+        words.append(z ^ (z >> 16))
         if i == 0:
             state = (state + high) % 4294967296
     if words[0] == 0 and words[1] == 0 and words[2] == 0 and words[3] == 0:

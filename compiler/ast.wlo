@@ -32,7 +32,6 @@ class Module:
     # test functions by name.
     names: dict[str, Decl]
     imported: dict[str, Module]
-    provided: dict[str, stdlib.Module]
     roots: dict[str, bool]
     tests: list[FunctionDecl]
 

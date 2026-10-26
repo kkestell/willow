@@ -1,0 +1,8 @@
+import aio
+
+async def main():
+    var value: int | none = 1
+    for i in range(2):
+        print(value + 1)
+        async with aio.task_group():
+            value = none

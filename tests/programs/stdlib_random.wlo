@@ -17,6 +17,15 @@ def show(items: list[int]) -> str:
     return ", ".join(parts)
 
 def main():
+    # Keep the seeded stream stable, including both ends of the int range.
+    for seed, first, second in [
+        (0, 0.37932652900647357, -8993249099287807388),
+        (9223372036854775807, 0.4993195466698622, -4505633671368307000),
+        (-9223372036854775807, 0.7002660070468989, -6828773508359455427),
+    ]:
+        var stream = random.generator(seed)
+        assert stream.random() == first
+        assert stream.randint(-9223372036854775807, 9223372036854775807) == second
     assert checked_draw(random.generator(7)) == random.generator(7).random()
     var a = random.generator(42)
     var b = random.generator(42)

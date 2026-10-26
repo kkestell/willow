@@ -3044,17 +3044,10 @@ class Emitter:
             self.line(f"{t} =l cast {r}")
         return t
 
-    # A function of sys or fs, which core implements as `sys_exit`,
-    # `fs_read_file`, and so on. sys.args reads the argc and argv the entry
-    # saved.
+    # A built-in whose runtime helper has the same name, with dots replaced
+    # by underscores, such as bytes.fromhex or sys.exit.
     def host(node: ast.Call, target: stdlib.Builtin) -> str:
-        var args: list[str] = []
-        if node.name == "sys.args":
-            for word in ["$W.argc", "$W.argv"]:
-                var t = self.temp()
-                self.line(f"{t} =l loadl {word}")
-                args.append(t)
-        args.extend(self.arg_values(node.args, node.order))
+        var args = self.arg_values(node.args, node.order)
         var result = target.result
         assert result is not none, f"{node.name} has no result"
         return self.core_call(node.name.replace(".", "_"), args, not is_none(result))

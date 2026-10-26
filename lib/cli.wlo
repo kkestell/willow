@@ -161,16 +161,7 @@ class Parser:
                 if entry.kind != "flag":
                     left = left + " " + entry.name.upper().replace("-", "_")
                     var note = ""
-                    var value = entry.default
-                    var default: str
-                    if value is str:
-                        default = value
-                    else if value is int:
-                        default = str(value)
-                    else if value is float:
-                        default = str(value)
-                    else:
-                        default = str(value)
+                    var default = str(entry.default)
                     if entry.required:
                         note = "(required)"
                     else if default != "":

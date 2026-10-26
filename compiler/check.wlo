@@ -1760,20 +1760,10 @@ class Checker:
             return self.check_host(expr, node, target, state)
         else if name == "chr":
             return self.check_host(expr, node, target, state)
-        else if name == "sys.args":
-            return self.check_host(expr, node, target, state)
         else if name == "sys.exit":
             return self.check_host(expr, node, target, state)
         else if name == "sys.eprint":
             return self.check_print(expr, node, state)
-        else if name == "fs.read_file":
-            return self.check_host(expr, node, target, state)
-        else if name == "fs.write_file":
-            return self.check_host(expr, node, target, state)
-        else if name == "fs.exists":
-            return self.check_host(expr, node, target, state)
-        else if name == "fs.realpath":
-            return self.check_host(expr, node, target, state)
         return self.unsupported(line, col, f"'{name}'")
 
     def check_iterable_builtin(expr: ast.Expr, node: ast.Call, target: stdlib.Builtin, state: dict[int, types.Type]) -> types.Type:
@@ -2132,6 +2122,11 @@ def assigned_symbols(body: list[ast.Stmt], result: dict[int, bool]):
                 var target = item.target
                 if target is not none:
                     target_symbols(target, result)
+            assigned_symbols(node.body, result)
+        else if node is ast.AsyncWith:
+            var target = node.target
+            if target is not none:
+                target_symbols(target, result)
             assigned_symbols(node.body, result)
         else if node is ast.Try:
             assigned_symbols(node.body, result)

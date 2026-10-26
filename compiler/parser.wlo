@@ -1059,7 +1059,7 @@ class Parser:
         return decl
 
     def parse_module() -> ast.Module:
-        var module = ast.Module(self.path, "", self.privileged, [], [], {}, {}, {}, {}, {}, [])
+        var module = ast.Module(self.path, "", self.privileged, [], [], {}, {}, {}, {}, [])
         while self.peek().kind == tokens.Kind.IMPORT:
             self.advance()
             var name = self.expect(tokens.Kind.NAME, "a module name")

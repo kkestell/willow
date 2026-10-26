@@ -1,0 +1,1 @@
+group_except_assignment.wlo:10:21: error: operator '+' cannot be applied to int | none and int

@@ -41,22 +41,16 @@ class TypeScope:
             return none
         return outer.find(name)
 
-# A library module's alias, such as json.Json.
-class ProvidedAlias:
-    name: str
-    type_name: str
-    ty: types.Type
-
 # A library module's float constant, such as math.pi.
 class ProvidedConstant:
     name: str
     value: float
 
 # What a module-qualified name can reach.
-type Member = ast.Decl | stdlib.Builtin | types.Class | ProvidedAlias | ProvidedConstant
+type Member = ast.Decl | stdlib.Builtin | types.Class | ProvidedConstant
 
 # What a name in a type can reach.
-type Named = types.Class | types.Protocol | types.Enum | AliasState | ProvidedAlias
+type Named = types.Class | types.Protocol | types.Enum | AliasState
 
 # A program's alias as the binder resolves it. A generic alias has a type
 # for each list of type arguments it is given.
@@ -112,7 +106,6 @@ class Binder:
     intrinsics: dict[str, stdlib.Builtin]
     exceptions: dict[str, types.Class]
     protocols: dict[str, types.Protocol]
-    provided: dict[str, stdlib.Module]
     coroutine: types.Class
     # By types.identity of the alias's type_name.
     aliases: dict[str, AliasState]
@@ -167,8 +160,6 @@ class Binder:
             var target = self.imported_module(module, imp.name)
             if target is not none:
                 module.imported[imp.name] = target
-            else if imp.name in self.provided:
-                module.provided[imp.name] = self.provided[imp.name]
         for decl in module.declarations:
             var ident = decl_ident(decl)
             if not self.check_builtin_name(module, ident.name, ident.line, ident.col):
@@ -248,40 +239,28 @@ class Binder:
         return record
 
     def has_module(module: ast.Module, path: str) -> bool:
-        return path in module.imported or path in module.provided
+        return path in module.imported
 
     # Member `name` of the module that `module` imports as `path`. Names that
     # begin with `_` are private to their module.
     def lookup(module: ast.Module, path: str, name: str, line: int, col: int) -> Member | none:
-        if path in module.imported:
-            var target = module.imported[path]
-            if name in target.constants:
-                return ProvidedConstant(name, target.constants[name])
-            if name not in target.names:
-                self.fail(module, line, col, f"module '{target.name}' has no function, class, enum, or alias '{name}'")
-                return none
-            if name.startswith("_") and target.name != module.name:
-                self.fail(module, line, col, f"'{name}' is private to module '{target.name}'")
-                return none
-            if target.privileged and target.name == "sys":
-                # The compiler converts eprint's printable argument to text
-                # and recognizes exit as a control transfer.
-                if name == "eprint":
-                    return stdlib.Builtin(name, [stdlib.any_arg("value")], types.prim("none"), "")
-                if name == "exit":
-                    return stdlib.Builtin(name, [stdlib.arg("status", types.prim("int"))], types.prim("none"), "")
-            return target.names[name]
-        var provided = module.provided[path]
-        if name in provided.functions:
-            return provided.functions[name]
-        if name in provided.classes:
-            return provided.classes[name]
-        if name in provided.aliases:
-            return ProvidedAlias(name, path + "." + name, provided.aliases[name])
-        if name in provided.constants:
-            return ProvidedConstant(name, provided.constants[name])
-        self.fail(module, line, col, f"module '{provided.name}' has no function, class, enum, or alias '{name}'")
-        return none
+        var target = module.imported[path]
+        if name in target.constants:
+            return ProvidedConstant(name, target.constants[name])
+        if name not in target.names:
+            self.fail(module, line, col, f"module '{target.name}' has no function, class, enum, or alias '{name}'")
+            return none
+        if name.startswith("_") and target.name != module.name:
+            self.fail(module, line, col, f"'{name}' is private to module '{target.name}'")
+            return none
+        if target.privileged and target.name == "sys":
+            # The compiler converts eprint's printable argument to text
+            # and recognizes exit as a control transfer.
+            if name == "eprint":
+                return stdlib.Builtin(name, [stdlib.any_arg("value")], types.prim("none"), "")
+            if name == "exit":
+                return stdlib.Builtin(name, [stdlib.arg("status", types.prim("int"))], types.prim("none"), "")
+        return target.names[name]
 
     # The enum that `object` names as `E` or `module.E` in `module` when no
     # name in `scope` shadows it, or none.
@@ -357,8 +336,6 @@ class Binder:
         if found is ast.AliasDecl:
             return self.aliases[types.identity(found.type_name, library)]
         if found is types.Class:
-            return found
-        if found is ProvidedAlias:
             return found
         return none
 
@@ -596,8 +573,6 @@ class Binder:
             if aliased is none:
                 return none_type
             return aliased
-        if named is ProvidedAlias:
-            return named.ty
         if named is types.Class:
             return types.ClassType(named, [])
         if named is types.Protocol:
@@ -1201,8 +1176,6 @@ class Resolver:
                 resolved = self.binder.apply_alias(named, types.var_types(named.typevars), self.module, ref.line, ref.col, self.type_scope)
             if resolved is not none:
                 ref.coverage = types.members(resolved)
-        else if named is ProvidedAlias:
-            ref.coverage = types.members(named.ty)
         else if named is types.Protocol:
             self.fail(ref.line, ref.col, f"protocol '{ref.name}' cannot be used in a type test")
             return
@@ -1406,7 +1379,7 @@ def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | no
             libraries[source.name] = source.tree
         else:
             by_name[source.name] = source.tree
-    var binder = Binder(modules, by_name, libraries, modules[0], 0, none, stdlib.builtins(), stdlib.intrinsics(), stdlib.exceptions(), stdlib.protocols(), stdlib.modules(), stdlib.coroutine(), {}, [], [])
+    var binder = Binder(modules, by_name, libraries, modules[0], 0, none, stdlib.builtins(), stdlib.intrinsics(), stdlib.exceptions(), stdlib.protocols(), stdlib.coroutine(), {}, [], [])
     for module in modules:
         binder.declare(module)
         if binder.error is not none:
@@ -1631,13 +1604,11 @@ def member_noun(found: Member) -> str:
         return "function"
     if found is types.Class:
         return "class"
-    if found is ProvidedAlias:
-        return "alias"
     return "constant"
 
 # The declarations that name no function or class to call.
 def cannot_call(found: Member) -> bool:
-    return found is ast.AliasDecl or found is ast.EnumDecl or found is ast.ProtocolDecl or found is ProvidedAlias or found is ProvidedConstant
+    return found is ast.AliasDecl or found is ast.EnumDecl or found is ast.ProtocolDecl or found is ProvidedConstant
 
 # What a call of `found`, which can be called, reaches.
 def call_target(found: Member) -> ast.FunctionDecl | stdlib.Builtin | types.Class | none:
@@ -1658,9 +1629,7 @@ def named_type_name(named: Named) -> str:
         return named.type_name
     if named is types.Enum:
         return named.type_name
-    if named is AliasState:
-        return named.decl.type_name
-    return named.type_name
+    return named.decl.type_name
 
 def named_name(named: Named) -> str:
     if named is types.Class:
@@ -1669,9 +1638,7 @@ def named_name(named: Named) -> str:
         return named.name
     if named is types.Enum:
         return named.name
-    if named is AliasState:
-        return named.decl.name
-    return named.name
+    return named.decl.name
 
 def named_typevars(named: Named) -> list[types.TypeVar]:
     if named is types.Class:
