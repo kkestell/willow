@@ -16,18 +16,13 @@
 
 ---
 
-- Support amd64. Do this first: the other tasks are tested on it.
-  - Add a way to run `make bootstrap-test` in a Linux amd64 Docker container
-    with QBE 1.3, libgc, pkg-config, and the libraries the tests load: libcurl,
-    and PCRE2 once `re` exists.
-  - Write the `amd64_sysv` coroutine switch in `compiler/coroutine.wlo`;
-    creating a coroutine on amd64 now fails with
-    `coroutines require arm64 and stage 1 or 2`, and the async conformance
-    programs need it.
-  - Decision needed: Intel macOS cannot run in Docker. Either drop it, or fix
-    `fs.stat` and `fs.listdir`, which use the arm64 `stat` and `dirent`
-    layouts and unsuffixed symbols where x86_64 needs the `$INODE64` entry
-    points, without a machine to test on. Recommended: drop it.
+- Finish amd64 validation before the other tasks, which are tested on it.
+  - Implemented: Linux Docker test environment, `amd64_sysv` coroutine
+    switching, and removal of Intel macOS support.
+  - Remaining: a full `make bootstrap-test` pass on Linux amd64 with native
+    execution or QEMU. Docker Desktop's Rosetta blocks the full suite on
+    this host; see [Docker setup](../docs/bootstrap.md#linux-in-docker).
+  - Add PCRE2 to the Docker dependencies when `re` exists.
 - Add integer bitwise operators and integer literal prefixes. `fs.chmod`'s
   mode wants `0o` literals, and a SHA-256 written in Willow would need the
   operators.

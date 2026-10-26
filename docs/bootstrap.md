@@ -123,6 +123,12 @@ default command is `make bootstrap-test`. On an arm64 host, Docker needs
 amd64 emulation (Docker Desktop provides it), and the tests will run more
 slowly.
 
+Some Docker Desktop Rosetta versions mishandle `posix_spawn` failures for
+missing executables. This breaks PATH search and can stop the bootstrap with
+`willow1: unsupported host linux ` (an empty architecture). Use Docker's
+QEMU emulation instead, with Rosetta disabled in Docker Desktop settings,
+or run the amd64 image on a native Linux amd64 host.
+
 The image contains a snapshot of the working tree, including uncommitted
 source changes. Host `build/` files and Git metadata are excluded. Builds
 and test outputs stay inside the container and are removed with `--rm`, so
