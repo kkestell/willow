@@ -1,6 +1,7 @@
 import core
 
-# Runs programs through core.run, which stage 1's driver uses for qbe and cc.
+# Runs programs through core.run, which the stage 1 and 2 drivers use for qbe
+# and cc.
 def main():
     assert core.run(["true"]) == 0
     assert core.run(["false"]) == 1
