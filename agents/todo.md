@@ -11,17 +11,8 @@
   (AGENTS.md).
 - Add conformance programs with expected output for the new behavior and its
   errors.
-- `make bootstrap-test` passes on macOS arm64 and Linux arm64, and, once amd64
-  support lands, on Linux amd64 in Docker (`docker run --platform linux/amd64`).
-
----
-
-- Support amd64 — complete, but unverified on real amd64 hardware.
-  - Implemented: Linux Docker test environment, `amd64_sysv` coroutine
-    switching, and removal of Intel macOS support.
-  - Full `make bootstrap-test` verification is deferred to real Linux amd64
-    hardware. Docker Desktop's Rosetta blocks the full suite on this host;
-    see [Docker setup](../docs/bootstrap.md#linux-in-docker).
+- `make bootstrap-test` passes on macOS arm64, Linux arm64, and Linux amd64;
+  the GitHub Actions `test` workflow checks all three.
 
 ---
 
