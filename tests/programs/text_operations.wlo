@@ -1,0 +1,30 @@
+def split_text(s: str, sep: str, right: bool):
+    var parts = s.partition(sep)
+    if right:
+        parts = s.rpartition(sep)
+    print(f"[{parts[0]}][{parts[1]}][{parts[2]}]")
+    assert parts == (parts[0], parts[1], parts[2])
+    var boxed: tuple[str, str, str] | none = parts
+    assert boxed == parts
+
+def main():
+    for text in ["aaaaa", "é🌳é🌳é", ""]:
+        print(text.count(""))
+        print(text.rfind(""))
+    print("aaaaa".count("aa"))
+    print("aaaaa".rfind("aa"))
+    print("é🌳é🌳é".count("é🌳"))
+    print("é🌳é🌳é".rfind("🌳"))
+    print("abc".count("abcd"))
+    print("abc".rfind("abcd"))
+    print("abc".rfind("z"))
+    for right in [false, true]:
+        split_text("é🌳é🌳é", "🌳", right)
+        split_text("ababa", "aba", right)
+        split_text("abc", "z", right)
+        split_text("", "long", right)
+        split_text("::", "::", right)
+        try:
+            split_text("abc", "", right)
+        except ValueError as e:
+            print(e.message)

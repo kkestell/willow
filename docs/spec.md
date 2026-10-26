@@ -713,6 +713,13 @@ remainder equal to the divisor. Dividing by zero, including by `-0.0`, raises
   decimal digits. Leading zeros are allowed. Any other text, or a result outside
   the `int` range, raises `ValueError` with the message
   `cannot convert str to int`.
+- `int(text: str, base: int) -> int` takes positional arguments and accepts
+  an optional sign and one or more digits valid in bases 2 through 36. Letters
+  `a` through `z`, in either case, represent digits 10 through 35. Leading zeros
+  are allowed. Base prefixes are not recognized; underscores and whitespace
+  are not allowed. Bad text or an out-of-range result raises
+  `ValueError` with the message `cannot convert str to int`. A base outside
+  2 through 36 raises `ValueError` with the message `invalid base`.
 - `float(s: str) -> float` accepts an optional `+` or `-` followed by either a
   decimal number or one of `inf`, `infinity`, and `nan` in any letter case. A
   decimal number consists of digits with an optional fraction and exponent, as in
@@ -728,7 +735,7 @@ The string conversions do not accept surrounding whitespace or underscores.
 
 Strings are compared by their exact contents, without Unicode normalization.
 Length, ordering, indexing, slicing, iteration, and the indexes returned by
-`find` are all measured in code points.
+`find` and `rfind` are all measured in code points.
 
 | Expression | Type | Meaning |
 | --- | --- | --- |
@@ -741,6 +748,10 @@ Length, ordering, indexing, slicing, iteration, and the indexes returned by
 | `s.startswith(prefix)` | `bool` | `s` begins with `prefix` |
 | `s.endswith(suffix)` | `bool` | `s` ends with `suffix` |
 | `s.find(sub)` | `int \| none` | Index of the first occurrence of `sub`, or `none` |
+| `s.rfind(sub)` | `int \| none` | Index of the last occurrence of `sub`, or `none` |
+| `s.count(sub)` | `int` | Number of non-overlapping occurrences of `sub`, counted from the left |
+| `s.partition(sep)` | `tuple[str, str, str]` | Text before the first occurrence of `sep`, the separator, and text after it |
+| `s.rpartition(sep)` | `tuple[str, str, str]` | Like `partition`, using the last occurrence |
 | `s.replace(old, new)` | `str` | `s` with every non-overlapping occurrence of `old`, from left to right, replaced by `new` |
 | `s.strip()` | `str` | `s` without leading and trailing ASCII whitespace |
 | `s.lstrip()` | `str` | `s` without leading ASCII whitespace |
@@ -765,9 +776,14 @@ Length, ordering, indexing, slicing, iteration, and the indexes returned by
 | `chr(n)` | `str` | The single-code-point string for code point `n` |
 
 ASCII whitespace is space, tab, LF, VT, FF, and CR. The empty string occurs at
-every index from 0 through `len(s)`, so `s.find("")` is `0`, `"" in s` is true, and
+every index from 0 through `len(s)`, so `s.find("")` is `0`, `s.rfind("")` is `len(s)`,
+`s.count("")` is `len(s) + 1`, `"" in s` is true, and
 `startswith("")` and `endswith("")` are true. `s.replace("", new)` inserts
 `new` before every code point and at the end.
+
+`partition` without an occurrence returns `(s, "", "")`; `rpartition` returns
+`("", "", s)`. An empty separator raises `ValueError` with the message
+`empty separator`.
 
 `split` with a separator returns every piece, including empty ones, so
 `"a,,b".split(",")` is `["a", "", "b"]` and `"".split(",")` is `[""]`. Without
@@ -828,27 +844,35 @@ An f-string field may end with a format specification, written
 `{expression:spec}`. The specification starts after the first colon that is not
 inside nested parentheses, brackets, braces, or string literals. So
 `f"{text[1:3]}"` contains a slice and has no format specification. A
-specification has the form `[alignment][width][.precision][type]`. The alignment
+specification has the form `[alignment][0][width][.precision][type]`. The alignment
 is `<`, `>`, or `^`. The width and precision are unsigned decimal integers with
-no leading zeros. The type is `s`, `d`, or `f`. An empty specification has no
-effect.
+no leading zeros. The type is `s`, `d`, `f`, `x`, or `X`. An empty specification
+has no effect.
 
 - A field without a type formats any printable value the way `str` does. A
   precision may only be given with the `f` type. The `s` type requires a `str`
-  value, `d` requires an `int`, and `f` requires a `float`. A value of a union
-  type must be narrowed before it can be formatted with a type.
+  value, `d`, `x`, and `X` require an `int`, and `f` requires a `float`. A value of
+  a union type must be narrowed before it can be formatted with a type.
 - The `f` type writes the number in fixed-point notation with six digits after
   the decimal point unless a precision is given. It rounds to the nearest value,
   with ties going to the even digit. NaN and infinities are written as they are
   by `str`.
-- Padding uses spaces. Strings are left-aligned by default and other values are
-  right-aligned. For a union, the default depends on the type of the value the
-  union holds. With center alignment, when the padding cannot be split evenly,
-  the extra space goes on the right. The width is a minimum length in code
+- The `x` and `X` types write hexadecimal digits in lowercase and uppercase,
+  respectively, with a leading `-` for negative values and no prefix.
+- A `0` followed by a width starting with a nonzero digit is the zero flag; a
+  lone `0` is a width of zero. The flag pads between the sign and digits with
+  zeros, as in `-0042`. It requires a static type of `int` or `float` and a
+  format type of `d`, `f`, `x`, `X`, or none, and cannot be combined with an
+  alignment. Violations are compile-time errors. Non-finite floats use spaces
+  instead of zeros.
+- Otherwise padding uses spaces. Strings are left-aligned by default and other
+  values are right-aligned. For a union, the default depends on the type of the
+  value the union holds. With center alignment, when the padding cannot be split
+  evenly, the extra space goes on the right. The width is a minimum length in code
   points, and longer values are not truncated.
 - A malformed specification, or a type that does not match the value, is a
-  compile-time error. Fill characters, digit grouping, sign options, zero
-  padding, and nested fields are not supported.
+  compile-time error. Fill characters, digit grouping, sign options, and
+  nested fields are not supported.
 
 ```python
 print(f"{'total':<12s}{12:>6d}{2.5:>10.2f}")

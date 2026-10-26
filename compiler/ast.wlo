@@ -213,6 +213,7 @@ class FString:
     specs: list[FormatSpec]
 
 class FormatSpec:
+    zero: bool = false
     align: str = ""
     width: int = 0
     precision: int = 6

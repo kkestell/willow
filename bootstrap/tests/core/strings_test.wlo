@@ -9,6 +9,12 @@ def main():
     assert core.str_compare("b", "a") > 0
     assert core.str_compare("ab", "ab") == 0
     assert core.int_to_str(-42) == "-42"
+    assert "aaaaa".count("aa") == 2
+    assert "é🌳é".rfind("é") == 2
+    assert "é🌳é".rfind("") == 3
+    assert "é🌳é".count("") == 4
+    assert int("7fffffffffffffff", 16) == 9223372036854775807
+    assert int("-Zz", 36) == -1295
 
     assert core.str_chr(65) == "A"
     assert core.str_chr(233) == "é"

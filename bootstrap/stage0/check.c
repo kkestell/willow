@@ -1156,6 +1156,14 @@ static MethodSignature method_signature(const Type *ty, String name) {
             sig.function = "str_find";
             vec_push(sig.params, TY(Str));
             sig.ret = union_two(TY(Int), TY(None));
+        } else if (eq(name, "rfind")) {
+            sig.function = "str_rfind";
+            vec_push(sig.params, TY(Str));
+            sig.ret = union_two(TY(Int), TY(None));
+        } else if (eq(name, "count")) {
+            sig.function = "str_count";
+            vec_push(sig.params, TY(Str));
+            sig.ret = TY(Int);
         } else if (eq(name, "startswith")) {
             sig.function = "str_startswith";
             vec_push(sig.params, TY(Str));
@@ -2581,6 +2589,12 @@ static TypedValue call(Checker *self, const Expr *callee, ExprVec arguments, con
                 str_format("'len' cannot be applied to " FMT, S(type_name(&arg.ty))));
         }
         return typed(core_call(function, VALUES(arg.value), true), TY(Int));
+    }
+    if (eq(name, "int") && checked.len == 2) {
+        Type text = TY(Str), base = TY(Int);
+        expect(self, checked.data[0].pos, &text, &checked.data[0].ty);
+        expect(self, checked.data[1].pos, &base, &checked.data[1].ty);
+        return typed(core_call("str_to_int_base", VALUES(checked.data[0].value, checked.data[1].value), true), TY(Int));
     }
     if (eq(name, "int") || eq(name, "float")) {
         arity(self, pos, name, 1, checked.len);

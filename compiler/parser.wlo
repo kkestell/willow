@@ -1148,13 +1148,16 @@ def parse_format_spec(text: str) -> ast.FormatSpec:
     if text[:1] in ["<", ">", "^"]:
         spec.align = text[0]
         text = text[1:]
-    if text[-1:] in ["s", "d", "f"]:
+    if text[-1:] in ["s", "d", "f", "x", "X"]:
         spec.kind = text[-1]
         text = text[:-1]
     var dot = text.find(".")
     if dot is not none:
         spec.precision = int(text[dot + 1:])
         text = text[:dot]
+    if len(text) > 1 and text[:1] == "0":
+        spec.zero = true
+        text = text[1:]
     if text != "":
         spec.width = int(text)
     return spec

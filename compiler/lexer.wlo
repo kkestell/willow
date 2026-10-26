@@ -504,7 +504,7 @@ def hex_value(c: str) -> int:
     return -1
 
 # The error in the format specification `spec`, which has the form
-# [alignment][width][.precision][type] (spec §7), or "" if it is valid.
+# [alignment][0][width][.precision][type] (spec §7), or "" if it is valid.
 def spec_error(spec: str) -> str:
     var chars: list[str] = []
     for c in spec:
@@ -512,6 +512,9 @@ def spec_error(spec: str) -> str:
     chars.append("")
     var i = 0
     if chars[i] == "<" or chars[i] == ">" or chars[i] == "^":
+        i = i + 1
+    var zero = chars[i] == "0" and is_digit(chars[i + 1]) and chars[i + 1] != "0"
+    if zero:
         i = i + 1
     var width_start = i
     while is_digit(chars[i]):
@@ -528,7 +531,7 @@ def spec_error(spec: str) -> str:
             i = i + 1
         precision_digits = i - precision_start
     var kind = ""
-    if chars[i] == "s" or chars[i] == "d" or chars[i] == "f":
+    if chars[i] == "s" or chars[i] == "d" or chars[i] == "f" or chars[i] == "x" or chars[i] == "X":
         kind = chars[i]
         i = i + 1
     var invalid = i != len(chars) - 1 or has_precision and precision_digits == 0
@@ -536,6 +539,8 @@ def spec_error(spec: str) -> str:
         invalid = true
     if invalid:
         return f"invalid format specification '{spec}'"
+    if zero and (width_start > 1 or kind == "s"):
+        return "zero flag requires a numeric format without alignment"
     if has_precision and kind != "f":
         return "format precision requires type 'f'"
     return ""

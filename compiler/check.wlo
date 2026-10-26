@@ -1697,12 +1697,14 @@ class Checker:
             var required = ""
             if kind == "s":
                 required = "str"
-            else if kind == "d":
+            else if kind in ["d", "x", "X"]:
                 required = "int"
             else if kind == "f":
                 required = "float"
             if required != "" and types.kind(ty) != required:
                 self.fail(part.line, part.col, f"format type '{kind}' requires {required}, received {types.display(ty)}")
+            else if node.specs[i].zero and types.kind(ty) not in ["int", "float"]:
+                self.fail(part.line, part.col, "zero flag requires int or float")
             else if not types.printable(ty):
                 self.fail(part.line, part.col, f"cannot format a value of type {types.display(ty)}")
         return types.prim("str")
@@ -1731,7 +1733,13 @@ class Checker:
         var noun = ""
         if len(target.params) > 0 and target.params[0].name != "":
             noun = "parameter"
-        self.bind_args(expr, node, target.params, noun)
+        var params = target.params
+        if name == "int" and len(node.args) + len(node.keywords) > 2:
+            self.fail(line, col, f"'int' expects 1 to 2 arguments, received {len(node.args) + len(node.keywords)}")
+            return none_type()
+        if name == "int" and len(node.args) == 2:
+            params = [stdlib.any_arg(""), stdlib.arg("", types.prim("int"))]
+        self.bind_args(expr, node, params, noun)
         if self.failed():
             return none_type()
         if name == "print":
@@ -1903,6 +1911,10 @@ class Checker:
 
     def check_conversion(expr: ast.Expr, node: ast.Call, state: dict[int, types.Type]) -> types.Type:
         var name = node.name
+        if name == "int" and len(node.args) == 2:
+            self.check_against(node.args[0], state, types.prim("str"))
+            self.check_against(node.args[1], state, types.prim("int"))
+            return types.prim("int")
         self.check_arity(expr, name, 1, len(node.args))
         if self.failed():
             return none_type()

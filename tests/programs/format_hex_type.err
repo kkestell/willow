@@ -1,0 +1,1 @@
+format_hex_type.wlo:2:14: error: format type 'x' requires int, received float

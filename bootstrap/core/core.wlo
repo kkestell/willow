@@ -620,6 +620,57 @@ def str_find(s: str, sub: str) -> int | none:
         return none
     return count_chars(s, 0, at)
 
+def str_rfind(s: str, sub: str) -> int | none:
+    var at = rfind_bytes(s, sub, str_size(s) - str_size(sub))
+    if at < 0:
+        return none
+    return count_chars(s, 0, at)
+
+def str_count(s: str, sub: str) -> int:
+    if str_size(sub) == 0:
+        return str_len(s) + 1
+    var count = 0
+    var at = find_bytes(s, sub, 0)
+    while at >= 0:
+        count = count + 1
+        at = find_bytes(s, sub, at + str_size(sub))
+    return count
+
+def str_partition(s: str, sep: str) -> ptr:
+    return partition_text(s, sep, false)
+
+def str_rpartition(s: str, sep: str) -> ptr:
+    return partition_text(s, sep, true)
+
+def partition_text(s: str, sep: str, right: bool) -> ptr:
+    if str_size(sep) == 0:
+        fail("ValueError", "empty separator")
+    var at = -1
+    if right:
+        at = rfind_bytes(s, sep, str_size(s) - str_size(sep))
+    else:
+        at = find_bytes(s, sep, 0)
+    var before = ""
+    var middle = ""
+    var after = ""
+    if at >= 0:
+        before = str_sub(s, 0, at)
+        middle = sep
+        after = str_sub(s, at + str_size(sep), str_size(s))
+    else if right:
+        after = s
+    else:
+        before = s
+    var kinds = __alloc_atomic(24)
+    __store8(kinds, 0, __word(2))
+    __store8(kinds, 8, __word(2))
+    __store8(kinds, 16, __word(2))
+    var result = tuple_new(3, kinds)
+    tuple_set(result, 0, __word(before))
+    tuple_set(result, 1, __word(middle))
+    tuple_set(result, 2, __word(after))
+    return result
+
 def str_startswith(s: str, prefix: str) -> bool:
     return bytes_equal_at(s, 0, prefix)
 
@@ -749,6 +800,34 @@ def pad(s: str, width: int, align: str) -> str:
         var left = padding // 2
         return repeat_byte(32, left) + s + repeat_byte(32, padding - left)
     return repeat_byte(32, padding) + s
+
+def pad_zero(s: str, width: int) -> str:
+    if str_endswith(s, "inf") or str_endswith(s, "nan"):
+        return pad(s, width, ">")
+    var padding = width - str_size(s)
+    if padding <= 0:
+        return s
+    var zeros = repeat_byte(48, padding)
+    if str_startswith(s, "-"):
+        return "-" + zeros + str_sub(s, 1, str_size(s))
+    return zeros + s
+
+def int_to_hex(n: int, upper: bool) -> str:
+    var digits = "0123456789abcdef"
+    if upper:
+        digits = "0123456789ABCDEF"
+    var negative = n < 0
+    if negative:
+        n = -n
+    var result = ""
+    while n > 0:
+        result = str_char_at(digits, n & 15) + result
+        n = n >> 4
+    if result == "":
+        result = "0"
+    if negative:
+        result = "-" + result
+    return result
 
 def format_union(value: ptr, width: int, align: str) -> str:
     if align == "":
@@ -3456,11 +3535,14 @@ def run(args: list[str]) -> int:
         return 128 - code
     return code
 
-# An optional sign and one or more decimal digits (spec §6). The magnitude is
-# checked before each step so it never leaves the int range, which is
-# symmetric, so both signs share the limit 9223372036854775807. The first
-# byte of an empty string is its trailing zero byte.
 def str_to_int(s: str) -> int:
+    return str_to_int_base(s, 10)
+
+# Check each digit before multiplying so the magnitude stays within the
+# symmetric int range for either sign.
+def str_to_int_base(s: str, base: int) -> int:
+    if base < 2 or base > 36:
+        fail("ValueError", "invalid base")
     var size = str_size(s)
     var negative = str_byte(s, 0) == 45
     var i = 0
@@ -3468,15 +3550,23 @@ def str_to_int(s: str) -> int:
         i = 1
     if i == size:
         fail("ValueError", "cannot convert str to int")
+    var limit = 9223372036854775807 // base
+    var remainder = 9223372036854775807 % base
     var value = 0
     while i < size:
         var b = str_byte(s, i)
-        if not is_digit(b):
+        var digit = -1
+        if is_digit(b):
+            digit = b - 48
+        else if b >= 65 and b <= 90:
+            digit = b - 65 + 10
+        else if b >= 97 and b <= 122:
+            digit = b - 97 + 10
+        if digit < 0 or digit >= base:
             fail("ValueError", "cannot convert str to int")
-        var digit = b - 48
-        if value > 922337203685477580 or (value == 922337203685477580 and digit > 7):
+        if value > limit or (value == limit and digit > remainder):
             fail("ValueError", "cannot convert str to int")
-        value = value * 10 + digit
+        value = value * base + digit
         i = i + 1
     if negative:
         return -value

@@ -1,2 +1,2 @@
 def main():
-    print(f"{1:05}")
+    print(f"{1:005}")
