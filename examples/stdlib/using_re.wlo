@@ -1,0 +1,20 @@
+import re
+
+def main():
+    var tickets = re.compile("(?<project>[a-z]+)-([0-9]+)", ignore_case=true)
+    var text = "Fix WILLOW-42 and willow-7"
+    var found = tickets.search(text)
+    if found is not none:
+        print(found.group())
+        print(found.named("project"))
+        print(found.group(2))
+        print(f"Offsets: {found.start()}..{found.end()}")
+
+    print(", ".join(tickets.findall(text)))
+    print(tickets.fullmatch("willow-12") is not none)
+    # Replacements use PCRE2's $1 and $2 capture syntax.
+    print(tickets.sub("$1 #$2", text))
+
+    var separators = re.compile("[,;] *")
+    for item in separators.split("tea, cake; coffee"):
+        print(item)

@@ -1,0 +1,17 @@
+import hash
+
+def main():
+    var message = "hello world".encode()
+    var digest = hash.sha256(message)
+    print(digest.hex())
+    print(f"Digest bytes: {len(digest)}")
+
+    var hasher = hash.sha256_hasher()
+    hasher.update("hello ".encode())
+    hasher.update("world".encode())
+    print(hasher.hexdigest())
+    print(hasher.digest() == digest)
+
+    # Reading the digest leaves the hasher ready for more input.
+    hasher.update("!".encode())
+    print(hasher.hexdigest())

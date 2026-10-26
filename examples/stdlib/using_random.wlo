@@ -1,0 +1,18 @@
+import random
+
+def main():
+    # A fixed seed makes the same sequence repeat on every run.
+    var rng = random.generator(42)
+    print(f"Die roll: {rng.randint(1, 6)}")
+
+    var players = ["Ada", "Grace", "Linus", "Ken"]
+    print("First player: " + rng.choice(players))
+    rng.shuffle(players)
+    print(", ".join(players))
+
+    var fraction = rng.random()
+    print(fraction >= 0.0 and fraction < 1.0)
+
+    # Use operating-system randomness for secrets; only its length is stable.
+    var token = random.secure_bytes(16)
+    print(f"Token bytes: {len(token)}")
