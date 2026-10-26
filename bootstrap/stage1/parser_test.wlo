@@ -81,7 +81,7 @@ def main():
         ["def f(x: list):\n    pass\n", "1:14: expected '[', found ')'"],
         ["def f(x: 1):\n    pass\n", "1:10: expected a type, found integer"],
         ["x = 1\n", "1:1: only function, class, protocol, enum, and type declarations are allowed at file scope"],
-        ["from os import path\n", "1:1: 'from' is not supported"],
+        ["from os import path\n", "1:1: only function, class, protocol, enum, and type declarations are allowed at file scope"],
         ["    def f():\n        pass\n", "1:5: only function, class, protocol, enum, and type declarations are allowed at file scope"],
         ["def f():\n", "2:1: expected an indented block, found end of file"],
         ["def f(g: (int, str) -> bool, h: () -> int):\n    pass\n", "def f(g: ((int, str) -> bool), h: (() -> int)) -> none { pass }"],
@@ -184,7 +184,7 @@ def main():
         ["p.x: int = 1", "2:8: only a name can have an annotation"],
         ["xs[0]", "2:7: only calls and await expressions can be used as statements"],
         ["raise E('x')\nraise", "{ raise E(\"x\"); raise }"],
-        ["raise E() from e", "2:15: 'raise ... from' is not supported"],
+        ["raise E() from e", "2:15: expected end of line, found 'from'"],
         ["try:\n    f()\nexcept E as e:\n    g(e)\nexcept m.F:\n    pass\nfinally:\n    h()", "{ try { f() } except E as e { g(e) } except m.F { pass } finally { h() } }"],
         ["try:\n    pass", "4:1: expected 'except' or 'finally', found dedent"],
         ["try:\n    pass\nexcept:\n    pass", "4:5: bare 'except' is not supported"],
@@ -222,7 +222,9 @@ def main():
         ["x = await await c", "2:15: expected an expression, found 'await'"],
         ["async with aio.task_group() as g:\n    pass\nasync with g:\n    pass", "{ async with aio.task_group() as g { pass }; async with g { pass } }"],
         ["async with g as (a, b):\n    pass", "2:21: expected a name, found '('"],
-        ["del x", "2:5: 'del' is not supported"],
+        ["del = 1\nfrom = 2\nglobal = 3", "{ del = 1; from = 2; global = 3 }"],
+        ["match = 1", "2:5: 'match' is not supported"],
+        ["case = 1", "2:5: 'case' is not supported"],
     ]
     exprs = [
         ["a or b and not c == d + e * -f", "(a or (b and (not (c == (d + (e * (- f)))))))"],

@@ -585,8 +585,6 @@ class Parser:
             raised: ast.Expr | none = none
             if self.peek().kind != tokens.Kind.NEWLINE:
                 raised = self.parse_expression()
-                if self.peek().kind == tokens.Kind.FROM:
-                    self.fail(self.peek(), "'raise ... from' is not supported")
             statement.node = ast.Raise(raised)
         else if kind == tokens.Kind.YIELD:
             self.advance()
@@ -1148,7 +1146,7 @@ def parse_format_spec(text: str) -> ast.FormatSpec:
 
 # Reserved words with no construct in the language.
 def is_unsupported(kind: tokens.Kind) -> bool:
-    return kind == tokens.Kind.CASE or kind == tokens.Kind.DEL or kind == tokens.Kind.FROM or kind == tokens.Kind.GLOBAL or kind == tokens.Kind.MATCH
+    return kind == tokens.Kind.CASE or kind == tokens.Kind.MATCH
 
 def is_type_name(kind: tokens.Kind) -> bool:
     return kind == tokens.Kind.INT or kind == tokens.Kind.FLOAT or kind == tokens.Kind.BOOL or kind == tokens.Kind.STR or kind == tokens.Kind.BYTES or kind == tokens.Kind.NONE or kind == tokens.Kind.LIST or kind == tokens.Kind.DICT or kind == tokens.Kind.TUPLE or is_protocol_name(kind)
