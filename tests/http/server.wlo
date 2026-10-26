@@ -1,3 +1,4 @@
+import io
 import net
 import time
 
@@ -85,6 +86,7 @@ def handle(connection: net.Connection, port: int):
 def main():
     with net.listen("127.0.0.1", 0) as listener:
         print(listener.local_port())
+        io.stdout().flush()
         while true:
             with listener.accept() as connection:
                 try:

@@ -219,9 +219,12 @@ class Emitter:
         if module == "W.core" and function.name == "ascii_character":
             self.emit_ascii_character()
             return
-        if module == "W.core" and function.name == "stdin_buffer":
+        if module == "W.core" and function.name in ["stdin_buffer", "stdout_buffer"]:
             self.begin(self.symbol(function), [], true)
-            self.end("$W.stdin.buffer")
+            var stream = "stdin"
+            if function.name == "stdout_buffer":
+                stream = "stdout"
+            self.end("$W." + stream + ".buffer")
             return
         if module == "W.core" and function.name in ["fail", "fail_at"]:
             self.emit_fail(function.name)
@@ -725,7 +728,6 @@ class Emitter:
             var main = entry.names["main"]
             assert main is ast.FunctionDecl, "entry without main"
             self.call_entry(entry, main)
-        # Output is not buffered, so there is nothing to flush.
         self.line("%e =l loadl $W.pending")
         self.line("jnz %e, @uncaught, @done")
         self.write("@uncaught")
@@ -733,6 +735,7 @@ class Emitter:
         self.line("call $W.core.report(l %e)")
         self.line("ret 1")
         self.write("@done")
+        self.line("call $W.core.flush_stdout()")
         if test:
             self.line(f"call $W.core.fs_write_file(l %marker, l {self.string('')})")
         self.line("ret 0")
@@ -741,6 +744,7 @@ class Emitter:
         self.write("data $W.argv = { l 0 }")
         self.write("data $W.pending = { l 0 }")
         self.write("data $W.stdin.buffer = { z 4120 }")
+        self.write("data $W.stdout.buffer = { z 4112 }")
         self.emit_ascii_characters()
         self.write(coroutine.data())
         for name in builtin_types():

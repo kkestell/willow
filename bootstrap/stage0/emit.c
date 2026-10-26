@@ -106,11 +106,13 @@ String emit(const Program *program) {
                         "\tstorel %argv, $W.argv\n"
                         "\tcall $W.core.init()\n"));
     sb_printf(&out, "\tcall $%.*s()\n", S(program->main));
-    sb_append(&out, STR("\tret 0\n"
+    sb_append(&out, STR("\tcall $W.core.flush_stdout()\n"
+                        "\tret 0\n"
                         "}\n"
                         "data $W.argc = { l 0 }\n"
                         "data $W.argv = { l 0 }\n"
-                        "data $W.stdin.buffer = { z 4120 }\n"));
+                        "data $W.stdin.buffer = { z 4120 }\n"
+                        "data $W.stdout.buffer = { z 4112 }\n"));
     for (size_t i = 0; i < program->descriptors.len; i++) {
         const Descriptor *descriptor = &program->descriptors.data[i];
         StringVec items = {0};
@@ -175,6 +177,11 @@ static void function(Emitter *self, const Function *func) {
     }
     if (str_equal(func->symbol, STR("W.core.stdin_buffer"))) {
         line(self, STR("ret $W.stdin.buffer"));
+        sb_append(self->out, STR("}\n"));
+        return;
+    }
+    if (str_equal(func->symbol, STR("W.core.stdout_buffer"))) {
+        line(self, STR("ret $W.stdout.buffer"));
         sb_append(self->out, STR("}\n"));
         return;
     }
