@@ -1,0 +1,14 @@
+import io
+import terminal
+
+def main():
+    var output = io.stdout()
+    var color = terminal.color_enabled(output)
+    print(terminal.style("Build report", color="cyan", bold=true, enabled=color))
+    print(f"Interactive output: {terminal.isatty(output)}")
+
+    # Progress uses stderr and disappears when that stream is redirected.
+    for i in range(3):
+        terminal.progress(f"Processing item {i + 1}/3")
+    terminal.finish_progress()
+    print(terminal.style("Processed 3 items", color="green", enabled=color))

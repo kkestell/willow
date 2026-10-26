@@ -1,0 +1,13 @@
+import time
+
+def main():
+    print(f"Unix epoch: {time.utc(0.0)}")
+    print(f"New year: {time.utc(1704067200.0)}")
+
+    # Wall-clock timestamps name dates; monotonic readings measure durations.
+    var now = time.time()
+    print(f"Current time is after the epoch: {now > 0.0}")
+    var start = time.monotonic()
+    time.sleep(0.001)
+    var elapsed = time.monotonic() - start
+    print(f"Elapsed time is nonnegative: {elapsed >= 0.0}")
