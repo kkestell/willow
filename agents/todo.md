@@ -151,6 +151,11 @@
   written in Willow after the bitwise operators (no dependency, but slow with
   masking and overflow checks), or calling a platform library (CommonCrypto on
   macOS, OpenSSL's libcrypto on Linux), or vendored C compiled into programs.
+
+---
+
+Future scope. Do not implement yet!
+
 - Decide whether to allow user `extern` declarations so external libraries can
   provide C-backed capabilities without expanding the standard library. Open:
   which types they may use (`ptr`, `cint`, and `word` are
