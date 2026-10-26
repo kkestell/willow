@@ -1,0 +1,6 @@
+.git
+.ox
+build
+benchmarks/build
+bootstrap/stage0/target
+.DS_Store
