@@ -55,8 +55,11 @@ $(BUILD_DIR)/willow2a: $(BUILD_DIR)/willow1 bootstrap/prepare.sh $(STAGE2_SOURCE
 $(BUILD_DIR)/willow2b: $(BUILD_DIR)/willow2a
 	$(BUILD_DIR)/willow2a build $(BUILD_DIR)/stage2/willow.wlo -o $@
 
+# Copying over the old binary in place makes macOS kill the new one on launch,
+# because the kernel keeps the old file's code signature; replace it instead.
 $(WILLOW): $(BUILD_DIR)/willow2b
-	cp $(BUILD_DIR)/willow2b $@
+	cp $(BUILD_DIR)/willow2b $@.tmp
+	mv -f $@.tmp $@
 
 # Stage 0's L0 programs and core tests, stage 2's own tests, and then make
 # test.
