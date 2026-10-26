@@ -3,7 +3,8 @@ enum ColorMode:
     ALWAYS
     NEVER
 
-# Members named like an ordinary word or like a string stay distinct values.
+# Members of different enums stay distinct from each other and from strings,
+# even with the same name.
 enum Keyword:
     end
     AUTO
