@@ -3,7 +3,7 @@ enum ColorMode:
     ALWAYS
     NEVER
 
-# Members named like Lua keywords or like a string still stay distinct values.
+# Members named like an ordinary word or like a string stay distinct values.
 enum Keyword:
     end
     AUTO
