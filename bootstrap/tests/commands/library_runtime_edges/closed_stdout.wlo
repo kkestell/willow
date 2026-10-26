@@ -21,3 +21,11 @@ def main():
         assert error.message == "cannot write <stdout>: Bad file descriptor"
         caught = true
     assert caught
+    io.stdout().write_text("prompt: ")
+    caught = false
+    try:
+        io.stdin().readline()
+    except OSError as error:
+        assert error.message == "cannot write <stdout>: Bad file descriptor"
+        caught = true
+    assert caught

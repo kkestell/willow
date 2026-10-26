@@ -188,7 +188,7 @@ newline flush immediately. All stages emit the buffer's zeroed storage and
 flush it on normal program return.
 `stdout_flush` returns success for catchable File and spawn failures;
 `flush_stdout` reports a failure and exits with status 1 for built-in output,
-stdin reads, and program termination. Writes to stderr flush stdout first.
+`input`, and program termination. Writes to stderr flush stdout first.
 `sys_exit` and `process_start` also flush before exiting or starting a child.
 
 ## Exceptions under stages 1 and 2

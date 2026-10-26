@@ -2695,7 +2695,10 @@ def file_buffer() -> ptr:
 
 def fill_buffer(fd: int, buffer: ptr, path: str, fatal: bool) -> int:
     if fd == 0:
-        flush_stdout()
+        if fatal:
+            flush_stdout()
+        else if not stdout_flush():
+            fail_os("write", "<stdout>")
     __store8(buffer, 16, __word(1))
     var count = read(fd, __offset(buffer, 24), 4096)
     if count < 0:
