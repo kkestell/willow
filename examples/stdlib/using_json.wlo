@@ -1,0 +1,21 @@
+import json
+
+def main():
+    var order = json.parse('{"customer": "Ada", "items": ["tea", "cake"]}')
+    if order is dict:
+        var customer = order["customer"]
+        if customer is str:
+            print("Order for " + customer)
+        var items = order["items"]
+        if items is list:
+            print(f"Items: {len(items)}")
+        order["paid"] = true
+        print(json.dump(order))
+
+    var reply: json.Json = {"ok": true, "total": 7.5, "discount": none}
+    print(json.dump(reply))
+
+    try:
+        json.parse('{"paid": True}')
+    except json.JsonError as error:
+        print(error.message)

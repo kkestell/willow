@@ -1,0 +1,5 @@
+Order for Ada
+Items: 2
+{"customer":"Ada","items":["tea","cake"],"paid":true}
+{"ok":true,"total":7.5,"discount":null}
+expected value at line 1, column 10
