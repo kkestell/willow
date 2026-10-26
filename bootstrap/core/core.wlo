@@ -314,6 +314,19 @@ def failure(descriptors: ptr, class_name: str, message: str) -> ptr:
     __store8(e, 24, __word(message))
     return e
 
+# An exception's location (offset 8) and traceback tail (offset 16) point to
+# records: previous, function, path, line, column, task-start marker. Locations
+# may be independent of the frames for deferred operations.
+def trace_frame(previous: ptr, function: str, path: str, line: int, col: int, task: bool) -> ptr:
+    var frame = __alloc(48)
+    __store8(frame, 0, __word(previous))
+    __store8(frame, 8, __word(function))
+    __store8(frame, 16, __word(path))
+    __store8(frame, 24, __word(line))
+    __store8(frame, 32, __word(col))
+    __store8(frame, 40, __word(task))
+    return frame
+
 # Starts the frames of `e`, raised by a raise statement.
 def raised(e: ptr, function: str, path: str, line: int, col: int):
     __store8(e, 8, __word(0))
@@ -325,23 +338,37 @@ def raised(e: ptr, function: str, path: str, line: int, col: int):
 def trace(e: ptr, function: str, path: str, line: int, col: int):
     if e == aio_cancel():
         return
+    var previous = __ptr(__load8(e, 16))
     # A task-start frame ends the original traceback, even when re-observed.
-    var frames = __ptr(__load8(e, 16))
-    if not __addr_is_null(frames) and str_find(__str(__word(frames)), "\n  in task started at ") is not none:
+    if not __addr_is_null(previous) and __bool(__load8(previous, 40)):
         return
-    var where = path + ":" + int_to_str(line) + ":" + int_to_str(col)
+    var frame = trace_frame(previous, function, path, line, col, false)
     if __addr_is_null(__ptr(__load8(e, 8))):
-        __store8(e, 8, __word(where))
-    if __addr_is_null(__ptr(__load8(e, 16))):
-        __store8(e, 16, __word("\n  in " + function + " at " + where))
-    else:
-        __store8(e, 16, __word(__str(__load8(e, 16)) + "\n  called from " + function + " at " + where))
+        __store8(e, 8, __word(frame))
+    __store8(e, 16, __word(frame))
+
+def frame_location(frame: ptr) -> str:
+    return __str(__load8(frame, 16)) + ":" + int_to_str(__int(__load8(frame, 24))) + ":" + int_to_str(__int(__load8(frame, 32)))
 
 # Writes the report of `e`, which propagated out of main (spec §13).
 def report(e: ptr):
     var name = __str(__load8(header(e), 0))
     var message = __str(__load8(e, 24))
-    write_str(2, __str(__load8(e, 8)) + ": error: " + name + ": " + message + __str(__load8(e, 16)) + "\n")
+    var frames = ""
+    var frame = __ptr(__load8(e, 16))
+    while not __addr_is_null(frame):
+        var previous = __ptr(__load8(frame, 0))
+        var text = ""
+        if __bool(__load8(frame, 40)):
+            text = "\n  in task started at " + __str(__load8(frame, 16))
+        else:
+            var prefix = "\n  called from "
+            if __addr_is_null(previous):
+                prefix = "\n  in "
+            text = prefix + __str(__load8(frame, 8)) + " at " + frame_location(frame)
+        frames = text + frames
+        frame = previous
+    write_str(2, frame_location(__ptr(__load8(e, 8))) + ": error: " + name + ": " + message + frames + "\n")
 
 def print_str(s: str):
     write_str(1, s)
@@ -4336,7 +4363,7 @@ def fail_at(class_name: str, message: str, path: str, line: int, col: int):
     fail(class_name, message)
 
 def locate(e: ptr, path: str, line: int, col: int):
-    __store8(e, 8, __word(path + ":" + int_to_str(line) + ":" + int_to_str(col)))
+    __store8(e, 8, __word(trace_frame(__ptr(__word(0)), "", path, line, col, false)))
 
 
 # Stages 1 and 2 replace this body with compiler/coroutine.wlo's.
@@ -4408,12 +4435,9 @@ def aio_finish(task: AioTask):
     else:
         task.state = 2
         if task.location != "":
-            var frames = ""
-            var saved_frames = __ptr(__load8(task.error, 16))
-            if not __addr_is_null(saved_frames):
-                frames = __str(__word(saved_frames))
-            if str_find(frames, "\n  in task started at ") is none:
-                __store8(task.error, 16, __word(frames + "\n  in task started at " + task.location))
+            var previous = __ptr(__load8(task.error, 16))
+            if __addr_is_null(previous) or not __bool(__load8(previous, 40)):
+                __store8(task.error, 16, __word(trace_frame(previous, "", task.location, 0, 0, true)))
     task.body = __ptr(__word(0))
     var loop = aio_loop()
     var group = task.group
