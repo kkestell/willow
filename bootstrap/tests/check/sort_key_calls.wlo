@@ -6,13 +6,13 @@ class Row:
         return self.score - row.score
 
 def names(xs: list[Row]) -> str:
-    texts: list[str] = []
+    var texts: list[str] = []
     for x in xs:
         texts.append(f"{x.name}:{x.score}")
     return " ".join(texts)
 
 def ints(xs: list[int]) -> str:
-    texts: list[str] = []
+    var texts: list[str] = []
     for x in xs:
         texts.append(str(x))
     return " ".join(texts)
@@ -21,13 +21,13 @@ def by_name(row: Row) -> str:
     return row.name
 
 def main():
-    data = [Row("cy", 2), Row("ada", 3), Row("bob", 2), Row("dee", 1)]
+    var data = [Row("cy", 2), Row("ada", 3), Row("bob", 2), Row("dee", 1)]
     print(names(sorted(data, key=(row) => row.score)))
     print(names(sorted(data, reverse=true, key=(row) => row.score)))
     print(names(sorted(data, key=(row) => (row.score, row.name))))
     print(names(sorted(data, key=by_name)))
     print(names(sorted(data, key=Row("", 10).rank)))
-    words = ["bb", "a", "ccc"]
+    var words = ["bb", "a", "ccc"]
     words.sort(key=len)
     print(" ".join(words))
     print(ints(sorted([-3, 2, -1], key=abs)))
@@ -40,7 +40,7 @@ def main():
     print(names(data))
 
     # A key's own effects stay, but the list is not reordered.
-    xs = [3, 1, 2]
+    var xs = [3, 1, 2]
     def growing(x: int) -> int:
         xs.append(0)
         return x

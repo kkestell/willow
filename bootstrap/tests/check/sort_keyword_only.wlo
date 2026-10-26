@@ -1,3 +1,3 @@
 def main():
-    xs = [1]
+    var xs = [1]
     xs.sort(true, true)

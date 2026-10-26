@@ -1,2 +1,2 @@
 def main():
-    x: int | int = 1
+    var x: int | int = 1

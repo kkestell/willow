@@ -3,7 +3,7 @@ import subprocess
 
 # walk lists a symlink to a directory as a file and does not enter it.
 def main():
-    root = fs.temp_dir()
+    var root = fs.temp_dir()
     fs.mkdir(fs.join(root, "real"))
     fs.write_file(fs.join(root, "real/inside"), "x")
     subprocess.run(["ln", "-s", "real", fs.join(root, "link")])

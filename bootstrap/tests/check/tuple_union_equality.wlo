@@ -20,7 +20,7 @@ def main():
     assert widen((none,)) == (none,)
     assert widen(7) == 7
     assert widen(none) is none
-    values: list[tuple[tuple[int | float] | str | none] | int | none] = [((2.5,),), 7, none]
+    var values: list[tuple[tuple[int | float] | str | none] | int | none] = [((2.5,),), 7, none]
     assert ((2.5,),) in values
     assert ((2,),) not in values
     assert 7 in values

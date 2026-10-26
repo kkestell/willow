@@ -2,6 +2,6 @@ def age(ages: dict[str, int], name: str) -> int:
     return ages.pop(name)
 
 def main():
-    ages = {"ada": 36}
+    var ages = {"ada": 36}
     print(age(ages, "ada"))
     print(age(ages, "ada"))

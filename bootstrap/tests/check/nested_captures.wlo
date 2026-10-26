@@ -1,16 +1,16 @@
-# Captures pass through a function that does not use them, and nonlocal
+# Captures pass through a function that does not use them, and assignments
 # rebinds across two levels.
 def outer() -> () -> int:
-    total = 0
+    var total = 0
 
     def middle() -> () -> int:
         def inner() -> int:
-            nonlocal total
+
             total = total + 1
             return total
         return inner
 
-    step = middle()
+    var step = middle()
     step()
     return step
 
@@ -23,14 +23,14 @@ def half(x: int | float) -> float:
     return x / 2.0
 
 def main():
-    f = outer()
+    var f = outer()
     print(f())
     print(f())
     # A function in an optional callable field is adapted to its types.
-    h = Holder(none)
+    var h = Holder(none)
     print(h.f is none)
-    g: ((int) -> float) | none = half
+    var g: ((int) -> float) | none = half
     h.f = g
-    call = h.f
+    var call = h.f
     if call is not none:
         print(call(3))

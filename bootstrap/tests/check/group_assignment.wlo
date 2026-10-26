@@ -1,7 +1,8 @@
 import aio
 
 async def main():
+    var value: none
     async with aio.task_group():
-        before = 1
+        var before = 1
         value = await aio.sleep(0.0)
     print(value)

@@ -5,7 +5,7 @@ class Empty(Exception):
     pass
 
 def parse_digit(text: str, line: int) -> int:
-    index = "0123456789".find(text)
+    var index = "0123456789".find(text)
     if len(text) != 1 or index is none:
         raise ParseError(f"not a digit: {text}", line)
     return index
@@ -15,8 +15,8 @@ def trace(text: str) -> int:
     return len(text)
 
 def builtin_failures():
-    items = [1]
-    ages = {"a": 1}
+    var items = [1]
+    var ages = {"a": 1}
     for step in range(7):
         try:
             if step == 0:
@@ -33,7 +33,7 @@ def builtin_failures():
                 for key in ages:
                     ages[key + "!"] = 2
             else:
-                words = "".split("")
+                var words = "".split("")
         except OverflowError as overflow:
             print(f"OverflowError: {overflow.message}")
         except ZeroDivisionError as division:
@@ -46,7 +46,7 @@ def builtin_failures():
             print(f"other: {other.message}")
 
 def clause_order():
-    errors: list[Exception] = [ParseError("p", 1), Empty("e"), ValueError("v")]
+    var errors: list[Exception] = [ParseError("p", 1), Empty("e"), ValueError("v")]
     for raised in errors:
         try:
             raise raised
@@ -93,7 +93,7 @@ def replaced():
         print(error.message)
 
 def nested() -> int:
-    total = 0
+    var total = 0
     try:
         while true:
             try:

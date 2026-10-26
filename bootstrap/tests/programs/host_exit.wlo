@@ -17,7 +17,7 @@ def main():
     sys.eprint(2.5)
     sys.eprint(false)
     sys.eprint(none)
-    maybe: int | none = none
+    var maybe: int | none = none
     sys.eprint(maybe)
     print(check(3))
     print(check(0))

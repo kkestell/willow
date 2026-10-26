@@ -22,19 +22,19 @@ def keep(x: int | float | none) -> int | float | none:
     return x
 
 def main():
-    i = 0
+    var i = 0
     while i < 7:
         print(show(pick(i)))
         i = i + 1
-    x = keep(2.5)
+    var x = keep(2.5)
     if x is float:
         print(x * 2.0 == 5.0)
-    y = keep(-9223372036854775807)
+    var y = keep(-9223372036854775807)
     if y is int:
         print(y)
     print(keep(none) is none)
-    total = 0
-    n: int | none = 0
+    var total = 0
+    var n: int | none = 0
     while n is not none:
         total = total + n
         if n == 4:

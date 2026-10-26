@@ -17,7 +17,7 @@ def describe(value: int | str | none) -> str:
         return value
 
 def first(a: int | none, b: int | none) -> int:
-    result = 0
+    var result = 0
     if a is not none:
         result = a
     else if b is not none:
@@ -37,5 +37,5 @@ def main():
     print(first(5, 7))
     print(first(none, 7))
     print(first(none, none))
-    elif = 42
+    var elif = 42
     print(elif)

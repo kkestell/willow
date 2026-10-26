@@ -33,14 +33,16 @@ def bounded[T: ContextManager[tuple[str, int]]](manager: T) -> str:
         return name
 
 def main():
-    log: list[str] = []
+    var log: list[str] = []
     assert returning(Manager("return", log)) == 3
     assert ",".join(log) == "enter return,exit return"
     log = []
     assert bounded(Manager("bounded", log)) == "bounded"
     assert ",".join(log) == "enter bounded,exit bounded"
     log = []
-    with Manager("a", log) as (name, value), Manager("b", log):
+    var name: str
+    with Manager("a", log) as (name_item, value), Manager("b", log):
+        name = name_item
         assert value == 3
     assert name == "a"
     assert ",".join(log) == "enter a,enter b,exit b,exit a"
@@ -66,7 +68,7 @@ def main():
         pass
     assert ",".join(log) == "enter return,exit return"
     log = []
-    saved = Manager("original", log)
+    var saved = Manager("original", log)
     with saved:
         saved = Manager("replacement", log)
     assert ",".join(log) == "enter original,exit original"

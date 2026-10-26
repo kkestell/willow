@@ -12,6 +12,6 @@ class Counter:
         return self.value
 
 def main():
-    counters = {Key.FIRST: Counter(3)}
+    var counters = {Key.FIRST: Counter(3)}
     print(counters[Key.FIRST].pop())
     print(counters[Key.FIRST].get())

@@ -1,2 +1,2 @@
 async def main():
-    value = await 1
+    var value = await 1

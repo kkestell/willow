@@ -1,4 +1,5 @@
 def f(x: int | none):
+    var y: int
     try:
         y = 1
     except Exception:

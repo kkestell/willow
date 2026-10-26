@@ -7,26 +7,26 @@ def trace(label: str) -> str:
     return label
 
 def main():
-    name = "Willow"
+    var name = "Willow"
     print(f"{name} has {len(name)} letters")    # Willow has 6 letters
-    words = "a, b, c".split(", ")
+    var words = "a, b, c".split(", ")
     print("-".join(words))                      # a-b-c
     print(f"{7 / 2} {{braces}}")                # 3.5 {braces}
 
-    poem = """first line
+    var poem = """first line
     indented line
 last line"""
     print(poem)
     print(len(poem))
-    two_lines = '''a
+    var two_lines = '''a
 b'''
     print(two_lines == "a\nb")
     print("\x41é\U0001F600")
     print(len("é\U0001F600"))
 
-    maybe: int | none = none
-    ratio: float | none = 0.25
-    p = Point(3, 4)
+    var maybe: int | none = none
+    var ratio: float | none = 0.25
+    var p = Point(3, 4)
     print(f"{1}|{-2.5}|{true}|{none}|{maybe}|{ratio}|{'s'}|{p.x + p.y}")
     print(f"{trace('first')}{trace('second')}")
     print(f"{ {'k': 1}['k'] } {f'{name}!'} {[1, 2][1]}")
@@ -35,7 +35,7 @@ b'''
     print(str(1) + str(2.0) + str(false) + str(none) + str(maybe) + str("x"))
     print(str(0.1 + 0.2))
 
-    text = "héllo wörld"
+    var text = "héllo wörld"
     print(len(text))
     print(text.find("wö"))
     print(text.find("z"))
@@ -62,7 +62,7 @@ b'''
     print("abc".replace("z", "y"))
     print("[" + "  \t\n hi there \r\n".strip() + "]")
     print("[" + "   ".strip() + "]")
-    parts = "a,,b,".split(",")
+    var parts = "a,,b,".split(",")
     print(len(parts))
     print("|".join(parts))
     print(len("".split(",")))

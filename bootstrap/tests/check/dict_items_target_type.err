@@ -1,1 +1,1 @@
-dict_items_target_type.wlo:4:14: error: expected str, received int
+dict_items_target_type.wlo:5:17: error: expected str, received int

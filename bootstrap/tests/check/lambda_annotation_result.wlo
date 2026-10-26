@@ -1,2 +1,2 @@
 def main():
-    f: () -> int = () => "bad"
+    var f: () -> int = () => "bad"

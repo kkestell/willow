@@ -1,1 +1,1 @@
-maybe_unassigned.wlo:4:11: error: variable 'message' may be used before assignment
+maybe_unassigned.wlo:5:11: error: variable 'message' may be used before assignment

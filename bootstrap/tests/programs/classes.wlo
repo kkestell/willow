@@ -21,7 +21,7 @@ class Stack:
         self.items.append(value)
 
     def depth() -> int:
-        parent = self.parent
+        var parent = self.parent
         if parent is none:
             return 1
         return parent.depth() + 1
@@ -38,35 +38,35 @@ def make_token(text: str) -> Token:
     return Token(text, 1)
 
 def main():
-    counter = Counter("hits")
+    var counter = Counter("hits")
     print(counter.label())
     counter.bump()
     print(counter.add(5))
     print(counter.label())
-    fast = Counter("fast", 10, 3)
+    var fast = Counter("fast", 10, 3)
     fast.bump()
     print(fast.label())
-    alias = fast
+    var alias = fast
     alias.name = "alias"
     print(fast.name)
     reset(fast)
     print(fast.count)
 
-    root = Stack([], none)
-    child = Stack([1, 2], root)
-    grandchild = Stack([], child)
+    var root = Stack([], none)
+    var child = Stack([1, 2], root)
+    var grandchild = Stack([], child)
     grandchild.push(7)
     print(grandchild.depth())
     print(len(grandchild.items))
     print(child.items[-1])
 
-    token = make_token("x")
+    var token = make_token("x")
     print(token.text)
     print(token.value)
     token.value = 2.5
-    value = token.value
+    var value = token.value
     if value is not none:
         print(value * 2.0)
-    tokens = [token, Token("y", 2, none)]
+    var tokens = [token, Token("y", 2, none)]
     tokens[1].line = 3
     print(tokens[1].line)

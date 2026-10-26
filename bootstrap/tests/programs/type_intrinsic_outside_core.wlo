@@ -1,2 +1,2 @@
 def main():
-    header = __type(str)
+    var header = __type(str)

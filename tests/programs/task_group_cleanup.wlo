@@ -11,7 +11,7 @@ async def serve(group: aio.TaskGroup):
 
 async def main():
     async with aio.task_group() as group:
-        background = group.start(flusher())
+        var background = group.start(flusher())
         try:
             await serve(group)
             await aio.sleep(10.0)

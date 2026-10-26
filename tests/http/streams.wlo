@@ -4,30 +4,30 @@ import sys
 import time
 
 def main():
-    base = sys.args()[0]
-    directory = sys.args()[1]
+    var base = sys.args()[0]
+    var directory = sys.args()[1]
     try:
         http.request("GET", "http://[abc]/")
         assert false, "invalid IPv6 host accepted"
     except ValueError as invalid:
         assert invalid.message == "invalid URL 'http://[abc]/'"
-    binary = bytes([0, 1, 128, 255])
+    var binary = bytes([0, 1, 128, 255])
     assert http.request("POST", base + "/binary", body=binary).body == binary
     assert len(http.request("POST", base + "/binary", body=bytes([])).body) == 0
     assert len(http.request("HEAD", base + "/json", body=binary).body) == 0
-    echoed = http.request("get", base + "/echo/tea é?x=%2f%#gone").body.decode()
+    var echoed = http.request("get", base + "/echo/tea é?x=%2f%#gone").body.decode()
     assert '"method": "get"' in echoed
     assert '"path": "/echo/tea%20%C3%A9?x=%2f%25"' in echoed
-    latin1 = http.request("GET", base + "/latin1-header")
+    var latin1 = http.request("GET", base + "/latin1-header")
     assert http.header(latin1.headers, "x-space") == chr(160) + "ok" + chr(160)
-    empty = http.request("GET", base + "/echo", headers=[http.Header("X-Test", "")])
+    var empty = http.request("GET", base + "/echo", headers=[http.Header("X-Test", "")])
     assert '"x_test": ""' in empty.body.decode()
-    started = time.monotonic()
-    response = http.request("GET", base + "/trickle", timeout=0.15)
+    var started = time.monotonic()
+    var response = http.request("GET", base + "/trickle", timeout=0.15)
     assert response.body == "xxxxx".encode()
     assert time.monotonic() - started > 0.3
-    target = fs.join(directory, "streams.bin")
-    result = http.download(base + "/redirect/1", target)
+    var target = fs.join(directory, "streams.bin")
+    var result = http.download(base + "/redirect/1", target)
     assert result.status == 200 and result.bytes_written == 4
     assert fs.read_file(target) == "done"
     try:

@@ -1,1 +1,1 @@
-lambda_annotation_noncallable.wlo:2:14: error: expected int, received (int) -> int
+lambda_annotation_noncallable.wlo:2:18: error: expected int, received (int) -> int

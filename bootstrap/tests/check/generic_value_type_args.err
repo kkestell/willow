@@ -1,1 +1,1 @@
-generic_value_type_args.wlo:5:9: error: generic function 'identity' needs type arguments or an expected callable type
+generic_value_type_args.wlo:5:13: error: generic function 'identity' needs type arguments or an expected callable type

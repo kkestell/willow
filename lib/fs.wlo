@@ -46,10 +46,10 @@ def basename(path: str) -> str:
 
 def dirname(path: str) -> str:
     core.path_bytes(path)
-    parts = path.rsplit("/", 1)
+    var parts = path.rsplit("/", 1)
     if len(parts) == 1:
         return ""
-    head = parts[0] + "/"
+    var head = parts[0] + "/"
     if head.replace("/", "") == "":
         return head
     while head.endswith("/"):
@@ -57,30 +57,30 @@ def dirname(path: str) -> str:
     return head
 
 def _listdir(path: str, pattern: str | none) -> list[str]:
-    layout = core.fs_layout()
-    directory = opendir(core.path_bytes(path))
+    var layout = core.fs_layout()
+    var directory = opendir(core.path_bytes(path))
     if __addr_is_null(directory):
         if pattern is not none:
             return []
         core.fail_os("list", path)
-    names: list[str] = []
+    var names: list[str] = []
     try:
         while true:
             core.clear_errno()
-            entry = readdir(directory)
+            var entry = readdir(directory)
             if __addr_is_null(entry):
                 if core.errno() != 0:
                     if pattern is not none:
                         return []
                     core.fail_os("list", path)
                 break
-            name = __offset(entry, layout.name_offset)
-            size = core.strlen(name)
+            var name = __offset(entry, layout.name_offset)
+            var size = core.strlen(name)
             if size == 1 and __load1(name, 0) == 46:
                 continue
             if size == 2 and __load1(name, 0) == 46 and __load1(name, 1) == 46:
                 continue
-            text = core.str_from_bytes(name, size)
+            var text = core.str_from_bytes(name, size)
             if pattern is none or _match(pattern, text):
                 names.append(text)
     finally:
@@ -92,7 +92,7 @@ def listdir(path: str) -> list[str]:
     return _listdir(path, none)
 
 def _kind(buf: ptr, layout: core.FsLayout) -> str:
-    mode = __load4(buf, layout.mode_offset) % 65536 // 4096
+    var mode = __load4(buf, layout.mode_offset) % 65536 // 4096
     if mode == 8:
         return "file"
     if mode == 4:
@@ -102,19 +102,19 @@ def _kind(buf: ptr, layout: core.FsLayout) -> str:
     return "other"
 
 def stat(path: str, follow_symlinks: bool = true) -> Stat:
-    layout = core.fs_layout()
-    buf = __alloc_atomic(layout.buffer_size)
+    var layout = core.fs_layout()
+    var buf = __alloc_atomic(layout.buffer_size)
     if core.fs_stat(core.path_bytes(path), buf, follow_symlinks) != 0:
         core.fail_os("stat", path)
-    size = __int(__load8(buf, layout.size_offset))
+    var size = __int(__load8(buf, layout.size_offset))
     if size < 0:
         raise OverflowError("file size out of range")
-    modified = float(__int(__load8(buf, layout.modified_offset))) + float(__load4(buf, layout.modified_offset + 8)) / 1000000000.0
+    var modified = float(__int(__load8(buf, layout.modified_offset))) + float(__load4(buf, layout.modified_offset + 8)) / 1000000000.0
     return Stat(_kind(buf, layout), size, modified)
 
 def _is_directory(path: str) -> bool:
-    layout = core.fs_layout()
-    buf = __alloc_atomic(layout.buffer_size)
+    var layout = core.fs_layout()
+    var buf = __alloc_atomic(layout.buffer_size)
     return core.fs_stat(core.path_bytes(path), buf, true) == 0 and _kind(buf, layout) == "directory"
 
 def mkdir(path: str, parents: bool = false, exist_ok: bool = false):
@@ -123,10 +123,10 @@ def mkdir(path: str, parents: bool = false, exist_ok: bool = false):
         path = path[:-1]
     if core.mkdir(core.str_bytes(path), 511) == 0:
         return
-    code = core.errno()
-    reason = core.os_reason()
+    var code = core.errno()
+    var reason = core.os_reason()
     if code == 2 and parents:
-        parent = dirname(path)
+        var parent = dirname(path)
         if parent != "" and parent != path:
             mkdir(parent, parents=true, exist_ok=true)
             if core.mkdir(core.str_bytes(path), 511) == 0:
@@ -150,16 +150,16 @@ def rename(source: str, destination: str):
         core.fail_os("rename " + source + " to", destination)
 
 def copy_file(source: str, destination: str):
-    source_bytes = core.path_bytes(source)
-    destination_bytes = core.path_bytes(destination)
-    input = core.open(source_bytes, 0)
+    var source_bytes = core.path_bytes(source)
+    var destination_bytes = core.path_bytes(destination)
+    var input = core.open(source_bytes, 0)
     if input < 0:
         core.fail_os("read", source)
-    output = -1
-    closed = 0
+    var output = -1
+    var closed = 0
     try:
-        buf = __alloc_atomic(65536)
-        count = core.read(input, buf, 65536)
+        var buf = __alloc_atomic(65536)
+        var count = core.read(input, buf, 65536)
         if count < 0:
             core.fail_os("read", source)
         if core.fs_same_file(source, destination):
@@ -168,9 +168,9 @@ def copy_file(source: str, destination: str):
         if output < 0:
             core.fail_os("write", destination)
         while count > 0:
-            done = 0
+            var done = 0
             while done < count:
-                written = core.write(output, __offset(buf, done), count - done)
+                var written = core.write(output, __offset(buf, done), count - done)
                 if written < 0:
                     core.fail_os("write", destination)
                 done = done + written
@@ -186,12 +186,12 @@ def copy_file(source: str, destination: str):
 
 def normpath(path: str) -> str:
     core.path_bytes(path)
-    slashes = ""
+    var slashes = ""
     if path.startswith("/"):
         slashes = "/"
     if path.startswith("//") and not path.startswith("///"):
         slashes = "//"
-    parts: list[str] = []
+    var parts: list[str] = []
     for part in path.split("/"):
         if part == "" or part == ".":
             continue
@@ -199,7 +199,7 @@ def normpath(path: str) -> str:
             parts.append(part)
         else if len(parts) > 0:
             parts.pop()
-    result = slashes + "/".join(parts)
+    var result = slashes + "/".join(parts)
     if result == "":
         return "."
     return result
@@ -213,18 +213,18 @@ def _has_magic(pattern: str) -> bool:
     return "*" in pattern or "?" in pattern or "[" in pattern
 
 def _match_set(pattern: list[str], start: int, char: str) -> tuple[bool, int]:
-    at = start + 1
-    negate = at < len(pattern) and pattern[at] == "!"
+    var at = start + 1
+    var negate = at < len(pattern) and pattern[at] == "!"
     if negate:
         at = at + 1
-    end = at
+    var end = at
     if end < len(pattern) and pattern[end] == "]":
         end = end + 1
     while end < len(pattern) and pattern[end] != "]":
         end = end + 1
     if end == len(pattern):
         return (char == "[", start + 1)
-    matched = false
+    var matched = false
     while at < end:
         if at + 2 < end and pattern[at + 1] == "-":
             matched = matched or (pattern[at] <= char and char <= pattern[at + 2])
@@ -237,20 +237,20 @@ def _match_set(pattern: list[str], start: int, char: str) -> tuple[bool, int]:
 def _match(pattern: str, name: str) -> bool:
     if name.startswith(".") and not pattern.startswith("."):
         return false
-    chars = list(pattern)
-    text = list(name)
-    at = 0
-    pos = 0
-    star = -1
-    retry = 0
+    var chars = list(pattern)
+    var text = list(name)
+    var at = 0
+    var pos = 0
+    var star = -1
+    var retry = 0
     while pos < len(text):
         if at < len(chars) and chars[at] == "*":
             star = at
             at = at + 1
             retry = pos
             continue
-        matched = false
-        after = at + 1
+        var matched = false
+        var after = at + 1
         if at < len(chars):
             if chars[at] == "[":
                 matched, after = _match_set(chars, at, text[pos])
@@ -270,42 +270,42 @@ def _match(pattern: str, name: str) -> bool:
     return at == len(chars)
 
 def _glob(pattern: str) -> list[str]:
-    head = dirname(pattern)
-    tail = basename(pattern)
-    heads = [head]
+    var head = dirname(pattern)
+    var tail = basename(pattern)
+    var heads = [head]
     if _has_magic(head):
         heads = _glob(head)
-    paths: list[str] = []
+    var paths: list[str] = []
     for directory in heads:
         if tail == "":
             if _is_directory(directory):
                 paths.append(join(directory, ""))
         else if _has_magic(tail):
-            scan = directory
+            var scan = directory
             if scan == "":
                 scan = "."
             for name in _listdir(scan, tail):
                 paths.append(join(directory, name))
         else:
-            path = join(directory, tail)
-            layout = core.fs_layout()
-            buf = __alloc_atomic(layout.buffer_size)
+            var path = join(directory, tail)
+            var layout = core.fs_layout()
+            var buf = __alloc_atomic(layout.buffer_size)
             if core.fs_stat(core.str_bytes(path), buf, false) == 0:
                 paths.append(path)
     return paths
 
 def glob(pattern: str) -> list[str]:
     core.path_bytes(pattern)
-    paths = _glob(pattern)
+    var paths = _glob(pattern)
     paths.sort()
     return paths
 
 def walk(path: str) -> Iterator[tuple[str, list[str], list[str]]]:
-    pending = [path]
+    var pending = [path]
     while len(pending) > 0:
-        directory = pending.pop()
-        directories: list[str] = []
-        files: list[str] = []
+        var directory = pending.pop()
+        var directories: list[str] = []
+        var files: list[str] = []
         for name in listdir(directory):
             if stat(join(directory, name), follow_symlinks=false).kind == "directory":
                 directories.append(name)
@@ -322,11 +322,11 @@ def _temp(prefix: str, directory: str | none, file: bool) -> str:
         directory = sys.getenv("TMPDIR")
         if directory is none or directory == "":
             directory = "/tmp"
-    text = join(directory, prefix + "XXXXXX")
-    template = __alloc_atomic(core.str_size(text) + 1)
+    var text = join(directory, prefix + "XXXXXX")
+    var template = __alloc_atomic(core.str_size(text) + 1)
     core.memcpy(template, core.str_bytes(text), core.str_size(text) + 1)
     if file:
-        fd = mkstemp(template)
+        var fd = mkstemp(template)
         if fd < 0:
             core.fail_os("create temporary file in", directory)
         if core.close(fd) != 0:

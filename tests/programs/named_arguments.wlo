@@ -11,7 +11,7 @@ class Problem(Exception):
     code: int = 2
 
 def greet(name: str, prefix: str = "Hello", times: int = 1) -> str:
-    result = ""
+    var result = ""
     for i in range(times):
         result = result + prefix + ", " + name + "! "
     return result.strip()
@@ -51,7 +51,7 @@ def main():
     print(greet("Ada", times=2))
     print(scale() + " " + scale(3) + " " + scale(x=1.0))
 
-    options = Options("report")
+    var options = Options("report")
     print(f"{options.name} {options.width} {options.ratio} {options.label}")
     options = Options(label="x", name="other", ratio=-0.0)
     print(f"{options.name} {options.width} {options.ratio} {options.label}")
@@ -73,20 +73,20 @@ def main():
         print(f"{e.message} {e.code}")
 
     print(json.dump(value=[3, 1]) + " " + str(len(sorted(items=[3, 1], reverse=true))))
-    xs = [2, 3, 1]
+    var xs = [2, 3, 1]
     xs.sort(reverse=true)
     print(f"{xs[0]} {xs[1]} {xs[2]}")
 
     print(report("a", verbose=true))
     print(report(tag="t", verbose=false, path="b", limit=5))
-    counter = Counter(3)
+    var counter = Counter(3)
     print(f"{counter.scaled()} {counter.scaled(by=4)}")
     # Library methods take keywords by their documented names.
-    text = "a-b"
+    var text = "a-b"
     print(text.startswith(prefix="a"))
     print(text.replace(new="+", old="-"))
     print("/".join(items=["x", "y"]) + " " + text.ljust(width=5) + "|")
-    ys = [1]
+    var ys = [1]
     ys.append(v=2)
-    counts = {"k": 1}
+    var counts = {"k": 1}
     print(f"{len(ys)} {counts.get(k='k')} {counts.pop(k='k')}")

@@ -1,5 +1,5 @@
 def main():
-    True = 1
-    False = True + 1
-    None = False + 1
+    var True = 1
+    var False = True + 1
+    var None = False + 1
     print(None)

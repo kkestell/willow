@@ -1,1 +1,1 @@
-bytes_key.wlo:2:15: error: dictionary keys must be int, str, or an enum
+bytes_key.wlo:2:19: error: dictionary keys must be int, str, or an enum

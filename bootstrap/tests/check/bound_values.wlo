@@ -17,25 +17,25 @@ def apply(f: (int) -> int, x: int) -> int:
 
 def main():
     # The receiver is evaluated once, when the method is read.
-    add = make().add
+    var add = make().add
     print(add())
     print(add(5))
     print(add(times=2, by=3))
     # A bound method sees its receiver's current fields.
-    c = Counter(100)
-    g = c.add
+    var c = Counter(100)
+    var g = c.add
     c.n = 200
     print(g())
     print(apply(c.add, 10))
-    size: (str) -> int = len
+    var size: (str) -> int = len
     print(size("hello"))
-    text: (float) -> str = str
+    var text: (float) -> str = str
     print(text(2.5))
-    say: (str) -> none = print
+    var say: (str) -> none = print
     say("hi")
-    exists: (str) -> bool = fs.exists
+    var exists: (str) -> bool = fs.exists
     print(exists("/no/such/path"))
-    parse: (str) -> int = int
+    var parse: (str) -> int = int
     print(parse("42"))
     try:
         parse("x")

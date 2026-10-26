@@ -26,34 +26,37 @@ class Options:
     quiet: bool
 
 def parse_options() -> Options:
-    parser = cli.parser("report", description="Count log lines by level.")
+    var parser = cli.parser("report", description="Count log lines by level.")
+    var help: cli.HelpRequested
     parser.add_int("limit", 10, help="Show at most this many levels", short="n")
     parser.add_str("sort", "count", help="Order by count or name")
     parser.add_str("color", "auto", help="Color output: auto, always, or never")
     parser.add_flag("quiet", help="Do not show progress", short="q")
     parser.add_rest("file", help="Log file to read (default: stdin)")
+    var args: cli.Args
     try:
         args = parser.parse(sys.args())
-    except cli.HelpRequested as help:
+    except cli.HelpRequested as help_item:
+        help = help_item
         io.stdout().write_text(help.message)
         sys.exit(0)
     except cli.UsageError as error:
         sys.eprint(error.message)
         sys.exit(2)
-    files = args.get_list("file")
-    sorts = {"count": Sort.COUNT, "name": Sort.NAME}
-    sort = sorts.get(args.get_str("sort"))
-    modes = {"auto": ColorMode.AUTO, "always": ColorMode.ALWAYS, "never": ColorMode.NEVER}
-    color = modes.get(args.get_str("color"))
-    limit = args.get_int("limit")
+    var files = args.get_list("file")
+    var sorts = {"count": Sort.COUNT, "name": Sort.NAME}
+    var sort = sorts.get(args.get_str("sort"))
+    var modes = {"auto": ColorMode.AUTO, "always": ColorMode.ALWAYS, "never": ColorMode.NEVER}
+    var color = modes.get(args.get_str("color"))
+    var limit = args.get_int("limit")
     if len(files) > 1 or limit < 0 or sort is none or color is none:
         sys.eprint(parser.help().split("\n")[0])
         sys.eprint("report: error: expected at most one file, --limit of at least 0, --sort count|name, and --color auto|always|never")
         sys.exit(2)
-    path = "-"
+    var path = "-"
     if len(files) == 1:
         path = files[0]
-    enabled = color == ColorMode.ALWAYS or (color == ColorMode.AUTO and terminal.color_enabled(io.stdout()))
+    var enabled = color == ColorMode.ALWAYS or (color == ColorMode.AUTO and terminal.color_enabled(io.stdout()))
     return Options(path, limit, sort, enabled, args.get_bool("quiet"))
 
 def level_color(level: str) -> str:
@@ -66,20 +69,20 @@ def level_color(level: str) -> str:
     return "default"
 
 def main():
-    options = parse_options()
-    source = io.stdin()
+    var options = parse_options()
+    var source = io.stdin()
     if options.path != "-":
         try:
             source = io.open(options.path)
         except OSError as error:
             sys.eprint(error.message)
             sys.exit(1)
-    counts: dict[str, int] = {}
-    total = 0
+    var counts: dict[str, int] = {}
+    var total = 0
     for line in source:
-        words = line.strip().split(" ")
+        var words = line.strip().split(" ")
         if words[0] != "":
-            seen = counts.get(words[0])
+            var seen = counts.get(words[0])
             if seen is none:
                 counts[words[0]] = 1
             else:
@@ -91,12 +94,12 @@ def main():
         source.close()
     terminal.finish_progress()
 
-    levels = sorted(counts)
+    var levels = sorted(counts)
     if options.sort == Sort.COUNT:
         # Most lines first, then by name.
         levels = sorted(counts, key=(level) => (-counts[level], level))
     print(terminal.style(f"{'level':<10}{'lines':>8}", bold=true, enabled=options.color))
     for level in levels[:options.limit]:
-        name = terminal.style(f"{level:<10}", color=level_color(level), enabled=options.color)
+        var name = terminal.style(f"{level:<10}", color=level_color(level), enabled=options.color)
         print(f"{name}{counts[level]:>8d}")
     print(f"{'total':<10}{total:>8d}")

@@ -1,2 +1,2 @@
 def main():
-    values = {bytes([]): 1}
+    var values = {bytes([]): 1}

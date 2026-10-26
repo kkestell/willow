@@ -1,10 +1,10 @@
 # https://rosettacode.org/wiki/Roman_numerals/Decode
 
 def from_roman(numeral: str) -> int:
-    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
-    total = 0
+    var values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    var total = 0
     for i in range(len(numeral)):
-        value = values[numeral[i]]
+        var value = values[numeral[i]]
         # A smaller numeral before a larger one is subtracted.
         if i + 1 < len(numeral) and value < values[numeral[i + 1]]:
             total = total - value

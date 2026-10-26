@@ -15,7 +15,7 @@ def noisy(label: str, value: int) -> int:
     return value
 
 def show(items: list[int]) -> str:
-    text = ""
+    var text = ""
     for item in items:
         text = text + str(item) + " "
     return text
@@ -24,17 +24,17 @@ def main():
     print(f"{abs(-3)} {abs(0)} {abs(-9007199254740991)} {abs(-2.5)} {abs(-0.0)}")
     print(f"{round(0.5)} {round(1.5)} {round(2.5)} {round(-2.5)} {round(-0.4)} {round(2.6)}")
 
-    nums = [3, 1, 2]
+    var nums = [3, 1, 2]
     print(f"{min(nums)} {max(nums)} {min(2, 5)} {max(2.5, 1.5)} {max('a', 'b')}")
     print(f"{min((1, 'b'), (1, 'a'))[1]} {max(nums[0:2])} {min((4, 2, 3))}")
     print(f"{min(noisy('left', 3), noisy('right', 1))}")
-    pairs = [(1, "first"), (1, "second")]
+    var pairs = [(1, "first"), (1, "second")]
     print(f"{min(pairs)[1]} {max(pairs)[1]}")
 
     print(f"{sum(nums)} {sum([0.5, 0.25])} {sum([1.5][:0])} {sum(numbers(3))}")
     print(f"{any([false, true])} {all([true, false])} {all([true][:0])} {any([true][:0])}")
 
-    copy = list(nums)
+    var copy = list(nums)
     copy.append(9)
     print(f"{len(nums)} {len(copy)} {len(list('abc'))} {len(list({'k': 1}))}")
     print(show(list(range(4))))
@@ -45,7 +45,7 @@ def main():
     for left, right in zip(numbers(2), "abc"):
         print(f"{left} {right}")
 
-    items = [1, 2]
+    var items = [1, 2]
     items.extend(items)
     items.extend((7, 8))
     items.reverse()
@@ -55,7 +55,7 @@ def main():
     except ValueError as error:
         print(f"{error.message} {len(items)}")
 
-    scores = {"ada": 1, "grace": 2}
+    var scores = {"ada": 1, "grace": 2}
     for name in scores.keys():
         print(name)
     for score in scores.values():
@@ -63,19 +63,19 @@ def main():
     for name, score in scores.items():
         print(f"{name}={score}")
     print(f"{scores.get('ada', 0)} {scores.get('zoe', 0)} {scores.get('zoe')}")
-    missing: int | none = scores.get("zoe")
+    var missing: int | none = scores.get("zoe")
     print(missing is none)
 
-    stored: dict[str, int | none] = {"a": none}
+    var stored: dict[str, int | none] = {"a": none}
     print(f"{stored.get('a', 5) is none} {stored.get('b', 5)}")
 
-    scores_iter = scores.items()
+    var scores_iter = scores.items()
     scores["new"] = 3
     try:
         next(scores_iter)
     except RuntimeError as failure:
         print(failure.message)
 
-    total: (list[int]) -> int = sum
+    var total: (list[int]) -> int = sum
     print(show(sorted([-3, 2, -1], key=abs)))
     print(total(nums))

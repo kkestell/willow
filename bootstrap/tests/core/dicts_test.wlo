@@ -1,7 +1,7 @@
 import core
 
 def main():
-    d = core.dict_new(0)
+    var d = core.dict_new(0)
     core.dict_set(d, core.int_word(10), core.int_word(1))
     core.dict_set(d, core.int_word(-3), core.int_word(2))
     core.dict_set(d, core.int_word(7), core.int_word(3))
@@ -13,25 +13,25 @@ def main():
 
     # Replacing a value keeps the entry's position and the version; removing
     # a key and inserting it again moves it to the end.
-    version = core.dict_version(d)
+    var version = core.dict_version(d)
     core.dict_set(d, core.int_word(10), core.int_word(4))
     assert core.dict_version(d) == version
     assert core.word_int(core.dict_pop(d, core.int_word(-3))) == 2
     assert core.dict_version(d) != version
     core.dict_set(d, core.int_word(-3), core.int_word(5))
-    order = ""
+    var order = ""
     version = core.dict_version(d)
-    entry = core.dict_next(d, 0, version)
+    var entry = core.dict_next(d, 0, version)
     while entry != -1:
-        key = core.word_int(core.dict_key_at(d, entry))
-        value = core.word_int(core.dict_value_at(d, entry))
+        var key = core.word_int(core.dict_key_at(d, entry))
+        var value = core.word_int(core.dict_value_at(d, entry))
         order = order + core.int_to_str(key) + "=" + core.int_to_str(value) + " "
         entry = core.dict_next(d, entry + 1, version)
     assert order == "10=4 7=3 -3=5 "
 
     # Keys compare by contents, and growing keeps insertion order.
-    s = core.dict_new(2)
-    i = 0
+    var s = core.dict_new(2)
+    var i = 0
     while i < 100:
         core.dict_set(s, core.str_word("k" + core.int_to_str(i)), core.int_word(i))
         i = i + 1
@@ -49,7 +49,7 @@ def main():
     assert core.word_int(core.dict_get(s, core.str_word(""))) == -1
 
     # Many string keys force several grows, and every one keeps its value.
-    many = core.dict_new(2)
+    var many = core.dict_new(2)
     i = 0
     while i < 5000:
         core.dict_set(many, core.str_word("key_" + core.int_to_str(i)), core.int_word(i))
@@ -73,18 +73,18 @@ def main():
     assert core.dict_next(many, entry + 1, version) == -1
 
     # Negative int keys are found.
-    big = core.dict_new(0)
+    var big = core.dict_new(0)
     core.dict_set(big, core.int_word(-9223372036854775807), core.int_word(1))
     core.dict_set(big, core.int_word(-1), core.int_word(2))
     assert core.word_int(core.dict_get(big, core.int_word(-9223372036854775807))) == 1
     assert core.word_int(core.dict_get(big, core.int_word(-1))) == 2
 
     # A string equal by contents but a different object is found.
-    fresh = "ke" + "y_17"
+    var fresh = "ke" + "y_17"
     assert core.word_int(core.dict_get(many, core.str_word(fresh))) == -17
 
     # A zero hash is still cacheable, for both literals and allocated strings.
-    empty = core.str_sub("x", 0, 0)
+    var empty = core.str_sub("x", 0, 0)
     assert core.str_hash("") == 0
     assert core.str_hash("") == 0
     assert core.str_hash(empty) == 0
@@ -95,10 +95,10 @@ def main():
     # Caching preserves the existing hashes and the contents of shared keys.
     assert core.str_hash("foo_9999") == 955942781
     assert core.str_hash("foo_9999") == 955942781
-    shared = "é🙂"
-    alias = shared
-    equal = core.str_concat("é", "🙂")
-    other = core.dict_new(2)
+    var shared = "é🙂"
+    var alias = shared
+    var equal = core.str_concat("é", "🙂")
+    var other = core.dict_new(2)
     core.dict_set(s, core.str_word(shared), core.int_word(11))
     core.dict_set(other, core.str_word(alias), core.int_word(22))
     assert core.str_hash(shared) == 80726473

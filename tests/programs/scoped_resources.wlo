@@ -10,10 +10,12 @@ def lines(path: str, opened: list[io.File]) -> Generator[str]:
             yield line
 
 def main():
-    path = fs.join("/tmp", "wlo_scoped_" + str(int(time.time() * 1000000.0)))
+    var path = fs.join("/tmp", "wlo_scoped_" + str(int(time.time() * 1000000.0)))
     fs.write_file(path, "one\ntwo\nthree\n")
 
-    with io.open(path) as f:
+    var f: io.File
+    with io.open(path) as f_item:
+        f = f_item
         print(f.readline())
     try:
         f.readline()
@@ -30,7 +32,7 @@ def main():
     except ValueError as standard:
         print(standard.message)
 
-    opened: list[io.File] = []
+    var opened: list[io.File] = []
     with lines(path, opened) as rows:
         for line in rows:
             print(line)
@@ -40,8 +42,12 @@ def main():
     except ValueError as generator_closed:
         print("generator closed its file: " + generator_closed.message)
 
-    with net.listen("127.0.0.1", 0) as listener:
-        with net.connect("127.0.0.1", listener.local_port(), timeout=5.0) as connection:
+    var listener: net.Listener
+    var connection: net.Connection
+    with net.listen("127.0.0.1", 0) as listener_item:
+        listener = listener_item
+        with net.connect("127.0.0.1", listener.local_port(), timeout=5.0) as connection_item:
+            connection = connection_item
             print("connected")
     try:
         connection.recv(1)

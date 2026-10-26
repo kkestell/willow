@@ -1,9 +1,9 @@
 # Each counter rebinds its own `count`.
 def counter() -> () -> int:
-    count = 0
+    var count = 0
 
     def increment() -> int:
-        nonlocal count
+
         count = count + 1
         return count
 
@@ -11,10 +11,10 @@ def counter() -> () -> int:
 
 # The outer function reads what the nested function rebinds.
 def total() -> int:
-    sum = 0
+    var sum = 0
 
     def add(n: int):
-        nonlocal sum
+
         sum = sum + n
 
     add(3)
@@ -28,30 +28,30 @@ def threshold(minimum: int) -> (int) -> bool:
     return (score) => score >= minimum
 
 def main():
-    a = counter()
-    b = counter()
+    var a = counter()
+    var b = counter()
     print(a())
     print(a())
     print(b())
     print(total())
     print(apply((x) => x * 10, 4))
-    ok = threshold(5)
+    var ok = threshold(5)
     print(ok(3))
     print(ok(7))
-    fs: list[(int) -> int] = [(x) => x + 1, (x) => x * x]
+    var fs: list[(int) -> int] = [(x) => x + 1, (x) => x * x]
     for f in fs:
         print(f(5))
     # A parameterless lambda needs no expected type.
-    answer = () => 42
+    var answer = () => 42
     print(answer())
     # The lambda's float result is boxed for the callable's result type.
-    half: () -> int | float = () => 1.5
-    r = half()
+    var half: () -> int | float = () => 1.5
+    var r = half()
     print((r is float))
-    # A lambda in a loop shares the loop variable's binding.
-    getters: list[() -> int] = []
+    # Each lambda captures its own iteration binding.
+    var getters: list[() -> int] = []
     for i in range(3):
         getters.append(() => i)
     print(getters[0]())
-    add = () => () => 7
+    var add = () => () => 7
     print(add()())

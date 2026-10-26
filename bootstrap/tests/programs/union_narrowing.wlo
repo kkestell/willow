@@ -55,17 +55,17 @@ def main():
     print(positive(none))
     print(first(none, 7))
     print(first(5, none))
-    value: int | str = 5
+    var value: int | str = 5
     value = value + 1
     print(value)
     value = "six"
     print(value + "!")
-    found = maybe(true)
+    var found = maybe(true)
     if found is not none:
         print(found)
     print(maybe(false) is none)
-    count: int | none = none
-    i = 0
+    var count: int | none = none
+    var i = 0
     while i < 3:
         if count is none:
             count = 0

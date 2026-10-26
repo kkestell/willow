@@ -10,13 +10,13 @@ def contains(value: Nested, values: list[Nested]) -> bool:
     return value in values
 
 def main():
-    raw = ("a",)
+    var raw = ("a",)
     assert not equal(raw, (none,))
     assert not equal((none,), raw)
     assert equal(raw, ("a",))
-    nothing = (none,)
+    var nothing = (none,)
     assert equal(nothing, (none,))
-    nested = (raw,)
+    var nested = (raw,)
     assert not equal_nested(nested, (none,))
     assert not equal_nested((none,), nested)
     assert equal_nested(nested, (("a",),))

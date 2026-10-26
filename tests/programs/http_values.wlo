@@ -9,9 +9,9 @@ def attempt(method: str, url: str, headers: list[http.Header], timeout: float):
 def main():
     print(http.urlencode({"q": "a b&c", "é": "x=y~", "empty": ""}))
     print(f"[{http.urlencode({})}]")
-    headers = [http.Header("Content-Type", "text/plain"), http.Header("X-Twice", "one"), http.Header("x-twice", "two")]
+    var headers = [http.Header("Content-Type", "text/plain"), http.Header("X-Twice", "one"), http.Header("x-twice", "two")]
     print(f"{http.header(headers, 'content-type')} {http.header(headers, 'X-TWICE')} {http.header(headers, 'missing')}")
-    no_headers: list[http.Header] = []
+    var no_headers: list[http.Header] = []
     for url in ["ftp://example.com/", "http://", "https://user:pw@example.com/", "http://example.com:99999/",
             "http://example.com:x/", "/relative", "http://exa mple.com/", "http://café.example/"]:
         attempt("GET", url, no_headers, 1.0)

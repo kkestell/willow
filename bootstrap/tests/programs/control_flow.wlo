@@ -5,7 +5,7 @@ def first_negative(values: list[int]) -> int:
     return 0
 
 def main():
-    found = -1
+    var found = -1
     for v in [3, -1, 4, 0, 5]:
         if v < 0:
             continue
@@ -14,7 +14,7 @@ def main():
         found = v
     print(found)
 
-    ages = {"ada": 36, "bob": 0, "alan": 41, "eve": 29}
+    var ages = {"ada": 36, "bob": 0, "alan": 41, "eve": 29}
     for name in ages:
         if ages[name] == 0:
             continue
@@ -22,7 +22,7 @@ def main():
             break
         print(name)
 
-    odd = 0
+    var odd = 0
     for i in range(10):
         if i % 2 == 0:
             continue
@@ -31,7 +31,7 @@ def main():
         odd = odd + i
     print(odd)
 
-    n = 0
+    var n = 0
     while true:
         n = n + 1
         if n % 2 == 0:
@@ -40,7 +40,7 @@ def main():
             break
     print(n)
 
-    outer = 0
+    var outer = 0
     while outer < 3:
         outer = outer + 1
         for j in range(5):

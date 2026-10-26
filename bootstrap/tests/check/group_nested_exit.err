@@ -1,1 +1,1 @@
-group_nested_exit.wlo:8:11: error: variable 'value' may be used before assignment
+group_nested_exit.wlo:9:11: error: variable 'value' may be used before assignment

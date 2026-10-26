@@ -1,6 +1,6 @@
 # The closure reads the binding, which the outer call rebinds after creating it.
 def make_counter(start: int) -> () -> int:
-    count = start
+    var count = start
 
     def read() -> int:
         return count
@@ -16,9 +16,9 @@ def fact(n: int) -> int:
         return go(k - 1, acc=acc * k)
     return go(n)
 
-# Closures made in a loop share the loop variable's one binding.
+# Each iteration creates a separate binding for its closures.
 def loop():
-    fs: list[() -> int] = []
+    var fs: list[() -> int] = []
     for i in range(3):
         def get() -> int:
             return i
@@ -36,8 +36,8 @@ class Box:
 
 def main():
     # Separate outer calls make separate bindings.
-    a = make_counter(1)
-    b = make_counter(5)
+    var a = make_counter(1)
+    var b = make_counter(5)
     print(a())
     print(b())
     print(fact(5))

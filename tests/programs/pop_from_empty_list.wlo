@@ -2,6 +2,6 @@ def take(items: list[str]) -> str:
     return items.pop()
 
 def main():
-    names = ["ada"]
+    var names = ["ada"]
     print(take(names))
     print(take(names))

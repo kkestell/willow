@@ -9,10 +9,10 @@ def color_enabled(file: io.File) -> bool:
     return isatty(file) and sys.getenv("TERM") != "dumb" and sys.getenv("NO_COLOR") is none
 
 def style(text: str, color: str = "default", bold: bool = false, enabled: bool = true) -> str:
-    colors = ["default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+    var colors = ["default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
     if color not in colors:
         raise ValueError(f"unknown color '{color}'")
-    codes: list[str] = []
+    var codes: list[str] = []
     if bold:
         codes.append("1")
     for i in range(1, len(colors)):

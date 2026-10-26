@@ -29,10 +29,10 @@ def report(error: diagnostic.Diagnostic):
     fail(error.format())
 
 def main():
-    args = sys.args()
+    var args = sys.args()
     if len(args) != 4 or args[0] not in ["build", "compile"] or args[2] != "-o":
         usage()
-    il = compile(args[1])
+    var il = compile(args[1])
     if args[0] == "compile":
         fs.write_file(args[3], il)
     else:
@@ -42,23 +42,23 @@ def main():
 def compile(path: str) -> str:
     if not fs.exists(path):
         fail(f"willow1: {path}: No such file or directory")
-    name = loader.entry_name(path)
+    var name = loader.entry_name(path)
     if not is_module_name(name) or name == "core":
         fail(f"willow1: {path}: '{name}' cannot be a module name")
-    sources = loader.load(path, true)
+    var sources = loader.load(path, true)
     if sources is diagnostic.Diagnostic:
         report(sources)
         return ""
-    error = bind.bind(sources, false)
+    var error = bind.bind(sources, false)
     if error is not none:
         report(error)
-    modules: list[ast.Module] = []
+    var modules: list[ast.Module] = []
     for source in sources:
         modules.append(source.tree)
     error = check.check_program(modules)
     if error is not none:
         report(error)
-    emitter = emit.emitter(modules, core.os())
+    var emitter = emit.emitter(modules, core.os())
     for module in modules:
         for function in bind.functions(module):
             emitter.function(function)
@@ -76,16 +76,16 @@ def is_module_name(name: str) -> bool:
 # `output`. The intermediate files sit next to `output`, since L0 cannot make
 # a temporary directory.
 def build(il: str, output: str):
-    ssa = output + ".ssa"
-    asm = output + ".s"
-    scratch = output + ".tmp"
+    var ssa = output + ".ssa"
+    var asm = output + ".s"
+    var scratch = output + ".tmp"
     fs.write_file(ssa, il)
-    target = qbe_target(scratch)
-    ok = core.run(["qbe", "-t", target, "-o", asm, ssa]) == 0
-    message = "willow1: qbe failed"
+    var target = qbe_target(scratch)
+    var ok = core.run(["qbe", "-t", target, "-o", asm, ssa]) == 0
+    var message = "willow1: qbe failed"
     if ok:
         fs.write_file(asm, fs.read_file(asm) + coroutine.assembly(target))
-        command = ["cc", "-o", output, asm]
+        var command = ["cc", "-o", output, asm]
         command.extend(gc_flags(scratch))
         command.append("-lm")
         ok = core.run(command) == 0
@@ -96,8 +96,8 @@ def build(il: str, output: str):
 
 # The QBE target for the host, whose architecture `uname -m` names.
 def qbe_target(scratch: str) -> str:
-    os = core.os()
-    arch = shell_output("uname -m", scratch).strip()
+    var os = core.os()
+    var arch = shell_output("uname -m", scratch).strip()
     if arch == "aarch64" or arch == "arm64":
         if os == "darwin":
             return "arm64_apple"
@@ -111,7 +111,7 @@ def qbe_target(scratch: str) -> str:
 
 # The compiler flags that link libgc.
 def gc_flags(scratch: str) -> list[str]:
-    flags = shell_output("pkg-config --cflags --libs bdw-gc 2>/dev/null", scratch)
+    var flags = shell_output("pkg-config --cflags --libs bdw-gc 2>/dev/null", scratch)
     if flags == "":
         return ["-lgc"]
     return flags.split()
@@ -124,6 +124,6 @@ def shell_output(command: str, scratch: str) -> str:
     return fs.read_file(scratch)
 
 def remove(paths: list[str]):
-    command = ["rm", "-f"]
+    var command = ["rm", "-f"]
     command.extend(paths)
     core.run(command)

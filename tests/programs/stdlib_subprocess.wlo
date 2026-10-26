@@ -31,7 +31,7 @@ async def stop_after(group: aio.TaskGroup, delay: float):
 
 async def main():
     # Results match run's.
-    r = await subprocess.run_async(["printf", "%s|%s", "a b", "$HOME *"], capture_output=true)
+    var r = await subprocess.run_async(["printf", "%s|%s", "a b", "$HOME *"], capture_output=true)
     print(f"{r.returncode} {text(r.stdout)} {size(r.stderr)}")
     r = await subprocess.run_async(["sh", "-c", "echo out; echo err >&2; exit 3"], capture_output=true)
     print(f"{r.returncode} {text(r.stdout).strip()} {text(r.stderr).strip()}")
@@ -40,35 +40,36 @@ async def main():
     print(text((await subprocess.run_async(["cat"], input="hello".encode(), capture_output=true)).stdout))
     print(size((await subprocess.run_async(["cat"], input=bytes([]), capture_output=true)).stdout))
     print(text((await subprocess.run_async(["pwd"], cwd="/", capture_output=true)).stdout).strip())
-    env = {"A": "1"}
+    var env = {"A": "1"}
     print(text((await subprocess.run_async(["env"], env=env, capture_output=true)).stdout).strip())
 
     # Large input, stdout, and stderr are moved at the same time: this child
     # fills both output pipes before it reads any input.
-    chunk = "0123456789abcdef".encode()
-    big = chunk
+    var chunk = "0123456789abcdef".encode()
+    var big = chunk
     while len(big) < 2097152:
         big = big + big
-    script = "head -c 1048576 /dev/zero; head -c 1048576 /dev/zero >&2; cat >/dev/null"
+    var script = "head -c 1048576 /dev/zero; head -c 1048576 /dev/zero >&2; cat >/dev/null"
     r = await subprocess.run_async(["sh", "-c", script], input=big, capture_output=true)
     print(f"{r.returncode} {size(r.stdout)} {size(r.stderr)}")
     r = await subprocess.run_async(["cat"], input=big, capture_output=true)
     print(r.stdout == big)
 
     # Other tasks run while a command does.
-    counts: list[int] = []
+    var counts: list[int] = []
+    var p: subprocess.Process
     async with aio.task_group() as group:
         group.start(ticker(counts))
         r = await subprocess.run_async(["sh", "-c", "sleep 0.3; echo done"], capture_output=true)
-        ticks = len(counts)
+        var ticks = len(counts)
         print(f"{text(r.stdout).strip()} {ticks >= 5}")
         p = subprocess.spawn(["sleep", "0.3"])
-        code = await p.wait_async()
+        var code = await p.wait_async()
         print(f"{code} {len(counts) - ticks >= 5}")
         group.cancel()
 
     # Errors are raised when the coroutine is awaited.
-    coro = subprocess.run_async(["true"], timeout=-1.0)
+    var coro = subprocess.run_async(["true"], timeout=-1.0)
     try:
         await coro
     except ValueError as v:
@@ -79,18 +80,18 @@ async def main():
         print(o.message)
 
     # A timeout kills the child and reaps it.
-    start = time.monotonic()
+    var start = time.monotonic()
     try:
         await subprocess.run_async(["sleep", "5"], capture_output=true, timeout=0.2)
     except TimeoutError as t:
         print(f"{t.message} {time.monotonic() - start < 2.0}")
 
     # Cancellation does too.
-    path = fs.join("/tmp", "wlo_stdlib_subprocess_" + str(int(time.time() * 1000000.0)))
+    var path = fs.join("/tmp", "wlo_stdlib_subprocess_" + str(int(time.time() * 1000000.0)))
     async with aio.task_group() as group:
         group.start(run_cancelled(path))
         group.start(stop_after(group, 0.3))
-    pid = fs.read_file(path).strip()
+    var pid = fs.read_file(path).strip()
     fs.remove(path)
     print(subprocess.run(["kill", "-0", pid], capture_output=true).returncode != 0)
 

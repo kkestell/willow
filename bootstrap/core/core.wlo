@@ -105,10 +105,10 @@ class CoroutineContext:
     state: int
 
 def coroutine_context() -> CoroutineContext:
-    current = coroutine_current()
+    var current = coroutine_current()
     if current is none:
-        null = __ptr(__word(0))
-        bottom = __alloc(8)
+        var null = __ptr(__word(0))
+        var bottom = __alloc(8)
         GC_get_my_stackbottom(bottom)
         current = CoroutineContext(null, null, bottom, null, __word(0), __word(0), none, null, 1)
         coroutine_set_current(current)
@@ -118,22 +118,22 @@ def coroutine_create(entry: ptr, argument: word) -> CoroutineContext:
     if not coroutine_available():
         fail("RuntimeError", "coroutines require stage 1 on arm64")
     coroutine_context()
-    stack_size = 262144
-    stack = __alloc(stack_size)
-    top = __offset(stack, stack_size - __int(__word(stack)) % 16)
-    bottom = __alloc(8)
+    var stack_size = 262144
+    var stack = __alloc(stack_size)
+    var top = __offset(stack, stack_size - __int(__word(stack)) % 16)
+    var bottom = __alloc(8)
     __store8(bottom, 0, __word(top))
-    sp = __offset(top, -160)
+    var sp = __offset(top, -160)
     __store8(sp, 88, __word(coroutine_start_address()))
-    null = __ptr(__word(0))
+    var null = __ptr(__word(0))
     return CoroutineContext(sp, stack, bottom, entry, argument, __word(0), none, null, 0)
 
 def coroutine_finished(coroutine: CoroutineContext) -> bool:
     return coroutine.state == 3
 
 def coroutine_resume(coroutine: CoroutineContext) -> word:
-    value = coroutine_step(coroutine)
-    error = coroutine.error
+    var value = coroutine_step(coroutine)
+    var error = coroutine.error
     coroutine.error = __ptr(__word(0))
     coroutine_set_pending(error)
     return value
@@ -144,18 +144,18 @@ def coroutine_step(coroutine: CoroutineContext) -> word:
         fail("RuntimeError", "cannot resume a running coroutine")
     if coroutine.state == 3:
         return __word(0)
-    caller = coroutine_context()
+    var caller = coroutine_context()
     coroutine.caller = caller
     coroutine.state = 1
     coroutine_switch(caller, coroutine)
-    value = coroutine.value
+    var value = coroutine.value
     coroutine.value = __word(0)
     if coroutine.state == 3:
         coroutine_release(coroutine)
     return value
 
 def coroutine_release(coroutine: CoroutineContext):
-    null = __ptr(__word(0))
+    var null = __ptr(__word(0))
     coroutine.sp = null
     coroutine.stack = null
     coroutine.bottom = null
@@ -168,20 +168,20 @@ class GeneratorContext:
     closing: bool
 
 def generator_new(entry: ptr, environment: ptr) -> GeneratorContext:
-    coroutine = coroutine_create(entry, __word(environment))
+    var coroutine = coroutine_create(entry, __word(environment))
     return GeneratorContext(coroutine, environment, false)
 
 def generator_closing(generator: GeneratorContext) -> bool:
     return generator.closing
 
 def generator_next(generator: GeneratorContext) -> word:
-    coroutine = generator.coroutine
+    var coroutine = generator.coroutine
     if coroutine.state == 1:
         fail("RuntimeError", "generator already running")
-    value = coroutine_step(coroutine)
+    var value = coroutine_step(coroutine)
     if coroutine_finished(coroutine):
         generator.environment = __ptr(__word(0))
-    error = coroutine.error
+    var error = coroutine.error
     coroutine.error = __ptr(__word(0))
     if not __addr_is_null(error):
         if str_eq(__str(__load8(header(error), 0)), "StopIteration"):
@@ -193,7 +193,7 @@ def generator_next(generator: GeneratorContext) -> word:
     return value
 
 def generator_close(generator: GeneratorContext):
-    coroutine = generator.coroutine
+    var coroutine = generator.coroutine
     if coroutine.state == 1:
         fail("RuntimeError", "generator already running")
     generator.environment = __ptr(__word(0))
@@ -205,8 +205,8 @@ def generator_close(generator: GeneratorContext):
         coroutine_release(coroutine)
 
 def coroutine_yield(value: word):
-    current = coroutine_context()
-    caller = current.caller
+    var current = coroutine_context()
+    var caller = current.caller
     if caller is none:
         fail("RuntimeError", "cannot yield outside a coroutine")
         return
@@ -226,11 +226,11 @@ def coroutine_prepare(current: CoroutineContext, resumed: CoroutineContext):
     GC_alloc_unlock()
 
 def coroutine_start():
-    current = coroutine_context()
+    var current = coroutine_context()
     current.error = coroutine_invoke(current.entry, current.argument)
     current.state = 3
     current.value = __word(0)
-    caller = current.caller
+    var caller = current.caller
     assert caller is not none, "coroutine has no caller"
     current.caller = none
     coroutine_switch(current, caller)
@@ -270,9 +270,9 @@ def init():
 # Both File writes and built-in output use this unbuffered path. The caller
 # decides whether a failed write raises OSError or ends the program.
 def write_bytes(fd: int, buf: ptr, count: int) -> bool:
-    done = 0
+    var done = 0
     while done < count:
-        written = write(fd, __offset(buf, done), count - done)
+        var written = write(fd, __offset(buf, done), count - done)
         if written < 0:
             return false
         done = done + written
@@ -282,7 +282,7 @@ def write_bytes(fd: int, buf: ptr, count: int) -> bool:
 # The report itself is lost when stderr is the stream that failed.
 def write_all(fd: int, buf: ptr, count: int):
     if not write_bytes(fd, buf, count):
-        report = "error: cannot write output: " + os_reason() + "\n"
+        var report = "error: cannot write output: " + os_reason() + "\n"
         write_bytes(2, str_bytes(report), str_size(report))
         exit(1)
 
@@ -304,12 +304,12 @@ def fail(class_name: str, message: str):
 # A new exception of the built-in class named `class_name`, whose descriptor
 # is in the array `descriptors`.
 def failure(descriptors: ptr, class_name: str, message: str) -> ptr:
-    i = 0
-    descriptor = __ptr(__load8(descriptors, 0))
+    var i = 0
+    var descriptor = __ptr(__load8(descriptors, 0))
     while not str_eq(__str(__load8(descriptor, 0)), class_name):
         i = i + 1
         descriptor = __ptr(__load8(descriptors, i * 8))
-    e = object_new(descriptor, 3)
+    var e = object_new(descriptor, 3)
     __store8(e, 24, __word(message))
     return e
 
@@ -325,10 +325,10 @@ def trace(e: ptr, function: str, path: str, line: int, col: int):
     if e == aio_cancel():
         return
     # A task-start frame ends the original traceback, even when re-observed.
-    frames = __ptr(__load8(e, 16))
+    var frames = __ptr(__load8(e, 16))
     if not __addr_is_null(frames) and str_find(__str(__word(frames)), "\n  in task started at ") is not none:
         return
-    where = path + ":" + int_to_str(line) + ":" + int_to_str(col)
+    var where = path + ":" + int_to_str(line) + ":" + int_to_str(col)
     if __addr_is_null(__ptr(__load8(e, 8))):
         __store8(e, 8, __word(where))
     if __addr_is_null(__ptr(__load8(e, 16))):
@@ -338,8 +338,8 @@ def trace(e: ptr, function: str, path: str, line: int, col: int):
 
 # Writes the report of `e`, which propagated out of main (spec §13).
 def report(e: ptr):
-    name = __str(__load8(header(e), 0))
-    message = __str(__load8(e, 24))
+    var name = __str(__load8(header(e), 0))
+    var message = __str(__load8(e, 24))
     write_str(2, __str(__load8(e, 8)) + ": error: " + name + ": " + message + __str(__load8(e, 16)) + "\n")
 
 def print_str(s: str):
@@ -358,8 +358,8 @@ def print_bool(b: bool):
 
 def int_to_str(n: int) -> str:
     # 21 bytes hold the longest int and the zero byte snprintf writes.
-    s = __alloc_atomic(24 + 21)
-    length = snprintf(__offset(s, 24), 21, str_bytes("%lld"), n)
+    var s = __alloc_atomic(24 + 21)
+    var length = snprintf(__offset(s, 24), 21, str_bytes("%lld"), n)
     __store8(s, 0, __word(__type(str)))
     __store8(s, 8, __word(length))
     __store8(s, 16, __word(0))
@@ -388,7 +388,7 @@ def str_byte(s: str, i: int) -> int:
 
 # A string of `length` bytes whose contents the caller fills in.
 def str_alloc(length: int) -> ptr:
-    s = __alloc_atomic(25 + length)
+    var s = __alloc_atomic(25 + length)
     __store8(s, 0, __word(__type(str)))
     __store8(s, 8, __word(length))
     __store8(s, 16, __word(0))
@@ -397,7 +397,7 @@ def str_alloc(length: int) -> ptr:
 
 # The string holding bytes `start` up to `stop` of `s`.
 def str_sub(s: str, start: int, stop: int) -> str:
-    result = str_alloc(stop - start)
+    var result = str_alloc(stop - start)
     memcpy(__offset(result, 24), __offset(str_bytes(s), start), stop - start)
     return __str(__word(result))
 
@@ -416,8 +416,8 @@ def char_size(b: int) -> int:
 
 # The number of code points in bytes `start` up to `stop` of `s`.
 def count_chars(s: str, start: int, stop: int) -> int:
-    count = 0
-    i = start
+    var count = 0
+    var i = start
     while i < stop:
         if not is_continuation(str_byte(s, i)):
             count = count + 1
@@ -434,8 +434,8 @@ def advance(s: str, at: int, count: int) -> int:
 
 # The first byte offset at or after `start` where `sub` occurs, or -1.
 def find_bytes(s: str, sub: str, start: int) -> int:
-    last = str_size(s) - str_size(sub)
-    i = start
+    var last = str_size(s) - str_size(sub)
+    var i = start
     while i <= last:
         if memcmp(__offset(str_bytes(s), i), str_bytes(sub), str_size(sub)) == 0:
             return i
@@ -469,9 +469,9 @@ def clamp(index: int, length: int) -> int:
     return index
 
 def str_concat(a: str, b: str) -> str:
-    a_size = str_size(a)
-    b_size = str_size(b)
-    s = str_alloc(a_size + b_size)
+    var a_size = str_size(a)
+    var b_size = str_size(b)
+    var s = str_alloc(a_size + b_size)
     memcpy(__offset(s, 24), str_bytes(a), a_size)
     memcpy(__offset(s, 24 + a_size), str_bytes(b), b_size)
     return __str(__word(s))
@@ -484,11 +484,11 @@ def str_eq(a: str, b: str) -> bool:
 # Negative when a sorts before b, zero when they are equal, and positive
 # otherwise. Byte order is code point order in UTF-8.
 def str_compare(a: str, b: str) -> int:
-    a_size = str_size(a)
-    b_size = str_size(b)
-    i = 0
+    var a_size = str_size(a)
+    var b_size = str_size(b)
+    var i = 0
     while i < a_size and i < b_size:
-        difference = str_byte(a, i) - str_byte(b, i)
+        var difference = str_byte(a, i) - str_byte(b, i)
         if difference != 0:
             return difference
         i = i + 1
@@ -503,13 +503,13 @@ def ascii_character(code: int) -> str:
     return ""
 
 def str_char_at(s: str, at: int) -> str:
-    lead = str_byte(s, at)
+    var lead = str_byte(s, at)
     if lead < 128:
         return ascii_character(lead)
     return str_sub(s, at, at + char_size(lead))
 
 def str_index(s: str, i: int) -> str:
-    length = str_len(s)
+    var length = str_len(s)
     if i < 0:
         i = i + length
     if i < 0 or i >= length:
@@ -517,19 +517,19 @@ def str_index(s: str, i: int) -> str:
     return str_char_at(s, advance(s, 0, i))
 
 def str_slice(s: str, start: int, stop: int) -> str:
-    length = str_len(s)
+    var length = str_len(s)
     start = clamp(start, length)
     stop = clamp(stop, length)
     if stop <= start:
         return ""
-    first = advance(s, 0, start)
+    var first = advance(s, 0, start)
     return str_sub(s, first, advance(s, first, stop - start))
 
 def str_contains(s: str, sub: str) -> bool:
     return find_bytes(s, sub, 0) >= 0
 
 def str_find(s: str, sub: str) -> int | none:
-    at = find_bytes(s, sub, 0)
+    var at = find_bytes(s, sub, 0)
     if at < 0:
         return none
     return count_chars(s, 0, at)
@@ -542,14 +542,14 @@ def str_endswith(s: str, suffix: str) -> bool:
 
 # An empty `old` matches before every code point and at the end, as in Python.
 def str_replace(s: str, old: str, new: str) -> str:
-    result = ""
-    start = 0
+    var result = ""
+    var start = 0
     if str_size(old) == 0:
         while start < str_size(s):
             result = result + new + str_char_at(s, start)
             start = start + char_size(str_byte(s, start))
         return result + new
-    at = find_bytes(s, old, 0)
+    var at = find_bytes(s, old, 0)
     while at >= 0:
         result = result + str_sub(s, start, at) + new
         start = at + str_size(old)
@@ -557,8 +557,8 @@ def str_replace(s: str, old: str, new: str) -> str:
     return result + str_sub(s, start, str_size(s))
 
 def str_strip(s: str) -> str:
-    start = 0
-    stop = str_size(s)
+    var start = 0
+    var stop = str_size(s)
     while start < stop and is_space(str_byte(s, start)):
         start = start + 1
     while stop > start and is_space(str_byte(s, stop - 1)):
@@ -584,7 +584,7 @@ def str_removesuffix(s: str, suffix: str) -> str:
 # The classification methods are ASCII only, and false for the empty string.
 
 def str_isascii(s: str) -> bool:
-    i = 0
+    var i = 0
     while i < str_size(s):
         if str_byte(s, i) >= 128:
             return false
@@ -594,7 +594,7 @@ def str_isascii(s: str) -> bool:
 def str_isdigit(s: str) -> bool:
     if str_size(s) == 0:
         return false
-    i = 0
+    var i = 0
     while i < str_size(s):
         if not is_digit(str_byte(s, i)):
             return false
@@ -604,7 +604,7 @@ def str_isdigit(s: str) -> bool:
 def str_isalpha(s: str) -> bool:
     if str_size(s) == 0:
         return false
-    i = 0
+    var i = 0
     while i < str_size(s):
         if not is_alpha(str_byte(s, i)):
             return false
@@ -614,9 +614,9 @@ def str_isalpha(s: str) -> bool:
 def str_isalnum(s: str) -> bool:
     if str_size(s) == 0:
         return false
-    i = 0
+    var i = 0
     while i < str_size(s):
-        b = str_byte(s, i)
+        var b = str_byte(s, i)
         if not (is_alpha(b) or is_digit(b)):
             return false
         i = i + 1
@@ -625,7 +625,7 @@ def str_isalnum(s: str) -> bool:
 def str_isspace(s: str) -> bool:
     if str_size(s) == 0:
         return false
-    i = 0
+    var i = 0
     while i < str_size(s):
         if not is_space(str_byte(s, i)):
             return false
@@ -634,33 +634,33 @@ def str_isspace(s: str) -> bool:
 
 # A string of `count` copies of the ASCII byte `b`.
 def repeat_byte(b: int, count: int) -> str:
-    s = str_alloc(count)
-    i = 0
+    var s = str_alloc(count)
+    var i = 0
     while i < count:
         __store1(s, 24 + i, b)
         i = i + 1
     return __str(__word(s))
 
 def str_ljust(s: str, width: int) -> str:
-    length = str_len(s)
+    var length = str_len(s)
     if width <= length:
         return s
     return s + repeat_byte(32, width - length)
 
 def str_rjust(s: str, width: int) -> str:
-    length = str_len(s)
+    var length = str_len(s)
     if width <= length:
         return s
     return repeat_byte(32, width - length) + s
 
 def pad(s: str, width: int, align: str) -> str:
-    padding = width - str_len(s)
+    var padding = width - str_len(s)
     if padding <= 0:
         return s
     if align == "<":
         return s + repeat_byte(32, padding)
     if align == "^":
-        left = padding // 2
+        var left = padding // 2
         return repeat_byte(32, left) + s + repeat_byte(32, padding - left)
     return repeat_byte(32, padding) + s
 
@@ -683,9 +683,9 @@ def str_split(s: str, sep: str | none, maxsplit: int) -> ptr:
         return split_whitespace(s, maxsplit)
     if str_size(sep) == 0:
         fail("ValueError", "empty separator")
-    parts = list_new(0)
-    start = 0
-    at = find_bytes(s, sep, 0)
+    var parts = list_new(0)
+    var start = 0
+    var at = find_bytes(s, sep, 0)
     while at >= 0 and maxsplit != 0:
         list_append(parts, __word(str_sub(s, start, at)))
         start = at + str_size(sep)
@@ -696,11 +696,11 @@ def str_split(s: str, sep: str | none, maxsplit: int) -> ptr:
 
 # After the last split, the remainder keeps its trailing whitespace.
 def split_whitespace(s: str, maxsplit: int) -> ptr:
-    parts = list_new(0)
-    size = str_size(s)
-    i = skip_spaces(s, 0)
+    var parts = list_new(0)
+    var size = str_size(s)
+    var i = skip_spaces(s, 0)
     while i < size and maxsplit != 0:
-        start = i
+        var start = i
         while i < size and not is_space(str_byte(s, i)):
             i = i + 1
         list_append(parts, __word(str_sub(s, start, i)))
@@ -726,14 +726,15 @@ def skip_spaces_back(s: str, i: int) -> int:
 def str_rsplit(s: str, sep: str | none, maxsplit: int) -> ptr:
     if maxsplit < 0:
         maxsplit = str_size(s)
+    var parts: ptr
     if sep is none:
         parts = rsplit_whitespace(s, maxsplit)
     else:
         if str_size(sep) == 0:
             fail("ValueError", "empty separator")
         parts = list_new(0)
-        stop = str_size(s)
-        at = rfind_bytes(s, sep, stop - str_size(sep))
+        var stop = str_size(s)
+        var at = rfind_bytes(s, sep, stop - str_size(sep))
         while at >= 0 and maxsplit != 0:
             list_append(parts, __word(str_sub(s, at + str_size(sep), stop)))
             stop = at
@@ -745,10 +746,10 @@ def str_rsplit(s: str, sep: str | none, maxsplit: int) -> ptr:
 
 # After the last split, the remainder keeps its leading whitespace.
 def rsplit_whitespace(s: str, maxsplit: int) -> ptr:
-    parts = list_new(0)
-    i = skip_spaces_back(s, str_size(s))
+    var parts = list_new(0)
+    var i = skip_spaces_back(s, str_size(s))
     while i > 0 and maxsplit != 0:
-        stop = i
+        var stop = i
         while i > 0 and not is_space(str_byte(s, i - 1)):
             i = i - 1
         list_append(parts, __word(str_sub(s, i, stop)))
@@ -760,7 +761,7 @@ def rsplit_whitespace(s: str, maxsplit: int) -> ptr:
 
 # The last byte offset at or before `start` where `sub` occurs, or -1.
 def rfind_bytes(s: str, sub: str, start: int) -> int:
-    i = start
+    var i = start
     while i >= 0:
         if memcmp(__offset(str_bytes(s), i), str_bytes(sub), str_size(sub)) == 0:
             return i
@@ -769,15 +770,15 @@ def rfind_bytes(s: str, sub: str, start: int) -> int:
 
 # Lines end at LF, CR, or CRLF.
 def str_splitlines(s: str, keepends: bool) -> ptr:
-    parts = list_new(0)
-    size = str_size(s)
-    start = 0
-    i = 0
+    var parts = list_new(0)
+    var size = str_size(s)
+    var start = 0
+    var i = 0
     while i < size:
-        b = str_byte(s, i)
+        var b = str_byte(s, i)
         i = i + 1
         if b == 10 or b == 13:
-            stop = i - 1
+            var stop = i - 1
             if b == 13 and i < size and str_byte(s, i) == 10:
                 i = i + 1
             if keepends:
@@ -789,29 +790,29 @@ def str_splitlines(s: str, keepends: bool) -> ptr:
     return parts
 
 def str_join(sep: str, items: ptr) -> str:
-    count = __int(__load8(items, 8))
+    var count = __int(__load8(items, 8))
     if count == 0:
         return ""
-    slots = __ptr(__load8(items, 24))
-    sep_ptr = __ptr(__word(sep))
-    sep_size = __int(__load8(sep_ptr, 8))
-    sep_bytes = __offset(sep_ptr, 24)
-    size = sep_size * (count - 1)
-    i = 0
+    var slots = __ptr(__load8(items, 24))
+    var sep_ptr = __ptr(__word(sep))
+    var sep_size = __int(__load8(sep_ptr, 8))
+    var sep_bytes = __offset(sep_ptr, 24)
+    var size = sep_size * (count - 1)
+    var i = 0
     while i < count:
-        item = __ptr(__load8(slots, i * 8))
+        var item = __ptr(__load8(slots, i * 8))
         size = size + __int(__load8(item, 8))
         i = i + 1
-    s = str_alloc(size)
-    at = 24
+    var s = str_alloc(size)
+    var at = 24
     i = 0
     while i < count:
         if i > 0:
             if sep_size != 0:
                 memcpy(__offset(s, at), sep_bytes, sep_size)
                 at = at + sep_size
-        item = __ptr(__load8(slots, i * 8))
-        item_size = __int(__load8(item, 8))
+        var item = __ptr(__load8(slots, i * 8))
+        var item_size = __int(__load8(item, 8))
         if item_size == 1:
             __store1(s, at, __load1(item, 24))
             at = at + 1
@@ -830,8 +831,9 @@ def str_ord(s: str) -> int:
 # lead byte keeps its low 7, 5, 4, or 3 bits and each continuation byte adds
 # 6 more.
 def code_at(s: str, at: int) -> int:
-    lead = str_byte(s, at)
-    size = char_size(lead)
+    var lead = str_byte(s, at)
+    var size = char_size(lead)
+    var code: int
     if size == 1:
         return lead
     else if size == 2:
@@ -840,7 +842,7 @@ def code_at(s: str, at: int) -> int:
         code = lead - 224
     else:
         code = lead - 240
-    i = 1
+    var i = 1
     while i < size:
         code = code * 64 + str_byte(s, at + i) - 128
         i = i + 1
@@ -853,6 +855,8 @@ def str_chr(n: int) -> str:
         fail("ValueError", "invalid code point")
     if n < 128:
         return repeat_byte(n, 1)
+    var size: int
+    var lead: int
     if n < 2048:
         size = 2
         lead = 192 + n // 64
@@ -862,10 +866,10 @@ def str_chr(n: int) -> str:
     else:
         size = 4
         lead = 240 + n // 262144
-    s = str_alloc(size)
+    var s = str_alloc(size)
     __store1(s, 24, lead)
-    i = size - 1
-    rest = n
+    var i = size - 1
+    var rest = n
     while i > 0:
         __store1(s, 24 + i, 128 + rest % 64)
         rest = rest // 64
@@ -881,12 +885,12 @@ def str_upper(s: str) -> str:
 # Unicode's default full case mappings (spec §7): a full mapping when the
 # code point has one, otherwise the simple mapping, and Final_Sigma for Σ.
 def convert_case(s: str, lower: bool) -> str:
-    size = str_size(s)
+    var size = str_size(s)
     if str_isascii(s):
-        result = str_alloc(size)
-        i = 0
+        var result = str_alloc(size)
+        var i = 0
         while i < size:
-            b = str_byte(s, i)
+            var b = str_byte(s, i)
             if lower and b >= 65 and b <= 90:
                 b = b + 32
             else if not lower and b >= 97 and b <= 122:
@@ -894,23 +898,23 @@ def convert_case(s: str, lower: bool) -> str:
             __store1(result, 24 + i, b)
             i = i + 1
         return __str(__word(result))
-    runs = case_upper_runs()
-    full = case_upper_full()
+    var runs = case_upper_runs()
+    var full = case_upper_full()
     if lower:
         runs = case_lower_runs()
         full = case_lower_full()
-    parts = list_new(0)
-    at = 0
+    var parts = list_new(0)
+    var at = 0
     while at < size:
-        code = code_at(s, at)
-        record = case_record(full, 28, code)
+        var code = code_at(s, at)
+        var record = case_record(full, 28, code)
         if lower and code == 931:
             code = 963
             if final_sigma(s, at):
                 code = 962
             list_append(parts, __word(str_chr(code)))
         else if record >= 0 and hex_at(full, record) == code:
-            i = 7
+            var i = 7
             while i < 28 and hex_at(full, record + i) != 0:
                 list_append(parts, __word(str_chr(hex_at(full, record + i))))
                 i = i + 7
@@ -921,10 +925,10 @@ def convert_case(s: str, lower: bool) -> str:
 
 # The six-digit uppercase hex number at byte `at` of a case table.
 def hex_at(table: str, at: int) -> int:
-    value = 0
-    i = at
+    var value = 0
+    var i = at
     while i < at + 6:
-        b = str_byte(table, i)
+        var b = str_byte(table, i)
         if b >= 65:
             value = value * 16 + b - 55
         else:
@@ -935,11 +939,11 @@ def hex_at(table: str, at: int) -> int:
 # The byte offset of the last record in a case table of `width`-byte records
 # whose first code point is at most `code`, or -1.
 def case_record(table: str, width: int, code: int) -> int:
-    found = -1
-    low = 0
-    high = str_size(table) // width - 1
+    var found = -1
+    var low = 0
+    var high = str_size(table) // width - 1
     while low <= high:
-        middle = (low + high) // 2
+        var middle = (low + high) // 2
         if hex_at(table, middle * width) <= code:
             found = middle * width
             low = middle + 1
@@ -949,29 +953,29 @@ def case_record(table: str, width: int, code: int) -> int:
 
 # The mapping of `code` in a table of runs, or `code` when it has none.
 def case_simple(runs: str, code: int) -> int:
-    at = case_record(runs, 23, code)
+    var at = case_record(runs, 23, code)
     if at < 0:
         return code
-    first = hex_at(runs, at)
-    step = str_byte(runs, at + 14) - 48
+    var first = hex_at(runs, at)
+    var step = str_byte(runs, at + 14) - 48
     if code > hex_at(runs, at + 7) or (code - first) % step != 0:
         return code
     return hex_at(runs, at + 16) + code - first
 
 def case_in_ranges(ranges: str, code: int) -> bool:
-    at = case_record(ranges, 14, code)
+    var at = case_record(ranges, 14, code)
     return at >= 0 and code <= hex_at(ranges, at + 7)
 
 # Final_Sigma: a cased code point comes before the Σ at byte `at` and none
 # comes after it, skipping case-ignorable code points in both directions.
 def final_sigma(s: str, at: int) -> bool:
-    before = false
-    i = at
+    var before = false
+    var i = at
     while i > 0:
         i = i - 1
         while is_continuation(str_byte(s, i)):
             i = i - 1
-        code = code_at(s, i)
+        var code = code_at(s, i)
         if not case_in_ranges(case_case_ignorable(), code):
             before = case_in_ranges(case_cased(), code)
             break
@@ -979,7 +983,7 @@ def final_sigma(s: str, at: int) -> bool:
         return false
     i = at + 2
     while i < str_size(s):
-        code = code_at(s, i)
+        var code = code_at(s, i)
         if not case_in_ranges(case_case_ignorable(), code):
             return not case_in_ranges(case_cased(), code)
         i = i + char_size(str_byte(s, i))
@@ -2199,16 +2203,16 @@ def case_case_ignorable() -> str:
 # Bytes share strings' length, data, and trailing zero layout. Only newly
 # allocated strings may be retagged; strings held by callers stay strings.
 def bytes_tag(s: str) -> ptr:
-    data = __ptr(__word(s))
+    var data = __ptr(__word(s))
     __store8(data, 0, __word(__type(bytes)))
     return data
 
 def bytes_new(values: ptr) -> ptr:
-    size = list_len(values)
-    data = str_alloc(size)
-    i = 0
+    var size = list_len(values)
+    var data = str_alloc(size)
+    var i = 0
     while i < size:
-        value = __int(list_get(values, i))
+        var value = __int(list_get(values, i))
         if value < 0 or value > 255:
             fail("ValueError", "bytes must be in range(0, 256)")
         __store1(data, 24 + i, value)
@@ -2225,7 +2229,7 @@ def bytes_concat(a: ptr, b: ptr) -> ptr:
     return bytes_tag(str_concat(__str(__word(a)), __str(__word(b))))
 
 def bytes_index(data: ptr, i: int) -> int:
-    size = str_size(__str(__word(data)))
+    var size = str_size(__str(__word(data)))
     if i < 0:
         i = i + size
     if i < 0 or i >= size:
@@ -2233,7 +2237,7 @@ def bytes_index(data: ptr, i: int) -> int:
     return __load1(data, 24 + i)
 
 def bytes_slice(data: ptr, start: int, stop: int) -> ptr:
-    s = __str(__word(data))
+    var s = __str(__word(data))
     start = clamp(start, str_size(s))
     stop = clamp(stop, str_size(s))
     if stop < start:
@@ -2241,7 +2245,7 @@ def bytes_slice(data: ptr, start: int, stop: int) -> ptr:
     return bytes_tag(str_sub(s, start, stop))
 
 def bytes_find(data: ptr, sub: ptr) -> int | none:
-    at = find_bytes(__str(__word(data)), __str(__word(sub)), 0)
+    var at = find_bytes(__str(__word(data)), __str(__word(sub)), 0)
     if at < 0:
         return none
     return at
@@ -2253,8 +2257,8 @@ def bytes_endswith(data: ptr, suffix: ptr) -> bool:
     return str_endswith(__str(__word(data)), __str(__word(suffix)))
 
 def bytes_contains(data: ptr, value: int) -> bool:
-    s = __str(__word(data))
-    i = 0
+    var s = __str(__word(data))
+    var i = 0
     while i < str_size(s):
         if str_byte(s, i) == value:
             return true
@@ -2262,20 +2266,20 @@ def bytes_contains(data: ptr, value: int) -> bool:
     return false
 
 def bytes_split(data: ptr, sep: ptr, maxsplit: int) -> ptr:
-    parts = str_split(__str(__word(data)), __str(__word(sep)), maxsplit)
-    i = 0
+    var parts = str_split(__str(__word(data)), __str(__word(sep)), maxsplit)
+    var i = 0
     while i < list_len(parts):
         bytes_tag(__str(list_get(parts, i)))
         i = i + 1
     return parts
 
 def bytes_hex(data: ptr) -> str:
-    s = __str(__word(data))
-    digits = "0123456789abcdef"
-    text = str_alloc(str_size(s) * 2)
-    i = 0
+    var s = __str(__word(data))
+    var digits = "0123456789abcdef"
+    var text = str_alloc(str_size(s) * 2)
+    var i = 0
     while i < str_size(s):
-        b = str_byte(s, i)
+        var b = str_byte(s, i)
         __store1(text, 24 + i * 2, str_byte(digits, b // 16))
         __store1(text, 25 + i * 2, str_byte(digits, b % 16))
         i = i + 1
@@ -2291,14 +2295,14 @@ def hex_digit(b: int) -> int:
     return -1
 
 def bytes_fromhex(text: str) -> ptr:
-    data = str_alloc(str_size(text) // 2)
-    size = 0
-    i = skip_spaces(text, 0)
+    var data = str_alloc(str_size(text) // 2)
+    var size = 0
+    var i = skip_spaces(text, 0)
     while i < str_size(text):
         if i + 1 == str_size(text):
             fail("ValueError", "invalid hex string")
-        high = hex_digit(str_byte(text, i))
-        low = hex_digit(str_byte(text, i + 1))
+        var high = hex_digit(str_byte(text, i))
+        var low = hex_digit(str_byte(text, i + 1))
         if high < 0 or low < 0:
             fail("ValueError", "invalid hex string")
         __store1(data, 24 + size, high * 16 + low)
@@ -2324,7 +2328,7 @@ def set_list_len(xs: ptr, length: int):
 def list_new(capacity: int) -> ptr:
     if capacity < 4:
         capacity = 4
-    xs = __alloc(32)
+    var xs = __alloc(32)
     __store8(xs, 0, __word(__type(list)))
     __store8(xs, 8, __word(0))
     __store8(xs, 16, __word(capacity))
@@ -2350,9 +2354,9 @@ def list_set(xs: ptr, i: int, value: word):
     __store8(list_slots(xs), list_index(xs, i) * 8, value)
 
 def list_append(xs: ptr, value: word):
-    length = list_len(xs)
+    var length = list_len(xs)
     if length == list_capacity(xs):
-        slots = __alloc(length * 2 * 8)
+        var slots = __alloc(length * 2 * 8)
         memcpy(slots, list_slots(xs), length * 8)
         __store8(xs, 16, __word(length * 2))
         __store8(xs, 24, __word(slots))
@@ -2360,10 +2364,10 @@ def list_append(xs: ptr, value: word):
     set_list_len(xs, length + 1)
 
 def list_pop(xs: ptr) -> word:
-    length = list_len(xs)
+    var length = list_len(xs)
     if length == 0:
         fail("IndexError", "pop from empty list")
-    value = __load8(list_slots(xs), (length - 1) * 8)
+    var value = __load8(list_slots(xs), (length - 1) * 8)
     # Clear the slot so the collector does not keep its value alive.
     __store8(list_slots(xs), (length - 1) * 8, __word(0))
     set_list_len(xs, length - 1)
@@ -2372,29 +2376,29 @@ def list_pop(xs: ptr) -> word:
 # Copying `items` first makes `xs.extend(xs)` append the original elements
 # once (spec §7).
 def list_extend(xs: ptr, items: ptr):
-    copy = list_slice(items, 0, list_len(items))
-    i = 0
+    var copy = list_slice(items, 0, list_len(items))
+    var i = 0
     while i < list_len(copy):
         list_append(xs, list_get(copy, i))
         i = i + 1
 
 def list_reverse(xs: ptr):
-    low = 0
-    high = list_len(xs) - 1
+    var low = 0
+    var high = list_len(xs) - 1
     while low < high:
-        value = list_get(xs, low)
+        var value = list_get(xs, low)
         list_set(xs, low, list_get(xs, high))
         list_set(xs, high, value)
         low = low + 1
         high = high - 1
 
 def list_slice(xs: ptr, start: int, stop: int) -> ptr:
-    length = __int(__load8(xs, 8))
+    var length = __int(__load8(xs, 8))
     start = clamp(start, length)
     stop = clamp(stop, length)
     if stop < start:
         stop = start
-    result = list_new(stop - start)
+    var result = list_new(stop - start)
     if stop > start:
         memcpy(__ptr(__load8(result, 24)), __offset(__ptr(__load8(xs, 24)), start * 8), (stop - start) * 8)
     set_list_len(result, stop - start)
@@ -2413,7 +2417,7 @@ def slots_equal(a: word, b: word, kind: int) -> bool:
     return __int(a) == __int(b)
 
 def list_contains(xs: ptr, value: word, kind: int) -> bool:
-    i = 0
+    var i = 0
     while i < list_len(xs):
         if slots_equal(list_get(xs, i), value, kind):
             return true
@@ -2425,8 +2429,8 @@ def list_contains(xs: ptr, value: word, kind: int) -> bool:
 # otherwise. A tuple's own kinds describe its positions.
 def slots_order(a: word, b: word, kind: int) -> int:
     if kind == 1:
-        x = __float(a)
-        y = __float(b)
+        var x = __float(a)
+        var y = __float(b)
         if x < y:
             return -1
         if x > y:
@@ -2435,11 +2439,11 @@ def slots_order(a: word, b: word, kind: int) -> int:
     if kind == 2:
         return str_compare(__str(a), __str(b))
     if kind == 4:
-        left = __ptr(a)
-        kinds = __ptr(__load8(left, 16))
-        i = 0
+        var left = __ptr(a)
+        var kinds = __ptr(__load8(left, 16))
+        var i = 0
         while i < tuple_len(left):
-            order = slots_order(tuple_get(left, i), tuple_get(__ptr(b), i), __int(__load8(kinds, i * 8)))
+            var order = slots_order(tuple_get(left, i), tuple_get(__ptr(b), i), __int(__load8(kinds, i * 8)))
             if order != 0:
                 return order
             i = i + 1
@@ -2454,9 +2458,9 @@ def slot_has_nan(value: word, kind: int) -> bool:
     if kind == 1:
         return __float(value) != __float(value)
     if kind == 4:
-        t = __ptr(value)
-        kinds = __ptr(__load8(t, 16))
-        i = 0
+        var t = __ptr(value)
+        var kinds = __ptr(__load8(t, 16))
+        var i = 0
         while i < tuple_len(t):
             if slot_has_nan(tuple_get(t, i), __int(__load8(kinds, i * 8))):
                 return true
@@ -2468,7 +2472,7 @@ def slot_has_nan(value: word, kind: int) -> bool:
 def list_changed(xs: ptr, snapshot: ptr) -> bool:
     if list_len(xs) != list_len(snapshot):
         return true
-    i = 0
+    var i = 0
     while i < list_len(xs):
         if __int(list_get(xs, i)) != __int(list_get(snapshot, i)):
             return true
@@ -2480,30 +2484,30 @@ def list_changed(xs: ptr, snapshot: ptr) -> bool:
 # and `reverse` swaps only the comparison, so equal keys keep their order
 # either way. A NaN key fails before anything moves.
 def list_sort(xs: ptr, keys: ptr, kind: int, reverse: bool):
-    n = list_len(keys)
-    i = 0
+    var n = list_len(keys)
+    var i = 0
     while i < n:
         if slot_has_nan(list_get(keys, i), kind):
             fail("ValueError", "cannot sort NaN")
             return
         i = i + 1
-    order = __alloc_atomic(n * 8)
-    spare = __alloc_atomic(n * 8)
+    var order = __alloc_atomic(n * 8)
+    var spare = __alloc_atomic(n * 8)
     i = 0
     while i < n:
         __store8(order, i * 8, __word(i))
         i = i + 1
-    width = 1
+    var width = 1
     while width < n:
-        start = 0
+        var start = 0
         while start < n:
             merge_runs(order, spare, keys, kind, reverse, start, width)
             start = start + 2 * width
-        swap = order
+        var swap = order
         order = spare
         spare = swap
         width = width * 2
-    values = list_slice(xs, 0, n)
+    var values = list_slice(xs, 0, n)
     i = 0
     while i < n:
         list_set(xs, i, list_get(values, __int(__load8(order, i * 8))))
@@ -2513,20 +2517,20 @@ def list_sort(xs: ptr, keys: ptr, kind: int, reverse: bool):
 # after it into `target`, taking from the second run only when its key
 # sorts strictly first.
 def merge_runs(source: ptr, target: ptr, keys: ptr, kind: int, reverse: bool, start: int, width: int):
-    n = list_len(keys)
-    middle = start + width
+    var n = list_len(keys)
+    var middle = start + width
     if middle > n:
         middle = n
-    stop = middle + width
+    var stop = middle + width
     if stop > n:
         stop = n
-    left = start
-    right = middle
-    at = start
+    var left = start
+    var right = middle
+    var at = start
     while at < stop:
-        from_right = left == middle
+        var from_right = left == middle
         if not from_right and right < stop:
-            order = slots_order(list_get(keys, __int(__load8(source, right * 8))), list_get(keys, __int(__load8(source, left * 8))), kind)
+            var order = slots_order(list_get(keys, __int(__load8(source, right * 8))), list_get(keys, __int(__load8(source, left * 8))), kind)
             from_right = order < 0 and not reverse or order > 0 and reverse
         if from_right:
             __store8(target, at * 8, __load8(source, right * 8))
@@ -2543,9 +2547,10 @@ def merge_runs(source: ptr, target: ptr, keys: ptr, kind: int, reverse: bool, st
 # The size of the valid UTF-8 code point at byte `i` of the `size` bytes at
 # `p`, or 0 if none starts there.
 def utf8_char_size(p: ptr, i: int, size: int) -> int:
-    lead = __load1(p, i)
-    low = 128
-    high = 191
+    var lead = __load1(p, i)
+    var low = 128
+    var high = 191
+    var count: int
     if lead < 128:
         return 1
     else if lead < 194:
@@ -2568,10 +2573,10 @@ def utf8_char_size(p: ptr, i: int, size: int) -> int:
         return 0
     if i + count > size:
         return 0
-    second = __load1(p, i + 1)
+    var second = __load1(p, i + 1)
     if second < low or second > high:
         return 0
-    j = 2
+    var j = 2
     while j < count:
         if not is_continuation(__load1(p, i + j)):
             return 0
@@ -2579,9 +2584,9 @@ def utf8_char_size(p: ptr, i: int, size: int) -> int:
     return count
 
 def utf8_valid(p: ptr, size: int) -> bool:
-    i = 0
+    var i = 0
     while i < size:
-        count = utf8_char_size(p, i, size)
+        var count = utf8_char_size(p, i, size)
         if count == 0:
             return false
         i = i + count
@@ -2592,7 +2597,7 @@ def utf8_valid(p: ptr, size: int) -> bool:
 def str_from_bytes(p: ptr, size: int) -> str:
     if not utf8_valid(p, size):
         fail("ValueError", "invalid UTF-8")
-    s = str_alloc(size)
+    var s = str_alloc(size)
     memcpy(__offset(s, 24), p, size)
     return __str(__word(s))
 
@@ -2604,7 +2609,7 @@ def stdin_buffer() -> ptr:
     return __ptr(__word(0))
 
 def file_buffer() -> ptr:
-    buffer = __alloc_atomic(4120)
+    var buffer = __alloc_atomic(4120)
     __store8(buffer, 0, __word(0))
     __store8(buffer, 8, __word(0))
     __store8(buffer, 16, __word(0))
@@ -2612,7 +2617,7 @@ def file_buffer() -> ptr:
 
 def fill_buffer(fd: int, buffer: ptr, path: str, fatal: bool) -> int:
     __store8(buffer, 16, __word(1))
-    count = read(fd, __offset(buffer, 24), 4096)
+    var count = read(fd, __offset(buffer, 24), 4096)
     if count < 0:
         if fatal:
             eprint_str("error: cannot read input: " + os_reason())
@@ -2623,39 +2628,39 @@ def fill_buffer(fd: int, buffer: ptr, path: str, fatal: bool) -> int:
     return count
 
 def file_read(fd: int, buffer: ptr, size: int, path: str) -> ptr:
-    start = __int(__load8(buffer, 0))
-    stop = __int(__load8(buffer, 8))
+    var start = __int(__load8(buffer, 0))
+    var stop = __int(__load8(buffer, 8))
     if start == stop:
         stop = fill_buffer(fd, buffer, path, false)
         start = 0
-    count = stop - start
+    var count = stop - start
     if count > size:
         count = size
-    data = str_alloc(count)
+    var data = str_alloc(count)
     memcpy(__offset(data, 24), __offset(buffer, 24 + start), count)
     __store8(buffer, 0, __word(start + count))
     return bytes_tag(__str(__word(data)))
 
 def file_readline(fd: int, buffer: ptr, path: str, fatal: bool) -> str | none:
-    capacity = 128
-    size = 0
-    line = __alloc_atomic(capacity)
+    var capacity = 128
+    var size = 0
+    var line = __alloc_atomic(capacity)
     while true:
-        start = __int(__load8(buffer, 0))
-        stop = __int(__load8(buffer, 8))
+        var start = __int(__load8(buffer, 0))
+        var stop = __int(__load8(buffer, 8))
         if start == stop:
             stop = fill_buffer(fd, buffer, path, fatal)
             start = 0
             if stop == 0:
                 break
-        byte = __load1(buffer, 24 + start)
+        var byte = __load1(buffer, 24 + start)
         __store8(buffer, 0, __word(start + 1))
         if byte == 10:
             if size > 0 and __load1(line, size - 1) == 13:
                 size = size - 1
             return str_from_bytes(line, size)
         if size == capacity:
-            larger = __alloc_atomic(capacity * 2)
+            var larger = __alloc_atomic(capacity * 2)
             memcpy(larger, line, size)
             line = larger
             capacity = capacity * 2
@@ -2674,10 +2679,10 @@ def sys_arguments() -> list[str]:
     return []
 
 def sys_args(argc: int, argv: ptr) -> ptr:
-    args = list_new(argc)
-    i = 1
+    var args = list_new(argc)
+    var i = 1
     while i < argc:
-        arg = __ptr(__load8(argv, i * 8))
+        var arg = __ptr(__load8(argv, i * 8))
         list_append(args, __word(str_from_bytes(arg, strlen(arg))))
         i = i + 1
     return args
@@ -2712,12 +2717,12 @@ def clear_errno():
 # The strerror text for the current errno. It is read before anything else
 # runs, since allocating may change errno.
 def os_reason() -> str:
-    text = strerror(errno())
+    var text = strerror(errno())
     return str_from_bytes(text, strlen(text))
 
 # Reports `cannot <action> <path>: <reason>` as a fatal OSError.
 def fail_os(action: str, path: str):
-    reason = os_reason()
+    var reason = os_reason()
     fail("OSError", "cannot " + action + " " + path + ": " + reason)
 
 # open flags. O_RDONLY is 0 on both systems.
@@ -2734,46 +2739,46 @@ def append_flags() -> int:
     return 1 + 512 + 8
 
 def fs_read_file(path: str) -> str:
-    data = fs_read_data(path)
+    var data = fs_read_data(path)
     return str_from_bytes(__offset(data, 24), __int(__load8(data, 8)))
 
 # Raw bytes share the string layout; the caller decides whether to decode.
 def fs_read_data(path: str) -> ptr:
-    fd = open(path_bytes(path), 0)
+    var fd = open(path_bytes(path), 0)
     if fd < 0:
         fail_os("read", path)
-    capacity = 4096
-    size = 0
-    buf = __alloc_atomic(capacity)
-    count = read(fd, buf, capacity)
+    var capacity = 4096
+    var size = 0
+    var buf = __alloc_atomic(capacity)
+    var count = read(fd, buf, capacity)
     while count != 0:
         if count < 0:
-            reason = os_reason()
+            var reason = os_reason()
             close(fd)
             fail("OSError", "cannot read " + path + ": " + reason)
         size = size + count
         if size == capacity:
-            larger = __alloc_atomic(capacity * 2)
+            var larger = __alloc_atomic(capacity * 2)
             memcpy(larger, buf, size)
             buf = larger
             capacity = capacity * 2
         count = read(fd, __offset(buf, size), capacity - size)
     if close(fd) < 0:
         fail_os("read", path)
-    data = str_alloc(size)
+    var data = str_alloc(size)
     memcpy(__offset(data, 24), buf, size)
     return data
 
 def fs_write_file(path: str, text: str):
     # 438 is mode 0666, which the umask then restricts.
-    fd = open(path_bytes(path), write_flags(), 438)
+    var fd = open(path_bytes(path), write_flags(), 438)
     if fd < 0:
         fail_os("write", path)
-    done = 0
+    var done = 0
     while done < str_size(text):
-        written = write(fd, __offset(str_bytes(text), done), str_size(text) - done)
+        var written = write(fd, __offset(str_bytes(text), done), str_size(text) - done)
         if written < 0:
-            reason = os_reason()
+            var reason = os_reason()
             close(fd)
             fail("OSError", "cannot write " + path + ": " + reason)
         done = done + written
@@ -2785,14 +2790,14 @@ def fs_write_file(path: str, text: str):
 def fs_exists(path: str) -> bool:
     if access(path_bytes(path), 0) == 0:
         return true
-    code = errno()
+    var code = errno()
     if code != 2 and code != 20:
         fail_os("stat", path)
     return false
 
 # PATH_MAX is 4096 on Linux and 1024 on macOS, so 4096 bytes hold any result.
 def fs_realpath(path: str) -> str:
-    buf = __alloc_atomic(4096)
+    var buf = __alloc_atomic(4096)
     if __addr_is_null(realpath(path_bytes(path), buf)):
         fail_os("resolve", path)
     return str_from_bytes(buf, strlen(buf))
@@ -2842,27 +2847,27 @@ def net_timed_out(what: str, timeout: float | none):
     fail("TimeoutError", what + " timed out after " + float_to_str(timeout) + " seconds")
 
 def net_reason(code: int) -> str:
-    text = strerror(code)
+    var text = strerror(code)
     return str_from_bytes(text, strlen(text))
 
 def net_resolve(host: str, port: int) -> list[NetAddress]:
-    layout = net_layout()
+    var layout = net_layout()
     # addrinfo is 48 bytes on both systems; only ai_addr's offset differs.
-    hints = __alloc_atomic(48)
+    var hints = __alloc_atomic(48)
     for offset in range(0, 48, 8):
         __store8(hints, offset, __word(0))
     __store4(hints, 8, 1)
-    result = __alloc(8)
-    code = getaddrinfo(str_bytes(host), str_bytes(str(port)), hints, result)
+    var result = __alloc(8)
+    var code = getaddrinfo(str_bytes(host), str_bytes(str(port)), hints, result)
     if code != 0:
-        text = gai_strerror(code)
+        var text = gai_strerror(code)
         fail("OSError", "cannot resolve " + host + ": " + str_from_bytes(text, strlen(text)))
-    addresses: list[NetAddress] = []
-    first = __ptr(__load8(result, 0))
-    entry = first
+    var addresses: list[NetAddress] = []
+    var first = __ptr(__load8(result, 0))
+    var entry = first
     while not __addr_is_null(entry):
-        size = __load4(entry, 16)
-        data = __alloc_atomic(size)
+        var size = __load4(entry, 16)
+        var data = __alloc_atomic(size)
         memcpy(data, __ptr(__load8(entry, layout.address_offset)), size)
         addresses.append(NetAddress(__load4(entry, 4), data, size))
         entry = __ptr(__load8(entry, 40))
@@ -2872,10 +2877,10 @@ def net_resolve(host: str, port: int) -> list[NetAddress]:
 # Accepted sockets need the same flags and SIGPIPE protection as new ones.
 # Return an errno value before cleanup can overwrite it.
 def net_configure(fd: int) -> int:
-    layout = net_layout()
+    var layout = net_layout()
     if fcntl(fd, 2, 1) < 0:
         return errno()
-    flags = fcntl(fd, 3)
+    var flags = fcntl(fd, 3)
     if flags < 0:
         return errno()
     if flags // layout.nonblocking % 2 == 0:
@@ -2883,25 +2888,25 @@ def net_configure(fd: int) -> int:
     if fcntl(fd, 4, flags) < 0:
         return errno()
     if layout.no_sigpipe != 0:
-        enabled = __alloc_atomic(4)
+        var enabled = __alloc_atomic(4)
         __store4(enabled, 0, 1)
         if setsockopt(fd, layout.socket_level, layout.no_sigpipe, enabled, 4) < 0:
             return errno()
     return 0
 
 def net_socket(family: int) -> int:
-    fd = socket(family, 1, 0)
+    var fd = socket(family, 1, 0)
     if fd >= 0:
-        code = net_configure(fd)
+        var code = net_configure(fd)
         if code != 0:
             close(fd)
             fail("OSError", "cannot configure socket: " + net_reason(code))
     return fd
 
 def net_socket_error(fd: int) -> int:
-    layout = net_layout()
-    value = __alloc_atomic(4)
-    size = __alloc_atomic(4)
+    var layout = net_layout()
+    var value = __alloc_atomic(4)
+    var size = __alloc_atomic(4)
     __store4(size, 0, 4)
     if getsockopt(fd, layout.socket_level, layout.socket_error, value, size) < 0:
         return errno()
@@ -2909,14 +2914,14 @@ def net_socket_error(fd: int) -> int:
 
 def net_pollfd(fd: int, events: int) -> ptr:
     # pollfd is an int and two shorts on both systems.
-    value = __alloc_atomic(8)
+    var value = __alloc_atomic(8)
     __store4(value, 0, fd)
     __store4(value, 4, events)
     return value
 
 def net_local_port(fd: int) -> int:
-    address = __alloc_atomic(128)
-    size = __alloc_atomic(4)
+    var address = __alloc_atomic(128)
+    var size = __alloc_atomic(4)
     __store4(size, 0, 128)
     if getsockname(fd, address, size) < 0:
         fail("OSError", "cannot get local port: " + os_reason())
@@ -2926,12 +2931,12 @@ def net_local_port(fd: int) -> int:
 # A negative count means the nonblocking operation needs readiness.
 def net_try_recv(fd: int, buffer: ptr, size: int) -> int:
     while true:
-        count = recv(fd, __offset(buffer, 24), size, 0)
+        var count = recv(fd, __offset(buffer, 24), size, 0)
         if count >= 0:
             __store8(buffer, 8, __word(count))
             __store1(buffer, 24 + count, 0)
             return count
-        code = errno()
+        var code = errno()
         if code == net_layout().again:
             return -1
         if code != 4:
@@ -2944,10 +2949,10 @@ def net_received(buffer: ptr) -> word:
 
 def net_try_send(fd: int, data: ptr, offset: int, size: int) -> int:
     while true:
-        count = send(fd, __offset(data, 24 + offset), size - offset, net_layout().no_signal)
+        var count = send(fd, __offset(data, 24 + offset), size - offset, net_layout().no_signal)
         if count >= 0:
             return count
-        code = errno()
+        var code = errno()
         if code == net_layout().again:
             return -1
         if code != 4:
@@ -2957,7 +2962,8 @@ def net_try_send(fd: int, data: ptr, offset: int, size: int) -> int:
 
 def net_try_accept(fd: int) -> int:
     while true:
-        accepted = accept(fd, __ptr(__word(0)), __ptr(__word(0)))
+        var accepted = accept(fd, __ptr(__word(0)), __ptr(__word(0)))
+        var code: int
         if accepted >= 0:
             code = net_configure(accepted)
             if code != 0:
@@ -2984,7 +2990,7 @@ class NetConnect:
 # Returns true when connected, false when the current fd needs POLLOUT.
 def net_connect_step(state: NetConnect) -> bool:
     if state.fd >= 0:
-        code = net_socket_error(state.fd)
+        var code = net_socket_error(state.fd)
         if code == 0:
             return true
         if code == net_layout().in_progress or code == net_layout().again:
@@ -2993,16 +2999,16 @@ def net_connect_step(state: NetConnect) -> bool:
         close(state.fd)
         state.fd = -1
     while state.next < len(state.addresses):
-        address = state.addresses[state.next]
+        var address = state.addresses[state.next]
         state.next = state.next + 1
         state.fd = net_socket(address.family)
         if state.fd < 0:
             state.reason = os_reason()
         else:
-            status = connect(state.fd, address.data, address.size)
+            var status = connect(state.fd, address.data, address.size)
             if status == 0:
                 return true
-            code = errno()
+            var code = errno()
             if code == net_layout().in_progress or code == 4:
                 return false
             state.reason = net_reason(code)
@@ -3016,13 +3022,13 @@ def net_listen(host: str, port: int, backlog: int) -> int:
     if backlog < 1:
         fail("ValueError", "backlog must be positive")
         return -1
-    addresses = net_resolve(host, port)
-    layout = net_layout()
-    enabled = __alloc_atomic(4)
+    var addresses = net_resolve(host, port)
+    var layout = net_layout()
+    var enabled = __alloc_atomic(4)
     __store4(enabled, 0, 1)
-    reason = "no addresses"
+    var reason = "no addresses"
     for address in addresses:
-        fd = net_socket(address.family)
+        var fd = net_socket(address.family)
         if fd < 0:
             reason = os_reason()
         else:
@@ -3051,7 +3057,7 @@ def fs_layout() -> FsLayout:
 
 def fs_stat(path: ptr, buf: ptr, follow_symlinks: bool) -> int:
     if __os == "linux":
-        flags = 0
+        var flags = 0
         if not follow_symlinks:
             flags = 256
         # AT_FDCWD, AT_SYMLINK_NOFOLLOW, and STATX_BASIC_STATS.
@@ -3064,11 +3070,11 @@ def fs_stat(path: ptr, buf: ptr, follow_symlinks: bool) -> int:
 def random_secure_bytes(size: int) -> ptr:
     if size < 0:
         fail("ValueError", "size must be nonnegative")
-    data = str_alloc(size)
-    offset = 0
+    var data = str_alloc(size)
+    var offset = 0
     # getentropy accepts at most 256 bytes per call on Linux and macOS.
     while offset < size:
-        count = size - offset
+        var count = size - offset
         if count > 256:
             count = 256
         if getentropy(__offset(data, 24 + offset), count) != 0:
@@ -3079,9 +3085,9 @@ def random_secure_bytes(size: int) -> ptr:
 # Whether `source` and `destination` name the same existing file, following
 # symlinks.
 def fs_same_file(source: str, destination: str) -> bool:
-    layout = fs_layout()
-    first = __alloc_atomic(layout.buffer_size)
-    second = __alloc_atomic(layout.buffer_size)
+    var layout = fs_layout()
+    var first = __alloc_atomic(layout.buffer_size)
+    var second = __alloc_atomic(layout.buffer_size)
     if fs_stat(str_bytes(source), first, true) != 0 or fs_stat(str_bytes(destination), second, true) != 0:
         return false
     if __int(__load8(first, layout.inode_offset)) != __int(__load8(second, layout.inode_offset)):
@@ -3100,7 +3106,7 @@ def http_library_name() -> str:
     return "libcurl.so.4"
 
 def http_ipv6(host: str) -> bool:
-    family = 10
+    var family = 10
     if __os == "darwin":
         family = 30
     return inet_pton(family, str_bytes(host), __alloc_atomic(16)) == 1
@@ -3121,9 +3127,9 @@ def environment() -> ptr:
 # The absolute path of the running executable, with symlinks resolved.
 def executable_path() -> str:
     if __os == "darwin":
-        size = __alloc_atomic(8)
+        var size = __alloc_atomic(8)
         __store4(size, 0, 4096)
-        buf = __alloc_atomic(4096)
+        var buf = __alloc_atomic(4096)
         if _NSGetExecutablePath(buf, size) != 0:
             fail("OSError", "cannot find the executable's path")
         return fs_realpath(str_from_bytes(buf, strlen(buf)))
@@ -3139,8 +3145,8 @@ class Child:
     code: int | none = none
 
 def process_error(program: str, code: int):
-    text = strerror(code)
-    reason = str_from_bytes(text, strlen(text))
+    var text = strerror(code)
+    var reason = str_from_bytes(text, strlen(text))
     fail("OSError", "cannot run " + program + ": " + reason)
 
 def duplicate_command() -> int:
@@ -3160,10 +3166,10 @@ def would_block(code: int) -> bool:
     return code == 35
 
 def process_nonblocking(fd: int):
-    flags = fcntl(fd, 3)
+    var flags = fcntl(fd, 3)
     if flags < 0:
         fail_os("configure", "pipe")
-    flag = nonblocking_flag()
+    var flag = nonblocking_flag()
     if flags % (flag * 2) < flag:
         flags = flags + flag
     if fcntl(fd, 4, flags) < 0:
@@ -3173,11 +3179,11 @@ def close_on_exec(fd: int) -> bool:
     return fcntl(fd, 2, 1) == 0
 
 def process_pipe() -> list[int]:
-    fds = __alloc_atomic(8)
+    var fds = __alloc_atomic(8)
     if pipe(fds) < 0:
         fail_os("create", "pipe")
-    result = [__load4(fds, 0), __load4(fds, 4)]
-    code = 0
+    var result = [__load4(fds, 0), __load4(fds, 4)]
+    var code = 0
     for fd in result:
         if not close_on_exec(fd):
             code = errno()
@@ -3185,17 +3191,17 @@ def process_pipe() -> list[int]:
     if code != 0:
         for fd in result:
             close(fd)
-        text = strerror(code)
+        var text = strerror(code)
         fail("OSError", "cannot configure pipe: " + str_from_bytes(text, strlen(text)))
     return result
 
 # Snapshot the bytes present after the direct child exits. Descendants may
 # keep writing, so draining until EOF or EAGAIN could wait indefinitely.
 def process_available(fd: int) -> int:
-    request = 21531
+    var request = 21531
     if __os == "darwin":
         request = 1074030207
-    count = __alloc_atomic(4)
+    var count = __alloc_atomic(4)
     if ioctl(fd, request, count) < 0:
         fail_os("read", "pipe")
     return __load4(count, 0)
@@ -3203,8 +3209,8 @@ def process_available(fd: int) -> int:
 def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, redirects: list[int]) -> Child:
     if len(args) == 0 or args[0] == "":
         fail("ValueError", "args must contain a nonempty executable name")
-    argv = __alloc((len(args) + 1) * 8)
-    i = 0
+    var argv = __alloc((len(args) + 1) * 8)
+    var i = 0
     for arg in args:
         if strlen(str_bytes(arg)) != str_size(arg):
             fail("ValueError", "argument contains a NUL character")
@@ -3213,18 +3219,19 @@ def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, 
     __store8(argv, i * 8, __word(0))
     if cwd is not none:
         path_bytes(cwd)
-    search = "/usr/bin:/bin"
-    strings: list[str] = []
+    var search = "/usr/bin:/bin"
+    var strings: list[str] = []
+    var envp: ptr
     if env is none:
         envp = environment()
-        pointer = getenv(str_bytes("PATH"))
+        var pointer = getenv(str_bytes("PATH"))
         if not __addr_is_null(pointer):
             search = str_from_bytes(pointer, strlen(pointer))
     else:
         for name in env:
             if name == "" or str_contains(name, "=") or str_contains(name, "\x00"):
                 fail("ValueError", "invalid environment variable name")
-            value = env[name]
+            var value = env[name]
             if str_contains(value, "\x00"):
                 fail("ValueError", "environment value contains a NUL character")
             strings.append(name + "=" + value)
@@ -3236,7 +3243,7 @@ def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, 
             __store8(envp, i * 8, __word(str_bytes(text)))
             i = i + 1
         __store8(envp, i * 8, __word(0))
-    candidates: list[str] = []
+    var candidates: list[str] = []
     if str_contains(args[0], "/"):
         candidates.append(args[0])
     else:
@@ -3246,19 +3253,19 @@ def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, 
             candidates.append(directory + "/" + args[0])
     # The opaque spawn structures fit in 512 bytes on Linux and Darwin;
     # sigset_t needs 128. No Willow code runs in the spawned child.
-    actions = __alloc_atomic(512)
-    attributes = __alloc_atomic(512)
-    signals = __alloc_atomic(128)
-    code = posix_spawn_file_actions_init(actions)
+    var actions = __alloc_atomic(512)
+    var attributes = __alloc_atomic(512)
+    var signals = __alloc_atomic(128)
+    var code = posix_spawn_file_actions_init(actions)
     if code != 0:
         process_error(args[0], code)
     code = posix_spawnattr_init(attributes)
     if code != 0:
         posix_spawn_file_actions_destroy(actions)
         process_error(args[0], code)
-    copies: list[int] = []
+    var copies: list[int] = []
     for target in range(3):
-        source = redirects[target]
+        var source = redirects[target]
         if source >= 0:
             if source < 3 and source != target:
                 source = fcntl(source, duplicate_command(), 3)
@@ -3277,9 +3284,9 @@ def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, 
         code = posix_spawnattr_setsigdefault(attributes, signals)
     if code == 0:
         code = posix_spawnattr_setflags(attributes, 4)
-    pid = __alloc_atomic(4)
+    var pid = __alloc_atomic(4)
     if code == 0:
-        denied = false
+        var denied = false
         for candidate in candidates:
             code = posix_spawn(pid, str_bytes(candidate), actions, attributes, argv, envp)
             if code == 0:
@@ -3301,18 +3308,18 @@ def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, 
 def process_poll(child: Child, block: bool) -> int | none:
     if child.code is not none:
         return child.code
-    options = 1
+    var options = 1
     if block:
         options = 0
-    status = __alloc_atomic(4)
-    result = waitpid(child.pid, status, options)
+    var status = __alloc_atomic(4)
+    var result = waitpid(child.pid, status, options)
     while result < 0:
         if errno() != 4:
             fail_os("wait for", int_to_str(child.pid))
         result = waitpid(child.pid, status, options)
     if result == 0:
         return none
-    value = __load4(status, 0)
+    var value = __load4(status, 0)
     if value % 128 == 0:
         child.code = value // 256 % 256
     else:
@@ -3326,8 +3333,8 @@ def process_signal(child: Child, sig: int):
 
 # The compiler's driver keeps its original 128 + signal convention.
 def run(args: list[str]) -> int:
-    child = process_start(args, none, none, [-1, -1, -1])
-    code = process_poll(child, true)
+    var child = process_start(args, none, none, [-1, -1, -1])
+    var code = process_poll(child, true)
     assert code is not none, "blocking wait did not reap the child"
     if code < 0:
         return 128 - code
@@ -3338,19 +3345,19 @@ def run(args: list[str]) -> int:
 # symmetric, so both signs share the limit 9223372036854775807. The first
 # byte of an empty string is its trailing zero byte.
 def str_to_int(s: str) -> int:
-    size = str_size(s)
-    negative = str_byte(s, 0) == 45
-    i = 0
+    var size = str_size(s)
+    var negative = str_byte(s, 0) == 45
+    var i = 0
     if negative or str_byte(s, 0) == 43:
         i = 1
     if i == size:
         fail("ValueError", "cannot convert str to int")
-    value = 0
+    var value = 0
     while i < size:
-        b = str_byte(s, i)
+        var b = str_byte(s, i)
         if not is_digit(b):
             fail("ValueError", "cannot convert str to int")
-        digit = b - 48
+        var digit = b - 48
         if value > 922337203685477580 or (value == 922337203685477580 and digit > 7):
             fail("ValueError", "cannot convert str to int")
         value = value * 10 + digit
@@ -3367,7 +3374,7 @@ def enum_to_str(descriptor: ptr, ordinal: int) -> str:
 # A box is a header word and a payload word. Only scalars are boxed, and the
 # header points at static data, so the collector need not scan a box.
 def box(descriptor: ptr, value: word) -> ptr:
-    b = __alloc_atomic(16)
+    var b = __alloc_atomic(16)
     __store8(b, 0, __word(descriptor))
     __store8(b, 8, value)
     return b
@@ -3380,14 +3387,14 @@ def is_instance(value: ptr, descriptor: ptr) -> bool:
 
 # __alloc returns zeroed memory, so the fields start as zero.
 def object_new(descriptor: ptr, fields: int) -> ptr:
-    object = __alloc(8 + fields * 8)
+    var object = __alloc(8 + fields * 8)
     __store8(object, 0, __word(descriptor))
     return object
 
 # Positions keep their static representation. The equality kinds describe
 # those slots so union equality can compare tuples without static types.
 def tuple_new(length: int, kinds: ptr) -> ptr:
-    value = __alloc(24 + length * 8)
+    var value = __alloc(24 + length * 8)
     __store8(value, 0, __word(__type(tuple)))
     __store8(value, 8, __word(length))
     __store8(value, 16, __word(kinds))
@@ -3405,14 +3412,15 @@ def tuple_set(value: ptr, position: int, item: word):
 def tuple_eq(a: ptr, b: ptr) -> bool:
     if tuple_len(a) != tuple_len(b):
         return false
-    a_kinds = __ptr(__load8(a, 16))
-    b_kinds = __ptr(__load8(b, 16))
-    i = 0
+    var a_kinds = __ptr(__load8(a, 16))
+    var b_kinds = __ptr(__load8(b, 16))
+    var i = 0
     while i < tuple_len(a):
-        left = tuple_get(a, i)
-        right = tuple_get(b, i)
-        a_kind = __int(__load8(a_kinds, i * 8))
-        b_kind = __int(__load8(b_kinds, i * 8))
+        var left = tuple_get(a, i)
+        var right = tuple_get(b, i)
+        var a_kind = __int(__load8(a_kinds, i * 8))
+        var b_kind = __int(__load8(b_kinds, i * 8))
+        var equal: bool
         if a_kind == b_kind:
             equal = slots_equal(left, right, a_kind)
         else:
@@ -3449,7 +3457,7 @@ def dict_index(d: ptr) -> ptr:
     return __ptr(__load8(d, 56))
 
 def dict_new(key_kind: int) -> ptr:
-    d = __alloc(72)
+    var d = __alloc(72)
     __store8(d, 0, __word(__type(dict)))
     set_dict_slot(d, 1, key_kind)
     dict_allocate(d, 8)
@@ -3460,11 +3468,11 @@ def dict_allocate(d: ptr, capacity: int):
     __store8(d, 32, __word(__alloc(capacity * 24)))
     set_dict_slot(d, 5, 0)
     set_dict_slot(d, 6, capacity)
-    size = 1
+    var size = 1
     while size < capacity * 2:
         size = size * 2
-    index = __alloc_atomic(size * 8)
-    i = 0
+    var index = __alloc_atomic(size * 8)
+    var i = 0
     while i < size:
         __store8(index, i * 8, __word(-1))
         i = i + 1
@@ -3491,21 +3499,22 @@ def dict_value_at(d: ptr, entry: int) -> word:
 # `h` in [0, 2^31], so the next multiply stays below 2^62, and the final fold
 # returns a non-negative result below 2^32.
 def str_hash(s: str) -> int:
-    p = __ptr(__word(s))
-    cached = __int(__load8(p, 16))
+    var p = __ptr(__word(s))
+    var cached = __int(__load8(p, 16))
     if cached != 0:
         return cached - 1
-    n = __int(__load8(__ptr(__word(s)), 8))
-    b = __offset(__ptr(__word(s)), 24)
-    h = n
-    i = 0
+    var n = __int(__load8(__ptr(__word(s)), 8))
+    var b = __offset(__ptr(__word(s)), 24)
+    var h = n
+    var i = 0
+    var x: int
     while i + 4 <= n:
         x = h * 1103515245 + __load4(b, i)
         x = x % 2147483648 + x // 2147483648
         h = x % 2147483648 + x // 2147483648
         i = i + 4
     if i < n:
-        tail = 0
+        var tail = 0
         while i < n:
             tail = tail * 256 + __load1(b, i)
             i = i + 1
@@ -3513,7 +3522,7 @@ def str_hash(s: str) -> int:
         x = x % 2147483648 + x // 2147483648
         h = x % 2147483648 + x // 2147483648
     x = h * 1000003 + n
-    hash = x % 2147483648 + x // 2147483648
+    var hash = x % 2147483648 + x // 2147483648
     __store8(p, 16, __word(hash + 1))
     return hash
 
@@ -3525,15 +3534,15 @@ def dict_hash(kind: int, key: word) -> int:
 
 # The entry holding `key`, whose hash is `hash`, or -1.
 def dict_lookup(d: ptr, key: word, hash: int) -> int:
-    entries = __ptr(__load8(d, 32))
-    index = __ptr(__load8(d, 56))
-    size = __int(__load8(d, 64))
-    kind = __int(__load8(d, 8))
-    slot = hash % size
-    entry = __int(__load8(index, slot * 8))
+    var entries = __ptr(__load8(d, 32))
+    var index = __ptr(__load8(d, 56))
+    var size = __int(__load8(d, 64))
+    var kind = __int(__load8(d, 8))
+    var slot = hash % size
+    var entry = __int(__load8(index, slot * 8))
     while entry != -1:
         if __int(__load8(entries, entry * 24 + 16)) == hash:
-            stored = __load8(entries, entry * 24)
+            var stored = __load8(entries, entry * 24)
             if kind == 2:
                 if __int(stored) == __int(key) or str_eq(__str(stored), __str(key)):
                     return entry
@@ -3551,15 +3560,15 @@ def dict_find(d: ptr, key: word) -> int:
 # Appends a live entry with its precomputed hash, which the caller has made
 # room for, and indexes it.
 def dict_append(d: ptr, key: word, value: word, hash: int):
-    entry = dict_slot(d, 5)
-    entries = dict_entries(d)
+    var entry = dict_slot(d, 5)
+    var entries = dict_entries(d)
     __store8(entries, entry * 24, key)
     __store8(entries, entry * 24 + 8, value)
     __store8(entries, entry * 24 + 16, __word(hash))
     set_dict_slot(d, 5, entry + 1)
-    index = dict_index(d)
-    size = dict_slot(d, 8)
-    slot = hash % size
+    var index = dict_index(d)
+    var size = dict_slot(d, 8)
+    var slot = hash % size
     while __int(__load8(index, slot * 8)) != -1:
         slot = slot + 1
         if slot == size:
@@ -3568,20 +3577,20 @@ def dict_append(d: ptr, key: word, value: word, hash: int):
 
 # Rebuilds `d` with room for twice its live keys, dropping dead entries.
 def dict_grow(d: ptr):
-    entries = dict_entries(d)
-    used = dict_slot(d, 5)
+    var entries = dict_entries(d)
+    var used = dict_slot(d, 5)
     dict_allocate(d, dict_len(d) * 2 + 8)
-    entry = 0
+    var entry = 0
     while entry < used:
-        hash = __int(__load8(entries, entry * 24 + 16))
+        var hash = __int(__load8(entries, entry * 24 + 16))
         if hash >= 0:
             dict_append(d, __load8(entries, entry * 24), __load8(entries, entry * 24 + 8), hash)
         entry = entry + 1
 
 # Replacing the value of an existing key keeps its position and the version.
 def dict_set(d: ptr, key: word, value: word):
-    hash = dict_hash(__int(__load8(d, 8)), key)
-    entry = dict_lookup(d, key, hash)
+    var hash = dict_hash(__int(__load8(d, 8)), key)
+    var entry = dict_lookup(d, key, hash)
     if entry >= 0:
         __store8(__ptr(__load8(d, 32)), entry * 24 + 8, value)
         return
@@ -3592,7 +3601,7 @@ def dict_set(d: ptr, key: word, value: word):
     set_dict_slot(d, 3, dict_version(d) + 1)
 
 def dict_get(d: ptr, key: word) -> word:
-    entry = dict_find(d, key)
+    var entry = dict_find(d, key)
     if entry < 0:
         fail("KeyError", "key not found")
     return dict_value_at(d, entry)
@@ -3603,11 +3612,11 @@ def dict_contains(d: ptr, key: word) -> bool:
 # The dead entry stays in the index so later probes pass over it. Clearing
 # its key and value lets the collector free them.
 def dict_pop(d: ptr, key: word) -> word:
-    entry = dict_find(d, key)
+    var entry = dict_find(d, key)
     if entry < 0:
         fail("KeyError", "key not found")
-    value = dict_value_at(d, entry)
-    entries = dict_entries(d)
+    var value = dict_value_at(d, entry)
+    var entries = dict_entries(d)
     __store8(entries, entry * 24, __word(0))
     __store8(entries, entry * 24 + 8, __word(0))
     __store8(entries, entry * 24 + 16, __word(-1))
@@ -3657,7 +3666,7 @@ def float_to_int(x: float) -> int:
 def float_mod(a: float, b: float) -> float:
     if b == 0.0:
         fail("ZeroDivisionError", "division by zero")
-    mod = fmod(a, b)
+    var mod = fmod(a, b)
     if mod == 0.0:
         return copysign(0.0, b)
     if (b < 0.0) != (mod < 0.0):
@@ -3667,29 +3676,29 @@ def float_mod(a: float, b: float) -> float:
 def float_floordiv(a: float, b: float) -> float:
     if b == 0.0:
         fail("ZeroDivisionError", "division by zero")
-    mod = fmod(a, b)
-    quotient = (a - mod) / b
+    var mod = fmod(a, b)
+    var quotient = (a - mod) / b
     if mod != 0.0 and (b < 0.0) != (mod < 0.0):
         quotient = quotient - 1.0
     if quotient == 0.0:
         return copysign(0.0, a / b)
-    result = floor(quotient)
+    var result = floor(quotient)
     if quotient - result > 0.5:
         return result + 1.0
     return result
 
 # `x` written by snprintf with `format`, which converts one float.
 def format_float(format: str, x: float) -> str:
-    buf = __alloc_atomic(32)
+    var buf = __alloc_atomic(32)
     snprintf(buf, 32, str_bytes(format), x)
     return str_from_bytes(buf, strlen(buf))
 
 def format_fixed(x: float, precision: int) -> str:
     if x != x or x > float_max() or x < -float_max():
         return float_to_str(x)
-    size = 330 + precision
-    result = str_alloc(size)
-    length = snprintf(__offset(result, 24), size, str_bytes("%." + int_to_str(precision) + "f"), x)
+    var size = 330 + precision
+    var result = str_alloc(size)
+    var length = snprintf(__offset(result, 24), size, str_bytes("%." + int_to_str(precision) + "f"), x)
     __store8(result, 8, __word(length))
     return __str(__word(result))
 
@@ -3709,12 +3718,12 @@ def float_to_str(x: float) -> str:
         return "inf"
     if x < -float_max():
         return "-inf"
-    precision = 0
+    var precision = 0
     while precision < 16:
-        text = format_float("%." + int_to_str(precision) + "e", x)
+        var text = format_float("%." + int_to_str(precision) + "e", x)
         if str_to_float_unchecked(text) == x:
             return repr_text(text)
-        up = next_decimal(text)
+        var up = next_decimal(text)
         if str_to_float_unchecked(up) == x:
             return repr_text(up)
         precision = precision + 1
@@ -3723,18 +3732,18 @@ def float_to_str(x: float) -> str:
 # The decimal after `text` in magnitude with the same number of significant
 # digits, in the same `[-]d.ddde[+-]X` form.
 def next_decimal(text: str) -> str:
-    sign = ""
+    var sign = ""
     if str_startswith(text, "-"):
         sign = "-"
         text = str_removeprefix(text, "-")
-    e = str_find(text, "e")
+    var e = str_find(text, "e")
     assert e is not none, "next_decimal: missing exponent"
-    exponent = str_to_int(str_slice(text, e + 1, str_len(text)))
-    digits = str_replace(str_slice(text, 0, e), ".", "")
-    count = str_size(digits)
-    i = count - 1
+    var exponent = str_to_int(str_slice(text, e + 1, str_len(text)))
+    var digits = str_replace(str_slice(text, 0, e), ".", "")
+    var count = str_size(digits)
+    var i = count - 1
     while i >= 0:
-        b = str_byte(digits, i)
+        var b = str_byte(digits, i)
         if b != 57:
             digits = str_sub(digits, 0, i) + repeat_byte(b + 1, 1) + repeat_byte(48, count - i - 1)
             return sign + mantissa_text(digits) + "e" + int_to_str(exponent)
@@ -3752,15 +3761,15 @@ def mantissa_text(digits: str) -> str:
 # when the decimal exponent is from -4 through 15, with at least one digit
 # after the point, and otherwise `d.ddde[+-]XX` without trailing zeros.
 def repr_text(text: str) -> str:
-    sign = ""
+    var sign = ""
     if str_startswith(text, "-"):
         sign = "-"
         text = str_removeprefix(text, "-")
-    e = str_find(text, "e")
+    var e = str_find(text, "e")
     assert e is not none, "repr_text: missing exponent"
-    exponent = str_to_int(str_slice(text, e + 1, str_len(text)))
-    digits = without_trailing_zeros(str_replace(str_slice(text, 0, e), ".", ""))
-    count = str_size(digits)
+    var exponent = str_to_int(str_slice(text, e + 1, str_len(text)))
+    var digits = without_trailing_zeros(str_replace(str_slice(text, 0, e), ".", ""))
+    var count = str_size(digits)
     if exponent < -4 or exponent >= 16:
         return sign + scientific(digits, exponent)
     if exponent < 0:
@@ -3771,7 +3780,7 @@ def repr_text(text: str) -> str:
 
 # `digits` without trailing zeros, keeping at least one digit.
 def without_trailing_zeros(digits: str) -> str:
-    stop = str_size(digits)
+    var stop = str_size(digits)
     while stop > 1:
         if str_byte(digits, stop - 1) != 48:
             return str_sub(digits, 0, stop)
@@ -3779,7 +3788,7 @@ def without_trailing_zeros(digits: str) -> str:
     return str_sub(digits, 0, 1)
 
 def scientific(digits: str, exponent: int) -> str:
-    text = mantissa_text(digits)
+    var text = mantissa_text(digits)
     if exponent < 0:
         text = text + "e-"
         exponent = -exponent
@@ -3790,10 +3799,10 @@ def scientific(digits: str, exponent: int) -> str:
     return text + int_to_str(exponent)
 
 def ascii_lower(s: str) -> str:
-    result = str_alloc(str_size(s))
-    i = 0
+    var result = str_alloc(str_size(s))
+    var i = 0
     while i < str_size(s):
-        b = str_byte(s, i)
+        var b = str_byte(s, i)
         if b >= 65 and b <= 90:
             b = b + 32
         __store1(result, 24 + i, b)
@@ -3810,15 +3819,15 @@ def skip_digits(s: str, i: int) -> int:
 # Digits with an optional fraction and exponent, as in `7`, `2.5`, `.5`,
 # `5.`, and `1e-3`, with at least one digit before the exponent.
 def is_decimal(s: str) -> bool:
-    i = skip_digits(s, 0)
-    count = i
+    var i = skip_digits(s, 0)
+    var count = i
     if str_byte(s, i) == 46:
-        stop = skip_digits(s, i + 1)
+        var stop = skip_digits(s, i + 1)
         count = count + stop - i - 1
         i = stop
     if count == 0:
         return false
-    b = str_byte(s, i)
+    var b = str_byte(s, i)
     if b != 101 and b != 69:
         return i == str_size(s)
     i = i + 1
@@ -3833,12 +3842,12 @@ def is_decimal(s: str) -> bool:
 # in any case (spec §6). strtod reads exactly that text, and also forms such
 # as hexadecimal that this check rejects first.
 def str_to_float(s: str) -> float:
-    rest = s
+    var rest = s
     if str_startswith(s, "+"):
         rest = str_removeprefix(s, "+")
     else if str_startswith(s, "-"):
         rest = str_removeprefix(s, "-")
-    word = ascii_lower(rest)
+    var word = ascii_lower(rest)
     if word == "inf" or word == "infinity" or word == "nan":
         return str_to_float_unchecked(s)
     if not is_decimal(rest):
@@ -3868,7 +3877,7 @@ def union_eq(a: ptr, b: ptr) -> bool:
 def union_to_str(value: ptr) -> str:
     if __addr_is_null(value):
         return "none"
-    kind = header(value)
+    var kind = header(value)
     if kind == __type(str):
         return __str(__word(value))
     if kind == __type(int):
@@ -3883,7 +3892,7 @@ def union_to_str(value: ptr) -> str:
 # source, cursor, exhausted, dictionary version, range stop, range step,
 # second zip iterator, and enumerate's count-overflow flag.
 def iterator_state(source: ptr, version: int) -> ptr:
-    state = __alloc(64)
+    var state = __alloc(64)
     __store8(state, 0, __word(source))
     __store8(state, 8, __word(0))
     __store8(state, 16, __word(false))
@@ -3913,8 +3922,8 @@ def iterator_check(state: ptr):
 
 def iterator_list_next(state: ptr) -> word:
     iterator_check(state)
-    source = iterator_source(state)
-    cursor = iterator_cursor(state)
+    var source = iterator_source(state)
+    var cursor = iterator_cursor(state)
     if cursor >= list_len(source):
         iterator_exhaust(state)
     iterator_set_cursor(state, cursor + 1)
@@ -3922,8 +3931,8 @@ def iterator_list_next(state: ptr) -> word:
 
 def iterator_tuple_next(state: ptr) -> word:
     iterator_check(state)
-    source = iterator_source(state)
-    cursor = iterator_cursor(state)
+    var source = iterator_source(state)
+    var cursor = iterator_cursor(state)
     if cursor >= tuple_len(source):
         iterator_exhaust(state)
     iterator_set_cursor(state, cursor + 1)
@@ -3931,18 +3940,18 @@ def iterator_tuple_next(state: ptr) -> word:
 
 def iterator_str_next(state: ptr) -> str:
     iterator_check(state)
-    source = __str(__word(iterator_source(state)))
-    cursor = iterator_cursor(state)
+    var source = __str(__word(iterator_source(state)))
+    var cursor = iterator_cursor(state)
     if cursor >= str_size(source):
         iterator_exhaust(state)
-    value = str_char_at(source, cursor)
+    var value = str_char_at(source, cursor)
     iterator_set_cursor(state, cursor + str_size(value))
     return value
 
 def iterator_bytes_next(state: ptr) -> int:
     iterator_check(state)
-    source = __str(__word(iterator_source(state)))
-    cursor = iterator_cursor(state)
+    var source = __str(__word(iterator_source(state)))
+    var cursor = iterator_cursor(state)
     if cursor >= str_size(source):
         iterator_exhaust(state)
     iterator_set_cursor(state, cursor + 1)
@@ -3950,8 +3959,8 @@ def iterator_bytes_next(state: ptr) -> int:
 
 def iterator_dict_next(state: ptr) -> int:
     iterator_check(state)
-    source = iterator_source(state)
-    entry = dict_next(source, iterator_cursor(state), __int(__load8(state, 24)))
+    var source = iterator_source(state)
+    var entry = dict_next(source, iterator_cursor(state), __int(__load8(state, 24)))
     if entry < 0:
         iterator_exhaust(state)
     iterator_set_cursor(state, entry + 1)
@@ -3960,14 +3969,14 @@ def iterator_dict_next(state: ptr) -> int:
 def range_new(first: int, stop: int, step: int) -> ptr:
     if step == 0:
         fail("ValueError", "range step must not be zero")
-    value = __alloc(24)
+    var value = __alloc(24)
     __store8(value, 0, __word(first))
     __store8(value, 8, __word(stop))
     __store8(value, 16, __word(step))
     return value
 
 def range_iter(value: ptr) -> ptr:
-    state = iterator_state(value, 0)
+    var state = iterator_state(value, 0)
     iterator_set_cursor(state, __int(__load8(value, 0)))
     __store8(state, 32, __load8(value, 8))
     __store8(state, 40, __load8(value, 16))
@@ -3975,9 +3984,9 @@ def range_iter(value: ptr) -> ptr:
 
 def iterator_range_next(state: ptr) -> int:
     iterator_check(state)
-    current = iterator_cursor(state)
-    stop = __int(__load8(state, 32))
-    step = __int(__load8(state, 40))
+    var current = iterator_cursor(state)
+    var stop = __int(__load8(state, 32))
+    var step = __int(__load8(state, 40))
     if (step > 0 and current >= stop) or (step < 0 and current <= stop):
         iterator_exhaust(state)
     if (step > 0 and current > 0 and step > 9223372036854775807 - current) or (step < 0 and current < 0 and step < -9223372036854775807 - current):
@@ -3987,7 +3996,7 @@ def iterator_range_next(state: ptr) -> int:
     return current
 
 def iterator_zip_state(left: ptr, right: ptr) -> ptr:
-    state = iterator_state(left, 0)
+    var state = iterator_state(left, 0)
     __store8(state, 48, __word(right))
     return state
 
@@ -3995,7 +4004,7 @@ def iterator_right(state: ptr) -> ptr:
     return __ptr(__load8(state, 48))
 
 def iterator_enumerate_state(source: ptr, start: int) -> ptr:
-    state = iterator_state(source, 0)
+    var state = iterator_state(source, 0)
     iterator_set_cursor(state, start)
     return state
 
@@ -4003,7 +4012,7 @@ def iterator_enumerate_state(source: ptr, start: int) -> ptr:
 def iterator_enumerate_count(state: ptr) -> int:
     if __bool(__load8(state, 56)):
         fail("OverflowError", "integer overflow")
-    count = iterator_cursor(state)
+    var count = iterator_cursor(state)
     if count == 9223372036854775807:
         __store8(state, 56, __word(true))
     else:
@@ -4016,8 +4025,8 @@ def float_abs(x: float) -> float:
 def float_round(x: float) -> int:
     if x != x or x >= 9223372036854775808.0 or x <= -9223372036854775808.0:
         fail("ValueError", "cannot round float to int")
-    lower = floor(x)
-    part = x - lower
+    var lower = floor(x)
+    var part = x - lower
     if part > 0.5 or (part == 0.5 and fmod(lower, 2.0) != 0.0):
         lower = lower + 1.0
     if lower >= 9223372036854775808.0 or lower <= -9223372036854775808.0:
@@ -4037,7 +4046,7 @@ def async_consume(coroutine: ptr) -> ptr:
     if __bool(__load8(coroutine, 16)):
         fail("RuntimeError", "coroutine was already awaited or started")
         return __ptr(__word(0))
-    body = __ptr(__load8(coroutine, 8))
+    var body = __ptr(__load8(coroutine, 8))
     __store8(coroutine, 16, __word(true))
     __store8(coroutine, 8, __word(0))
     return body
@@ -4119,7 +4128,7 @@ def aio_resume(task: AioTask):
     fail("RuntimeError", "coroutines require stage 1 on arm64")
 
 def aio_task_run(argument: word):
-    task = aio_loop().current
+    var task = aio_loop().current
     assert task is not none, "no running task"
     task.result = async_invoke(task.body)
 
@@ -4127,10 +4136,10 @@ extern def clock_gettime(clock: cint, stamp: ptr) -> cint
 extern def poll(fds: ptr, count: int, timeout: cint) -> cint
 
 def aio_now() -> float:
-    clock = 1
+    var clock = 1
     if __os == "darwin":
         clock = 6
-    stamp = __alloc_atomic(16)
+    var stamp = __alloc_atomic(16)
     if clock_gettime(clock, stamp) != 0:
         eprint_str("error: cannot read monotonic clock: " + os_reason())
         exit(1)
@@ -4140,35 +4149,35 @@ def aio_before(a: AioTimer, b: AioTimer) -> bool:
     return a.at < b.at or a.at == b.at and a.wait < b.wait
 
 def aio_push_timer(loop: AioLoop, timer: AioTimer):
-    heap = loop.timers
-    i = len(heap)
+    var heap = loop.timers
+    var i = len(heap)
     heap.append(timer)
     while i > 0:
-        parent = (i - 1) // 2
+        var parent = (i - 1) // 2
         if not aio_before(heap[i], heap[parent]):
             break
-        other = heap[parent]
+        var other = heap[parent]
         heap[parent] = heap[i]
         heap[i] = other
         i = parent
 
 def aio_pop_timer(loop: AioLoop) -> AioTimer:
-    heap = loop.timers
-    top = heap[0]
-    last = heap.pop()
-    n = len(heap)
+    var heap = loop.timers
+    var top = heap[0]
+    var last = heap.pop()
+    var n = len(heap)
     if n > 0:
         heap[0] = last
-        i = 0
+        var i = 0
         while true:
-            child = i * 2 + 1
+            var child = i * 2 + 1
             if child >= n:
                 break
             if child + 1 < n and aio_before(heap[child + 1], heap[child]):
                 child = child + 1
             if not aio_before(heap[child], heap[i]):
                 break
-            other = heap[child]
+            var other = heap[child]
             heap[child] = heap[i]
             heap[i] = other
             i = child
@@ -4182,12 +4191,12 @@ def aio_wake(loop: AioLoop, task: AioTask, wait: int):
 
 # Polling between ready batches prevents timers from being starved.
 def aio_poll(loop: AioLoop):
-    timers = loop.timers
+    var timers = loop.timers
     while len(timers) > 0 and timers[0].task.wait != timers[0].wait:
         aio_pop_timer(loop)
-    waits: list[AioFdWait] = []
-    slots: dict[int, int] = {}
-    interests: list[int] = []
+    var waits: list[AioFdWait] = []
+    var slots: dict[int, int] = {}
+    var interests: list[int] = []
     for entry in loop.descriptors:
         if entry.task.wait == entry.wait:
             waits.append(entry)
@@ -4195,18 +4204,18 @@ def aio_poll(loop: AioLoop):
                 slots[entry.fd] = len(interests)
                 interests.append(entry.events)
             else:
-                index = slots[entry.fd]
+                var index = slots[entry.fd]
                 if interests[index] != entry.events:
                     interests[index] = 5
     loop.descriptors = waits
     if len(loop.ready) == 0 and len(timers) == 0 and len(waits) == 0:
         eprint_str("error: deadlock: all tasks are waiting")
         exit(1)
-    timeout = -1
+    var timeout = -1
     if len(loop.ready) > 0:
         timeout = 0
     else if len(timers) > 0:
-        milliseconds = (timers[0].at - aio_now()) * 1000.0
+        var milliseconds = (timers[0].at - aio_now()) * 1000.0
         timeout = 0
         if milliseconds >= 2147483647.0:
             timeout = 2147483647
@@ -4214,30 +4223,30 @@ def aio_poll(loop: AioLoop):
             timeout = __dtosi(milliseconds)
             if float(timeout) < milliseconds:
                 timeout = timeout + 1
-    fds = __alloc_atomic(len(interests) * 8)
+    var fds = __alloc_atomic(len(interests) * 8)
     for fd in slots:
-        index = slots[fd]
+        var index = slots[fd]
         __store4(fds, index * 8, fd)
         __store4(fds, index * 8 + 4, interests[index])
-    result = poll(fds, len(interests), timeout)
-    failed = result < 0 and errno() != 4
+    var result = poll(fds, len(interests), timeout)
+    var failed = result < 0 and errno() != 4
     for entry in waits:
-        revents = __load4(fds, slots[entry.fd] * 8 + 4) // 65536
+        var revents = __load4(fds, slots[entry.fd] * 8 + 4) // 65536
         if entry.task.wait == entry.wait and (failed or revents >= 8 or revents // entry.events % 2 == 1):
             entry.ready = true
             aio_wake(loop, entry.task, entry.wait)
 
-    now = aio_now()
+    var now = aio_now()
     while len(timers) > 0 and timers[0].at <= now:
-        timer = aio_pop_timer(loop)
+        var timer = aio_pop_timer(loop)
         aio_wake(loop, timer.task, timer.wait)
 
 def aio_wait_fd(fd: int, events: int, deadline: float | none) -> bool:
     aio_checkpoint()
-    loop = aio_loop()
-    task = aio_current()
-    wait = aio_wait(true)
-    entry = AioFdWait(fd, events, task, wait)
+    var loop = aio_loop()
+    var task = aio_current()
+    var wait = aio_wait(true)
+    var entry = AioFdWait(fd, events, task, wait)
     loop.descriptors.append(entry)
     if deadline is not none:
         aio_push_timer(loop, AioTimer(deadline, task, wait))
@@ -4250,7 +4259,7 @@ def aio_close_fd(fd: int, loop: AioLoop | none):
     if loop is none:
         close(fd)
         return
-    kept: list[AioFdWait] = []
+    var kept: list[AioFdWait] = []
     for entry in loop.descriptors:
         if entry.fd == fd:
             aio_wake(loop, entry.task, entry.wait)
@@ -4260,16 +4269,16 @@ def aio_close_fd(fd: int, loop: AioLoop | none):
     close(fd)
 
 def aio_run(body: ptr) -> word:
-    loop = AioLoop(none, [], [], 0, {}, [])
+    var loop = AioLoop(none, [], [], 0, {}, [])
     aio_set_loop(loop)
-    root = aio_spawn(async_consume(body), none, "")
+    var root = aio_spawn(async_consume(body), none, "")
     while true:
-        batch = loop.ready
+        var batch = loop.ready
         loop.ready = []
         for task in batch:
             loop.current = task
             aio_resume(task)
-            context = task.context
+            var context = task.context
             assert context is not none, "task without context"
             if coroutine_finished(context):
                 aio_finish(task)
@@ -4282,7 +4291,7 @@ def aio_run(body: ptr) -> word:
     return root.result
 
 def aio_sleep_coroutine(seconds: float, path: str, line: int, col: int) -> ptr:
-    body = object_new(__ptr(__word(0)), 5)
+    var body = object_new(__ptr(__word(0)), 5)
     __store8(body, 8, __word(aio_sleep_address()))
     __store8(body, 16, __word(seconds))
     __store8(body, 24, __word(path))
@@ -4295,21 +4304,21 @@ def aio_sleep_wait(seconds: float):
         fail("ValueError", "sleep length must be finite and nonnegative")
         return
     aio_checkpoint()
-    task = aio_current()
-    wait = aio_wait(true)
+    var task = aio_current()
+    var wait = aio_wait(true)
     aio_push_timer(aio_loop(), AioTimer(aio_now() + seconds, task, wait))
     coroutine_yield(__word(0))
     aio_checkpoint()
 
 def aio_sleep_body(body: ptr) -> word:
-    seconds = __float(__load8(body, 16))
+    var seconds = __float(__load8(body, 16))
     if not (seconds >= 0.0 and seconds <= 1.7976931348623157e308):
         fail_at("ValueError", "sleep length must be finite and nonnegative", __str(__load8(body, 24)), __int(__load8(body, 32)), __int(__load8(body, 40)))
         return __word(0)
     aio_checkpoint()
-    loop = aio_loop()
-    task = aio_current()
-    wait = aio_wait(true)
+    var loop = aio_loop()
+    var task = aio_current()
+    var wait = aio_wait(true)
     aio_push_timer(loop, AioTimer(aio_now() + seconds, task, wait))
     coroutine_yield(__word(0))
     aio_checkpoint()
@@ -4328,7 +4337,7 @@ def aio_cancel() -> ptr:
     return __ptr(__word(0))
 
 def aio_current() -> AioTask:
-    task = aio_loop().current
+    var task = aio_loop().current
     assert task is not none, "no running task"
     return task
 
@@ -4336,11 +4345,11 @@ def aio_scope() -> AioGroup | none:
     return aio_current().scope
 
 def aio_set_scope(scope: AioGroup | none):
-    task = aio_current()
+    var task = aio_current()
     task.scope = scope
 
 def aio_pending(task: AioTask) -> bool:
-    group = task.scope
+    var group = task.scope
     while group is not none:
         if group.cancelled:
             return true
@@ -4357,8 +4366,8 @@ def aio_exception(error: ptr) -> ptr:
     return error
 
 def aio_wait(interruptible: bool) -> int:
-    loop = aio_loop()
-    task = aio_current()
+    var loop = aio_loop()
+    var task = aio_current()
     loop.last_wait = loop.last_wait + 1
     task.wait = loop.last_wait
     task.interruptible = interruptible
@@ -4369,17 +4378,17 @@ def aio_request(group: AioGroup):
     if group.cancelled:
         return
     group.cancelled = true
-    loop = aio_loop()
-    woken: list[AioTask] = []
+    var loop = aio_loop()
+    var woken: list[AioTask] = []
     for id in loop.waiting:
-        task = loop.waiting[id]
+        var task = loop.waiting[id]
         if task.interruptible and aio_pending(task):
             woken.append(task)
     for task in woken:
         aio_wake(loop, task, task.wait)
 
 def aio_spawn(body: ptr, group: AioGroup | none, location: str) -> AioTask:
-    task = AioTask(none, body, __word(0), __ptr(__word(0)), 0, 0, group, group, [], false, location)
+    var task = AioTask(none, body, __word(0), __ptr(__word(0)), 0, 0, group, group, [], false, location)
     task.context = coroutine_create(aio_task_address(), __word(0))
     aio_loop().ready.append(task)
     return task
@@ -4392,21 +4401,21 @@ def aio_finish(task: AioTask):
     else:
         task.state = 2
         if task.location != "":
-            frames = ""
-            saved_frames = __ptr(__load8(task.error, 16))
+            var frames = ""
+            var saved_frames = __ptr(__load8(task.error, 16))
             if not __addr_is_null(saved_frames):
                 frames = __str(__word(saved_frames))
             if str_find(frames, "\n  in task started at ") is none:
                 __store8(task.error, 16, __word(frames + "\n  in task started at " + task.location))
     task.body = __ptr(__word(0))
-    loop = aio_loop()
-    group = task.group
+    var loop = aio_loop()
+    var group = task.group
     if group is not none:
         group.count = group.count - 1
         if task.state == 2 and __addr_is_null(group.failure):
             group.failure = task.error
             aio_request(group)
-        joiner = group.joiner
+        var joiner = group.joiner
         if group.count == 0 and joiner is not none:
             aio_wake(loop, joiner, group.join_wait)
     for waiter in task.waiters:
@@ -4431,7 +4440,7 @@ def aio_task_result(task: AioTask) -> word:
 def aio_await_task(task: AioTask) -> word:
     aio_checkpoint()
     while task.state == 0:
-        id = aio_wait(true)
+        var id = aio_wait(true)
         task.waiters.append(AioWait(aio_current(), id))
         coroutine_yield(__word(0))
         aio_checkpoint()
@@ -4444,19 +4453,19 @@ def aio_group_enter(group: AioGroup):
     if group.state != 0:
         fail("RuntimeError", "task group was already entered")
         return
-    task = aio_current()
+    var task = aio_current()
     group.state = 1
     group.parent = task.scope
     task.scope = group
 
 def aio_group_exit(group: AioGroup, error: ptr) -> ptr:
-    task = aio_current()
+    var task = aio_current()
     task.scope = group.parent
     if not __addr_is_null(error) and error != aio_cancel() and __addr_is_null(group.failure):
         group.failure = error
         aio_request(group)
     while group.count > 0:
-        id = aio_wait(false)
+        var id = aio_wait(false)
         group.joiner = task
         group.join_wait = id
         coroutine_yield(__word(0))
@@ -4472,7 +4481,7 @@ def aio_group_start(group: AioGroup, coroutine: ptr, path: str, line: int, col: 
     if group.state != 1 or group.cancelled:
         fail("RuntimeError", "task group is not accepting tasks")
         return AioTask(none, __ptr(__word(0)), __word(0), __ptr(__word(0)), 0, 0, none, none, [], false, "")
-    body = async_consume(coroutine)
+    var body = async_consume(coroutine)
     group.count = group.count + 1
     return aio_spawn(body, group, path + ":" + int_to_str(line) + ":" + int_to_str(col))
 
@@ -4489,7 +4498,7 @@ def aio_semaphore(value: int) -> AioSemaphore:
 
 def aio_give_permit(semaphore: AioSemaphore):
     while len(semaphore.waiters) > 0:
-        waiter = semaphore.waiters[0]
+        var waiter = semaphore.waiters[0]
         semaphore.waiters = semaphore.waiters[1:]
         if waiter.task.wait == waiter.id:
             waiter.granted = true
@@ -4510,8 +4519,8 @@ def aio_semaphore_wait(semaphore: AioSemaphore):
     if semaphore.value > 0:
         semaphore.value = semaphore.value - 1
         return
-    task = aio_current()
-    waiter = AioWait(task, aio_wait(true))
+    var task = aio_current()
+    var waiter = AioWait(task, aio_wait(true))
     semaphore.waiters.append(waiter)
     coroutine_yield(__word(0))
     if waiter.granted:
@@ -4519,7 +4528,7 @@ def aio_semaphore_wait(semaphore: AioSemaphore):
             aio_give_permit(semaphore)
             coroutine_set_pending(aio_cancel())
         return
-    kept: list[AioWait] = []
+    var kept: list[AioWait] = []
     for queued in semaphore.waiters:
         if queued.id != waiter.id:
             kept.append(queued)

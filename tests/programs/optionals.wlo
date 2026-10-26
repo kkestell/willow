@@ -15,7 +15,7 @@ def show(i: int | none, f: float | none, s: str | none, b: bool | none):
     print(b)
 
 def main():
-    count: int | none = none
+    var count: int | none = none
     print(describe(none))           # anonymous
     print(describe("ada"))          # user ada
     if count is not none and count > 0:
@@ -26,7 +26,7 @@ def main():
     show(none, none, none, none)
     show(-3, -0.0, "", false)
 
-    found = find(5)
+    var found = find(5)
     print(found)
     print(find(1))
     print(found == 10)
@@ -38,9 +38,9 @@ def main():
     print(find(1) is none)
     print(not found is none)
 
-    total = 0
-    limit = 0
-    next: int | none = find(limit)
+    var total = 0
+    var limit = 0
+    var next: int | none = find(limit)
     while next is none:
         limit = limit + 1
         next = find(limit)
@@ -48,7 +48,7 @@ def main():
         total = total + next
     print(total)
 
-    best: str | none = none
+    var best: str | none = none
     if best is none or best == "x":
         best = "chosen"
     print(best + "!")

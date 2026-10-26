@@ -11,13 +11,13 @@ import subprocess
 def discover(path: str, recursive: bool) -> list[str]:
     if not is_directory(path):
         return [path]
-    shown = ""
+    var shown = ""
     if path != ".":
         shown = path
         while shown.endswith("/"):
             shown = shown[:-1]
         shown = shown + "/"
-    files: list[str] = []
+    var files: list[str] = []
     collect(path, shown, recursive, files)
     return sorted(files)
 
@@ -31,7 +31,7 @@ def is_directory(path: str) -> bool:
 # `files`.
 def collect(directory: str, shown: str, recursive: bool, files: list[str]):
     for name in fs.listdir(directory):
-        kind = fs.stat(directory + "/" + name, follow_symlinks=false).kind
+        var kind = fs.stat(directory + "/" + name, follow_symlinks=false).kind
         if kind == "directory" and recursive:
             collect(directory + "/" + name, shown + name + "/", true, files)
         else if kind == "file" and len(name) >= 9 and name.startswith("test_") and name.endswith(".wlo"):
@@ -46,9 +46,9 @@ class Tally:
 # test file `file`, with the environment `env`, and reports it. Files that
 # the runs need go in `directory`.
 def run_file(program: str, file: str, names: list[str], env: dict[str, str], directory: str, tally: Tally):
-    marker = directory + "/returned"
+    var marker = directory + "/returned"
     for name in names:
-        returned, status, output = run_test(program, name, marker, env, directory)
+        var returned, status, output = run_test(program, name, marker, env, directory)
         if returned and status == 0:
             tally.passed = tally.passed + 1
             print(f"PASS {file} {name}")
@@ -72,16 +72,16 @@ def run_file(program: str, file: str, names: list[str], env: dict[str, str], dir
 # creating `marker`, its exit status as a shell gives it, and its stdout and
 # stderr together.
 def run_test(program: str, name: str, marker: str, env: dict[str, str], directory: str) -> tuple[bool, int, str]:
-    path = directory + "/output"
-    output = io.open(path, "w")
-    empty = io.open("/dev/null")
-    process = subprocess.spawn([program, name, marker], env=env, stdin=empty, stdout=output, stderr=output)
-    status = process.wait()
+    var path = directory + "/output"
+    var output = io.open(path, "w")
+    var empty = io.open("/dev/null")
+    var process = subprocess.spawn([program, name, marker], env=env, stdin=empty, stdout=output, stderr=output)
+    var status = process.wait()
     output.close()
     empty.close()
     if status < 0:
         status = 128 - status
-    returned = fs.exists(marker)
+    var returned = fs.exists(marker)
     if returned:
         fs.remove(marker)
     return (returned, status, fs.read_file(path))

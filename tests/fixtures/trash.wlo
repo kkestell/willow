@@ -16,12 +16,12 @@ class TrashError(Exception):
 def move(path: str):
     if fs.stat(path, follow_symlinks=false).kind == "directory":
         raise TrashError(f"{path} is a directory")
-    parent = fs.dirname(path)
-    trash = fs.join(parent, ".trash")
-    target = fs.join(trash, fs.basename(path))
+    var parent = fs.dirname(path)
+    var trash = fs.join(parent, ".trash")
+    var target = fs.join(trash, fs.basename(path))
     if fs.exists(target):
         raise TrashError(f"{target} already exists")
-    created = not fs.exists(trash)
+    var created = not fs.exists(trash)
     fs.mkdir(trash, exist_ok=true)
     try:
         fs.rename(path, target)
@@ -35,33 +35,36 @@ def move(path: str):
 
 # Deletes the trash in `directory` and returns the number of files deleted.
 def empty(directory: str) -> int:
-    trash = fs.join(directory, ".trash")
+    var trash = fs.join(directory, ".trash")
     if not fs.exists(trash):
         return 0
-    names = fs.listdir(trash)
+    var names = fs.listdir(trash)
     for name in names:
         fs.remove(fs.join(trash, name))
     fs.rmdir(trash)
     return len(names)
 
 def main():
-    parser = cli.parser("trash", description="Move files to a .trash directory beside them.")
+    var parser = cli.parser("trash", description="Move files to a .trash directory beside them.")
+    var help: cli.HelpRequested
     parser.add_flag("empty", help="Delete the trash in each directory instead")
     parser.add_rest("path", help="Files to trash, or directories with --empty")
+    var args: cli.Args
     try:
         args = parser.parse(sys.args())
-    except cli.HelpRequested as help:
+    except cli.HelpRequested as help_item:
+        help = help_item
         io.stdout().write_text(help.message)
         sys.exit(0)
     except cli.UsageError as usage:
         sys.eprint(usage.message)
         sys.exit(2)
-    paths = args.get_list("path")
+    var paths = args.get_list("path")
     if len(paths) == 0:
         sys.eprint("trash: error: expected at least one path")
         sys.exit(2)
-    color = terminal.color_enabled(io.stderr())
-    status = 0
+    var color = terminal.color_enabled(io.stderr())
+    var status = 0
     for path in paths:
         try:
             if args.get_bool("empty"):

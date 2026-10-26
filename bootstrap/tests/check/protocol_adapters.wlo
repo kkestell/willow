@@ -61,26 +61,26 @@ def read_pair[T: Pair](pair: T) -> tuple[Source[int]]:
     return pair.get()
 
 def main():
-    tagged: Tagged[int] = Box(3)
-    source: Source[int] = tagged
+    var tagged: Tagged[int] = Box(3)
+    var source: Source[int] = tagged
     print(take(source))
-    optional: Source[int | none] = source
+    var optional: Source[int | none] = source
     print(optional.get())
     print(take(Box(2.5)))
     print(bounded(Box(4)))
     print(bounded(source))
     print(nullable(Box(5)))
     print(bounded_set(Adjuster()))
-    setter: Setter = Adjuster()
+    var setter: Setter = Adjuster()
     print(setter.set())
     print(setter.set(flag=true, value=2.5))
-    pair: Pair = PairBox()
+    var pair: Pair = PairBox()
     print(pair.get()[0].get())
-    chain: Chain = Link(Link(none))
-    next = chain.next()
+    var chain: Chain = Link(Link(none))
+    var next = chain.next()
     if next is not none:
         print(next.next() is none)
-    failed: Pair = FailedPair()
+    var failed: Pair = FailedPair()
     try:
         read_pair(failed)
     except ValueError as error:

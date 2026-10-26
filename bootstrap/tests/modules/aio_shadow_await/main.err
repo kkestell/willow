@@ -1,1 +1,1 @@
-main.wlo:4:13: error: cannot await a value of type aio.Task[int]
+main.wlo:4:17: error: cannot await a value of type aio.Task[int]

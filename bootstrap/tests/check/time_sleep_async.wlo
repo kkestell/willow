@@ -5,7 +5,7 @@ async def worker(events: list[str]):
     events.append("worker")
 
 async def main():
-    events: list[str] = []
+    var events: list[str] = []
     async with aio.task_group() as group:
         group.start(worker(events))
         time.sleep(0.01)

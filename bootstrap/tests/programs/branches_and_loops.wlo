@@ -12,7 +12,7 @@ def sign(n: int) -> str:
         return "positive"
 
 def first_square_above(limit: int) -> int:
-    n = 0
+    var n = 0
     while true:
         if n * n > limit:
             return n
@@ -31,7 +31,7 @@ def main():
     print(sign(7))
     print(first_square_above(50))
     countdown(3)
-    big: int = 9223372036854775807
+    var big: int = 9223372036854775807
     print(big)
     print(-big)
     print(-(3 - 10) * +2)
@@ -39,6 +39,7 @@ def main():
     print(3 >= 3)
     print(3 != 3)
     print(true == (1 < 2))
+    var label: str
     if false:
         label = "unused"
     else:

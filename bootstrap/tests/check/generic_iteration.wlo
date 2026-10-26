@@ -7,7 +7,7 @@ class Countdown:
     def next() -> int:
         if self.remaining == 0:
             raise StopIteration("")
-        value = self.remaining
+        var value = self.remaining
         self.remaining = self.remaining - 1
         return value
 
@@ -15,26 +15,26 @@ def identity[T](value: T) -> T:
     return value
 
 def mapped[T](items: Iterable[T], transform: (T) -> T) -> list[T]:
-    result: list[T] = []
+    var result: list[T] = []
     for item in items:
         result.append(transform(item))
     return result
 
 def main():
-    numbers = mapped([2, 3], identity[int])
+    var numbers = mapped([2, 3], identity[int])
     assert len(numbers) == 2
     assert numbers[0] == 2
     assert numbers[1] == 3
-    numbered = mapped(enumerate([4, 5], 10), identity[tuple[int, int]])
+    var numbered = mapped(enumerate([4, 5], 10), identity[tuple[int, int]])
     assert len(numbered) == 2
     assert numbered[0] == (10, 4)
     assert numbered[1] == (11, 5)
-    paired = mapped(zip([6, 7], ["a", "b"]), identity[tuple[int, str]])
+    var paired = mapped(zip([6, 7], ["a", "b"]), identity[tuple[int, str]])
     assert len(paired) == 2
     assert paired[0] == (6, "a")
     assert paired[1] == (7, "b")
-    iterator = Countdown(2)
-    counted = mapped(iterator, identity[int])
+    var iterator = Countdown(2)
+    var counted = mapped(iterator, identity[int])
     assert len(counted) == 2
     assert counted[0] == 2
     assert counted[1] == 1

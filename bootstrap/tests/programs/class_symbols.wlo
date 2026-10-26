@@ -16,8 +16,8 @@ class Value:
 type Count = int
 
 def main():
-    value = Value(Kind.ENTRY)
-    amount: Count = 5
+    var value = Value(Kind.ENTRY)
+    var amount: Count = 5
     value.add(amount)
     print(value.label())
     print(lib.class_symbols.Value(7, lib.class_symbols.Kind.IMPORTED).label())

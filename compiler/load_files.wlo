@@ -11,22 +11,22 @@ import loader
 import sys
 
 def main():
-    args = sys.args()
-    show_modules = len(args) > 0 and args[0] == "--modules"
+    var args = sys.args()
+    var show_modules = len(args) > 0 and args[0] == "--modules"
     if show_modules:
         args = args[1:]
-    failed = false
+    var failed = false
     for path in args:
-        result = loader.load(path, fs.read_file(path), loader.file_roots(path), false)
+        var result = loader.load(path, fs.read_file(path), loader.file_roots(path), false)
         if result is diagnostic.Diagnostic:
             # Paths in messages, such as a missing module's, start with the
             # directory too.
-            root = loader.directory_of(path)
-            relative = result.path.removeprefix(root)
-            message = result.message
+            var root = loader.directory_of(path)
+            var relative = result.path.removeprefix(root)
+            var message = result.message
             if root != "":
                 message = message.replace(root, "")
-            error = diagnostic.Diagnostic(relative, result.line, result.col, message)
+            var error = diagnostic.Diagnostic(relative, result.line, result.col, message)
             sys.eprint(f"{path}: {error.format()}")
             failed = true
         else if show_modules:

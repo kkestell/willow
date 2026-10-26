@@ -18,7 +18,7 @@ def show_ord(text: str):
 
 def show_chr(n: int):
     try:
-        c = chr(n)
+        var c = chr(n)
         print(ord(c) == n)
     except ValueError as e:
         print(e.message)
@@ -37,7 +37,7 @@ def main():
         show_float(text)
 
     for text in ["a", "é", "€", "😀"]:
-        n = ord(text)
+        var n = ord(text)
         print(f"{n} {chr(n)}")
     show_ord("")
     show_ord("ab")

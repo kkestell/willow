@@ -1,4 +1,4 @@
 def f(a: int) -> int:
     return a
 def main():
-    g: (int | none) -> int = f
+    var g: (int | none) -> int = f

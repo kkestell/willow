@@ -8,6 +8,6 @@ def describe(shape: shapes.Shape | none) -> str:
     return f"square of area {shapes.area(shape)}"
 
 def main():
-    items: list[shapes.Shape | none] = [shapes.Circle(2.0), shapes.Square(3.0), none]
+    var items: list[shapes.Shape | none] = [shapes.Circle(2.0), shapes.Square(3.0), none]
     for item in items:
         print(describe(item))

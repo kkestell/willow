@@ -2,7 +2,7 @@
 # popping, sorting, and membership tests.
 
 def main():
-    primes = [2, 3, 5, 7]
+    var primes = [2, 3, 5, 7]
     primes.append(11)
     print(len(primes))
     print(primes[-1])
@@ -10,7 +10,7 @@ def main():
     print(primes.pop())
     print(5 in primes)
 
-    names = ["grace", "ada", "alan"]
+    var names = ["grace", "ada", "alan"]
     names.sort()
     print(", ".join(names))
     names.sort(reverse=true)
@@ -18,20 +18,20 @@ def main():
     print(", ".join(sorted(names, key=(name) => len(name))))
 
     # Assignment shares a list; a slice copies it.
-    alias = names
-    copy = names[:]
+    var alias = names
+    var copy = names[:]
     alias.append("linus")
     print(len(names))
     print(len(copy))
 
-    matrix = [[1, 2], [3, 4]]
-    total = 0
+    var matrix = [[1, 2], [3, 4]]
+    var total = 0
     for row in matrix:
         for n in row:
             total = total + n
     print(total)
 
-    empty: list[int] = []
+    var empty: list[int] = []
     try:
         empty.pop()
     except IndexError as error:

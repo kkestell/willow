@@ -52,12 +52,13 @@ class Loader:
     # Loads module `name` from the file at `path`, which the import
     # `importing` in the module at `importer` names.
     def visit(name: str, path: str, importer: str, importing: ast.Import):
-        file = fs.realpath(path)
-        other = self.names_by_file.get(file)
+        var file = fs.realpath(path)
+        var other = self.names_by_file.get(file)
         if other is not none:
             self.fail(importer, importing, f"module '{name}' is the same file as module '{other}'")
             return
         self.names_by_file[file] = name
+        var text: str | diagnostic.Diagnostic
         try:
             text = read_source(path)
         except OSError as error:
@@ -75,11 +76,11 @@ class Loader:
             self.libraries[name] = true
         else:
             self.loaded[name] = true
-        lexed = lexer.lex(path, text)
+        var lexed = lexer.lex(path, text)
         if lexed is diagnostic.Diagnostic:
             self.error = lexed
             return
-        tree = parser.parse(path, lexed, privileged)
+        var tree = parser.parse(path, lexed, privileged)
         if tree is diagnostic.Diagnostic:
             self.error = tree
             return
@@ -99,16 +100,16 @@ class Loader:
     # when `a` is a file, is reported as "No such file or directory" rather
     # than "Not a directory".
     def load_import(importer: str, item: ast.Import, privileged: bool):
-        path = "lib/" + item.name + ".wlo"
+        var path = "lib/" + item.name + ".wlo"
         if not privileged and item.name != "core":
             if self.loaded.get(item.name) is not none:
                 return
-            relative = item.name.replace(".", "/") + ".wlo"
+            var relative = item.name.replace(".", "/") + ".wlo"
             path = self.roots.primary + relative
             if fs.exists(path):
                 self.visit(item.name, path, importer, item)
                 return
-            found: list[str] = []
+            var found: list[str] = []
             for dependency in self.roots.dependencies:
                 if fs.exists(dependency + relative):
                     found.append(dependency + relative)
@@ -123,7 +124,7 @@ class Loader:
         if item.name == "core":
             self.add_core()
             return
-        text = lib_source.text(item.name)
+        var text = lib_source.text(item.name)
         if text != "":
             self.add(item.name, "lib/" + item.name + ".wlo", text, true)
         else if not is_stdlib(item.name):
@@ -137,8 +138,8 @@ class Loader:
 
 # The directory part of `path` with its trailing "/", or "" when it has none.
 def directory_of(path: str) -> str:
-    end = 0
-    i = 0
+    var end = 0
+    var i = 0
     for c in path:
         i = i + 1
         if c == "/":
@@ -170,15 +171,15 @@ def read_reason(error: OSError) -> str:
 # The text of the source file at `path`, or a diagnostic at its first byte
 # that is not valid UTF-8 (spec §2). Raises OSError when it cannot be read.
 def read_source(path: str) -> str | diagnostic.Diagnostic:
-    data = fs.read_bytes(path)
+    var data = fs.read_bytes(path)
     try:
         return data.decode()
     except ValueError:
         pass
-    line = 1
-    col = 1
-    i = 0
-    size = char_size(data, i)
+    var line = 1
+    var col = 1
+    var i = 0
+    var size = char_size(data, i)
     while size > 0:
         if data[i] == 10:
             line = line + 1
@@ -208,12 +209,12 @@ def char_size(data: bytes, i: int) -> int:
 # lexed, or parsed. Clashes between imports are the binder's to report, in
 # its order.
 def load(path: str, text: str, roots: Roots, with_core: bool) -> list[Source] | diagnostic.Diagnostic:
-    loader = Loader(roots, [], {}, {}, {}, none)
+    var loader = Loader(roots, [], {}, {}, {}, none)
     loader.names_by_file[fs.realpath(path)] = roots.entry
     loader.add(roots.entry, path, text, false)
     if with_core and loader.error is none and loader.libraries.get("core") is none:
         loader.add_core()
-    error = loader.error
+    var error = loader.error
     if error is not none:
         return error
     return loader.sources

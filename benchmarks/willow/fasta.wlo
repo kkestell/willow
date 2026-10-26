@@ -35,8 +35,8 @@ def homo_sapiens() -> list[tuple[str, float]]:
 
 # The table with each probability replaced by the sum of it and the ones before it.
 def cumulative(table: list[tuple[str, float]]) -> list[tuple[str, float]]:
-    result: list[tuple[str, float]] = []
-    total = 0.0
+    var result: list[tuple[str, float]] = []
+    var total = 0.0
     for symbol, probability in table:
         total = total + probability
         result.append((symbol, total))
@@ -44,11 +44,11 @@ def cumulative(table: list[tuple[str, float]]) -> list[tuple[str, float]]:
 
 def repeat_fasta(header: str, sequence: str, count: int):
     print(header)
-    doubled = sequence + sequence
-    length = len(sequence)
-    position = 0
+    var doubled = sequence + sequence
+    var length = len(sequence)
+    var position = 0
     while count > 0:
-        width = 60
+        var width = 60
         if count < width:
             width = count
         print(doubled[position:position + width])
@@ -58,13 +58,13 @@ def repeat_fasta(header: str, sequence: str, count: int):
 def random_fasta(header: str, table: list[tuple[str, float]], count: int, random: Random):
     print(header)
     while count > 0:
-        width = 60
+        var width = 60
         if count < width:
             width = count
-        line: list[str] = []
+        var line: list[str] = []
         for _ in range(width):
-            r = random.next()
-            choice = table[-1][0]
+            var r = random.next()
+            var choice = table[-1][0]
             for symbol, probability in table:
                 if r < probability:
                     choice = symbol
@@ -74,8 +74,8 @@ def random_fasta(header: str, table: list[tuple[str, float]], count: int, random
         count = count - width
 
 def main():
-    n = int(sys.args()[0])
-    random = Random()
+    var n = int(sys.args()[0])
+    var random = Random()
     repeat_fasta(">ONE Homo sapiens alu", alu(), 2 * n)
     random_fasta(">TWO IUB ambiguity codes", cumulative(iub()), 3 * n, random)
     random_fasta(">THREE Homo sapiens frequency", cumulative(homo_sapiens()), 5 * n, random)

@@ -7,11 +7,11 @@ class Tree[T]:
 
     # Builds a tree of the same shape whose values are `f` of this tree's.
     def map[U](f: (T) -> U) -> Tree[U]:
-        result = Tree(f(self.value))
-        left = self.left
+        var result = Tree(f(self.value))
+        var left = self.left
         if left is not none:
             result.left = left.map(f)
-        right = self.right
+        var right = self.right
         if right is not none:
             result.right = right.map(f)
         return result
@@ -22,5 +22,5 @@ def show(tree: Tree[str] | none) -> str:
     return "(" + show(tree.left) + " " + tree.value + " " + show(tree.right) + ")"
 
 def main():
-    numbers = Tree(2, Tree(1), Tree(3))
+    var numbers = Tree(2, Tree(1), Tree(3))
     print(show(numbers.map((n) => str(n * n))))

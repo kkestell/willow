@@ -1,4 +1,4 @@
 import io
 
 def main():
-    f = io.File()
+    var f = io.File()

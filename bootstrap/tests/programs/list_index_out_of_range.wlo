@@ -1,5 +1,5 @@
 def main():
-    items = [1, 2, 3]
+    var items = [1, 2, 3]
     print(items[-3])
     print(items[3])
     print("unreachable")

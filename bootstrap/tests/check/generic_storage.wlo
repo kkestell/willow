@@ -16,16 +16,16 @@ def optional[T](value: T) -> T | none:
     return value
 
 def store[T](value: T) -> Items[T]:
-    local: T | none = value
-    values: Items[T] = [local, value]
+    var local: T | none = value
+    var values: Items[T] = [local, value]
     values.append(value)
     values[0] = value
-    table: dict[str, T | none] = {"a": value}
+    var table: dict[str, T | none] = {"a": value}
     table["b"] = value
     for key, item in table.items():
         values.append(item)
-    pair: tuple[T | none] = (value,)
-    slot: Slot[T] = Slot()
+    var pair: tuple[T | none] = (value,)
+    var slot: Slot[T] = Slot()
     slot.set(value)
     values.append(slot.get())
     values.append(optional[T](value))
@@ -33,7 +33,7 @@ def store[T](value: T) -> Items[T]:
     return values
 
 def main():
-    integers = store(7)
+    var integers = store(7)
     assert len(integers) == 8
     for integer in integers:
         assert integer == 7
@@ -46,7 +46,7 @@ def main():
     for missing in store[none](none):
         assert missing is none
     print("stored")
-    slot: Slot[float] = Slot()
+    var slot: Slot[float] = Slot()
     print(slot.get())
     slot.set(3.5)
     print(slot.get())

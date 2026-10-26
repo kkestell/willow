@@ -2,7 +2,7 @@ def half(x: float) -> float:
     return x / 2.0
 
 def main():
-    sum = 0.1 + 0.2
+    var sum = 0.1 + 0.2
     print(sum == 0.30000000000000004)
     print(sum != 0.3)
     print(half(5.0) == 2.5)
@@ -17,9 +17,9 @@ def main():
     print(float(3) == 3.0)
     print(float(-7) < float(-6))
     print(-0.0 == 0.0)
-    big = 1e308 * 10.0
+    var big = 1e308 * 10.0
     print(big > 1e308)
-    nan = big - big
+    var nan = big - big
     print(nan == nan)
     print(nan != nan)
     print(nan < 1.0)

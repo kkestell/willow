@@ -2,7 +2,7 @@
 # methods for searching, splitting, joining, and case.
 
 def main():
-    text = "Willow café"
+    var text = "Willow café"
     print(len(text))
     print(text[0])
     print(text[-1])
@@ -13,7 +13,7 @@ def main():
     print(text.startswith("Will") and text.endswith("é"))
     print(text.replace("café", "tea"))
 
-    fields = "a,b,,c".split(",")
+    var fields = "a,b,,c".split(",")
     print(len(fields))
     print(" | ".join(fields))
 
@@ -25,6 +25,6 @@ def main():
     print("tab:\there, quote: \"")
 
     # Triple-quoted strings span lines.
-    poem = """roses are red,
+    var poem = """roses are red,
 violets are blue"""
     print(len(poem.split("\n")))

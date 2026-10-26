@@ -16,20 +16,20 @@ def failing_cleanup() -> Generator[int]:
         raise ValueError("cleanup failed")
 
 def main():
-    log: list[str] = []
-    g = nested(log)
+    var log: list[str] = []
+    var g = nested(log)
     print(next(g))
     g.close()
     for entry in log:
         print(entry)
     g.close()
-    finished = nested(log)
+    var finished = nested(log)
     for n in finished:
         pass
     finished.close()
     print(len(log))
 
-    bad = failing_cleanup()
+    var bad = failing_cleanup()
     next(bad)
     try:
         bad.close()
@@ -41,8 +41,8 @@ def main():
         print("closed")
     bad.close()
 
-    managed = nested(log)
-    entered = managed.enter()
+    var managed = nested(log)
+    var entered = managed.enter()
     print(next(entered))
     managed.exit(none)
     print(log[len(log) - 1])

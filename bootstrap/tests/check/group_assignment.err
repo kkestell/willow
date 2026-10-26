@@ -1,1 +1,1 @@
-group_assignment.wlo:7:11: error: variable 'value' may be used before assignment
+group_assignment.wlo:8:11: error: variable 'value' may be used before assignment

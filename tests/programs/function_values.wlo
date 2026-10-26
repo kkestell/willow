@@ -12,27 +12,27 @@ def trace(label: str, value: int) -> int:
 
 # Recursion through an alias of the function itself.
 def fact(n: int) -> int:
-    f = fact
+    var f = fact
     if n < 2:
         return 1
     return n * f(n - 1)
 
 # A local hides the declaration of the same name throughout the function.
 def hidden():
-    double = add
+    var double = add
     print(double(1))
     # A qualified name still reaches the hidden declaration.
-    g = function_values.double
+    var g = function_values.double
     print(g(3))
 
 def main():
     hidden()
-    f = add
+    var f = add
     print(f(1))
     print(f(1, 2, scale=3))
     print(f(b=5, a=1))
     print((double)(4))
-    fs = [double, double]
+    var fs = [double, double]
     print(fs[1](5))
     print({"d": double}["d"](6))
     print((double, 1)[0](7))

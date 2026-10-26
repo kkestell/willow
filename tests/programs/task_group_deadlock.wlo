@@ -4,12 +4,12 @@ class Holder:
     task: aio.Task[int] | none
 
 async def waiter(holder: Holder) -> int:
-    task = holder.task
+    var task = holder.task
     if task is not none:
         return await task
     return 0
 
 async def main():
-    holder = Holder(none)
+    var holder = Holder(none)
     async with aio.task_group() as group:
         holder.task = group.start(waiter(holder))

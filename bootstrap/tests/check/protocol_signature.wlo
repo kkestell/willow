@@ -6,4 +6,4 @@ class Source:
         return "text"
 
 def main():
-    reader: Reader = Source()
+    var reader: Reader = Source()

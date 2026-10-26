@@ -13,18 +13,18 @@ def greeting(name: str | none) -> str:
     return "Hello, " + name
 
 def main():
-    names = ["ada", "alan", "grace"]
+    var names = ["ada", "alan", "grace"]
     print(greeting(find(names, "gr")))
     print(greeting(find(names, "x")))
 
-    ages = {"ada": 36}
-    age = ages.get("alan")
+    var ages = {"ada": 36}
+    var age = ages.get("alan")
     print(age)
     if age is none:
         age = 0
     print(age + 1)
 
     # An assert also narrows the value after it.
-    first = find(names, "a")
+    var first = find(names, "a")
     assert first is not none
     print(first.upper())

@@ -31,11 +31,12 @@ class Process:
 
     def wait(timeout: float | none = none) -> int:
         _check_timeout(timeout)
+        var code: int | none
         if timeout is none:
             code = core.process_poll(self._child, true)
             assert code is not none
             return code
-        deadline = _deadline(timeout)
+        var deadline = _deadline(timeout)
         code = self.poll()
         while code is none:
             if _delay(deadline) == 0.0:
@@ -48,8 +49,8 @@ class Process:
     async def wait_async(timeout: float | none = none) -> int:
         await aio.sleep(0.0)
         _check_timeout(timeout)
-        deadline = _deadline(timeout)
-        code = self.poll()
+        var deadline = _deadline(timeout)
+        var code = self.poll()
         while code is none:
             if _delay(deadline) == 0.0:
                 raise TimeoutError(f"process did not exit within {timeout} seconds")
@@ -65,7 +66,7 @@ class Process:
         core.process_signal(self._child, 9)
 
 def spawn(args: list[str], cwd: str | none = none, env: dict[str, str] | none = none, stdin: io.File | none = none, stdout: io.File | none = none, stderr: io.File | none = none) -> Process:
-    redirects = [-1, -1, -1]
+    var redirects = [-1, -1, -1]
     if stdin is not none:
         redirects[0] = stdin._child_fd("stdin", true)
     if stdout is not none:
@@ -75,7 +76,7 @@ def spawn(args: list[str], cwd: str | none = none, env: dict[str, str] | none = 
     return Process(core.process_start(args, cwd, env, redirects))
 
 def _octets(buffer: ptr, count: int) -> bytes:
-    data = core.str_alloc(count)
+    var data = core.str_alloc(count)
     core.memcpy(__offset(data, 24), buffer, count)
     return __bytes(__word(core.bytes_tag(__str(__word(data)))))
 
@@ -95,19 +96,19 @@ class _Run:
     _offset: int = 0
 
     def _write() -> bool:
-        fd = self._input_fd
-        data = self._input
+        var fd = self._input_fd
+        var data = self._input
         if fd < 0 or data is none:
             return false
-        progress = false
+        var progress = false
         if self._offset < len(data):
-            count = min(65536, len(data) - self._offset)
-            written = core.write(fd, __offset(__ptr(__word(data)), 24 + self._offset), count)
+            var count = min(65536, len(data) - self._offset)
+            var written = core.write(fd, __offset(__ptr(__word(data)), 24 + self._offset), count)
             if written > 0:
                 self._offset = self._offset + written
                 progress = true
             else if written < 0:
-                code = core.errno()
+                var code = core.errno()
                 if code == 32:
                     self._offset = len(data)
                 else if code != 4 and not core.would_block(code):
@@ -119,25 +120,25 @@ class _Run:
         return progress
 
     def _read(fd: int, parts: list[bytes], size: int) -> int:
-        count = core.read(fd, self._buffer, size)
+        var count = core.read(fd, self._buffer, size)
         if count > 0:
             parts.append(_octets(self._buffer, count))
         else if count < 0:
-            code = core.errno()
+            var code = core.errno()
             if code != 4 and not core.would_block(code):
                 raise OSError("cannot read output: " + core.os_reason())
         return count
 
     def step() -> bool:
-        progress = self._write()
+        var progress = self._write()
         for which in range(2):
-            fd = self._output_fd
-            parts = self._output
+            var fd = self._output_fd
+            var parts = self._output
             if which == 1:
                 fd = self._error_fd
                 parts = self._error
             if fd >= 0:
-                count = self._read(fd, parts, 65536)
+                var count = self._read(fd, parts, 65536)
                 if count >= 0:
                     progress = true
                 if count == 0:
@@ -149,11 +150,11 @@ class _Run:
         return progress
 
     def wait(seconds: float):
-        fds = __alloc_atomic(24)
-        count = 0
+        var fds = __alloc_atomic(24)
+        var count = 0
         for fd in [self._input_fd, self._output_fd, self._error_fd]:
             if fd >= 0:
-                events = 1
+                var events = 1
                 if fd == self._input_fd:
                     events = 4
                 __store4(fds, count * 8, fd)
@@ -165,20 +166,20 @@ class _Run:
 
     def finish(code: int) -> Result:
         for which in range(2):
-            fd = self._output_fd
-            parts = self._output
+            var fd = self._output_fd
+            var parts = self._output
             if which == 1:
                 fd = self._error_fd
                 parts = self._error
             if fd >= 0:
-                remaining = core.process_available(fd)
+                var remaining = core.process_available(fd)
                 while remaining > 0:
-                    count = self._read(fd, parts, min(65536, remaining))
+                    var count = self._read(fd, parts, min(65536, remaining))
                     if count <= 0:
                         break
                     remaining = remaining - count
-        output: bytes | none = none
-        error: bytes | none = none
+        var output: bytes | none = none
+        var error: bytes | none = none
         if self._capture:
             output = _join(self._output)
             error = _join(self._error)
@@ -193,22 +194,22 @@ class _Run:
         self._error_fd = -1
 
 def _start(args: list[str], input: bytes | none, capture_output: bool, cwd: str | none, env: dict[str, str] | none) -> _Run:
-    redirects = [-1, -1, -1]
-    all_fds: list[int] = []
-    parent: list[int] = []
-    input_fd = -1
-    output_fd = -1
-    error_fd = -1
-    started = false
+    var redirects = [-1, -1, -1]
+    var all_fds: list[int] = []
+    var parent: list[int] = []
+    var input_fd = -1
+    var output_fd = -1
+    var error_fd = -1
+    var started = false
     try:
         if input is not none:
-            pipe = core.process_pipe()
+            var pipe = core.process_pipe()
             all_fds.extend(pipe)
             redirects[0] = pipe[0]
             input_fd = pipe[1]
             parent.append(input_fd)
         if capture_output:
-            pipe = core.process_pipe()
+            var pipe = core.process_pipe()
             all_fds.extend(pipe)
             output_fd = pipe[0]
             redirects[1] = pipe[1]
@@ -220,8 +221,8 @@ def _start(args: list[str], input: bytes | none, capture_output: bool, cwd: str 
             parent.append(error_fd)
         for fd in parent:
             core.process_nonblocking(fd)
-        child = core.process_start(args, cwd, env, redirects)
-        result = _Run(child, input_fd, output_fd, error_fd, input, capture_output, [], [], __alloc_atomic(65536))
+        var child = core.process_start(args, cwd, env, redirects)
+        var result = _Run(child, input_fd, output_fd, error_fd, input, capture_output, [], [], __alloc_atomic(65536))
         started = true
         return result
     finally:
@@ -231,15 +232,15 @@ def _start(args: list[str], input: bytes | none, capture_output: bool, cwd: str 
 
 def run(args: list[str], input: bytes | none = none, capture_output: bool = false, cwd: str | none = none, env: dict[str, str] | none = none, timeout: float | none = none) -> Result:
     _check_timeout(timeout)
-    state = _start(args, input, capture_output, cwd, env)
-    deadline = _deadline(timeout)
-    code: int | none = none
+    var state = _start(args, input, capture_output, cwd, env)
+    var deadline = _deadline(timeout)
+    var code: int | none = none
     try:
         while code is none:
-            progress = state.step()
+            var progress = state.step()
             code = core.process_poll(state._child, false)
             if code is none:
-                delay = _delay(deadline)
+                var delay = _delay(deadline)
                 if delay == 0.0:
                     raise TimeoutError(f"command timed out after {timeout} seconds")
                 if not progress:
@@ -257,15 +258,15 @@ def run(args: list[str], input: bytes | none = none, capture_output: bool = fals
 async def run_async(args: list[str], input: bytes | none = none, capture_output: bool = false, cwd: str | none = none, env: dict[str, str] | none = none, timeout: float | none = none) -> Result:
     await aio.sleep(0.0)
     _check_timeout(timeout)
-    state = _start(args, input, capture_output, cwd, env)
-    deadline = _deadline(timeout)
-    code: int | none = none
+    var state = _start(args, input, capture_output, cwd, env)
+    var deadline = _deadline(timeout)
+    var code: int | none = none
     try:
         while code is none:
-            progress = state.step()
+            var progress = state.step()
             code = core.process_poll(state._child, false)
             if code is none:
-                delay = _delay(deadline)
+                var delay = _delay(deadline)
                 if delay == 0.0:
                     raise TimeoutError(f"command timed out after {timeout} seconds")
                 if progress:

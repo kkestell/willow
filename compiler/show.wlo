@@ -14,7 +14,7 @@ class Printer:
         return text
 
     def module(module: ast.Module) -> str:
-        lines: list[str] = []
+        var lines: list[str] = []
         for imported in module.imports:
             lines.append(self.at(f"import {imported.name}", imported.line, imported.col))
         for decl in module.declarations:
@@ -25,10 +25,10 @@ class Printer:
         if decl is ast.FunctionDecl:
             return self.function(decl)
         if decl is ast.ClassDecl:
-            parts: list[str] = []
+            var parts: list[str] = []
             for field in decl.fields:
-                text = self.at(field.name, field.line, field.col) + ": " + self.annotation(field.annotation)
-                default = field.default
+                var text = self.at(field.name, field.line, field.col) + ": " + self.annotation(field.annotation)
+                var default = field.default
                 if default is not none:
                     text = text + " = " + self.expr(default)
                 parts.append(text)
@@ -36,12 +36,12 @@ class Printer:
                 parts.append(self.function(method))
             return self.at(f"class {decl.name}{self.type_params(decl.type_params)}", decl.line, decl.col) + " { " + "; ".join(parts) + " }"
         if decl is ast.ProtocolDecl:
-            methods: list[str] = []
+            var methods: list[str] = []
             for method in decl.methods:
                 methods.append(self.function(method))
             return self.at(f"protocol {decl.name}{self.type_params(decl.type_params)}", decl.line, decl.col) + " { " + "; ".join(methods) + " }"
         if decl is ast.EnumDecl:
-            members: list[str] = []
+            var members: list[str] = []
             for member in decl.members:
                 members.append(self.at(member.name, member.line, member.col))
             return self.at(f"enum {decl.name}", decl.line, decl.col) + " { " + "; ".join(members) + " }"
@@ -50,10 +50,10 @@ class Printer:
     def type_params(params: list[ast.TypeParam]) -> str:
         if len(params) == 0:
             return ""
-        parts: list[str] = []
+        var parts: list[str] = []
         for param in params:
-            text = self.at(param.name, param.line, param.col)
-            bound = param.bound
+            var text = self.at(param.name, param.line, param.col)
+            var bound = param.bound
             if bound is not none:
                 text = text + ": " + self.annotation(bound)
             parts.append(text)
@@ -61,13 +61,13 @@ class Printer:
 
     # A function, or a protocol method signature when its body is empty.
     def function(function: ast.FunctionDecl) -> str:
-        params: list[str] = []
+        var params: list[str] = []
         for param in function.params:
             if param.name != "self":
                 params.append(self.param(param))
         if function.variadic:
             params.append("...")
-        text = f"def {function.name}{self.type_params(function.type_params)}"
+        var text = f"def {function.name}{self.type_params(function.type_params)}"
         if function.is_async:
             text = "async " + text
         if function.external:
@@ -78,14 +78,14 @@ class Printer:
         return text + " " + self.block(function.body)
 
     def param(param: ast.Param) -> str:
-        text = param.name
+        var text = param.name
         if param.keyword_only:
             text = "*" + text
         text = self.at(text, param.line, param.col)
-        annotation = param.annotation
+        var annotation = param.annotation
         if annotation is not none:
             text = text + ": " + self.annotation(annotation)
-        default = param.default
+        var default = param.default
         if default is not none:
             text = text + " = " + self.expr(default)
         return text
@@ -94,21 +94,21 @@ class Printer:
         if t is ast.TypeName:
             return self.type_name(t)
         if t is ast.UnionType:
-            members: list[str] = []
+            var members: list[str] = []
             for member in t.members:
                 members.append(self.annotation(member))
             return self.at(" | ".join(members), t.line, t.col)
-        params: list[str] = []
+        var params: list[str] = []
         for param in t.params:
             params.append(self.annotation(param))
         return self.at("((" + ", ".join(params) + ") -> " + self.annotation(t.result) + ")", t.line, t.col)
 
     def type_name(t: ast.TypeName) -> str:
-        text = t.name
+        var text = t.name
         if t.module != "":
             text = t.module + "." + text
         if t.has_args:
-            args: list[str] = []
+            var args: list[str] = []
             for arg in t.args:
                 args.append(self.annotation(arg))
             text = text + "[" + ", ".join(args) + "]"
@@ -117,19 +117,19 @@ class Printer:
     def target(target: ast.Target) -> str:
         if target.name != "":
             return target.name
-        elements: list[str] = []
+        var elements: list[str] = []
         for element in target.elements:
             elements.append(self.target(element))
         return "<" + ", ".join(elements) + ">"
 
     def exprs(exprs: list[ast.Expr]) -> str:
-        parts: list[str] = []
+        var parts: list[str] = []
         for expr in exprs:
             parts.append(self.expr(expr))
         return ", ".join(parts)
 
     def args(args: list[ast.Expr], keywords: list[ast.Keyword]) -> str:
-        parts: list[str] = []
+        var parts: list[str] = []
         for arg in args:
             parts.append(self.expr(arg))
         for keyword in keywords:
@@ -137,7 +137,7 @@ class Printer:
         return ", ".join(parts)
 
     def type_args(args: list[ast.TypeExpr]) -> str:
-        parts: list[str] = []
+        var parts: list[str] = []
         for t in args:
             parts.append(self.annotation(t))
         return ", ".join(parts)
@@ -146,7 +146,7 @@ class Printer:
     def type_arg_list(args: list[types.Type]) -> str:
         if len(args) == 0:
             return ""
-        names: list[str] = []
+        var names: list[str] = []
         for arg in args:
             names.append(types.display(arg))
         return "[" + ", ".join(names) + "]"
@@ -188,12 +188,12 @@ class Printer:
         if node is ast.Index:
             return self.expr(node.object) + "[" + self.expr(node.index) + "]"
         if node is ast.Slice:
-            text = self.expr(node.object) + "["
-            start = node.start
+            var text = self.expr(node.object) + "["
+            var start = node.start
             if start is not none:
                 text = text + self.expr(start)
             text = text + ":"
-            stop = node.stop
+            var stop = node.stop
             if stop is not none:
                 text = text + self.expr(stop)
             return text + "]"
@@ -210,14 +210,14 @@ class Printer:
                 return "(" + self.expr(node.operand) + " is not none)"
             return "(" + self.expr(node.operand) + " is none)"
         if node is ast.TypeTest:
-            op = " is "
+            var op = " is "
             if node.negated:
                 op = " is not "
             return "(" + self.expr(node.operand) + op + self.type_name(node.type_name) + ")"
         if node is ast.Await:
             return "(await " + self.expr(node.operand) + ")"
         if node is ast.Lambda:
-            names: list[str] = []
+            var names: list[str] = []
             for param in node.params:
                 names.append(self.param(param))
             return "((" + ", ".join(names) + ") => " + self.expr(node.body) + ")"
@@ -229,15 +229,15 @@ class Printer:
             return "__type(" + self.annotation(node.target) + ")"
         if node is ast.Typed:
             return f"typed({node.index})"
-        entries: list[str] = []
-        i = 0
+        var entries: list[str] = []
+        var i = 0
         while i < len(node.keys):
             entries.append(self.expr(node.keys[i]) + ": " + self.expr(node.values[i]))
             i = i + 1
         return "{" + ", ".join(entries) + "}"
 
     def block(body: list[ast.Stmt]) -> str:
-        parts: list[str] = []
+        var parts: list[str] = []
         for statement in body:
             parts.append(self.stmt(statement))
         return "{ " + "; ".join(parts) + " }"
@@ -247,17 +247,17 @@ class Printer:
 
     def stmt_node(node: ast.StmtNode) -> str:
         if (node is ast.Var):
-            text = "var " + self.target(node.target)
-            annotation = node.annotation
+            var text = "var " + self.target(node.target)
+            var annotation = node.annotation
             if annotation is not none:
                 text = text + ": " + self.annotation(annotation)
-            value = node.value
+            var value = node.value
             if value is not none:
                 text = text + " = " + self.expr(value)
             return text
         if (node is ast.Assign):
-            text = node.name
-            annotation = node.annotation
+            var text = node.name
+            var annotation = node.annotation
             if annotation is not none:
                 text = text + ": " + self.annotation(annotation)
             return text + " = " + self.expr(node.value)
@@ -270,7 +270,7 @@ class Printer:
         if node is ast.CallStmt:
             return self.expr(node.call)
         if node is ast.If:
-            text = "if " + self.expr(node.condition) + " " + self.block(node.body)
+            var text = "if " + self.expr(node.condition) + " " + self.block(node.body)
             if len(node.else_body) > 0:
                 text = text + " else " + self.block(node.else_body)
             return text
@@ -279,22 +279,22 @@ class Printer:
         if node is ast.For:
             return "for " + self.target(node.target) + " in " + self.expr(node.iterable) + " " + self.block(node.body)
         if node is ast.With:
-            items: list[str] = []
+            var items: list[str] = []
             for item in node.items:
-                text = self.expr(item.manager)
-                target = item.target
+                var text = self.expr(item.manager)
+                var target = item.target
                 if target is not none:
                     text = text + " as " + self.target(target)
                 items.append(text)
             return "with " + ", ".join(items) + " " + self.block(node.body)
         if node is ast.AsyncWith:
-            text = "async with " + self.expr(node.manager)
-            scope_target = node.target
+            var text = "async with " + self.expr(node.manager)
+            var scope_target = node.target
             if scope_target is not none:
                 text = text + " as " + self.target(scope_target)
             return text + " " + self.block(node.body)
         if node is ast.Try:
-            text = "try " + self.block(node.body)
+            var text = "try " + self.block(node.body)
             for handler in node.handlers:
                 text = text + " " + self.at("except", handler.line, handler.col) + " " + self.type_name(handler.type_name)
                 if handler.name != "":
@@ -306,18 +306,18 @@ class Printer:
         if node is ast.FunctionDef:
             return self.function(node.function)
         if (node is ast.Return):
-            value = node.value
+            var value = node.value
             if value is none:
                 return "return"
             return "return " + self.expr(value)
         if node is ast.Assert:
-            text = "assert " + self.expr(node.condition)
-            message = node.message
+            var text = "assert " + self.expr(node.condition)
+            var message = node.message
             if message is not none:
                 text = text + ", " + self.expr(message)
             return text
         if node is ast.Raise:
-            raised = node.value
+            var raised = node.value
             if raised is none:
                 return "raise"
             return "raise " + self.expr(raised)

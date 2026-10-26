@@ -14,7 +14,7 @@ async def accept_closed(listener: aio.Listener, log: list[str]):
         log.append("closed")
 
 async def main():
-    log: list[str] = []
+    var log: list[str] = []
     async with aio.task_group() as group:
         group.start(worker("a", log))
         group.start(worker("b", log))

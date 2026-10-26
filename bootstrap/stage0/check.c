@@ -464,7 +464,7 @@ static void bind_expr(Expr *expression, const Map *visible) {
         bind_expr(kind->as.Binary.left, visible);
         bind_expr(kind->as.Binary.right, visible);
         break;
-    case EXPR_IsNone: bind_expr(kind->as.IsNone.operand, visible); break;
+    case EXPR_TypeTest: bind_expr(kind->as.TypeTest.operand, visible); break;
     case EXPR_Int: case EXPR_Float: case EXPR_Str: case EXPR_Bool:
     case EXPR_None: case EXPR_TypeOf: break;
     }

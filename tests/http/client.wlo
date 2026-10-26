@@ -10,28 +10,29 @@ def show(response: http.Response) -> str:
     return f"{response.status} {response.url} {response.body.decode()}"
 
 def main():
-    base = sys.args()[0]
-    directory = sys.args()[1]
+    var base = sys.args()[0]
+    var directory = sys.args()[1]
 
     # Statuses and bodies.
     print(show(http.request("GET", base + "/json")))
+    var r: http.Response
     for code in ["404", "500"]:
         r = http.request("GET", base + "/status/" + code)
         print(f"{show(r)} {http.header(r.headers, 'x-code')}")
-    data = http.request("GET", base + "/bytes").body
+    var data = http.request("GET", base + "/bytes").body
     print(f"{len(data)} {data[0]} {data[255]}")
     r = http.request("GET", base + "/latin1-header")
     print(f"{http.header(r.headers, 'X-NAME')} {http.header(r.headers, 'x-twice')} {http.header(r.headers, 'missing')}")
-    twice: list[str] = []
+    var twice: list[str] = []
     for h in r.headers:
         if h.name.lower() == "x-twice":
             twice.append(h.value)
     print(", ".join(twice))
 
     # JSON round trip with headers and a body.
-    payload = json.dump({"name": "Ada", "score": 3}).encode()
-    headers = [http.Header("X-Test", "yes"), http.Header("Content-Type", "application/json")]
-    echoed = http.request("POST", base + "/echo?a=1&b=" + http.urlencode({"q": "x y"}), headers=headers, body=payload)
+    var payload = json.dump({"name": "Ada", "score": 3}).encode()
+    var headers = [http.Header("X-Test", "yes"), http.Header("Content-Type", "application/json")]
+    var echoed = http.request("POST", base + "/echo?a=1&b=" + http.urlencode({"q": "x y"}), headers=headers, body=payload)
     print(echoed.body.decode())
     print(http.request("GET", base + "/echo", body="q".encode()).body.decode()[:16])
     print(http.request("HEAD", base + "/json").body.decode() == "")
@@ -41,7 +42,7 @@ def main():
     print(show(http.request("GET", base + "/relative")))
     print(http.request("GET", base + "/redirect/2", follow_redirects=false).status)
     print(show(http.request("POST", base + "/post-redirect")))
-    moved = http.request("GET", base + "/to-host", headers=[http.Header("X-Test", "secret")])
+    var moved = http.request("GET", base + "/to-host", headers=[http.Header("X-Test", "secret")])
     print(moved.body.decode())
     print(http.request("GET", base + "/redirect/10").status)
     for path in ["/redirect/11", "/loop"]:
@@ -51,9 +52,11 @@ def main():
             print(error.message)
 
     # Failures.
+    var timeout: TimeoutError
     try:
         http.request("GET", base + "/slow", timeout=0.5)
-    except TimeoutError as timeout:
+    except TimeoutError as timeout_item:
+        timeout = timeout_item
         print(timeout.message)
     # The reasons come from libcurl, so only their prefix is compared.
     try:
@@ -66,9 +69,9 @@ def main():
         print(error.message.startswith("cannot fetch http://127.0.0.1:1/: "))
 
     # Downloads replace the destination only on success.
-    target = fs.join(directory, "data.bin")
+    var target = fs.join(directory, "data.bin")
     fs.write_file(target, "old")
-    d = http.download(base + "/bytes", target)
+    var d = http.download(base + "/bytes", target)
     print(f"{d.status} {d.bytes_written} {fs.stat(target).size} {d.url == base + '/bytes'}")
     fs.write_file(target, "kept")
     d = http.download(base + "/status/404", target)

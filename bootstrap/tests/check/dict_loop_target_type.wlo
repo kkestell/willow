@@ -1,5 +1,6 @@
 def main():
-    k = "s"
-    d = {1: 2}
-    for k in d:
+    var k = "s"
+    var d = {1: 2}
+    for k_item in d:
+        k = k_item
         pass

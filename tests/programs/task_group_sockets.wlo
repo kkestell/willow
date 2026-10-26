@@ -12,7 +12,7 @@ async def serve(connection: aio.Connection):
 async def main():
     # A child's failure wakes the body suspended in accept, and the listener's
     # cleanup runs as the body unwinds.
-    listener = aio.listen("127.0.0.1", 0)
+    var listener = aio.listen("127.0.0.1", 0)
     try:
         async with aio.task_group() as group:
             group.start(failing())
@@ -31,8 +31,9 @@ async def main():
 
     # A connection handed to a task is scoped before the task's first await, so
     # it is closed even when the group stops before the task's first turn.
-    with aio.listen("127.0.0.1", 0) as listener:
-        client = await aio.connect("127.0.0.1", listener.local_port())
+    with aio.listen("127.0.0.1", 0) as listener_item:
+        listener = listener_item
+        var client = await aio.connect("127.0.0.1", listener.local_port())
         async with aio.task_group() as group:
             group.start(serve(await listener.accept()))
             group.cancel()

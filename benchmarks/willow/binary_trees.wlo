@@ -14,32 +14,32 @@ def make(depth: int) -> Node:
 
 # The number of nodes in the tree.
 def check(node: Node) -> int:
-    left = node.left
-    right = node.right
+    var left = node.left
+    var right = node.right
     if left is none or right is none:
         return 1
     return 1 + check(left) + check(right)
 
 def power_of_two(exponent: int) -> int:
-    result = 1
+    var result = 1
     for _ in range(exponent):
         result = result * 2
     return result
 
 def main():
-    n = int(sys.args()[0])
-    min_depth = 4
-    max_depth = n
+    var n = int(sys.args()[0])
+    var min_depth = 4
+    var max_depth = n
     if max_depth < min_depth + 2:
         max_depth = min_depth + 2
 
-    stretch_depth = max_depth + 1
+    var stretch_depth = max_depth + 1
     print(f"stretch tree of depth {stretch_depth}\t check: {check(make(stretch_depth))}")
 
-    long_lived = make(max_depth)
+    var long_lived = make(max_depth)
     for depth in range(min_depth, max_depth + 1, 2):
-        iterations = power_of_two(max_depth - depth + min_depth)
-        total = 0
+        var iterations = power_of_two(max_depth - depth + min_depth)
+        var total = 0
         for _ in range(iterations):
             total = total + check(make(depth))
         print(f"{iterations}\t trees of depth {depth}\t check: {total}")

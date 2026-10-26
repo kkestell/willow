@@ -8,8 +8,8 @@ class Options:
     upper: bool = false
 
 def frame(text: str, *, width: int = 0, border: str = "*") -> str:
-    inner = wider(width - 4, len(text))
-    edge = ""
+    var inner = wider(width - 4, len(text))
+    var edge = ""
     for i in range(inner + 4):
         edge = edge + border
     return edge + "\n" + border + " " + text.ljust(inner) + " " + border + "\n" + edge
@@ -20,8 +20,8 @@ def wider(a: int, b: int) -> int:
     return b
 
 def main():
-    options = Options()
-    words: list[str] = []
+    var options = Options()
+    var words: list[str] = []
     for arg in sys.args():
         if arg == "--upper":
             options.upper = true
@@ -31,7 +31,7 @@ def main():
             options.width = int(arg[8:])
         else:
             words.append(arg)
-    text = " ".join(words)
+    var text = " ".join(words)
     if options.upper:
         text = text.upper()
     print(frame(text, border=options.border, width=options.width))

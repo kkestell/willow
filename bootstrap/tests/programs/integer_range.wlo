@@ -1,5 +1,5 @@
 def main():
-    big = 9223372036854775807
+    var big = 9223372036854775807
     print(big)
     print(-big)
     print(big - 1 + 1)

@@ -2,12 +2,12 @@ import fs
 import sys
 
 def main():
-    args = sys.args()
+    var args = sys.args()
     if len(args) != 1:
         sys.eprint("usage: number <output>")
         sys.exit(2)
-    numbered: list[str] = []
-    line = input()
+    var numbered: list[str] = []
+    var line = input()
     while line is not none:
         numbered.append(f"{len(numbered) + 1}: {line}\n")
         line = input()

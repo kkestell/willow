@@ -12,16 +12,17 @@ def text_of(value: json.Json) -> str:
     return json.dump(value)
 
 def main():
-    args = sys.args()
+    var args = sys.args()
     if len(args) != 2:
         sys.eprint("usage: jsonl <field> <value>")
         sys.exit(2)
-    stdin = io.stdin()
-    out = io.stdout()
-    number = 0
-    kept = 0
+    var stdin = io.stdin()
+    var out = io.stdout()
+    var number = 0
+    var kept = 0
     for line in stdin:
         number = number + 1
+        var record: json.Json
         try:
             record = json.parse(line)
         except json.JsonError as error:

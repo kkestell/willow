@@ -4,7 +4,7 @@ def shift(c: str, key: int, first: str) -> str:
     return chr((ord(c) - ord(first) + key) % 26 + ord(first))
 
 def encode(text: str, key: int) -> str:
-    result = ""
+    var result = ""
     for c in text:
         if "a" <= c and c <= "z":
             result = result + shift(c, key, "a")
@@ -18,7 +18,7 @@ def decode(text: str, key: int) -> str:
     return encode(text, -key)
 
 def main():
-    text = "The quick brown fox Jumped over the lazy Dog"
-    encoded = encode(text, 11)
+    var text = "The quick brown fox Jumped over the lazy Dog"
+    var encoded = encode(text, 11)
     print(encoded)
     print(decode(encoded, 11))

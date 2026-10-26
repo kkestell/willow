@@ -1,5 +1,5 @@
 def first_multiple(step: int, limit: int) -> int:
-    n = 1
+    var n = 1
     while true:
         if n * step > limit:
             break
@@ -7,7 +7,7 @@ def first_multiple(step: int, limit: int) -> int:
     return n * step
 
 def main():
-    i = 0
+    var i = 0
     while i < 10:
         i = i + 1
         if i % 2 == 0:
@@ -15,10 +15,10 @@ def main():
         if i > 7:
             break
         print(i)
-    outer = 0
+    var outer = 0
     while outer < 3:
         outer = outer + 1
-        inner = 0
+        var inner = 0
         while true:
             inner = inner + 1
             if inner == outer:

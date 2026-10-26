@@ -1,1 +1,1 @@
-constructor_arguments.wlo:6:15: error: 'Options' expects 1 to 2 arguments, received 0
+constructor_arguments.wlo:6:19: error: 'Options' expects 1 to 2 arguments, received 0

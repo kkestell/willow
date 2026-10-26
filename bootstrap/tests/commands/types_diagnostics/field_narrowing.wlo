@@ -2,6 +2,6 @@ class P:
     value: int | none
 def f(p: P):
     if p.value is not none:
-        x = p.value + 1
+        var x = p.value + 1
 def main():
     pass

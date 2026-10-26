@@ -17,7 +17,7 @@ def solar_mass() -> float:
     return 4.0 * 3.141592653589793 * 3.141592653589793
 
 def planet(x: float, y: float, z: float, vx: float, vy: float, vz: float, mass: float) -> Body:
-    days_per_year = 365.24
+    var days_per_year = 365.24
     return Body(x, y, z, vx * days_per_year, vy * days_per_year, vz * days_per_year, mass * solar_mass())
 
 def system() -> list[Body]:
@@ -47,45 +47,45 @@ def system() -> list[Body]:
 
 # Gives the sun the momentum that makes the system's total momentum zero.
 def offset_momentum(bodies: list[Body]):
-    px = 0.0
-    py = 0.0
-    pz = 0.0
+    var px = 0.0
+    var py = 0.0
+    var pz = 0.0
     for body in bodies:
         px = px + body.vx * body.mass
         py = py + body.vy * body.mass
         pz = pz + body.vz * body.mass
-    sun = bodies[0]
+    var sun = bodies[0]
     sun.vx = -px / solar_mass()
     sun.vy = -py / solar_mass()
     sun.vz = -pz / solar_mass()
 
 def energy(bodies: list[Body]) -> float:
-    e = 0.0
-    count = len(bodies)
+    var e = 0.0
+    var count = len(bodies)
     for i in range(count):
-        a = bodies[i]
+        var a = bodies[i]
         e = e + 0.5 * a.mass * (a.vx * a.vx + a.vy * a.vy + a.vz * a.vz)
         for j in range(i + 1, count):
-            b = bodies[j]
-            dx = a.x - b.x
-            dy = a.y - b.y
-            dz = a.z - b.z
+            var b = bodies[j]
+            var dx = a.x - b.x
+            var dy = a.y - b.y
+            var dz = a.z - b.z
             e = e - a.mass * b.mass / math.sqrt(dx * dx + dy * dy + dz * dz)
     return e
 
 def advance(bodies: list[Body], dt: float):
-    count = len(bodies)
+    var count = len(bodies)
     for i in range(count):
-        a = bodies[i]
+        var a = bodies[i]
         for j in range(i + 1, count):
-            b = bodies[j]
-            dx = a.x - b.x
-            dy = a.y - b.y
-            dz = a.z - b.z
-            distance2 = dx * dx + dy * dy + dz * dz
-            magnitude = dt / (distance2 * math.sqrt(distance2))
-            a_mass = a.mass * magnitude
-            b_mass = b.mass * magnitude
+            var b = bodies[j]
+            var dx = a.x - b.x
+            var dy = a.y - b.y
+            var dz = a.z - b.z
+            var distance2 = dx * dx + dy * dy + dz * dz
+            var magnitude = dt / (distance2 * math.sqrt(distance2))
+            var a_mass = a.mass * magnitude
+            var b_mass = b.mass * magnitude
             a.vx = a.vx - dx * b_mass
             a.vy = a.vy - dy * b_mass
             a.vz = a.vz - dz * b_mass
@@ -98,8 +98,8 @@ def advance(bodies: list[Body], dt: float):
         body.z = body.z + dt * body.vz
 
 def main():
-    steps = int(sys.args()[0])
-    bodies = system()
+    var steps = int(sys.args()[0])
+    var bodies = system()
     offset_momentum(bodies)
     print(f"{energy(bodies):.9f}")
     for _ in range(steps):

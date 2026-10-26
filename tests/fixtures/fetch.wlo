@@ -6,29 +6,32 @@ import http
 import sys
 
 def main():
-    args = sys.args()
+    var args = sys.args()
     if len(args) < 2:
         sys.eprint("usage: fetch <url> <path> [name=value...]")
         sys.exit(2)
-    url = args[0]
-    query: dict[str, str] = {}
+    var url = args[0]
+    var query: dict[str, str] = {}
     for pair in args[2:]:
-        split = pair.find("=")
+        var split = pair.find("=")
         if split is none or split < 1:
             sys.eprint(f"fetch: expected name=value, received '{pair}'")
             sys.exit(2)
         query[pair[:split]] = pair[split + 1:]
     if len(query) > 0:
-        separator = "?"
+        var separator = "?"
         if "?" in url:
             separator = "&"
         url = url + separator + http.urlencode(query)
+    var result: http.Download
+    var timeout: TimeoutError
     try:
         result = http.download(url, args[1], timeout=10.0)
     except OSError as error:
         sys.eprint(error.message)
         sys.exit(1)
-    except TimeoutError as timeout:
+    except TimeoutError as timeout_item:
+        timeout = timeout_item
         sys.eprint(timeout.message)
         sys.exit(1)
     if result.status < 200 or result.status > 299:

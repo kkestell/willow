@@ -5,19 +5,19 @@
 import sys
 
 def generate(n: int) -> list[str]:
-    symbols = ["A", "C", "G", "T"]
-    probabilities = [0.3029549426680, 0.1979883004921, 0.1975473066391, 0.3015094502008]
-    cumulative: list[float] = []
-    total = 0.0
+    var symbols = ["A", "C", "G", "T"]
+    var probabilities = [0.3029549426680, 0.1979883004921, 0.1975473066391, 0.3015094502008]
+    var cumulative: list[float] = []
+    var total = 0.0
     for probability in probabilities:
         total = total + probability
         cumulative.append(total)
-    sequence: list[str] = []
-    last = 42
+    var sequence: list[str] = []
+    var last = 42
     for _ in range(n):
         last = (last * 3877 + 29573) % 139968
-        r = float(last) / 139968.0
-        choice = 3
+        var r = float(last) / 139968.0
+        var choice = 3
         for i in range(4):
             if r < cumulative[i]:
                 choice = i
@@ -26,10 +26,10 @@ def generate(n: int) -> list[str]:
     return sequence
 
 def count(sequence: list[str], k: int) -> dict[str, int]:
-    counts: dict[str, int] = {}
+    var counts: dict[str, int] = {}
     for i in range(len(sequence) - k + 1):
-        kmer = "".join(sequence[i:i + k])
-        current = counts.get(kmer)
+        var kmer = "".join(sequence[i:i + k])
+        var current = counts.get(kmer)
         if current is none:
             counts[kmer] = 1
         else:
@@ -37,21 +37,21 @@ def count(sequence: list[str], k: int) -> dict[str, int]:
     return counts
 
 def print_frequencies(sequence: list[str], k: int):
-    counts = count(sequence, k)
-    total = float(len(sequence) - k + 1)
+    var counts = count(sequence, k)
+    var total = float(len(sequence) - k + 1)
     for kmer in sorted(counts, key=(kmer) => (-counts[kmer], kmer)):
         print(f"{kmer} {100.0 * float(counts[kmer]) / total:.3f}")
     print("")
 
 def print_count(sequence: list[str], kmer: str):
-    found = count(sequence, len(kmer)).get(kmer)
+    var found = count(sequence, len(kmer)).get(kmer)
     if found is none:
         found = 0
     print(f"{found}\t{kmer}")
 
 def main():
-    n = int(sys.args()[0])
-    sequence = generate(n)
+    var n = int(sys.args()[0])
+    var sequence = generate(n)
     print_frequencies(sequence, 1)
     print_frequencies(sequence, 2)
     for kmer in ["GGT", "GGTA", "GGTATT", "GGTATTTTAATT", "GGTATTTTAATTTATAGT"]:

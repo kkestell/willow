@@ -1,7 +1,7 @@
 import aio
 
 async def main():
-    pending = aio.sleep(-1.0)
+    var pending = aio.sleep(-1.0)
     print("created")
     try:
         await pending

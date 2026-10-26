@@ -1,1 +1,1 @@
-async_coroutine_invariant.wlo:5:38: error: expected Coroutine[int | none], received Coroutine[int]
+async_coroutine_invariant.wlo:5:42: error: expected Coroutine[int | none], received Coroutine[int]

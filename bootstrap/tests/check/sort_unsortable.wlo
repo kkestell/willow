@@ -1,3 +1,3 @@
 def main():
-    xs = [true]
+    var xs = [true]
     xs.sort()

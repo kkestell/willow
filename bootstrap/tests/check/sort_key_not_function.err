@@ -1,1 +1,1 @@
-sort_key_not_function.wlo:2:25: error: a sort key must be a function, received bool
+sort_key_not_function.wlo:2:29: error: a sort key must be a function, received bool

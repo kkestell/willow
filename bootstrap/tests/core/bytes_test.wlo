@@ -1,7 +1,7 @@
 import core
 
 def main():
-    data = core.str_encode("a\x00é")
+    var data = core.str_encode("a\x00é")
     assert core.bytes_decode(data) == "a\x00é"
     assert core.bytes_hex(data) == "6100c3a9"
     assert core.bytes_index(data, -1) == 169

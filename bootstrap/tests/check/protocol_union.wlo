@@ -23,7 +23,7 @@ def describe(value: Reader | none) -> str:
     return "reader " + str(value.read())
 
 def main():
-    values: list[Reader | none] = [Source(1), none]
+    var values: list[Reader | none] = [Source(1), none]
     for value in values:
         print(describe(value))
     print(describe(widen(Source(3))))

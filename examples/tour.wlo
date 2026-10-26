@@ -27,7 +27,7 @@ class SlowerThan:
 
     def check(entry: Entry) -> str | none:
         # Fields are not narrowed, so copy to a local before testing for none.
-        millis = entry.millis
+        var millis = entry.millis
         if millis is not none and millis > self.limit:
             return f"took {millis}ms"
         return none
@@ -73,25 +73,26 @@ async def fetch_log(host: str) -> str:
 def split_millis(text: str) -> tuple[str, int | none]:
     if not text.endswith("ms]"):
         return (text, none)
-    start = text.find(" [")
+    var start = text.find(" [")
     if start is none:
         return (text, none)
     return (text[:start], int(text[start + 2:-3]))
 
 def parse_line(host: str, line: str, number: int) -> Entry:
-    levels = {"INFO": Level.INFO, "WARN": Level.WARN, "ERROR": Level.ERROR}
-    word = line.split(" ")[0]
-    level = levels.get(word)
+    var levels = {"INFO": Level.INFO, "WARN": Level.WARN, "ERROR": Level.ERROR}
+    var word = line.split(" ")[0]
+    var level = levels.get(word)
     if level is none:
         raise ParseError(f"unknown level '{word}'", number)
-    text, millis = split_millis(line[len(word) + 1:])
+    var text, millis = split_millis(line[len(word) + 1:])
     return Entry(host, level, text, millis=millis)
 
 # A generator: its body runs a step at a time as the caller iterates.
 def parse(host: str, text: str) -> Iterator[Entry]:
-    number = 0
+    var number = 0
     for line in text.strip().split("\n"):
         number = number + 1
+        var entry: Entry
         try:
             entry = parse_line(host, line, number)
         except ParseError as error:
@@ -106,53 +107,53 @@ def first[T](items: list[T], *, where: (T) -> bool) -> T | none:
     return none
 
 def counter(prefix: str = "#") -> () -> str:
-    count = 0
+    var count = 0
 
     def next_label() -> str:
-        nonlocal count
+
         count = count + 1
         return f"{prefix}{count}"
 
     return next_label
 
 async def main():
-    hosts = ["web", "db"]
-    downloads: dict[str, aio.Task[str]] = {}
+    var hosts = ["web", "db"]
+    var downloads: dict[str, aio.Task[str]] = {}
     async with aio.task_group() as group:
         for host in hosts:
             downloads[host] = group.start(fetch_log(host))
 
     # The group has waited for every task, so each result is ready.
-    entries: list[Entry] = []
+    var entries: list[Entry] = []
     for host in hosts:
         for entry in parse(host, downloads[host].result()):
             entries.append(entry)
 
     with Section("Levels"):
-        counts = {Level.INFO: 0, Level.WARN: 0, Level.ERROR: 0}
+        var counts = {Level.INFO: 0, Level.WARN: 0, Level.ERROR: 0}
         for entry in entries:
             counts[entry.level] = counts[entry.level] + 1
         for level in counts:
             print(f"{level:<12}{counts[level]:>3d}")
 
     with Section("Slowest"):
-        timings: list[Timing] = []
+        var timings: list[Timing] = []
         for entry in entries:
-            millis = entry.millis
+            var millis = entry.millis
             if millis is not none:
                 timings.append((millis, f"{entry.host} {entry.text}"))
         for millis, text in sorted(timings, reverse=true)[:2]:
             print(f"{millis:>6d}ms  {text}")
 
     with Section("Alerts"):
-        rules: list[Rule] = [SlowerThan(limit=1000), Mentions("timeout")]
-        label = counter()
+        var rules: list[Rule] = [SlowerThan(limit=1000), Mentions("timeout")]
+        var label = counter()
         for entry in entries:
             for rule in rules:
-                alert = rule.check(entry)
+                var alert = rule.check(entry)
                 if alert is not none:
                     print(f"{label()} {entry.host}: {entry.text} ({alert})")
 
-    error = first(entries, where=(entry) => entry.level == Level.ERROR)
+    var error = first(entries, where=(entry) => entry.level == Level.ERROR)
     if error is not none:
         print(f"First error: {error.text} on {error.host}")

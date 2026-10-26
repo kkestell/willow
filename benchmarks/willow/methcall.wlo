@@ -35,7 +35,7 @@ class NthToggle:
         return self.state
 
 def run(switch: Switch, n: int):
-    value = true
+    var value = true
     for _ in range(n):
         value = switch.activate().value()
     if value:
@@ -44,6 +44,6 @@ def run(switch: Switch, n: int):
         print("false")
 
 def main():
-    n = int(sys.args()[0])
+    var n = int(sys.args()[0])
     run(Toggle(true), n)
     run(NthToggle(true, 3), n)

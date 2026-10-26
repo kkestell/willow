@@ -41,8 +41,8 @@ def main():
     print(int(-9007199254740991.0))
     print(float(-9007199254740991))
 
-    inf = 1e308 * 10.0
-    nan = inf - inf
+    var inf = 1e308 * 10.0
+    var nan = inf - inf
     print(inf)
     print(-inf)
     print(nan)

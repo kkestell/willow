@@ -2,8 +2,8 @@ import io
 import sys
 
 def main():
-    first = io.stdin()
-    second = io.stdin()
+    var first = io.stdin()
+    var second = io.stdin()
     assert input() == "first"
     assert first.read(2) == bytes([97, 98])
     assert second.readline() == "c"

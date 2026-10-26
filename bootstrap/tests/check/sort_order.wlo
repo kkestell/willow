@@ -1,11 +1,11 @@
 def ints(xs: list[int]) -> str:
-    texts: list[str] = []
+    var texts: list[str] = []
     for x in xs:
         texts.append(str(x))
     return " ".join(texts)
 
 def floats(xs: list[float]) -> str:
-    texts: list[str] = []
+    var texts: list[str] = []
     for x in xs:
         texts.append(str(x))
     return " ".join(texts)
@@ -20,19 +20,19 @@ def main():
     print(floats(sorted([0.0, -0.0, float("inf"), -1.5])))
 
     # Runs of several merge passes, with equal values in both directions.
-    big = [17, 3, 9, 1, 12, 5, 8, 20, 2, 11, 6, 14, 0, 19, 4, 7, 15, 10, 13]
+    var big = [17, 3, 9, 1, 12, 5, 8, 20, 2, 11, 6, 14, 0, 19, 4, 7, 15, 10, 13]
     big.sort()
     print(ints(big))
-    pairs = [(1, "a"), (0, "b"), (1, "c"), (0, "d")]
+    var pairs = [(1, "a"), (0, "b"), (1, "c"), (0, "d")]
     for n, name in sorted(pairs, reverse=true):
         print(f"{n} {name}")
-    nested = [((2, "x"), 1), ((1, "z"), 2), ((1, "y"), 3)]
+    var nested = [((2, "x"), 1), ((1, "z"), 2), ((1, "y"), 3)]
     nested.sort()
     for key, n in nested:
         print(f"{key[0]} {key[1]} {n}")
 
     # NaN in a nested tuple position stops the sort before anything moves.
-    with_nan = [(2, (1.0, "a")), (1, (float("nan"), "b"))]
+    var with_nan = [(2, (1.0, "a")), (1, (float("nan"), "b"))]
     try:
         with_nan.sort()
     except ValueError as error:

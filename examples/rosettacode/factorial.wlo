@@ -6,7 +6,7 @@ def factorial_recursive(n: int) -> int:
     return n * factorial_recursive(n - 1)
 
 def factorial_iterative(n: int) -> int:
-    result = 1
+    var result = 1
     for k in range(2, n + 1):
         result = result * k
     return result

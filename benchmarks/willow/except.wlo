@@ -31,8 +31,8 @@ def hi_function(n: int, counts: Counts):
         counts.hi = counts.hi + 1
 
 def main():
-    n = int(sys.args()[0])
-    counts = Counts()
+    var n = int(sys.args()[0])
+    var counts = Counts()
     for i in range(n - 1, -1, -1):
         hi_function(i, counts)
     print(f"Exceptions: HI={counts.hi} / LO={counts.lo}")

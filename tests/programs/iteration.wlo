@@ -39,13 +39,13 @@ class Pairs:
         return ("p", self.left)
 
 def sum_all(xs: Iterable[int]) -> int:
-    sum = 0
+    var sum = 0
     for x in xs:
         sum = sum + x
     return sum
 
 def total[T: Iterable[int]](xs: T) -> int:
-    sum = 0
+    var sum = 0
     for x in xs:
         sum = sum + x
     return sum
@@ -53,7 +53,7 @@ def total[T: Iterable[int]](xs: T) -> int:
 def main():
     for n in Countdown(3):
         print(n)
-    bag = Bag(2)
+    var bag = Bag(2)
     for n in bag:
         print(n)
     for n in bag:
@@ -62,7 +62,7 @@ def main():
     print(total(Bag(3)))
 
     # An early exit leaves the iterator where it stopped.
-    counter = Countdown(5)
+    var counter = Countdown(5)
     for n in counter:
         if n == 4:
             break
@@ -70,7 +70,7 @@ def main():
     for n in counter:
         print(n)
 
-    it = iter(Bag(1))
+    var it = iter(Bag(1))
     print(next(it))
     try:
         next(it)

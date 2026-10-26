@@ -2,7 +2,7 @@
 
 def gcd(a: int, b: int) -> int:
     while b != 0:
-        remainder = a % b
+        var remainder = a % b
         a = b
         b = remainder
     if a < 0:

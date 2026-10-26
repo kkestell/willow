@@ -29,11 +29,11 @@ def _server_path() -> str:
     raise RuntimeError("cannot find server.wlo")
 
 def _start() -> Server:
-    willow = sys.getenv("WILLOW")
+    var willow = sys.getenv("WILLOW")
     assert willow is not none, "WILLOW is not set"
-    port_file = fs.join("/tmp", f"kv_port_{int(time.time() * 1000000.0)}")
-    process = subprocess.spawn([willow, "run", _server_path(), port_file])
-    deadline = time.monotonic() + 10.0
+    var port_file = fs.join("/tmp", f"kv_port_{int(time.time() * 1000000.0)}")
+    var process = subprocess.spawn([willow, "run", _server_path(), port_file])
+    var deadline = time.monotonic() + 10.0
     while not fs.exists(port_file):
         if time.monotonic() > deadline:
             process.terminate()
@@ -52,7 +52,9 @@ def _ask(channel: framing.Channel, request: json.Json) -> str:
     return json.dump(channel.receive(timeout=5.0))
 
 def test_set_get_and_keys():
-    with _start() as server, framing.channel(net.connect("127.0.0.1", server.port)) as channel:
+    var server: Server
+    with _start() as server_item, framing.channel(net.connect("127.0.0.1", server.port)) as channel:
+        server = server_item
         assert _ask(channel, {"op": "set", "key": "b", "value": [1, 2]}) == '{"ok":true}'
         assert _ask(channel, {"op": "set", "key": "a", "value": "x"}) == '{"ok":true}'
         assert _ask(channel, {"op": "get", "key": "b"}) == '{"value":[1,2]}'
@@ -61,14 +63,16 @@ def test_set_get_and_keys():
         assert _ask(channel, {"op": "nope"}) == '{"error":"unknown request"}'
 
 def test_split_code_point_is_reassembled():
-    with _start() as server, framing.channel(net.connect("127.0.0.1", server.port)) as channel:
-        message = '{"op": "set", "key": "café", "value": "naïve"}\n'.encode()
+    var server: Server
+    with _start() as server_item, framing.channel(net.connect("127.0.0.1", server.port)) as channel:
+        server = server_item
+        var message = '{"op": "set", "key": "café", "value": "naïve"}\n'.encode()
         # Split inside the two bytes of "é".
-        cut = len('{"op": "set", "key": "caf'.encode()) + 1
+        var cut = len('{"op": "set", "key": "caf'.encode()) + 1
         channel.connection.sendall(message[:cut])
         time.sleep(0.1)
         channel.connection.sendall(message[cut:])
-        reply = channel.receive(timeout=5.0)
+        var reply = channel.receive(timeout=5.0)
         assert json.dump(reply) == '{"ok":true}', json.dump(reply)
         assert _ask(channel, {"op": "get", "key": "café"}) == '{"value":"naïve"}'
 

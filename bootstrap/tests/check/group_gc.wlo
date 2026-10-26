@@ -2,8 +2,8 @@ import aio
 import core
 
 async def keeper(index: int, gate: aio.Semaphore) -> int:
-    payload = [index, index + 1]
-    number = float(index) + 0.25
+    var payload = [index, index + 1]
+    var number = float(index) + 0.25
     await gate.acquire()
     assert payload[0] == index
     assert payload[1] == index + 1
@@ -11,15 +11,15 @@ async def keeper(index: int, gate: aio.Semaphore) -> int:
     return index
 
 async def main():
-    gate = aio.semaphore()
+    var gate = aio.semaphore()
     await gate.acquire()
-    handles: list[aio.Task[int]] = []
-    suspended: list[core.AioTask] = []
+    var handles: list[aio.Task[int]] = []
+    var suspended: list[core.AioTask] = []
     async with aio.task_group() as group:
         for index in range(128):
             handles.append(group.start(keeper(index, gate)))
         await aio.sleep(0.0)
-        loop = core.aio_loop()
+        var loop = core.aio_loop()
         assert len(loop.waiting) == 128
         for id in loop.waiting:
             suspended.append(loop.waiting[id])
@@ -27,12 +27,12 @@ async def main():
         for index in range(128):
             gate.release()
             await aio.sleep(0.0)
-    total = 0
+    var total = 0
     for handle in handles:
         total = total + handle.result()
     assert total == 8128
     for task in suspended:
-        context = task.context
+        var context = task.context
         assert context is not none
         assert core.coroutine_finished(context)
     core.GC_gcollect()

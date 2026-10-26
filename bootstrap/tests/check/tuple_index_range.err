@@ -1,1 +1,1 @@
-tuple_index_range.wlo:2:22: error: tuple index out of range
+tuple_index_range.wlo:2:26: error: tuple index out of range

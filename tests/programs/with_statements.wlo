@@ -55,7 +55,9 @@ def numbers() -> Generator[int]:
         print("numbers closed")
 
 def main():
-    with plain("a") as a, plain("b") as b:
+    var a: str
+    with plain("a") as a_item, plain("b") as b:
+        a = a_item
         print(a + b)
     print(a)
     with Pair(2) as (label, count):
@@ -90,7 +92,7 @@ def main():
     except RuntimeError as again:
         print("caught " + again.message)
 
-    g = suspended()
+    var g = suspended()
     print(next(g))
     g.close()
 

@@ -1,11 +1,11 @@
 import io
 
 def main():
-    stdin = io.stdin()
+    var stdin = io.stdin()
     print(stdin.readline())
     for line in stdin:
         print(f"[{line}]")
-    lines: Iterable[str] = stdin
+    var lines: Iterable[str] = stdin
     for line in lines:
         print("unreachable")
     print("done")

@@ -2,4 +2,4 @@ def identity[T](x: T) -> T:
     return x
 
 def main():
-    h = identity
+    var h = identity

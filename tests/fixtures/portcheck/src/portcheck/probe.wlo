@@ -15,15 +15,16 @@ class Probe:
 
 # Splits "host:port"; the host may be a bracketed IPv6 address.
 def parse_target(text: str) -> Target:
-    split = -1
+    var split = -1
     for i in range(len(text)):
         if text[i] == ":":
             split = i
     if split <= 0 or split == len(text) - 1:
         raise ValueError(f"expected host:port, received '{text}'")
-    host = text[:split]
+    var host = text[:split]
     if host.startswith("[") and host.endswith("]"):
         host = host[1:-1]
+    var port: int
     try:
         port = int(text[split + 1:])
     except ValueError:
@@ -33,7 +34,7 @@ def parse_target(text: str) -> Target:
     return Target(host, port)
 
 async def check(target: Target, timeout: float) -> Probe:
-    start = time.monotonic()
+    var start = time.monotonic()
     try:
         with await aio.connect(target.host, target.port, timeout=timeout):
             return Probe(target, true, _millis(start), "open")

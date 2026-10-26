@@ -31,28 +31,28 @@ class Node:
     next: Node | none = none
 
 def length(node: Node | none) -> int:
-    count = 0
+    var count = 0
     while node is not none:
         count = count + 1
         node = node.next
     return count
 
 def main():
-    origin = Point(0.0, 0.0)
+    var origin = Point(0.0, 0.0)
     print(origin.moved(1.5, -2.0).text())
 
-    account = Account("ada")
+    var account = Account("ada")
     account.deposit(100)
     print(account.withdraw(30))
     print(account.withdraw(500))
     print(account.balance)
 
     # Assignment shares a class value instead of copying it.
-    same = account
+    var same = account
     same.deposit(5)
     print(account.balance)
 
-    savings = Account(owner="alan", balance=50)
+    var savings = Account(owner="alan", balance=50)
     print(f"{savings.owner}: {savings.balance}")
 
     print(length(Node(1, Node(2, Node(3)))))

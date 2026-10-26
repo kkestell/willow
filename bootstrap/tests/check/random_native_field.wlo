@@ -1,5 +1,5 @@
 import random
 
 def main():
-    rng = random.generator(1)
+    var rng = random.generator(1)
     print(rng._s0)

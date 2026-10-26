@@ -7,15 +7,15 @@ type Tree = int | list[Tree]
 def total(tree: Tree) -> int:
     if tree is int:
         return tree
-    sum = 0
+    var sum = 0
     for child in tree:
         sum = sum + total(child)
     return sum
 
 def best(scores: dict[str, Score]) -> Pair[str, int] | none:
-    winner: Pair[str, int] | none = none
+    var winner: Pair[str, int] | none = none
     for name in scores:
-        score = scores[name]
+        var score = scores[name]
         if score is not none:
             if winner is none or score > winner[1]:
                 winner = (name, score)
@@ -23,7 +23,7 @@ def best(scores: dict[str, Score]) -> Pair[str, int] | none:
 
 def main():
     print(total([1, [2, 3], [[4], 5]]))
-    result = best({"ada": 7, "alan": none, "grace": 9})
+    var result = best({"ada": 7, "alan": none, "grace": 9})
     if result is not none:
-        name, score = result
+        var name, score = result
         print(f"{name} scored {score}")

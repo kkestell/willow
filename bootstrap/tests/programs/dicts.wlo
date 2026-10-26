@@ -1,5 +1,5 @@
 def show(d: dict[str, int]):
-    text = "{"
+    var text = "{"
     for key, value in d.items():
         if text != "{":
             text = text + ", "
@@ -7,7 +7,7 @@ def show(d: dict[str, int]):
     print(text + "}")
 
 def main():
-    ages = {"ada": 36, "alan": 41}
+    var ages = {"ada": 36, "alan": 41}
     print(len(ages))
     print(ages["ada"])
     ages["grace"] = 85
@@ -29,25 +29,25 @@ def main():
     for value in ages.values():
         print(value)
 
-    dupes = {"a": 1, "b": 2, "a": 3}
+    var dupes = {"a": 1, "b": 2, "a": 3}
     show(dupes)
 
-    squares: dict[int, int] = {}
+    var squares: dict[int, int] = {}
     for n in range(4):
         squares[n * 10] = n * n
     print(squares[30])
     print(squares.get(-1, -1))
     print(len(squares))
 
-    seen: dict[str, str | none] = {"x": none}
+    var seen: dict[str, str | none] = {"x": none}
     print(seen.get("x"))
     print(seen.get("x", "default"))
     print(seen.get("y", "default"))
     print("x" in seen)
 
-    groups: dict[str, list[str]] = {}
+    var groups: dict[str, list[str]] = {}
     for word in ["ant", "bee", "asp"]:
-        first = word[0]
+        var first = word[0]
         if first not in groups:
             groups[first] = []
         groups[first].append(word)

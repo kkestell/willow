@@ -1,4 +1,4 @@
 def main():
-    xs: list[int | none] = [1]
+    var xs: list[int | none] = [1]
     if xs[0] is not none:
         print(xs[0] + 1)

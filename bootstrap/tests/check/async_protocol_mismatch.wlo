@@ -6,4 +6,4 @@ class Number:
         return 1
 
 def main():
-    source: Source = Number()
+    var source: Source = Number()

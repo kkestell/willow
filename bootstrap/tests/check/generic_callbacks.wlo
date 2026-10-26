@@ -8,8 +8,8 @@ def text(value: int) -> str:
     return str(value)
 
 def main():
-    integer = optional(7)
-    decimal = optional(2.5)
+    var integer = optional(7)
+    var decimal = optional(2.5)
     print(integer())
     print(decimal())
     print(apply(3, (value) => value + 1))

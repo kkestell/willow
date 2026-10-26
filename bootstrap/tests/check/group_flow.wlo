@@ -4,6 +4,7 @@ async def number() -> int:
     return 1
 
 async def value() -> int:
+    var assigned: int
     async with aio.task_group():
         try:
             await aio.sleep(0.0)
@@ -12,11 +13,13 @@ async def value() -> int:
     return assigned
 
 async def main():
+    var before: int
     async with aio.task_group():
         before = 1
         await aio.sleep(0.0)
     print(before)
     print(await value())
+    var assigned: int
     async with aio.task_group():
         try:
             pass
@@ -24,6 +27,7 @@ async def main():
             await aio.sleep(0.0)
             assigned = 3
     print(assigned)
+    var nested: int
     async with aio.task_group():
         async with aio.task_group():
             nested = 4

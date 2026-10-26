@@ -7,12 +7,12 @@ def label(name: str) -> str:
     return name
 
 def main():
-    name = "Ada"
-    count = 3
-    ratio = 0.5
-    flag = false
-    missing: str | none = none
-    level = Level.HIGH
+    var name = "Ada"
+    var count = 3
+    var ratio = 0.5
+    var flag = false
+    var missing: str | none = none
+    var level = Level.HIGH
     print(f"{name} has {len(name)} letters")
     print(f"{count} {ratio} {flag} {missing} {level}")
     print(f"{count + 1}{count * 2}")
@@ -21,7 +21,7 @@ def main():
     print(f"plain")
     print(f'{name + "!"}')
     print(f"{name[1:3]}")
-    scores = {"ada": 36}
+    var scores = {"ada": 36}
     print(f"{scores['ada']}")
     print(f"{label('a')}-{label('b')}")
     print(f"{1e16} {-0.0} {1.0 / 3.0}")

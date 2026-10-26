@@ -1,4 +1,4 @@
-test_b.wlo:2:14: error: expected int, received str
+test_b.wlo:2:18: error: expected int, received str
 status 1
 PASS helper.wlo test_helper
 1 passed, 0 failed

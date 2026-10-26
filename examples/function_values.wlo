@@ -5,7 +5,7 @@ def double(n: int) -> int:
     return n * 2
 
 def apply_all(functions: list[(int) -> int], value: int) -> list[int]:
-    results: list[int] = []
+    var results: list[int] = []
     for f in functions:
         results.append(f(value))
     return results
@@ -20,16 +20,16 @@ class Greeter:
         return f"{self.greeting}, {name}"
 
 def main():
-    increment: (int) -> int = (n) => n + 1
+    var increment: (int) -> int = (n) => n + 1
     for result in apply_all([double, increment, compose(double, increment)], 5):
         print(result)
 
     # A bound method keeps its object.
-    hello = Greeter("Hello").greet
+    var hello = Greeter("Hello").greet
     print(hello("Ada"))
 
-    names = ["grace", "Ada", "alan"]
+    var names = ["grace", "Ada", "alan"]
     print(", ".join(sorted(names, key=(name) => name.lower())))
 
-    operations: dict[str, (int) -> int] = {"double": double, "square": (n) => n * n}
+    var operations: dict[str, (int) -> int] = {"double": double, "square": (n) => n * n}
     print(operations["square"](4))

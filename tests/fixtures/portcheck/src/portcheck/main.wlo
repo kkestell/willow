@@ -10,10 +10,11 @@ import sys
 import textkit.table
 
 async def main():
-    parser = cli.parser("portcheck", description="Check whether TCP ports accept connections.")
+    var parser = cli.parser("portcheck", description="Check whether TCP ports accept connections.")
     parser.add_float("timeout", 2.0, help="Seconds to wait for each connection", short="t")
     parser.add_flag("json", help="Write one JSON object per target")
     parser.add_rest("target", help="host:port to check")
+    var args: cli.Args
     try:
         args = parser.parse(sys.args())
     except cli.HelpRequested as help:
@@ -22,8 +23,8 @@ async def main():
     except cli.UsageError as usage:
         sys.eprint(usage.message)
         sys.exit(2)
-    texts = args.get_list("target")
-    targets: list[portcheck.probe.Target] = []
+    var texts = args.get_list("target")
+    var targets: list[portcheck.probe.Target] = []
     try:
         for text in texts:
             targets.append(portcheck.probe.parse_target(text))
@@ -35,22 +36,22 @@ async def main():
         sys.exit(2)
 
     # Every target is probed at once, so the slowest probe bounds the wait.
-    probes: list[aio.Task[portcheck.probe.Probe]] = []
+    var probes: list[aio.Task[portcheck.probe.Probe]] = []
     async with aio.task_group() as group:
         for target in targets:
             probes.append(group.start(portcheck.probe.check(target, args.get_float("timeout"))))
 
-    all_open = true
-    rows: list[list[str]] = []
+    var all_open = true
+    var rows: list[list[str]] = []
     for probe in probes:
-        result = probe.result()
+        var result = probe.result()
         if not result.open:
             all_open = false
-        name = f"{result.target.host}:{result.target.port}"
+        var name = f"{result.target.host}:{result.target.port}"
         if args.get_bool("json"):
             print(json.dump({"target": name, "open": result.open, "detail": result.detail}))
         else:
-            state = "closed"
+            var state = "closed"
             if result.open:
                 state = "open"
             rows.append([name, state, f"{result.millis:.1f} ms"])

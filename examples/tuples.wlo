@@ -5,22 +5,22 @@ def divide(a: int, b: int) -> tuple[int, int]:
     return (a // b, a % b)
 
 def main():
-    quotient, remainder = divide(17, 5)
+    var quotient, remainder = divide(17, 5)
     print(f"{quotient} remainder {remainder}")
 
-    record = (3, "east", true)
+    var record = (3, "east", true)
     print(record[1])
     print(len(record))
 
-    (x, y), label = ((1, 2), "corner")
+    var (x, y), label = ((1, 2), "corner")
     print(f"{label} at {x}, {y}")
 
-    a = 1
-    b = 2
+    var a = 1
+    var b = 2
     a, b = (b, a)
     print(f"{a} {b}")
 
-    scores = [("bob", 2), ("amy", 2), ("cat", 1)]
+    var scores = [("bob", 2), ("amy", 2), ("cat", 1)]
     for name, score in sorted(scores, key=(entry) => (entry[1], entry[0])):
         print(f"{name} {score}")
 

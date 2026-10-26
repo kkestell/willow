@@ -1,12 +1,12 @@
 def show(items: list[bytes]) -> str:
-    parts: list[str] = []
+    var parts: list[str] = []
     for item in items:
         parts.append("[" + item.hex() + "]")
     return ", ".join(parts)
 
 def main():
-    data = "a,b,,c".encode()
-    comma = ",".encode()
+    var data = "a,b,,c".encode()
+    var comma = ",".encode()
     print(f"{data.find(comma)} {data.find('z'.encode())} {data.find(bytes([]))} {data[2:].find(comma)}")
     print(f"{data.startswith('a,'.encode())} {data.startswith(bytes([]))} {data.startswith('b'.encode())}")
     print(f"{data.endswith(',c'.encode())} {data.endswith(bytes([]))} {data.endswith(data + data)}")
@@ -22,13 +22,15 @@ def main():
     except ValueError as error:
         print(error.message)
 
-    binary = bytes([0, 15, 16, 255, 171])
+    var binary = bytes([0, 15, 16, 255, 171])
     print(f"{binary.hex()} [{bytes([]).hex()}]")
     print(bytes.fromhex("000f10ffAB") == binary)
     print(bytes.fromhex(" 00 0F\n10\tFf aB ") == binary)
     print(len(bytes.fromhex("")))
+    var text: str
     print(bytes.fromhex(text="48 69").decode())
-    for text in ["abc", "0g", "0 f", "é1", "a b"]:
+    for text_item in ["abc", "0g", "0 f", "é1", "a b"]:
+        text = text_item
         try:
             bytes.fromhex(text)
         except ValueError as error:

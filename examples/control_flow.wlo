@@ -13,7 +13,7 @@ def main():
     for n in [-5, 0, 5]:
         print(f"{n} is {classify(n)}")
 
-    evens: list[str] = []
+    var evens: list[str] = []
     for n in range(0, 10, 2):
         evens.append(str(n))
     print(" ".join(evens))
@@ -25,8 +25,8 @@ def main():
             break
         print(n)
 
-    n = 27
-    steps = 0
+    var n = 27
+    var steps = 0
     while n != 1:
         if n % 2 == 0:
             n = n // 2

@@ -1,13 +1,13 @@
 # https://rosettacode.org/wiki/Multiplication_tables
 
 def main():
-    header = "  x |"
+    var header = "  x |"
     for column in range(1, 13):
         header = header + f"{column:>4}"
     print(header)
     print("----+------------------------------------------------")
     for row in range(1, 13):
-        line = f"{row:>3} |"
+        var line = f"{row:>3} |"
         for column in range(1, 13):
             if column < row:
                 line = line + "    "

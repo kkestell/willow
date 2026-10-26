@@ -2,7 +2,7 @@ import io
 import subprocess
 
 def main():
-    stdin = io.stdin()
+    var stdin = io.stdin()
     print(stdin.readline())
     try:
         subprocess.spawn(["cat"], stdin=stdin)

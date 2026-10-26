@@ -6,7 +6,7 @@ def square_of(i: int) -> () -> int:
     return () => i * i
 
 def main():
-    funcs: list[() -> int] = []
+    var funcs: list[() -> int] = []
     for i in range(10):
         funcs.append(square_of(i))
     print(funcs[3]())

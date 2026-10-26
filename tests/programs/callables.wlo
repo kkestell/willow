@@ -42,17 +42,17 @@ def main():
     print(apply(scaled, 2))
     print(apply(maybe, 4))
     # Floats are boxed or unboxed between the callable's types and the function's.
-    d: (float) -> str = describe
+    var d: (float) -> str = describe
     print(d(1.5))
-    h: (float) -> int | float = half
-    r = h(3.0)
+    var h: (float) -> int | float = half
+    var r = h(3.0)
     print((r is float))
     print(r)
     # One callable converts to another.
-    k: (float) -> float = half
-    w: (float) -> int | float = k
+    var k: (float) -> float = half
+    var w: (float) -> int | float = k
     print(w(1.0))
-    fs: list[(int) -> int] = [double, add, maybe]
+    var fs: list[(int) -> int] = [double, add, maybe]
     for f in fs:
         print(f(1))
     print(call_optional(double))
@@ -61,6 +61,6 @@ def main():
     print(run(use))
     print(twice(add)(7))
     # A tuple position adapts its function too.
-    pair = (add, 1)
-    adapted: tuple[(int) -> int, int] = pair
+    var pair = (add, 1)
+    var adapted: tuple[(int) -> int, int] = pair
     print(adapted[0](adapted[1]))

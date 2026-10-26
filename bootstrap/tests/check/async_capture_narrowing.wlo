@@ -2,7 +2,7 @@ async def value():
     pass
 
 def main():
-    item: int | none = 1
+    var item: int | none = 1
     async def read() -> int:
         if item is not none:
             await value()

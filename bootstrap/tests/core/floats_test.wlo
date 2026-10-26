@@ -1,8 +1,8 @@
 import core
 
 def main():
-    inf = 1e308 * 10.0
-    nan = inf - inf
+    var inf = 1e308 * 10.0
+    var nan = inf - inf
 
     assert core.float_to_str(0.1 + 0.2) == "0.30000000000000004"
     assert core.float_to_str(1.0 / 3.0) == "0.3333333333333333"
@@ -30,7 +30,7 @@ def main():
     assert core.str_to_float("1e400") == inf
     assert core.str_to_float("-Infinity") == -inf
     assert core.str_to_float("iNf") == inf
-    nan_text = core.str_to_float("NaN")
+    var nan_text = core.str_to_float("NaN")
     assert nan_text != nan_text
 
     assert core.float_to_int(-2.5) == -2

@@ -2,14 +2,14 @@
 # each `next`, and `with` closes it early.
 
 def countdown(start: int) -> Iterator[int]:
-    n = start
+    var n = start
     while n > 0:
         yield n
         n = n - 1
 
 def fibonacci() -> Generator[int]:
-    a = 0
-    b = 1
+    var a = 0
+    var b = 1
     try:
         while true:
             yield a
@@ -22,7 +22,7 @@ def main():
         print(n)
 
     # Calling a generator function runs none of its body until `next`.
-    lazy = countdown(2)
+    var lazy = countdown(2)
     print(next(lazy))
 
     # Leaving the `with` block closes the generator, which runs its `finally`.

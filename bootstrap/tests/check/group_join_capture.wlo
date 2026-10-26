@@ -4,9 +4,9 @@ def optional() -> int | none:
     return 1
 
 async def main():
-    value = optional()
+    var value = optional()
     def clear():
-        nonlocal value
+
         value = none
     if value is not none:
         async with aio.task_group():

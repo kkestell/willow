@@ -4,5 +4,5 @@ def bad(x: int) -> int:
     return x
 
 def main():
-    xs = [3, 2, 1]
+    var xs = [3, 2, 1]
     xs.sort(key=bad)

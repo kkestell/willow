@@ -2,7 +2,7 @@ import core
 import io
 
 def main():
-    stdin = io.stdin()
+    var stdin = io.stdin()
     assert core.close(0) == 0
     try:
         stdin.readline()

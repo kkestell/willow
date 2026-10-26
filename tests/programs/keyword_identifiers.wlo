@@ -1,13 +1,13 @@
 # `del`, `from`, and `global` are ordinary identifiers, not reserved words.
 
 def total(from: int, global: int) -> int:
-    del = from + global
+    var del = from + global
     return del
 
 def main():
     print(total(1, 2))
-    from = 3
-    global = 4
+    var from = 3
+    var global = 4
     print(from + global)
-    del = 5
+    var del = 5
     print(del)

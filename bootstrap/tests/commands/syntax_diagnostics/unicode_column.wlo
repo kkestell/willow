@@ -1,2 +1,2 @@
 def main():
-    x = 'é' + missing
+    var x = 'é' + missing

@@ -3,7 +3,7 @@ def note(text: str) -> str:
     return text
 
 def main():
-    count = 2
+    var count = 2
     assert count > 0, note("first")
     print(count)
     assert count == 3, note(f"count is {count}")

@@ -2,7 +2,7 @@ def maybe() -> int | none:
     return 1
 
 def main():
-    value = maybe()
+    var value = maybe()
     def values() -> Iterator[int]:
         if value is not none:
             yield 1

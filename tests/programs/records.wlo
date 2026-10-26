@@ -18,8 +18,8 @@ class Person:
     name: str
 
 def total(head: Node | none) -> int:
-    result = 0
-    node = head
+    var result = 0
+    var node = head
     while node is not none:
         result = result + node.value
         node = node.next
@@ -39,41 +39,41 @@ def make_point() -> Point:
 def main():
     print(total(Node(1, Node(2, Node(3, none)))))   # 6
 
-    p = Point(1, 2)
-    alias = p
+    var p = Point(1, 2)
+    var alias = p
     alias.y = 20
     move(p, 5)
     print(p.x)
     print(p.y)
 
-    head: Node | none = none
-    i = 0
+    var head: Node | none = none
+    var i = 0
     while i < 4:
         head = Node(i, head)
         i = i + 1
     print(total(head))
     if head is not none:
-        second = head.next
+        var second = head.next
         if second is not none:
             print(second.value)
 
-    k = Keywords("done", [1, 2])
+    var k = Keywords("done", [1, 2])
     k.local.append(3)
     print(k.end)
     print(len(k.local))
 
-    bag = Bag([], none)
+    var bag = Bag([], none)
     bag.items.append("apple")
     bag.owner = Person("ada")
-    owner = bag.owner
+    var owner = bag.owner
     if owner is not none:
         print(owner.name)
     print(bag.items[0])
 
-    q = Point(trace("first", 1), trace("second", 2))
+    var q = Point(trace("first", 1), trace("second", 2))
     make_point().x = trace("value", 3)
     print(q.x + q.y)
-    points = [Point(1, 1), Point(2, 2)]
+    var points = [Point(1, 1), Point(2, 2)]
     points[1].x = 7
     print(points[1].x)
     Point(0, 0).y = trace("constructed", 4)

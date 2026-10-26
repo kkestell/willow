@@ -31,7 +31,7 @@ def same_number(a: int | float | ColorMode, b: int | float | ColorMode) -> bool:
     return a == b
 
 def main():
-    mode = ColorMode.AUTO
+    var mode = ColorMode.AUTO
     print(mode)
     print(f"{mode} {ColorMode.NEVER:>18}|")
     print(use_color(mode))
@@ -47,17 +47,17 @@ def main():
     print(same_number(ColorMode.AUTO, ColorMode.AUTO))
     print(same_number(ColorMode.AUTO, ColorMode.NEVER))
     print(same_number(1.5, ColorMode.AUTO))
-    modes = [ColorMode.AUTO, ColorMode.NEVER]
+    var modes = [ColorMode.AUTO, ColorMode.NEVER]
     print(ColorMode.NEVER in modes)
     print(ColorMode.ALWAYS in modes)
     print(use_color())
     print(Settings("plain").mode)
     print(Settings("bright", ColorMode.ALWAYS).mode)
-    labels: dict[ColorMode, str] = {ColorMode.NEVER: "off", ColorMode.AUTO: "auto"}
+    var labels: dict[ColorMode, str] = {ColorMode.NEVER: "off", ColorMode.AUTO: "auto"}
     labels[ColorMode.ALWAYS] = "on"
     for key in labels:
         print(f"{key} {labels[key]}")
     print(ColorMode.AUTO in labels)
-    counts = {Keyword.AUTO: 1}
+    var counts = {Keyword.AUTO: 1}
     print(counts.get(Keyword.end))
     print(counts[Keyword.AUTO])

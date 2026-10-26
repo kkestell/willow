@@ -22,9 +22,9 @@ def apply(counter: Counter) -> int:
     return counter.read()
 
 def main():
-    box = Box(2)
-    read = box.capture()
-    add = box.add
+    var box = Box(2)
+    var read = box.capture()
+    var add = box.add
     print(add(4))
     print(apply(box))
     print(read())

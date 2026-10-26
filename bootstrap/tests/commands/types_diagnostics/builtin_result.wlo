@@ -1,2 +1,2 @@
 def main():
-    f: (str) -> str = len
+    var f: (str) -> str = len

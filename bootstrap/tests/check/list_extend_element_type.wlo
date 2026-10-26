@@ -1,4 +1,4 @@
 def main():
-    values = [1]
-    names = ["one"]
+    var values = [1]
+    var names = ["one"]
     values.extend(names)

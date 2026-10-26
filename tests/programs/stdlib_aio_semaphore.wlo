@@ -30,8 +30,8 @@ async def hold(sem: aio.Semaphore):
 
 async def main():
     # Two permits: the third task waits for the first release, in order.
-    sem = aio.semaphore(2)
-    log: list[str] = []
+    var sem = aio.semaphore(2)
+    var log: list[str] = []
     async with aio.task_group() as group:
         group.start(worker(sem, "a", log))
         group.start(worker(sem, "b", log))
@@ -41,7 +41,7 @@ async def main():
         print(entry)
 
     # The default is one permit, and every permit is back after the work.
-    one = aio.semaphore()
+    var one = aio.semaphore()
     await one.acquire()
     one.release()
     try:

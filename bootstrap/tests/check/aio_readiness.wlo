@@ -1,9 +1,9 @@
 import aio
 
 async def receive(connection: aio.Connection, count: int):
-    received = 0
+    var received = 0
     while received < count:
-        data = await connection.recv(min(65536, count - received), timeout=5.0)
+        var data = await connection.recv(min(65536, count - received), timeout=5.0)
         assert len(data) > 0
         received = received + len(data)
 
@@ -21,18 +21,19 @@ async def fractional() -> float:
     return 1.25
 
 async def main():
+    var fraction: aio.Task[float]
     async with aio.task_group() as group:
         fraction = group.start(fractional())
     assert fraction.result() == 1.25
     assert await fraction == 1.25
-    data = "x".encode()
+    var data = "x".encode()
     for i in range(23):
         data = data + data
     with aio.listen("127.0.0.1", 0) as listener:
         async with aio.task_group() as group:
             group.start(listener.accept())
             await aio.sleep(0.0)
-            rejected = false
+            var rejected = false
             try:
                 await listener.accept()
             except RuntimeError as error:
@@ -40,8 +41,12 @@ async def main():
                 rejected = true
             assert rejected
             group.cancel()
-        with await aio.connect("127.0.0.1", listener.local_port()) as client:
-            with await listener.accept() as server:
+        var client: aio.Connection
+        var server: aio.Connection
+        with await aio.connect("127.0.0.1", listener.local_port()) as client_item:
+            client = client_item
+            with await listener.accept() as server_item:
+                server = server_item
                 async with aio.task_group() as group:
                     group.start(client.sendall(data, timeout=5.0))
                     group.start(server.sendall(data, timeout=5.0))
@@ -56,7 +61,7 @@ async def main():
 
         client = await aio.connect("127.0.0.1", listener.local_port())
         server = await listener.accept()
-        finished: list[bool] = []
+        var finished: list[bool] = []
         async with aio.task_group() as group:
             group.start(receive_closed(server, finished))
             await aio.sleep(0.0)
@@ -69,12 +74,14 @@ async def main():
         assert len(finished) == 1 and finished[0]
         client.close()
 
-        with await aio.connect("127.0.0.1", listener.local_port()) as client:
-            with await listener.accept() as server:
+        with await aio.connect("127.0.0.1", listener.local_port()) as client_item:
+            client = client_item
+            with await listener.accept() as server_item:
+                server = server_item
                 async with aio.task_group() as group:
                     group.start(stalled_send(server, data))
                     await aio.sleep(0.01)
-                    rejected = false
+                    var rejected = false
                     try:
                         await server.sendall(bytes([]))
                     except RuntimeError as error:
@@ -83,7 +90,7 @@ async def main():
                     assert rejected
                     server.enter()
                     group.cancel()
-                broken = false
+                var broken = false
                 try:
                     server.enter()
                 except ValueError as failure:

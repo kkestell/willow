@@ -1,1 +1,1 @@
-async_await_type.wlo:2:13: error: cannot await a value of type int
+async_await_type.wlo:2:17: error: cannot await a value of type int

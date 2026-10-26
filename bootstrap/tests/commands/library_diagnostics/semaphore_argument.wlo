@@ -1,4 +1,4 @@
 import aio
 async def main():
-    sem = aio.semaphore(1)
-    x = aio.semaphore("a")
+    var sem = aio.semaphore(1)
+    var x = aio.semaphore("a")

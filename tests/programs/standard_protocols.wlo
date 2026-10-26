@@ -35,7 +35,7 @@ class Circle:
         return 3.0 * self.radius * self.radius
 
 def total[T: Shape](shapes: list[T]) -> float:
-    sum = 0.0
+    var sum = 0.0
     for shape in shapes:
         sum = sum + shape.area()
     return sum
@@ -44,12 +44,12 @@ def first(items: Iterable[int]) -> int:
     return items.iter().next()
 
 def main():
-    it: Iterator[int] = Countdown(3)
+    var it: Iterator[int] = Countdown(3)
     print(it.next())
     print(it.iter().next())
     print(first(Countdown(10)))
 
-    manager: ContextManager[str] = Session("db")
+    var manager: ContextManager[str] = Session("db")
     print(manager.enter())
     manager.exit(none)
 

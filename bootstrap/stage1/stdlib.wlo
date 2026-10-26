@@ -80,7 +80,7 @@ def add_helper(table: dict[str, Builtin], name: str, params: list[BuiltinParam],
 # The built-in functions. `bytes.fromhex` is listed by that name, which the
 # binder resolves.
 def builtins() -> dict[str, Builtin]:
-    table: dict[str, Builtin] = {}
+    var table: dict[str, Builtin] = {}
     add(table, "print", [any_arg("")], prim("none"))
     add(table, "str", [any_arg("")], prim("str"))
     add(table, "int", [any_arg("")], prim("int"))
@@ -92,7 +92,7 @@ def builtins() -> dict[str, Builtin]:
     add(table, "input", [], optional("str"))
     add(table, "ord", [arg("", prim("str"))], prim("int"))
     add(table, "chr", [arg("", prim("int"))], prim("str"))
-    sorted_params = [any_arg("items")]
+    var sorted_params = [any_arg("items")]
     sorted_params.extend(sort_params())
     add(table, "sorted", sorted_params, none)
     add(table, "bytes", [arg("", list_of("int"))], prim("bytes"))
@@ -107,22 +107,22 @@ def builtins() -> dict[str, Builtin]:
     add(table, "any", [any_arg("items")], prim("bool"))
     add(table, "all", [any_arg("items")], prim("bool"))
     add(table, "list", [any_arg("items")], none)
-    start = defaulted("start", prim("int"), int_default("0"))
+    var start = defaulted("start", prim("int"), int_default("0"))
     add(table, "enumerate", [any_arg("items"), start], none)
     add(table, "zip", [any_arg("a"), any_arg("b")], none)
     return table
 
 # The parameters of `sorted` after `items`, and of `list.sort`.
 def sort_params() -> list[BuiltinParam]:
-    reverse = defaulted("reverse", prim("bool"), bool_default(false))
+    var reverse = defaulted("reverse", prim("bool"), bool_default(false))
     return [reverse, BuiltinParam("key", none, none_default(), true)]
 
 # The string methods, with the spec's parameter names and defaults. Each
 # lowers to core's `str_<name>`.
 def str_methods() -> dict[str, Builtin]:
-    table: dict[str, Builtin] = {}
-    text = prim("str")
-    flag = prim("bool")
+    var table: dict[str, Builtin] = {}
+    var text = prim("str")
+    var flag = prim("bool")
     add(table, "find", [arg("sub", text)], optional("int"))
     add(table, "split", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
     add(table, "rsplit", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
@@ -149,8 +149,8 @@ def str_methods() -> dict[str, Builtin]:
     return table
 
 def bytes_methods() -> dict[str, Builtin]:
-    table: dict[str, Builtin] = {}
-    data = prim("bytes")
+    var table: dict[str, Builtin] = {}
+    var data = prim("bytes")
     add(table, "decode", [], prim("str"))
     add(table, "find", [arg("sub", data)], optional("int"))
     add(table, "startswith", [arg("prefix", data)], prim("bool"))
@@ -162,7 +162,7 @@ def bytes_methods() -> dict[str, Builtin]:
 # The intrinsics that core calls. `__type` has its
 # own syntax, and `__os` is a name.
 def intrinsics() -> dict[str, Builtin]:
-    table: dict[str, Builtin] = {}
+    var table: dict[str, Builtin] = {}
     add(table, "__alloc", [arg("", prim("int"))], prim("ptr"))
     add(table, "__alloc_atomic", [arg("", prim("int"))], prim("ptr"))
     add(table, "__load1", [arg("", prim("ptr")), arg("", prim("int"))], prim("int"))
@@ -185,13 +185,13 @@ def intrinsics() -> dict[str, Builtin]:
 
 # An exception class: a class with only a `message` field.
 def exception(name: str, type_name: str) -> types.Class:
-    message = types.Field("message", prim("str"), none)
+    var message = types.Field("message", prim("str"), none)
     return types.Class(name, type_name, [], [message], [], true, false, "")
 
 # The built-in exception classes.
 def exceptions() -> dict[str, types.Class]:
-    table: dict[str, types.Class] = {}
-    names = "Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError TimeoutError StopIteration"
+    var table: dict[str, types.Class] = {}
+    var names = "Exception AssertionError OverflowError ZeroDivisionError ValueError IndexError KeyError RuntimeError OSError TimeoutError StopIteration"
     for name in names.split(" "):
         table[name] = exception(name, name)
     return table
@@ -208,8 +208,8 @@ def standard_protocol(name: str, id: int) -> types.Protocol:
 
 # Adds a method with the parameters `params` after `self`.
 def protocol_method(decl: types.Protocol, name: str, params: list[types.Param], result: types.Type):
-    receiver = types.Param("self", types.protocol_self(decl), none, false)
-    all_params = [receiver]
+    var receiver = types.Param("self", types.protocol_self(decl), none, false)
+    var all_params = [receiver]
     all_params.extend(params)
     decl.methods.append(types.Function(0, name, decl.type_name + "." + name, [], all_params, result))
 
@@ -218,13 +218,13 @@ def param(name: str, ty: types.Type) -> types.Param:
 
 # The standard protocols, each generic in `T`.
 def protocols() -> dict[str, types.Protocol]:
-    iterable = standard_protocol("Iterable", -2)
+    var iterable = standard_protocol("Iterable", -2)
     protocol_method(iterable, "iter", [], types.iterator(iterable.typevars[0]))
-    manager = standard_protocol("ContextManager", -3)
+    var manager = standard_protocol("ContextManager", -3)
     protocol_method(manager, "enter", [], manager.typevars[0])
     protocol_method(manager, "exit", [param("error", optional_exception())], prim("none"))
-    generator = standard_protocol("Generator", -4)
-    t = generator.typevars[0]
+    var generator = standard_protocol("Generator", -4)
+    var t = generator.typevars[0]
     protocol_method(generator, "iter", [], types.iterator(t))
     protocol_method(generator, "next", [], t)
     protocol_method(generator, "close", [], prim("none"))
@@ -255,7 +255,7 @@ def has_coroutine(t: types.Type) -> bool:
 # An ordinary class of a provided module, with `fields` names and `kinds`
 # types.
 def provided_class(module: str, name: str, names: list[str], kinds: list[types.Type]) -> types.Class:
-    fields: list[types.Field] = []
+    var fields: list[types.Field] = []
     for i in range(len(names)):
         fields.append(types.Field(names[i], kinds[i], none))
     return types.Class(name, module + "." + name, [], fields, [], false, false, "", true)
@@ -275,8 +275,8 @@ def native_method(decl: types.Class, name: str, params: list[types.Param], resul
 
 # A native method generic in `typevars`.
 def generic_method(decl: types.Class, name: str, typevars: list[types.TypeVar], params: list[types.Param], result: types.Type):
-    receiver = types.Param("self", types.class_self(decl), none, false)
-    all_params = [receiver]
+    var receiver = types.Param("self", types.class_self(decl), none, false)
+    var all_params = [receiver]
     all_params.extend(params)
     decl.methods.append(types.Function(0, name, decl.type_name + "." + name, typevars, all_params, result))
 
@@ -293,7 +293,7 @@ def new_module(name: str) -> Module:
     return Module(name, {}, {}, {}, {})
 
 def io_file() -> types.Class:
-    file = native_class("io", "File", "file")
+    var file = native_class("io", "File", "file")
     native_method(file, "read", [param("size", prim("int"))], prim("bytes"))
     native_method(file, "readline", [], optional("str"))
     native_method(file, "write", [param("data", prim("bytes"))], prim("none"))
@@ -308,33 +308,33 @@ def none_param(name: str, ty: types.Type) -> types.Param:
     return default_param(name, ty, none_default())
 
 def aio_module() -> Module:
-    module = new_module("aio")
+    var module = new_module("aio")
     # `aio.Task[T]`, an opaque generic handle like `Coroutine[T]`.
-    task = native_class("aio", "Task", "aio_task")
-    t = types.TypeVar(-6, "T", none)
+    var task = native_class("aio", "Task", "aio_task")
+    var t = types.TypeVar(-6, "T", none)
     task.typevars.append(t)
     native_method(task, "result", [], t)
-    group = native_class("aio", "TaskGroup", "aio_group")
-    start = types.TypeVar(-7, "T", none)
-    started = types.ClassType(task, [start])
+    var group = native_class("aio", "TaskGroup", "aio_group")
+    var start = types.TypeVar(-7, "T", none)
+    var started = types.ClassType(task, [start])
     generic_method(group, "start", [start], [param("coro", coroutine_of(start))], started)
     native_method(group, "cancel", [], prim("none"))
     # aio's TCP handles behave like net's, but recv, sendall, and accept
     # return coroutines that wait by suspending their task.
-    timeout = none_param("timeout", optional("float"))
-    connection = native_class("aio", "Connection", "aio_connection")
-    received = coroutine_of(prim("bytes"))
+    var timeout = none_param("timeout", optional("float"))
+    var connection = native_class("aio", "Connection", "aio_connection")
+    var received = coroutine_of(prim("bytes"))
     native_method(connection, "recv", [param("size", prim("int")), timeout], received)
-    sent = coroutine_of(prim("none"))
+    var sent = coroutine_of(prim("none"))
     native_method(connection, "sendall", [param("data", prim("bytes")), timeout], sent)
     native_method(connection, "close", [], prim("none"))
-    listener = native_class("aio", "Listener", "aio_listener")
+    var listener = native_class("aio", "Listener", "aio_listener")
     native_method(listener, "accept", [timeout], coroutine_of(class_type(connection)))
     native_method(listener, "local_port", [], prim("int"))
     native_method(listener, "close", [], prim("none"))
     scoped(connection)
     scoped(listener)
-    semaphore = native_class("aio", "Semaphore", "aio_semaphore")
+    var semaphore = native_class("aio", "Semaphore", "aio_semaphore")
     native_method(semaphore, "acquire", [], coroutine_of(prim("none")))
     native_method(semaphore, "release", [], prim("none"))
     module.classes["Task"] = task
@@ -342,29 +342,29 @@ def aio_module() -> Module:
     module.classes["Connection"] = connection
     module.classes["Listener"] = listener
     module.classes["Semaphore"] = semaphore
-    functions = module.functions
-    seconds = arg("seconds", prim("float"))
+    var functions = module.functions
+    var seconds = arg("seconds", prim("float"))
     add_helper(functions, "sleep", [seconds], coroutine_of(prim("none")), "aio_sleep_coroutine")
     add_helper(functions, "task_group", [], class_type(group), "aio_task_group")
-    host = arg("host", prim("str"))
-    port = arg("port", prim("int"))
-    connect_timeout = defaulted("timeout", optional("float"), float_default(30.0))
-    connected = coroutine_of(class_type(connection))
+    var host = arg("host", prim("str"))
+    var port = arg("port", prim("int"))
+    var connect_timeout = defaulted("timeout", optional("float"), float_default(30.0))
+    var connected = coroutine_of(class_type(connection))
     add_helper(functions, "connect", [host, port, connect_timeout], connected, "aio_connect_coroutine")
-    backlog = defaulted("backlog", prim("int"), int_default("16"))
+    var backlog = defaulted("backlog", prim("int"), int_default("16"))
     add_helper(functions, "listen", [host, port, backlog], class_type(listener), "aio_listen")
-    value = defaulted("value", prim("int"), int_default("1"))
+    var value = defaulted("value", prim("int"), int_default("1"))
     add_helper(functions, "semaphore", [value], class_type(semaphore), "aio_semaphore")
     return module
 
 def random_module() -> Module:
-    module = new_module("random")
-    generator = native_class("random", "Random", "random")
+    var module = new_module("random")
+    var generator = native_class("random", "Random", "random")
     native_method(generator, "random", [], prim("float"))
     native_method(generator, "randint", [param("a", prim("int")), param("b", prim("int"))], prim("int"))
-    choice = types.TypeVar(-8, "T", none)
+    var choice = types.TypeVar(-8, "T", none)
     generic_method(generator, "choice", [choice], [param("items", types.ListType(choice))], choice)
-    shuffle = types.TypeVar(-9, "T", none)
+    var shuffle = types.TypeVar(-9, "T", none)
     generic_method(generator, "shuffle", [shuffle], [param("items", types.ListType(shuffle))], prim("none"))
     module.classes["Random"] = generator
     add_helper(module.functions, "generator", [arg("seed", prim("int"))], class_type(generator), "random_generator")
@@ -372,22 +372,22 @@ def random_module() -> Module:
     return module
 
 def terminal_module() -> Module:
-    module = new_module("terminal")
-    file = arg("file", class_type(io_file()))
+    var module = new_module("terminal")
+    var file = arg("file", class_type(io_file()))
     add(module.functions, "isatty", [file], prim("bool"))
     add(module.functions, "color_enabled", [file], prim("bool"))
-    color = defaulted("color", prim("str"), str_default("default"))
-    bold = defaulted("bold", prim("bool"), bool_default(false))
-    enabled = defaulted("enabled", prim("bool"), bool_default(true))
+    var color = defaulted("color", prim("str"), str_default("default"))
+    var bold = defaulted("bold", prim("bool"), bool_default(false))
+    var enabled = defaulted("enabled", prim("bool"), bool_default(true))
     add(module.functions, "style", [arg("text", prim("str")), color, bold, enabled], prim("str"))
     add(module.functions, "progress", [arg("message", prim("str"))], prim("none"))
-    message = defaulted("message", prim("str"), str_default(""))
+    var message = defaulted("message", prim("str"), str_default(""))
     add(module.functions, "finish_progress", [message], prim("none"))
     return module
 
 # The parameters of subprocess.run and run_async.
 def run_params() -> list[BuiltinParam]:
-    environment = types.optional(types.DictType(prim("str"), prim("str")))
+    var environment = types.optional(types.DictType(prim("str"), prim("str")))
     return [
         arg("args", list_of("str")),
         defaulted("input", optional("bytes"), none_default()),
@@ -398,23 +398,23 @@ def run_params() -> list[BuiltinParam]:
     ]
 
 def subprocess_module() -> Module:
-    module = new_module("subprocess")
-    result = provided_class("subprocess", "Result", ["returncode", "stdout", "stderr"], [prim("int"), optional("bytes"), optional("bytes")])
-    process = native_class("subprocess", "Process", "process")
+    var module = new_module("subprocess")
+    var result = provided_class("subprocess", "Result", ["returncode", "stdout", "stderr"], [prim("int"), optional("bytes"), optional("bytes")])
+    var process = native_class("subprocess", "Process", "process")
     native_method(process, "poll", [], optional("int"))
-    timeout = none_param("timeout", optional("float"))
+    var timeout = none_param("timeout", optional("float"))
     native_method(process, "wait", [timeout], prim("int"))
     native_method(process, "wait_async", [timeout], coroutine_of(prim("int")))
     native_method(process, "terminate", [], prim("none"))
     native_method(process, "kill", [], prim("none"))
     module.classes["Result"] = result
     module.classes["Process"] = process
-    functions = module.functions
+    var functions = module.functions
     add_helper(functions, "run", run_params(), class_type(result), "process_run")
     add_helper(functions, "run_async", run_params(), coroutine_of(class_type(result)), "process_run_async")
-    environment = types.optional(types.DictType(prim("str"), prim("str")))
-    file = types.optional(class_type(io_file()))
-    spawn = [
+    var environment = types.optional(types.DictType(prim("str"), prim("str")))
+    var file = types.optional(class_type(io_file()))
+    var spawn = [
         arg("args", list_of("str")),
         defaulted("cwd", optional("str"), none_default()),
         defaulted("env", environment, none_default()),
@@ -426,19 +426,19 @@ def subprocess_module() -> Module:
     return module
 
 def http_module() -> Module:
-    module = new_module("http")
-    header = provided_class("http", "Header", ["name", "value"], [prim("str"), prim("str")])
-    headers = types.ListType(class_type(header))
-    response = provided_class("http", "Response", ["status", "headers", "body", "url"], [prim("int"), headers, prim("bytes"), prim("str")])
-    download = provided_class("http", "Download", ["status", "headers", "url", "bytes_written"], [prim("int"), headers, prim("str"), prim("int")])
+    var module = new_module("http")
+    var header = provided_class("http", "Header", ["name", "value"], [prim("str"), prim("str")])
+    var headers = types.ListType(class_type(header))
+    var response = provided_class("http", "Response", ["status", "headers", "body", "url"], [prim("int"), headers, prim("bytes"), prim("str")])
+    var download = provided_class("http", "Download", ["status", "headers", "url", "bytes_written"], [prim("int"), headers, prim("str"), prim("int")])
     module.classes["Header"] = header
     module.classes["Response"] = response
     module.classes["Download"] = download
-    optional_headers = defaulted("headers", types.optional(headers), none_default())
-    timeout = defaulted("timeout", prim("float"), float_default(30.0))
-    follow = defaulted("follow_redirects", prim("bool"), bool_default(true))
-    ca_file = defaulted("ca_file", optional("str"), none_default())
-    request = [
+    var optional_headers = defaulted("headers", types.optional(headers), none_default())
+    var timeout = defaulted("timeout", prim("float"), float_default(30.0))
+    var follow = defaulted("follow_redirects", prim("bool"), bool_default(true))
+    var ca_file = defaulted("ca_file", optional("str"), none_default())
+    var request = [
         arg("method", prim("str")),
         arg("url", prim("str")),
         optional_headers,
@@ -447,31 +447,31 @@ def http_module() -> Module:
         follow,
         ca_file,
     ]
-    fetch = [arg("url", prim("str")), arg("path", prim("str")), optional_headers, timeout, follow, ca_file]
-    functions = module.functions
+    var fetch = [arg("url", prim("str")), arg("path", prim("str")), optional_headers, timeout, follow, ca_file]
+    var functions = module.functions
     add_helper(functions, "request", request, class_type(response), "http_request")
     add_helper(functions, "request_async", request, coroutine_of(class_type(response)), "http_request_async")
     add_helper(functions, "download", fetch, class_type(download), "http_download")
     add_helper(functions, "download_async", fetch, coroutine_of(class_type(download)), "http_download_async")
     add_helper(functions, "header", [arg("headers", headers), arg("name", prim("str"))], optional("str"), "http_header")
-    values = arg("values", types.DictType(prim("str"), prim("str")))
+    var values = arg("values", types.DictType(prim("str"), prim("str")))
     add_helper(functions, "urlencode", [values], prim("str"), "http_urlencode")
     return module
 
 def net_module() -> Module:
-    module = new_module("net")
-    timeout = none_param("timeout", optional("float"))
-    connection = native_class("net", "Connection", "net_connection")
+    var module = new_module("net")
+    var timeout = none_param("timeout", optional("float"))
+    var connection = native_class("net", "Connection", "net_connection")
     native_method(connection, "recv", [param("size", prim("int")), timeout], prim("bytes"))
     native_method(connection, "sendall", [param("data", prim("bytes")), timeout], prim("none"))
     native_method(connection, "close", [], prim("none"))
-    listener = native_class("net", "Listener", "net_listener")
+    var listener = native_class("net", "Listener", "net_listener")
     native_method(listener, "accept", [timeout], class_type(connection))
     native_method(listener, "local_port", [], prim("int"))
     native_method(listener, "close", [], prim("none"))
-    reader = native_class("net", "Reader", "net_reader")
+    var reader = native_class("net", "Reader", "net_reader")
     native_method(reader, "read_exactly", [param("size", prim("int")), timeout], prim("bytes"))
-    max_bytes = default_param("max_bytes", prim("int"), int_default("1048576"))
+    var max_bytes = default_param("max_bytes", prim("int"), int_default("1048576"))
     native_method(reader, "read_until", [param("separator", prim("bytes")), max_bytes, timeout], prim("bytes"))
     native_method(reader, "close", [], prim("none"))
     scoped(connection)
@@ -480,11 +480,11 @@ def net_module() -> Module:
     module.classes["Connection"] = connection
     module.classes["Listener"] = listener
     module.classes["Reader"] = reader
-    host = arg("host", prim("str"))
-    port = arg("port", prim("int"))
-    connect_timeout = defaulted("timeout", optional("float"), float_default(30.0))
+    var host = arg("host", prim("str"))
+    var port = arg("port", prim("int"))
+    var connect_timeout = defaulted("timeout", optional("float"), float_default(30.0))
     add_helper(module.functions, "connect", [host, port, connect_timeout], class_type(connection), "net_connect")
-    backlog = defaulted("backlog", prim("int"), int_default("16"))
+    var backlog = defaulted("backlog", prim("int"), int_default("16"))
     add_helper(module.functions, "listen", [host, port, backlog], class_type(listener), "net_listen")
     add_helper(module.functions, "reader", [arg("connection", class_type(connection))], class_type(reader), "net_reader")
     return module
@@ -505,26 +505,26 @@ def modules() -> dict[str, Module]:
 # name them. Their methods lower to helpers named after their prefixes. Each
 # has an `iter` method over items of a type parameter `T` of its own.
 def dispatched() -> list[types.Class]:
-    result: list[types.Class] = []
-    id = -10
+    var result: list[types.Class] = []
+    var id = -10
     for name in "list dict str bytes tuple range".split(" "):
         result.append(dispatched_class(name, name, types.TypeVar(id, "T", none)))
         id = id - 1
-    t = types.TypeVar(-16, "T", none)
-    iterator = dispatched_class("<iterator>", "iterator", t)
+    var t = types.TypeVar(-16, "T", none)
+    var iterator = dispatched_class("<iterator>", "iterator", t)
     native_method(iterator, "next", [], t)
     result.append(iterator)
     t = types.TypeVar(-17, "T", none)
-    generator = dispatched_class("<generator>", "generator", t)
+    var generator = dispatched_class("<generator>", "generator", t)
     native_method(generator, "next", [], t)
     native_method(generator, "close", [], prim("none"))
-    generators = protocols()["Generator"]
+    var generators = protocols()["Generator"]
     native_method(generator, "enter", [], types.ProtocolType(generators, [t]))
     native_method(generator, "exit", [param("error", optional_exception())], prim("none"))
     result.append(generator)
     return result
 
 def dispatched_class(tag: str, prefix: str, t: types.TypeVar) -> types.Class:
-    decl = types.Class(tag, tag, [], [], [], false, true, prefix)
+    var decl = types.Class(tag, tag, [], [], [], false, true, prefix)
     native_method(decl, "iter", [], types.iterator(t))
     return decl

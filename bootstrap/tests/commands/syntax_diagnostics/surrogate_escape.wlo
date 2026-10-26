@@ -1,2 +1,2 @@
 def main():
-    x = '\uD800'
+    var x = '\uD800'

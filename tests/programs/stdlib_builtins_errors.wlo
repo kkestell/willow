@@ -4,7 +4,7 @@ def nan() -> float:
     return float("nan")
 
 def main():
-    empty: list[int] = []
+    var empty: list[int] = []
     try:
         min(empty)
     except ValueError as error:

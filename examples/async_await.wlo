@@ -15,27 +15,27 @@ class Cache:
 
     async def load(key: str) -> int:
         await aio.sleep(0.0)
-        value = self.values.get(key)
+        var value = self.values.get(key)
         if value is none:
             return 0
         return value
 
 async def total(loader: Loader, keys: list[str]) -> int:
-    sum = 0
+    var sum = 0
     for key in keys:
         sum = sum + await loader.load(key)
     return sum
 
 # A coroutine is a value of type `Coroutine[T]`.
 async def run_twice(make: () -> Coroutine[str]) -> str:
-    first = await make()
-    second = await make()
+    var first = await make()
+    var second = await make()
     return first + ", " + second
 
 async def main():
     print(await fetch("first", 0.01))
 
-    pending = fetch("second", 0.01)
+    var pending = fetch("second", 0.01)
     print("created, not started")
     print(await pending)
 

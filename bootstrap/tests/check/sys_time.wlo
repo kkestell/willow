@@ -7,16 +7,16 @@ def main():
             sys.getenv(name)
         except ValueError as error:
             print(error.message)
-    env = sys.environ()
-    names = list(env)
-    ordered = sorted(names)
+    var env = sys.environ()
+    var names = list(env)
+    var ordered = sorted(names)
     for i in range(len(names)):
         assert names[i] == ordered[i]
     assert len(sys.getcwd()) > 0
     for name in names:
         assert sys.getenv(name) == env[name]
     if len(names) > 0:
-        original = env.pop(names[0])
+        var original = env.pop(names[0])
         assert sys.getenv(names[0]) == original
     assert sys.getenv("WILLOW_MISSING_SYS_TIME_VARIABLE") is none
     for seconds in [-1.0, float("nan"), float("inf")]:
@@ -32,7 +32,7 @@ def main():
         except ValueError as error:
             print(error.message)
     assert time.time() > 0.0
-    start = time.monotonic()
+    var start = time.monotonic()
     time.sleep(0.01)
     assert time.monotonic() - start >= 0.01
     time.sleep(0.0)

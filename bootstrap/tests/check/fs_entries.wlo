@@ -2,9 +2,9 @@ import core
 import fs
 
 def main():
-    root = fs.temp_dir()
+    var root = fs.temp_dir()
     fs.mkdir(fs.join(root, "real/sub"), parents=true)
-    source = fs.join(root, "real/inside")
+    var source = fs.join(root, "real/inside")
     fs.write_file(source, "original")
     assert core.run(["ln", "-s", "real", fs.join(root, "link")]) == 0
     assert core.run(["ln", "-s", "missing", fs.join(root, "dangling")]) == 0
@@ -21,18 +21,21 @@ def main():
         assert error.message.endswith("they are the same file")
     assert fs.read_file(source) == "original"
 
-    tree = fs.walk(root)
-    path, directories, files = next(tree)
+    var tree = fs.walk(root)
+    var path, directories, files = next(tree)
     assert path == root
     assert ",".join(directories) == "real"
     assert ",".join(files) == "dangling,hard,link"
     directories.pop()
     files.append("unused")
-    visited: list[str] = []
-    for path, directories, files in tree:
+    var visited: list[str] = []
+    for path_item, directories_item, files_item in tree:
+        path = path_item
+        directories = directories_item
+        files = files_item
         visited.append(path[len(root):])
     assert ",".join(visited) == "/real,/real/sub"
-    missing = fs.walk(fs.join(root, "missing"))
+    var missing = fs.walk(fs.join(root, "missing"))
     try:
         next(missing)
         assert false
@@ -48,11 +51,14 @@ def main():
     assert len(fs.glob(fs.join(root, "[é😀]"))) == 2
     assert len(fs.glob(fs.join(root, "[à-ê]"))) == 1
     assert len(fs.glob(fs.join(root, "[!é]"))) == 1
-    info = fs.Stat("file", 3, 2.0)
+    var info = fs.Stat("file", 3, 2.0)
     info.kind = "other"
     assert info.kind == "other" and info.size == 3
-    paths: list[str] = []
-    for path, directories, files in fs.walk(root):
+    var paths: list[str] = []
+    for path_item, directories_item, files_item in fs.walk(root):
+        path = path_item
+        directories = directories_item
+        files = files_item
         paths.append(path)
         for name in files:
             fs.remove(fs.join(path, name))

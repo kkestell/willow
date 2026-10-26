@@ -1,1 +1,1 @@
-except_unassigned.wlo:5:15: error: variable 'y' may be used before assignment
+except_unassigned.wlo:6:15: error: variable 'y' may be used before assignment

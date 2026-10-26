@@ -1,23 +1,23 @@
 # https://rosettacode.org/wiki/Sieve_of_Eratosthenes
 
 def primes_up_to(limit: int) -> list[int]:
-    is_prime: list[bool] = []
-    for n in range(limit + 1):
-        is_prime.append(n >= 2)
-    n = 2
+    var is_prime: list[bool] = []
+    for candidate in range(limit + 1):
+        is_prime.append(candidate >= 2)
+    var n = 2
     while n * n <= limit:
         if is_prime[n]:
             for multiple in range(n * n, limit + 1, n):
                 is_prime[multiple] = false
         n = n + 1
-    primes: list[int] = []
-    for n in range(limit + 1):
-        if is_prime[n]:
-            primes.append(n)
+    var primes: list[int] = []
+    for candidate in range(limit + 1):
+        if is_prime[candidate]:
+            primes.append(candidate)
     return primes
 
 def main():
-    words: list[str] = []
+    var words: list[str] = []
     for p in primes_up_to(100):
         words.append(str(p))
     print(" ".join(words))

@@ -1,8 +1,8 @@
 # https://rosettacode.org/wiki/Palindrome_detection
 
 def is_palindrome(text: str) -> bool:
-    i = 0
-    j = len(text) - 1
+    var i = 0
+    var j = len(text) - 1
     while i < j:
         if text[i] != text[j]:
             return false
@@ -11,7 +11,7 @@ def is_palindrome(text: str) -> bool:
     return true
 
 def letters(text: str) -> str:
-    result = ""
+    var result = ""
     for c in text.lower():
         if c != c.upper():
             result = result + c
@@ -19,6 +19,6 @@ def letters(text: str) -> str:
 
 def main():
     for text in ["racecar", "rotor", "willow", "A man, a plan, a canal: Panama!"]:
-        exact = is_palindrome(text)
-        inexact = is_palindrome(letters(text))
+        var exact = is_palindrome(text)
+        var inexact = is_palindrome(letters(text))
         print(f"{text:<32}exact: {exact:<6}inexact: {inexact}")
