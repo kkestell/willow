@@ -23,34 +23,6 @@
     hardware. Docker Desktop's Rosetta blocks the full suite on this host;
     see [Docker setup](../docs/bootstrap.md#linux-in-docker).
   - Add PCRE2 to the Docker dependencies when `re` exists.
-- Add text operations.
-  - `s.count(sub) -> int`: the number of non-overlapping occurrences, counted
-    from the left. `s.count("")` is `len(s) + 1`, since the empty string
-    occurs at every index from 0 through `len(s)`.
-  - `s.rfind(sub) -> int | none`: the index of the last occurrence, or `none`.
-    `s.rfind("")` is `len(s)`.
-  - `s.partition(sep)` and `s.rpartition(sep)` return
-    `tuple[str, str, str]`: the text before the first (or last) occurrence,
-    the separator, and the text after it. Without an occurrence, `partition`
-    gives `(s, "", "")` and `rpartition` gives `("", "", s)`. An empty
-    separator raises `ValueError` with the message `empty separator`.
-  - `int(text: str, base: int) -> int` for bases 2 through 36, positional
-    like the other intrinsics. The text is an optional sign and one or more
-    digits valid in the base, using `a` through `z` in either case for 10
-    through 35. No prefixes, underscores, or whitespace. Bad text, or a result
-    outside the `int` range, raises `ValueError` with the message
-    `cannot convert str to int`; a base outside 2 through 36 raises
-    `ValueError` with the message `invalid base`.
-  - Format specifications become `[alignment][0][width][.precision][type]`.
-    Types `x` and `X` write an `int` in lowercase or uppercase hexadecimal,
-    with a leading `-` for negative values and no prefix. A `0` followed by a
-    width that starts with a nonzero digit is the zero flag; a lone `0` is
-    still a width of zero. The flag pads with zeros between the sign and the
-    digits, as in `-0042`. It requires a value whose static type is `int` or
-    `float` and a type of `d`, `f`, `x`, `X`, or none, and cannot be combined
-    with an alignment; anything else is a compile-time error. Non-finite
-    floats are padded with spaces instead. A precision still requires type
-    `f`.
 - Add regular expressions in a new `re` module, built on PCRE2
   (`libpcre2-8`).
   - `re.compile(pattern: str, ignore_case: bool = false,

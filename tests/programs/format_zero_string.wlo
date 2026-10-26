@@ -1,0 +1,2 @@
+def main():
+    print(f"{'a':05s}")

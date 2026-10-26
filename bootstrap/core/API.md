@@ -47,7 +47,8 @@ Fatal failures of L0:
 | `ZeroDivisionError` | `division by zero` | stage 0 inline; `float_mod`, `float_floordiv` |
 | `OverflowError` | `integer overflow` | stage 0 inline |
 | `ValueError` | `cannot convert float to int` | `float_to_int` |
-| `ValueError` | `cannot convert str to int` | `str_to_int` |
+| `ValueError` | `cannot convert str to int` | `str_to_int`, `str_to_int_base` |
+| `ValueError` | `invalid base` | `str_to_int_base` |
 | `ValueError` | `cannot convert str to float` | `str_to_float` |
 | `ValueError` | `empty separator` | `str_split` |
 | `ValueError` | `expected one character` | `str_ord` |
@@ -86,6 +87,7 @@ literal `"none"`.
 | `float_floordiv(a: float, b: float) -> float` | `a // b`: the floor of the quotient |
 | `float_mod(a: float, b: float) -> float` | `a % b`: the remainder with the sign of `b`, so `5.0 % -3.0` is `-1.0` |
 | `str_to_int(s: str) -> int` | `int(s)` |
+| `str_to_int_base(s: str, base: int) -> int` | `int(s, base)` |
 | `str_to_float(s: str) -> float` | `float(s)` |
 | `float_to_int(x: float) -> int` | `int(x)`, truncating toward zero |
 
@@ -105,6 +107,8 @@ literal `"none"`.
 | `str_slice(s: str, start: int, stop: int) -> str` | `s[start:stop]` |
 | `str_contains(s: str, sub: str) -> bool` | `sub in s` |
 | `str_find(s: str, sub: str) -> int \| none` | `s.find(sub)` |
+| `str_rfind(s: str, sub: str) -> int \| none` | `s.rfind(sub)` |
+| `str_count(s: str, sub: str) -> int` | `s.count(sub)` |
 | `str_startswith(s: str, prefix: str) -> bool` | `s.startswith(prefix)` |
 | `str_endswith(s: str, suffix: str) -> bool` | `s.endswith(suffix)` |
 | `str_replace(s: str, old: str, new: str) -> str` | `s.replace(old, new)` |

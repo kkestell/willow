@@ -1,0 +1,5 @@
+def show(value: int | float):
+    print(f"{value:05}")
+
+def main():
+    show(1)

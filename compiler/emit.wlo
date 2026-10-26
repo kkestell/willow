@@ -2576,9 +2576,16 @@ class Emitter:
             else:
                 if spec.kind == "f":
                     value = self.core_call("format_fixed", [self.expr(part), str(spec.precision)], true)
+                else if spec.kind in ["x", "X"]:
+                    var upper = "0"
+                    if spec.kind == "X":
+                        upper = "1"
+                    value = self.core_call("int_to_hex", [self.expr(part), upper], true)
                 else:
                     value = self.to_str(part)
-                if spec.width > 0:
+                if spec.zero:
+                    value = self.core_call("pad_zero", [value, str(spec.width)], true)
+                else if spec.width > 0:
                     if align == "":
                         align = ">"
                         if types.kind(ty) == "str":
@@ -3062,6 +3069,8 @@ class Emitter:
         var kind = types.kind(ty)
         var value = self.expr(arg)
         if node.name == "int":
+            if len(node.args) == 2:
+                return self.core_call("str_to_int_base", [value, self.expr(node.args[1])], true)
             if kind == "float":
                 return self.core_call("float_to_int", [value], true)
             return self.core_call("str_to_int", [value], true)

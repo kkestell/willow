@@ -1,0 +1,1 @@
+format_zero_alignment.wlo:2:16: error: zero flag requires a numeric format without alignment
