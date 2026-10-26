@@ -1,4 +1,5 @@
-# Declared names may match runtime type tags and generated table names.
+# Names such as `end`, `nil`, `number`, `string`, `x_`, and `__wlo_t1` are
+# ordinary identifiers.
 enum number:
     A
 

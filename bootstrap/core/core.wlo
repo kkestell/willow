@@ -116,7 +116,7 @@ def coroutine_context() -> CoroutineContext:
 
 def coroutine_create(entry: ptr, argument: word) -> CoroutineContext:
     if not coroutine_available():
-        fail("RuntimeError", "coroutines require stage 1 on arm64")
+        fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     coroutine_context()
     var stack_size = 262144
     var stack = __alloc(stack_size)
@@ -242,25 +242,25 @@ def coroutine_available() -> bool:
     return false
 
 def coroutine_current() -> CoroutineContext | none:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return none
 
 def coroutine_set_current(current: CoroutineContext):
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
 
 def coroutine_set_pending(pending: ptr):
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
 
 def coroutine_start_address() -> ptr:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return __ptr(__word(0))
 
 def coroutine_invoke(entry: ptr, argument: word) -> ptr:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return __ptr(__word(0))
 
 def coroutine_switch(current: CoroutineContext, resumed: CoroutineContext):
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
 
 # Called by the program entry before main. Writing to a closed pipe must fail
 # the write instead of raising SIGPIPE (spec §10); SIGPIPE is 13 and SIG_IGN
@@ -2676,7 +2676,7 @@ def input_line() -> str | none:
 
 # Stages 1 and 2 replace this body to read the arguments saved by program entry.
 def sys_arguments() -> list[str]:
-    fail("RuntimeError", "program arguments require stage 1")
+    fail("RuntimeError", "program arguments require stage 1 or 2")
     return []
 
 def sys_args(argc: int, argv: ptr) -> ptr:
@@ -4038,11 +4038,11 @@ def float_round(x: float) -> int:
 # Async calls hold a body closure; only scheduled tasks allocate stacks.
 # Stages 1 and 2 replace the next two bodies with compiler/coroutine.wlo's.
 def async_coroutine(body: ptr) -> ptr:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return __ptr(__word(0))
 
 def async_invoke(body: ptr) -> word:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return __word(0)
 
 def async_consume(coroutine: ptr) -> ptr:
@@ -4114,23 +4114,23 @@ class AioLoop:
 # Stages 1 and 2 replace the bodies from here through `aio_resume` with
 # compiler/coroutine.wlo's.
 def aio_loop() -> AioLoop:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return AioLoop(none, [], [], 0, {}, [])
 
 def aio_set_loop(loop: AioLoop | none):
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
 
 def aio_task_address() -> ptr:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return __ptr(__word(0))
 
 def aio_sleep_address() -> ptr:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return __ptr(__word(0))
 
 # Captures a task's failure instead of unwinding the scheduler.
 def aio_resume(task: AioTask):
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
 
 def aio_task_run(argument: word):
     var task = aio_loop().current
@@ -4515,11 +4515,11 @@ def aio_give_permit(semaphore: AioSemaphore):
 
 # Stages 1 and 2 replace the next two bodies with compiler/coroutine.wlo's.
 def aio_semaphore_acquire(semaphore: AioSemaphore) -> ptr:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return __ptr(__word(0))
 
 def aio_semaphore_body(body: ptr) -> word:
-    fail("RuntimeError", "coroutines require stage 1 on arm64")
+    fail("RuntimeError", "coroutines require arm64 and stage 1 or 2")
     return __word(0)
 
 def aio_semaphore_wait(semaphore: AioSemaphore):

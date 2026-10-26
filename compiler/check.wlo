@@ -46,7 +46,7 @@ class Checker:
     # Reports a construct the compiler does not support, and gives it the
     # type none so checking can unwind.
     def unsupported(line: int, col: int, what: str) -> types.Type:
-        self.fail(line, col, f"stage 1 does not support {what} yet")
+        self.fail(line, col, f"the compiler does not support {what} yet")
         return none_type()
 
     # Records that `expr`, of type `actual`, is used where `expected` is.

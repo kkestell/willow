@@ -22,7 +22,7 @@ def main():
     print("banana".find("na"))
     print("banana".find("x"))
     print("main.wlo".startswith("main"))
-    print("main.wlo".endswith(".lua"))
+    print("main.wlo".endswith(".txt"))
     print("aaa".replace("a", "bb"))
     print("a-b-c".replace("-", ""))
     print("[" + " \t pad \n".strip() + "]")
