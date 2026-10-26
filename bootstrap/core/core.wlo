@@ -3138,7 +3138,7 @@ def executable_path() -> str:
     else:
         return fs_realpath("/proc/self/exe")
 
-# The target's operating system, for stage 1's driver.
+# The target's operating system.
 def os() -> str:
     return __os
 
