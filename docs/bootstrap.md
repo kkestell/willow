@@ -115,7 +115,7 @@ docker build --platform linux/arm64 -f Dockerfile.bootstrap -t willow-bootstrap-
 docker run --rm --platform linux/arm64 willow-bootstrap-arm64
 ```
 
-The image installs a C toolchain, QBE 1.3, libgc, pkg-config, and libcurl;
+The image installs a C toolchain, QBE 1.3, libgc, pkg-config, libcurl, and PCRE2;
 OpenSSL supports the HTTP integration tests, and Git and procps provide
 commands exercised by the CLI and subprocess tests. Tests run as an
 unprivileged user so filesystem permission checks remain meaningful. The

@@ -5,7 +5,7 @@ FROM gnat-agent
 
 USER root
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgc-dev pkg-config \
+    && apt-get install -y --no-install-recommends libgc-dev pkg-config libpcre2-8-0 \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://c9x.me/compile/release/qbe-1.3.tar.xz | tar -xJ -C /tmp \
     && make -C /tmp/qbe-1.3 -j4 PREFIX=/usr/local install \

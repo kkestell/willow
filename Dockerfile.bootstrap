@@ -3,7 +3,7 @@ FROM debian:bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential ca-certificates curl xz-utils \
-        libgc-dev pkg-config libcurl4 openssl git procps \
+        libgc-dev pkg-config libcurl4 libpcre2-8-0 openssl git procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Debian's QBE package is older than the release Willow requires.

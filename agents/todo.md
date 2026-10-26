@@ -22,7 +22,6 @@
   - Full `make bootstrap-test` verification is deferred to real Linux amd64
     hardware. Docker Desktop's Rosetta blocks the full suite on this host;
     see [Docker setup](../docs/bootstrap.md#linux-in-docker).
-  - Add PCRE2 to the Docker dependencies when `re` exists.
 - Add integer bitwise operators and integer literal prefixes. `fs.chmod`'s
   mode wants `0o` literals, and a SHA-256 written in Willow would need the
   operators.
@@ -71,49 +70,6 @@
     with an alignment; anything else is a compile-time error. Non-finite
     floats are padded with spaces instead. A precision still requires type
     `f`.
-- Add regular expressions in a new `re` module, built on PCRE2
-  (`libpcre2-8`).
-  - `re.compile(pattern: str, ignore_case: bool = false,
-    multiline: bool = false, dotall: bool = false) -> Pattern` and
-    `re.escape(text: str) -> str`. Patterns use PCRE2's own syntax.
-  - Compile in UTF mode with `PCRE2_NEVER_BACKSLASH_C`, since `\C` matches
-    one byte and would split a code point, and `PCRE2_NEVER_UCP`, so `(*UCP)`
-    cannot override the ASCII classes. Set LF as the newline.
-  - `Pattern` methods: `search(text, start: int = 0) -> Match | none`,
-    `match(text, start: int = 0) -> Match | none` (anchored at `start`),
-    `fullmatch(text, start: int = 0) -> Match | none` (anchored at `start` and
-    the end of `text`), `findall(text) -> list[str]` (the whole matches),
-    `finditer(text) -> list[Match]`, `sub(replacement: str, text) -> str`, and
-    `split(text, maxsplit: int = -1) -> list[str]` (captures are not included;
-    `maxsplit` as in `str.split`). A `start` outside 0 through `len(text)`
-    raises `IndexError` with the message `start out of range`.
-  - `sub` replaces every match using PCRE2's replacement syntax (`$1`,
-    `${name}`, `$$`). An unset group gives empty text
-    (`PCRE2_SUBSTITUTE_UNSET_EMPTY`). A malformed replacement, or one that
-    names a group the pattern lacks, raises `ValueError` with the message
-    `invalid replacement`.
-  - `Match` methods: `group(index: int = 0) -> str | none`,
-    `named(name: str) -> str | none`, `groups() -> list[str | none]`, and
-    `start` and `end` (each `(index: int = 0) -> int | none`). An unmatched
-    group gives `none`; a group the pattern lacks raises `IndexError` with the
-    message `no such group`. All offsets are in code points.
-  - Matches are found left to right without overlapping. After an empty
-    match, the next match may not be empty at the same position.
-  - `\d`, `\w`, `\s`, and `\b` are ASCII only, matching the ASCII-only
-    `isdigit` and friends; `.` matches one code point other than LF unless
-    `dotall` is set; `ignore_case` folds Unicode case.
-  - An invalid pattern raises `ValueError` with the message
-    `invalid pattern at <offset>: <PCRE2's message>`, the offset in code
-    points. PCRE2's text varies between versions, so tests check only the part
-    before it. Exceeding PCRE2's match, depth, or heap limit raises
-    `RuntimeError` with the message `regex match limit exceeded`. If the
-    library can't be loaded, `OSError` with the message
-    `cannot load PCRE2: <reason>`, as `http` does for libcurl.
-  - Load the library with `dlopen` as `http` loads libcurl: on Linux
-    `libpcre2-8.so.0`; on macOS `libpcre2-8.0.dylib` from `/opt/homebrew/lib`,
-    then `/usr/local/lib`. No JIT. Free match data after each call; compiled
-    patterns are not freed. Add PCRE2 to the README's requirements and to
-    `Dockerfile.gnat`.
 - Expose missing OS operations.
   - `fs.chmod(path: str, mode: int) -> none` (following symlinks),
     `fs.symlink(target: str, link: str) -> none`, and

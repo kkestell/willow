@@ -1,0 +1,308 @@
+import core
+
+extern def pcre2_compile_8(pattern: ptr, length: int, options: cint, error: ptr, offset: ptr, context: ptr) -> ptr
+extern def pcre2_compile_context_create_8(context: ptr) -> ptr
+extern def pcre2_compile_context_free_8(context: ptr)
+extern def pcre2_set_newline_8(context: ptr, newline: cint) -> cint
+extern def pcre2_pattern_info_8(code: ptr, what: cint, result: ptr) -> cint
+extern def pcre2_get_error_message_8(error: cint, buffer: ptr, size: int) -> cint
+extern def pcre2_match_data_create_from_pattern_8(code: ptr, context: ptr) -> ptr
+extern def pcre2_match_data_free_8(data: ptr)
+extern def pcre2_match_8(code: ptr, text: ptr, length: int, start: int, options: cint, data: ptr, context: ptr) -> cint
+extern def pcre2_get_ovector_pointer_8(data: ptr) -> ptr
+extern def pcre2_substring_nametable_scan_8(code: ptr, name: ptr, first: ptr, last: ptr) -> cint
+extern def pcre2_substitute_8(code: ptr, text: ptr, length: int, start: int, options: cint, data: ptr, context: ptr, replacement: ptr, replacement_length: int, output: ptr, output_length: ptr) -> cint
+
+def _null() -> ptr:
+    return __ptr(__word(0))
+
+def _load_reason() -> str:
+    var reason = core.dlerror()
+    assert not __addr_is_null(reason), "dynamic loader returned no error"
+    return core.str_from_bytes(reason, core.strlen(reason))
+
+def _pcre() -> dict[str, ptr]:
+    var cache = core.re_cache()
+    var library = __ptr(__load8(cache, 0))
+    var loaded = not __addr_is_null(library)
+    if not loaded:
+        for name in core.re_library_names():
+            library = core.dlopen(core.str_bytes(name), 2)
+            if not __addr_is_null(library):
+                break
+        if __addr_is_null(library):
+            raise OSError("cannot load PCRE2: " + _load_reason())
+    var symbols: dict[str, ptr] = {}
+    try:
+        for name in ["pcre2_compile_8", "pcre2_compile_context_create_8", "pcre2_compile_context_free_8", "pcre2_set_newline_8", "pcre2_pattern_info_8", "pcre2_get_error_message_8", "pcre2_match_data_create_from_pattern_8", "pcre2_match_data_free_8", "pcre2_match_8", "pcre2_get_ovector_pointer_8", "pcre2_substring_nametable_scan_8", "pcre2_substitute_8"]:
+            var symbol = core.dlsym(library, core.str_bytes(name))
+            if __addr_is_null(symbol):
+                raise OSError("cannot load PCRE2: " + _load_reason())
+            symbols[name] = symbol
+    except Exception:
+        if not loaded:
+            core.dlclose(library)
+        raise
+    __store8(cache, 0, __word(library))
+    return symbols
+
+def _match_error(code: int):
+    if code in [-47, -53, -63]:
+        raise RuntimeError("regex match limit exceeded")
+    assert code >= 0, "unexpected PCRE2 match error: " + str(code)
+
+class Match:
+    _pattern: Pattern
+    _text: str
+    _starts: list[int]
+    _ends: list[int]
+
+    def _check(index: int):
+        if index < 0 or index >= len(self._starts):
+            raise IndexError("no such group")
+
+    def group(index: int = 0) -> str | none:
+        self._check(index)
+        if self._starts[index] < 0:
+            return none
+        return core.str_sub(self._text, self._starts[index], self._ends[index])
+
+    def named(name: str) -> str | none:
+        for index in self._pattern._numbers(name):
+            if self._starts[index] >= 0:
+                return self.group(index)
+        return none
+
+    def groups() -> list[str | none]:
+        var result: list[str | none] = []
+        for i in range(1, len(self._starts)):
+            result.append(self.group(i))
+        return result
+
+    def start(index: int = 0) -> int | none:
+        self._check(index)
+        if self._starts[index] < 0:
+            return none
+        return core.count_chars(self._text, 0, self._starts[index])
+
+    def end(index: int = 0) -> int | none:
+        self._check(index)
+        if self._ends[index] < 0:
+            return none
+        return core.count_chars(self._text, 0, self._ends[index])
+
+class Pattern:
+    _code: ptr
+    _symbols: dict[str, ptr]
+    _count: int
+
+    def _numbers(name: str) -> list[int]:
+        if "\x00" in name:
+            raise IndexError("no such group")
+        var slots = __alloc_atomic(16)
+        var size = __ccall(pcre2_substring_nametable_scan_8, self._symbols["pcre2_substring_nametable_scan_8"], self._code, core.str_bytes(name), slots, __offset(slots, 8))
+        if size < 0:
+            raise IndexError("no such group")
+        var entry = __ptr(__load8(slots, 0))
+        var last = __ptr(__load8(slots, 8))
+        var result: list[int] = []
+        while true:
+            result.append(__load1(entry, 0) * 256 + __load1(entry, 1))
+            if entry == last:
+                break
+            entry = __offset(entry, size)
+        return result
+
+    def _search(text: str, start: int, options: int) -> Match | none:
+        var symbols = self._symbols
+        var data = __ccall(pcre2_match_data_create_from_pattern_8, symbols["pcre2_match_data_create_from_pattern_8"], self._code, _null())
+        assert not __addr_is_null(data), "cannot allocate PCRE2 match data"
+        try:
+            var code = __ccall(pcre2_match_8, symbols["pcre2_match_8"], self._code, core.str_bytes(text), core.str_size(text), start, options, data, _null())
+            if code == -1:
+                return none
+            _match_error(code)
+            var vector = __ccall(pcre2_get_ovector_pointer_8, symbols["pcre2_get_ovector_pointer_8"], data)
+            var starts: list[int] = []
+            var ends: list[int] = []
+            for i in range(self._count + 1):
+                starts.append(__int(__load8(vector, i * 16)))
+                ends.append(__int(__load8(vector, i * 16 + 8)))
+            return Match(self, text, starts, ends)
+        finally:
+            __ccall(pcre2_match_data_free_8, symbols["pcre2_match_data_free_8"], data)
+
+    def _start(text: str, start: int) -> int:
+        if start < 0 or start > len(text):
+            raise IndexError("start out of range")
+        return core.advance(text, 0, start)
+
+    def search(text: str, start: int = 0) -> Match | none:
+        return self._search(text, self._start(text, start), 0)
+
+    def match(text: str, start: int = 0) -> Match | none:
+        # PCRE2_ANCHORED
+        return self._search(text, self._start(text, start), 2147483648)
+
+    def fullmatch(text: str, start: int = 0) -> Match | none:
+        # PCRE2_ANCHORED | PCRE2_ENDANCHORED
+        return self._search(text, self._start(text, start), 2684354560)
+
+    def _matches(text: str, limit: int) -> list[Match]:
+        var result: list[Match] = []
+        var at = 0
+        var options = 0
+        while at <= core.str_size(text):
+            var found = self._search(text, at, options)
+            if found is none:
+                if options == 0 or at == core.str_size(text):
+                    break
+                at = core.advance(text, at, 1)
+                options = 0
+            else:
+                result.append(found)
+                if len(result) == limit:
+                    break
+                at = found._ends[0]
+                options = 0
+                if found._starts[0] == at:
+                    # Retry with PCRE2_ANCHORED | PCRE2_NOTEMPTY_ATSTART.
+                    options = 2147483656
+        return result
+
+    def finditer(text: str) -> list[Match]:
+        return self._matches(text, -1)
+
+    def findall(text: str) -> list[str]:
+        var result: list[str] = []
+        for found in self.finditer(text):
+            var whole = found.group()
+            assert whole is not none, "unmatched whole match"
+            result.append(whole)
+        return result
+
+    def split(text: str, maxsplit: int = -1) -> list[str]:
+        var result: list[str] = []
+        var previous = 0
+        if maxsplit != 0:
+            for found in self._matches(text, maxsplit):
+                result.append(core.str_sub(text, previous, found._starts[0]))
+                previous = found._ends[0]
+        result.append(core.str_sub(text, previous, core.str_size(text)))
+        return result
+
+    def sub(replacement: str, text: str) -> str:
+        self._replacement(replacement)
+        var symbols = self._symbols
+        var size = __alloc_atomic(8)
+        __store8(size, 0, __word(0))
+        # GLOBAL | UNSET_EMPTY | OVERFLOW_LENGTH computes the required buffer.
+        var code = __ccall(pcre2_substitute_8, symbols["pcre2_substitute_8"], self._code, core.str_bytes(text), core.str_size(text), 0, 5376, _null(), _null(), core.str_bytes(replacement), core.str_size(replacement), _null(), size)
+        if code != -48:
+            _replacement_error(code)
+        var output = __alloc_atomic(__int(__load8(size, 0)))
+        code = __ccall(pcre2_substitute_8, symbols["pcre2_substitute_8"], self._code, core.str_bytes(text), core.str_size(text), 0, 5376, _null(), _null(), core.str_bytes(replacement), core.str_size(replacement), output, size)
+        _replacement_error(code)
+        return core.str_from_bytes(output, __int(__load8(size, 0)))
+
+    # Validate even when the subject has no match. PCRE2 otherwise parses a
+    # replacement only after matching the subject.
+    def _replacement(replacement: str):
+        var i = 0
+        while i < len(replacement):
+            if replacement[i] != "$":
+                i = i + 1
+                continue
+            i = i + 1
+            if i == len(replacement):
+                raise ValueError("invalid replacement")
+            if replacement[i] in "$&`'_+":
+                i = i + 1
+                continue
+            var close = ""
+            if replacement[i] == "{":
+                close = "}"
+                i = i + 1
+            else if replacement[i] == "<":
+                close = ">"
+                i = i + 1
+            var start = i
+            if i < len(replacement) and replacement[i] == "*" and close != ">":
+                i = i + 1
+            if i < len(replacement) and replacement[i].isdigit():
+                while i < len(replacement) and replacement[i].isdigit():
+                    i = i + 1
+            else:
+                while i < len(replacement) and (replacement[i].isalnum() or replacement[i] == "_" or ord(replacement[i]) > 127):
+                    i = i + 1
+            var name = replacement[start:i]
+            if close != "":
+                if i == len(replacement) or replacement[i] != close:
+                    raise ValueError("invalid replacement")
+                i = i + 1
+            if name == "*MARK":
+                continue
+            if name == "":
+                raise ValueError("invalid replacement")
+            if name.isdigit() and close != ">":
+                var number = 0
+                for digit in name:
+                    number = number * 10 + ord(digit) - 48
+                    if number > self._count:
+                        raise ValueError("invalid replacement")
+            else:
+                try:
+                    self._numbers(name)
+                except IndexError:
+                    raise ValueError("invalid replacement")
+
+def _replacement_error(code: int):
+    if code in [-47, -53, -63]:
+        _match_error(code)
+    if code < 0:
+        raise ValueError("invalid replacement")
+
+def compile(pattern: str, ignore_case: bool = false, multiline: bool = false, dotall: bool = false) -> Pattern:
+    var symbols = _pcre()
+    # UTF | NEVER_BACKSLASH_C | NEVER_UCP; leave Unicode properties disabled.
+    var options = 1574912
+    if ignore_case:
+        options = options + 8
+    if multiline:
+        options = options + 1024
+    if dotall:
+        options = options + 32
+    var context = __ccall(pcre2_compile_context_create_8, symbols["pcre2_compile_context_create_8"], _null())
+    assert not __addr_is_null(context), "cannot allocate PCRE2 compile context"
+    var error = __alloc_atomic(4)
+    var offset = __alloc_atomic(8)
+    var code: ptr
+    try:
+        var status = __ccall(pcre2_set_newline_8, symbols["pcre2_set_newline_8"], context, 2)
+        assert status == 0, "cannot set PCRE2 newline"
+        code = __ccall(pcre2_compile_8, symbols["pcre2_compile_8"], core.str_bytes(pattern), core.str_size(pattern), options, error, offset, context)
+    finally:
+        __ccall(pcre2_compile_context_free_8, symbols["pcre2_compile_context_free_8"], context)
+    if __addr_is_null(code):
+        var message = __alloc_atomic(256)
+        var length = __ccall(pcre2_get_error_message_8, symbols["pcre2_get_error_message_8"], __load4(error, 0), message, 256)
+        assert length >= 0, "cannot get PCRE2 error message"
+        var at = core.count_chars(pattern, 0, __int(__load8(offset, 0)))
+        raise ValueError("invalid pattern at " + str(at) + ": " + core.str_from_bytes(message, length))
+    var count = __alloc_atomic(4)
+    var status = __ccall(pcre2_pattern_info_8, symbols["pcre2_pattern_info_8"], code, 4, count)
+    assert status == 0, "cannot get PCRE2 capture count"
+    return Pattern(code, symbols, __load4(count, 0))
+
+def escape(text: str) -> str:
+    var parts: list[str] = []
+    var digits = "0123456789abcdef"
+    for c in text:
+        var value = ord(c)
+        if value < 32 or value == 127:
+            parts.append("\\x" + digits[value // 16] + digits[value % 16])
+        else if c in "\\.^$|?*+()[]{}-#&~ ":
+            parts.append("\\" + c)
+        else:
+            parts.append(c)
+    return "".join(parts)

@@ -1143,7 +1143,7 @@ def parse_format_spec(text: str) -> ast.FormatSpec:
 
 # Reserved words with no construct in the language.
 def is_unsupported(kind: tokens.Kind) -> bool:
-    return kind == tokens.Kind.CASE or kind == tokens.Kind.MATCH
+    return kind == tokens.Kind.CASE
 
 def is_type_name(kind: tokens.Kind) -> bool:
     return kind == tokens.Kind.INT or kind == tokens.Kind.FLOAT or kind == tokens.Kind.BOOL or kind == tokens.Kind.STR or kind == tokens.Kind.BYTES or kind == tokens.Kind.NONE or kind == tokens.Kind.LIST or kind == tokens.Kind.DICT or kind == tokens.Kind.TUPLE or is_protocol_name(kind)

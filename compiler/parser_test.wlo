@@ -219,7 +219,7 @@ def main():
         ["var g: int\nasync with aio.task_group() as g_item:\n    g = g_item\n    pass\nasync with g:\n    pass", "{ var g: int; async with aio.task_group() as g_item { g = g_item; pass }; async with g { pass } }"],
         ["async with g as (a, b):\n    pass", "2:21: expected a name, found '('"],
         ["var del = 1\nvar from = 2\nvar global = 3", "{ var del = 1; var from = 2; var global = 3 }"],
-        ["match = 1", "2:5: 'match' is not supported"],
+        ["var match = 1", "{ var match = 1 }"],
         ["case = 1", "2:5: 'case' is not supported"],
     ]
     var exprs = [

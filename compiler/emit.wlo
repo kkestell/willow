@@ -240,10 +240,11 @@ class Emitter:
             if body != "":
                 self.write(body)
                 return
-        if module == "W.core" and function.name == "http_cache":
-            self.write("data $W.http.library = { l 0 }")
+        if module == "W.core" and function.name in ["http_cache", "re_cache"]:
+            var library = "$W." + function.name.removesuffix("_cache") + ".library"
+            self.write("data " + library + " = { l 0 }")
             self.begin(self.symbol(function), [], true)
-            self.end("$W.http.library")
+            self.end(library)
             return
         if module == "W.core" and function.name == "ascii_character":
             self.emit_ascii_character()

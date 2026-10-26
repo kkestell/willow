@@ -1,0 +1,9 @@
+import re
+
+def main():
+    print(re.escape("a.b"))
+    try:
+        re.compile("x")
+    except OSError as error:
+        print(error.message.startswith("cannot load PCRE2: "))
+        print(len(error.message) > len("cannot load PCRE2: "))
