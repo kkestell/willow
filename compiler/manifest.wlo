@@ -3,6 +3,7 @@
 import fs
 import json
 import loader
+import source
 
 # A project. `source` and each of `dependencies` are directory prefixes that
 # end in "/", or are "" for the manifest's directory; `entry` is the entry
@@ -28,7 +29,7 @@ def read() -> Project | none:
     try:
         text = fs.read_file("willow.json")
     except OSError as error:
-        raise ManifestError(loader.read_reason(error))
+        raise ManifestError(source.read_reason(error))
     var data: json.Json
     try:
         data = json.parse(text)

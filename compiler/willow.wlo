@@ -15,6 +15,7 @@ import init
 import loader
 import manifest
 import runner
+import source
 import subprocess
 import sys
 
@@ -120,11 +121,9 @@ def main():
         roots = loader.Roots(project.source, project.dependencies, project.entry_name)
     else:
         roots = loader.file_roots(path)
-    var text: str | diagnostic.Diagnostic
-    try:
-        text = loader.read_source(path)
-    except OSError as error:
-        fail("error: " + loader.read_reason(error))
+    var text = source.read(path)
+    if text is source.Unreadable:
+        fail("error: " + text.reason)
         return
     if text is diagnostic.Diagnostic:
         fail(text.format())
@@ -242,11 +241,9 @@ def test(args: list[str]):
         var roots = loader.file_roots(file)
         if project is not none:
             roots = loader.Roots(project.source, project.dependencies, roots.entry)
-        var text: str | diagnostic.Diagnostic
-        try:
-            text = loader.read_source(file)
-        except OSError as error:
-            sys.eprint("error: " + loader.read_reason(error))
+        var text = source.read(file)
+        if text is source.Unreadable:
+            sys.eprint("error: " + text.reason)
             failed_checks = true
             continue
         if text is diagnostic.Diagnostic:

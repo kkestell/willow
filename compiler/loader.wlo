@@ -14,6 +14,7 @@ import fs
 import lexer
 import lib_source
 import parser
+import source
 
 # Whether `name` is a standard library module with no source in lib/, which
 # stdlib.wlo declares instead.
@@ -58,11 +59,9 @@ class Loader:
             self.fail(importer, importing, f"module '{name}' is the same file as module '{other}'")
             return
         self.names_by_file[file] = name
-        var text: str | diagnostic.Diagnostic
-        try:
-            text = read_source(path)
-        except OSError as error:
-            self.fail(importer, importing, f"cannot load module '{name}': {read_reason(error)}")
+        var text = source.read(path)
+        if text is source.Unreadable:
+            self.fail(importer, importing, f"cannot load module '{name}': {text.reason}")
             return
         if text is diagnostic.Diagnostic:
             self.error = text
@@ -162,44 +161,6 @@ def is_identifier(name: str) -> bool:
 # The roots of the entry file at `path` outside a project: its own directory.
 def file_roots(path: str) -> Roots:
     return Roots(directory_of(path), [], entry_name(path))
-
-# The reason in an OSError from fs.read_file: the path and the system's
-# message.
-def read_reason(error: OSError) -> str:
-    return error.message.removeprefix("cannot read ")
-
-# The text of the source file at `path`, or a diagnostic at its first byte
-# that is not valid UTF-8 (spec §2). Raises OSError when it cannot be read.
-def read_source(path: str) -> str | diagnostic.Diagnostic:
-    var data = fs.read_bytes(path)
-    try:
-        return data.decode()
-    except ValueError:
-        pass
-    var line = 1
-    var col = 1
-    var i = 0
-    var size = char_size(data, i)
-    while size > 0:
-        if data[i] == 10:
-            line = line + 1
-            col = 0
-        col = col + 1
-        i = i + size
-        size = char_size(data, i)
-    return diagnostic.Diagnostic(path, line, col, "invalid UTF-8")
-
-# The byte length of the UTF-8 character at byte `i` of `data`, or 0 when the
-# bytes there are not valid UTF-8. No prefix of a character decodes, so the
-# shortest slice that does is one character.
-def char_size(data: bytes, i: int) -> int:
-    for size in range(1, 5):
-        try:
-            data[i:i + size].decode()
-            return size
-        except ValueError:
-            pass
-    return 0
 
 # The modules of the program whose entry file is at `path` and has the text
 # `text`: the entry first, then each module in the order a depth-first walk

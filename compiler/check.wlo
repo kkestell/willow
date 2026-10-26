@@ -1613,7 +1613,10 @@ class Checker:
                     if target is none:
                         self.fail(call_args[i].line, call_args[i].col, "cannot infer the parameter types of this lambda")
                         return none_type()
-                    for j in range(min(len(lambda_node.params), len(target.params))):
+                    var count = len(lambda_node.params)
+                    if len(target.params) < count:
+                        count = len(target.params)
+                    for j in range(count):
                         if lambda_node.params[j].annotation is none and types.mentions_any(target.params[j], vars):
                             self.fail(call_args[i].line, call_args[i].col, "cannot infer the parameter types of this lambda")
                             return none_type()
