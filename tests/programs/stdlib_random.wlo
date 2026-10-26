@@ -87,6 +87,10 @@ def main():
         random.secure_bytes(-1)
     except ValueError as error:
         print(error.message)
+    try:
+        random.secure_bytes(9223372036854775807)
+    except OverflowError as error:
+        print(error.message)
     assert len(random.secure_bytes(0)) == 0
     assert len(random.secure_bytes(100000)) == 100000
     assert random.secure_bytes(16) != random.secure_bytes(16)

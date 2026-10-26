@@ -83,6 +83,10 @@ class Emitter:
     path: str = ""
     frames: bool = false
     async_body: bool = false
+    # Whether int arithmetic checks for overflow. Core's own arithmetic
+    # stays in range by construction and checks explicitly where program
+    # values could leave it.
+    overflow_checks: bool = true
     # Where a pending exception goes: the innermost handler, or `@unwind`,
     # which returns, and whether the function uses `@unwind`.
     target: str = ""
@@ -313,6 +317,7 @@ class Emitter:
         self.path = self.module_paths[module]
         self.frames = module not in self.privileged
         self.async_body = function.is_async
+        self.overflow_checks = module != "W.core"
         for param in function.params:
             var param_symbol = param.symbol
             assert param_symbol is not none, "parameter without a symbol"
@@ -428,6 +433,7 @@ class Emitter:
         self.unwinds = false
         self.frames = false
         self.async_body = false
+        self.overflow_checks = true
         self.returns = returns
         var result = ""
         if returns:
@@ -2219,9 +2225,14 @@ class Emitter:
     # `left instr right` on ints, failing with an OverflowError when the
     # result leaves the symmetric int range.
     def checked(instr: str, left: str, right: str) -> str:
+        var t: str
+        if not self.overflow_checks:
+            t = self.temp()
+            self.line(f"{t} =l {instr} {left}, {right}")
+            return t
         if instr == "mul":
             return self.checked_multiply(left, right)
-        var t = self.temp()
+        t = self.temp()
         self.line(f"{t} =l {instr} {left}, {right}")
         var a = self.temp()
         var b = self.temp()

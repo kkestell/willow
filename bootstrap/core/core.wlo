@@ -464,8 +464,12 @@ def str_bytes(s: str) -> ptr:
 def str_byte(s: str, i: int) -> int:
     return __load1(str_bytes(s), i)
 
-# A string of `length` bytes whose contents the caller fills in.
+# A string of `length` bytes whose contents the caller fills in. Programs
+# choose some lengths, such as a receive size, so the header and zero byte
+# must not take the size past the int range.
 def str_alloc(length: int) -> ptr:
+    if length > 9223372036854775782:
+        fail("OverflowError", "integer overflow")
     var s = __alloc_atomic(25 + length)
     __store8(s, 0, __word(__type(str)))
     __store8(s, 8, __word(length))

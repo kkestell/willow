@@ -25,6 +25,9 @@ and stages 1 and 2 call `os` and `run` through `import core`.
   9223372036854775807, which clamping makes the length.
 - Indexes and slice bounds may be negative, as spec §7 says; core does the
   normalizing and clamping.
+- Stages 1 and 2 compile core's own `int` arithmetic without overflow checks.
+  Core keeps its arithmetic in range and checks the program's values where
+  they could leave it.
 
 ## Program and failures
 
