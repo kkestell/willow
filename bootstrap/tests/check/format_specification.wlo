@@ -1,5 +1,5 @@
 def narrowed(value: int | str) -> str:
-    if isinstance(value, int):
+    if value is int:
         return f"{value:d}"
     return f"{value:s}"
 

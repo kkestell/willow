@@ -12,16 +12,16 @@ import sys
 # "line:col: message".
 def parse(source: str) -> ast.Module | str:
     lexed = lexer.lex("test.wlo", source)
-    if isinstance(lexed, diagnostic.Diagnostic):
+    if lexed is diagnostic.Diagnostic:
         return f"{lexed.line}:{lexed.col}: {lexed.message}"
     parsed = parser.parse("test.wlo", lexed, false)
-    if isinstance(parsed, diagnostic.Diagnostic):
+    if parsed is diagnostic.Diagnostic:
         return f"{parsed.line}:{parsed.col}: {parsed.message}"
     return parsed
 
 def module(source: str) -> str:
     parsed = parse(source)
-    if isinstance(parsed, str):
+    if parsed is str:
         return parsed
     return show.Printer(false).module(parsed)
 
@@ -35,22 +35,22 @@ def in_main(statements: str) -> str:
 # The body of `main` with `statements`.
 def body(statements: str) -> str:
     parsed = parse(in_main(statements))
-    if isinstance(parsed, str):
+    if parsed is str:
         return parsed
     main = parsed.declarations[0]
-    if isinstance(main, ast.FunctionDecl):
+    if main is ast.FunctionDecl:
         return show.Printer(false).block(main.body)
     return "not a function"
 
 # The value of `x = text` in `main`.
 def expr(text: str) -> str:
     parsed = parse(in_main("x = " + text))
-    if isinstance(parsed, str):
+    if parsed is str:
         return parsed
     main = parsed.declarations[0]
-    if isinstance(main, ast.FunctionDecl):
+    if main is ast.FunctionDecl:
         assign = main.body[0].node
-        if isinstance(assign, ast.Assign):
+        if assign is ast.Assign:
             return show.Printer(false).expr(assign.value)
     return "not an assignment"
 
@@ -68,7 +68,6 @@ def main():
         ["protocol P:\n    def f(self)\n", "2:11: expected a parameter name, found 'self'"],
         ["def f(self: int):\n    pass\n", "1:7: expected a parameter name, found 'self'"],
         ["def self():\n    pass\n", "1:5: expected a function name, found 'self'"],
-        ["class self:\n    pass\n", "1:7: expected a class name, found 'self'"],
         ["class A:\n    def f():\n        self = 1\n", "3:9: cannot assign to 'self'"],
         ["class A:\n    def f():\n        self: int = 1\n", "3:9: cannot assign to 'self'"],
         ["class A:\n    def f():\n        self, x = (1, 2)\n", "3:9: cannot assign to 'self'"],
@@ -80,7 +79,7 @@ def main():
         ["def f(x: list):\n    pass\n", "1:14: expected '[', found ')'"],
         ["def f(x: 1):\n    pass\n", "1:10: expected a type, found integer"],
         ["x = 1\n", "1:1: only function, class, protocol, enum, and type declarations are allowed at file scope"],
-        ["from os import path\n", "1:1: 'from' is not supported"],
+        ["from os import path\n", "1:1: only function, class, protocol, enum, and type declarations are allowed at file scope"],
         ["    def f():\n        pass\n", "1:5: only function, class, protocol, enum, and type declarations are allowed at file scope"],
         ["def f():\n", "2:1: expected an indented block, found end of file"],
         ["def f(g: (int, str) -> bool, h: () -> int):\n    pass\n", "def f(g: ((int, str) -> bool), h: (() -> int)) -> none { pass }"],
@@ -168,10 +167,8 @@ def main():
         ["a, f() = t", "2:8: cannot assign to this expression"],
         ["a, b = b, a", "2:13: expected end of line, found ','"],
         ["tuple = 1", "2:5: expected a statement, found 'tuple'"],
-        ["x = isinstance(y, none)", "2:23: expected a class name, found 'none'"],
-        ["x = isinstance(y)", "2:21: expected ',', found ')'"],
-        ["x = isinstance(y, list[int])", "2:27: expected ')', found '['"],
-        ["x = a is 3", "2:14: expected 'none', found integer"],
+        ["x = a is list[int]", "2:18: expected end of line, found '['"],
+        ["x = a is 3", "2:14: expected a type name, found integer"],
         ["x = a is none == b", "2:19: comparison chains are not supported"],
         ["x = a == b is none", "2:16: comparison chains are not supported"],
         ["x = a | b", "2:11: unsupported operator '|'"],
@@ -183,7 +180,7 @@ def main():
         ["p.x: int = 1", "2:8: only a name can have an annotation"],
         ["xs[0]", "2:7: only calls and await expressions can be used as statements"],
         ["raise E('x')\nraise", "{ raise E(\"x\"); raise }"],
-        ["raise E() from e", "2:15: 'raise ... from' is not supported"],
+        ["raise E() from e", "2:15: expected end of line, found 'from'"],
         ["try:\n    f()\nexcept E as e:\n    g(e)\nexcept m.F:\n    pass\nfinally:\n    h()", "{ try { f() } except E as e { g(e) } except m.F { pass } finally { h() } }"],
         ["try:\n    pass", "4:1: expected 'except' or 'finally', found dedent"],
         ["try:\n    pass\nexcept:\n    pass", "4:5: bare 'except' is not supported"],
@@ -221,7 +218,9 @@ def main():
         ["x = await await c", "2:15: expected an expression, found 'await'"],
         ["async with aio.task_group() as g:\n    pass\nasync with g:\n    pass", "{ async with aio.task_group() as g { pass }; async with g { pass } }"],
         ["async with g as (a, b):\n    pass", "2:21: expected a name, found '('"],
-        ["del x", "2:5: 'del' is not supported"],
+        ["del = 1\nfrom = 2\nglobal = 3", "{ del = 1; from = 2; global = 3 }"],
+        ["match = 1", "2:5: 'match' is not supported"],
+        ["case = 1", "2:5: 'case' is not supported"],
     ]
     exprs = [
         ["a or b and not c == d + e * -f", "(a or (b and (not (c == (d + (e * (- f)))))))"],
@@ -232,9 +231,10 @@ def main():
         ["(1,)", "tuple(1)"],
         ["(1, a + b,)", "tuple(1, (a + b))"],
         ["(1)", "1"],
-        ["isinstance(x, tuple)", "isinstance(x, tuple)"],
-        ["isinstance(x, list) and isinstance(y, Point,)", "(isinstance(x, list) and isinstance(y, Point))"],
-        ["not isinstance(f(x), a.b.C)", "(not isinstance(f(x), a.b.C))"],
+        ["x is not int", "(x is not int)"],
+        ["(x is tuple)", "(x is tuple)"],
+        ["(x is list) and (y is Point)", "((x is list) and (y is Point))"],
+        ["not (f(x) is a.b.C)", "(not (f(x) is a.b.C))"],
         ["not x is none", "(not (x is none))"],
         ["x is not none and x + 1 is none", "((x is not none) and ((x + 1) is none))"],
         ["[1, [2, 3,], []]", "[1, [2, 3], []]"],
@@ -297,7 +297,7 @@ def main():
     for pair in positions:
         parsed = parse(pair[0])
         actual = ""
-        if isinstance(parsed, str):
+        if parsed is str:
             actual = parsed
         else:
             actual = show.Printer(true).module(parsed)

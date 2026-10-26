@@ -6,7 +6,7 @@ class Empty(Exception):
 
 def parse_digit(text: str, line: int) -> int:
     index = "0123456789".find(text)
-    if len(text) != 1 or index < 0:
+    if len(text) != 1 or index is none:
         raise ParseError(f"not a digit: {text}", line)
     return index
 

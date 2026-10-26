@@ -170,12 +170,13 @@ class Reader:
         core.net_check_timeout(timeout)
         deadline = core.net_deadline(timeout)
         at = self._buffer.find(separator)
-        while at < 0 or at + len(separator) > max_bytes:
-            if at >= 0 or len(self._buffer) >= max_bytes:
+        while at is none or at + len(separator) > max_bytes:
+            if at is not none or len(self._buffer) >= max_bytes:
                 raise ValueError(f"separator not found within {max_bytes} bytes")
             if not self._fill("read_until", timeout, deadline):
                 return self._take(len(self._buffer))
             at = self._buffer.find(separator)
+        assert at is not none, "the loop exits only when the separator is found"
         return self._take(at + len(separator))
 
     def close():

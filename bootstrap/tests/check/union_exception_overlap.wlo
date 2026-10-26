@@ -1,0 +1,4 @@
+def test(value: Exception | ValueError):
+    pass
+def main():
+    pass

@@ -1,0 +1,1 @@
+type_test_partial.wlo:2:21: error: type test ValueError partially overlaps Exception

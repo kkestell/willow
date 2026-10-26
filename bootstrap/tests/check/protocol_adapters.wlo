@@ -25,7 +25,7 @@ class Box[T]:
 
 class Adjuster:
     def set(value: int | float = 3, *, extra: bool = true, flag: bool = true) -> float:
-        if isinstance(value, float):
+        if value is float:
             if extra and not flag:
                 return value * 2.0
             return value

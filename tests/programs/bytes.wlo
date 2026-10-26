@@ -38,5 +38,5 @@ def main():
     except ValueError as e:
         print(e.message)
     value: bytes | str = text
-    if isinstance(value, bytes):
+    if value is bytes:
         print(f"bytes of length {len(value)}")

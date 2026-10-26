@@ -62,7 +62,7 @@ def ray_sphere(sphere: Sphere, origin: Vec, direction: Vec) -> float:
     return t2
 
 def intersect(scene: Scene, origin: Vec, direction: Vec, hit: Hit):
-    if isinstance(scene, Sphere):
+    if scene is Sphere:
         distance = ray_sphere(scene, origin, direction)
         if distance >= hit.distance:
             return
@@ -76,7 +76,7 @@ def intersect(scene: Scene, origin: Vec, direction: Vec, hit: Hit):
 
 # Whether the ray hits anything in the scene.
 def shadowed(scene: Scene, origin: Vec, direction: Vec) -> bool:
-    if isinstance(scene, Sphere):
+    if scene is Sphere:
         return ray_sphere(scene, origin, direction) < infinity()
     if not ray_sphere(scene.bound, origin, direction) < infinity():
         return false

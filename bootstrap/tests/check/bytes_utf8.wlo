@@ -7,7 +7,7 @@ def invalid(data: bytes):
     assert false
 
 def is_bytes(value: bytes | str) -> bool:
-    return isinstance(value, bytes)
+    return value is bytes
 
 def main():
     for octets in [[128], [192, 128], [237, 160, 128], [244, 144, 128, 128], [226, 130], [226, 65, 172]]:

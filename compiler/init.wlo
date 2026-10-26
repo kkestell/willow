@@ -160,7 +160,7 @@ Rules that differ from Python:
   library, and its declarations are used by full name: `a.b.func()`. Names that
   begin with `_` are private to their module.
 - Built-in functions: `print`, `input`, `len`, `range`, `int`, `float`, `str`,
-  `bytes`, `ord`, `chr`, `isinstance`, `sorted`, `iter`, and `next`.
+  `bytes`, `ord`, `chr`, `sorted`, `iter`, and `next`.
 - Also available: nested functions and `nonlocal`, lambdas, generators with
   `yield` returning `Iterator[T]`, `with` for values that have `enter` and
   `exit` methods, and `async def`, `await`, and `async with aio.task_group()`

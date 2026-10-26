@@ -34,7 +34,7 @@ def main():
         print(response.body.decode())
         sys.exit(1)
     doc = json.parse(response.body.decode())
-    if isinstance(doc, dict):
+    if doc is dict:
         for key in doc:
             print(f"{key}: {json.dump(doc[key])}")
     else:

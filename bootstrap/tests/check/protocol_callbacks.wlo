@@ -16,8 +16,8 @@ def source(value: int) -> Source:
 def number(value: int) -> int:
     return value
 
-type Narrow = Source | ((int) -> int) | none
-type Wide = Reader | ((int) -> int | none) | none
+type Narrow = Source | none
+type Wide = Reader | none
 
 def widen(value: Narrow) -> Wide:
     return value
@@ -27,7 +27,6 @@ def main():
     print(callback(Source(7)))
     factory: (int) -> Reader = source
     print(factory(8).get())
-    widen(number)
     widen(Source(9))
     widen(none)
     print("converted")

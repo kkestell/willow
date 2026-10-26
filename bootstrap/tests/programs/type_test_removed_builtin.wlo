@@ -1,0 +1,2 @@
+def main():
+    print(isinstance(1, int))

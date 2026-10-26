@@ -47,7 +47,7 @@ def main():
     # The lambda's float result is boxed for the callable's result type.
     half: () -> int | float = () => 1.5
     r = half()
-    print(isinstance(r, float))
+    print((r is float))
     # A lambda in a loop shares the loop variable's binding.
     getters: list[() -> int] = []
     for i in range(3):

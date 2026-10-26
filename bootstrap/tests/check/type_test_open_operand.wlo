@@ -1,0 +1,9 @@
+protocol P:
+    def read() -> int
+class Source:
+    def read() -> int:
+        return 1
+def test(value: P | none) -> bool:
+    return value is Source
+def main():
+    pass

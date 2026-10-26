@@ -1,0 +1,1 @@
+type_test_generic_open.wlo:3:21: error: open alias 'Open' cannot be used in a type test

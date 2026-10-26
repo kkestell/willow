@@ -326,7 +326,7 @@ def trace(e: ptr, function: str, path: str, line: int, col: int):
         return
     # A task-start frame ends the original traceback, even when re-observed.
     frames = __ptr(__load8(e, 16))
-    if not __addr_is_null(frames) and str_find(__str(__word(frames)), "\n  in task started at ") >= 0:
+    if not __addr_is_null(frames) and str_find(__str(__word(frames)), "\n  in task started at ") is not none:
         return
     where = path + ":" + int_to_str(line) + ":" + int_to_str(col)
     if __addr_is_null(__ptr(__load8(e, 8))):
@@ -528,10 +528,10 @@ def str_slice(s: str, start: int, stop: int) -> str:
 def str_contains(s: str, sub: str) -> bool:
     return find_bytes(s, sub, 0) >= 0
 
-def str_find(s: str, sub: str) -> int:
+def str_find(s: str, sub: str) -> int | none:
     at = find_bytes(s, sub, 0)
     if at < 0:
-        return -1
+        return none
     return count_chars(s, 0, at)
 
 def str_startswith(s: str, prefix: str) -> bool:
@@ -2240,8 +2240,11 @@ def bytes_slice(data: ptr, start: int, stop: int) -> ptr:
         stop = start
     return bytes_tag(str_sub(s, start, stop))
 
-def bytes_find(data: ptr, sub: ptr) -> int:
-    return find_bytes(__str(__word(data)), __str(__word(sub)), 0)
+def bytes_find(data: ptr, sub: ptr) -> int | none:
+    at = find_bytes(__str(__word(data)), __str(__word(sub)), 0)
+    if at < 0:
+        return none
+    return at
 
 def bytes_startswith(data: ptr, prefix: ptr) -> bool:
     return str_startswith(__str(__word(data)), __str(__word(prefix)))
@@ -3725,6 +3728,7 @@ def next_decimal(text: str) -> str:
         sign = "-"
         text = str_removeprefix(text, "-")
     e = str_find(text, "e")
+    assert e is not none, "next_decimal: missing exponent"
     exponent = str_to_int(str_slice(text, e + 1, str_len(text)))
     digits = str_replace(str_slice(text, 0, e), ".", "")
     count = str_size(digits)
@@ -3753,6 +3757,7 @@ def repr_text(text: str) -> str:
         sign = "-"
         text = str_removeprefix(text, "-")
     e = str_find(text, "e")
+    assert e is not none, "repr_text: missing exponent"
     exponent = str_to_int(str_slice(text, e + 1, str_len(text)))
     digits = without_trailing_zeros(str_replace(str_slice(text, 0, e), ".", ""))
     count = str_size(digits)
@@ -4391,7 +4396,7 @@ def aio_finish(task: AioTask):
             saved_frames = __ptr(__load8(task.error, 16))
             if not __addr_is_null(saved_frames):
                 frames = __str(__word(saved_frames))
-            if str_find(frames, "\n  in task started at ") < 0:
+            if str_find(frames, "\n  in task started at ") is none:
                 __store8(task.error, 16, __word(frames + "\n  in task started at " + task.location))
     task.body = __ptr(__word(0))
     loop = aio_loop()

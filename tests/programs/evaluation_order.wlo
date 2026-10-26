@@ -17,5 +17,5 @@ def main():
     print(flag("left", false) and flag("skipped", true))
     print(flag("left", true) or flag("skipped", false))
     print(flag("left", true) and flag("right", false))
-    print(log("a") == log("b"))
+    print(log("a") is none and log("b") is none)
     print(say(10) - say(4) * say(2))

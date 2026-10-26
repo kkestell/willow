@@ -149,7 +149,7 @@ type TypeExpr = TypeName | UnionType | CallableType
 # A reserved type name or a possibly module-qualified name, with the type
 # arguments in its brackets: a list's element, a dict's key and value, a
 # tuple's positions, or a named type's arguments. `tuple[]` has no
-# arguments; `has_args` tells `Box[]` from `Box`. `isinstance` and `except`
+# arguments; `has_args` tells `Box[]` from `Box`. `is` type tests and `except`
 # name their class with a TypeName too.
 class TypeName:
     line: int
@@ -158,8 +158,9 @@ class TypeName:
     module: str
     args: list[TypeExpr]
     has_args: bool
-    # The binder's, for `isinstance` and `except`: the class or enum named.
+    # The binder's, for `is` type tests and `except`: the class or enum named.
     record: types.Class | types.Enum | none = none
+    coverage: list[types.Type] | none = none
 
 # At its first member.
 class UnionType:
@@ -192,7 +193,7 @@ class Expr:
     ty: types.Type | none = none
     expected: types.Type | none = none
 
-type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | BuiltinValue | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | IsInstance | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay | TypeOf | Typed
+type ExprNode = Int | Float | String | FString | Constant | Name | FunctionValue | EnumMember | BuiltinValue | Call | CallValue | MethodCall | Field | Index | Slice | Specialized | SpecializedCall | Unary | Binary | Is | TypeTest | Await | Lambda | TupleDisplay | ListDisplay | DictDisplay | TypeOf | Typed
 
 # The decimal digits, with "-" before a negative default. The lexer has
 # checked the range.
@@ -347,10 +348,11 @@ class Is:
     negated: bool
     operand: Expr
 
-# At `isinstance`.
-class IsInstance:
+# A runtime-class test at `is`.
+class TypeTest:
     operand: Expr
     type_name: TypeName
+    negated: bool = false
 
 class Await:
     operand: Expr

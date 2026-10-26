@@ -32,7 +32,7 @@ def read() -> Project | none:
         data = json.parse(text)
     except json.JsonError as invalid_json:
         raise ManifestError("willow.json: " + invalid_json.message)
-    if not isinstance(data, dict):
+    if data is not dict:
         raise invalid("expected an object")
     entry = "main.wlo"
     source = "."
@@ -41,17 +41,17 @@ def read() -> Project | none:
     for key in data:
         value = data[key]
         if key == "dependencies":
-            if not isinstance(value, list):
+            if value is not list:
                 raise invalid("'dependencies' must be a list of strings")
             dependencies = []
             for item in value:
-                if not isinstance(item, str):
+                if item is not str:
                     raise invalid("'dependencies' must be a list of strings")
                 if item == "":
                     raise invalid("'dependencies' cannot contain an empty path")
                 dependencies.append(item)
         else if key in ["entry", "source", "tests"]:
-            if not isinstance(value, str):
+            if value is not str:
                 raise invalid(f"'{key}' must be a string")
             if value == "":
                 raise invalid(f"'{key}' cannot be empty")

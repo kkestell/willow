@@ -1,0 +1,6 @@
+protocol P:
+    def read() -> int
+def test(value: int) -> bool:
+    return value is P
+def main():
+    pass

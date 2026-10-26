@@ -43,7 +43,7 @@ class _Parser:
             if c == "":
                 raise self.error("", self.pos)
             digit = "0123456789abcdef".find(c.lower())
-            if digit == -1:
+            if digit is none:
                 raise self.error("invalid escape", start)
             code = code * 16 + digit
             self.pos = self.pos + 1
@@ -208,20 +208,20 @@ def _quote(text: str) -> str:
 def _write(value: Json, out: list[str]):
     if value is none:
         out.append("null")
-    else if isinstance(value, bool):
+    else if value is bool:
         if value:
             out.append("true")
         else:
             out.append("false")
-    else if isinstance(value, int):
+    else if value is int:
         out.append(str(value))
-    else if isinstance(value, float):
+    else if value is float:
         if value - value != 0.0:
             raise JsonError("cannot encode " + str(value))
         out.append(str(value))
-    else if isinstance(value, str):
+    else if value is str:
         out.append(_quote(value))
-    else if isinstance(value, list):
+    else if value is list:
         out.append("[")
         first = true
         for item in value:

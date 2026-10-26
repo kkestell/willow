@@ -5,7 +5,7 @@ type Pair[K, V] = tuple[K, V]
 type Tree = int | list[Tree]
 
 def total(tree: Tree) -> int:
-    if isinstance(tree, int):
+    if tree is int:
         return tree
     sum = 0
     for child in tree:

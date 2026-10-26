@@ -127,8 +127,16 @@
           "name": "keyword.control.willow",
           "match": "\\b(if|else|while|for|in|return|yield|break|continue|pass|try|except|finally|raise|assert|with|import|as|var|await)\\b"
         },
+        {
+          "match": "\\b(is)(?:\\s+(not))?\\s+(?!(?:none|not)\\b)((?:[A-Za-z_][A-Za-z0-9_]*\\.)*[A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.operator.logical.willow" },
+            "2": { "name": "keyword.operator.logical.willow" },
+            "3": { "name": "support.type.willow" }
+          }
+        },
         { "name": "keyword.operator.logical.willow", "match": "\\b(and|or|not|is)\\b" },
-        { "name": "keyword.other.reserved.willow", "match": "\\b(async|case|del|from|global|match)\\b" },
+        { "name": "keyword.other.reserved.willow", "match": "\\b(async|case|match)\\b" },
         { "name": "constant.language.willow", "match": "\\b(true|false|none)\\b" },
         { "name": "variable.language.self.willow keyword.other.reserved.willow", "match": "\\bself\\b" }
       ]
@@ -141,7 +149,7 @@
         },
         {
           "name": "support.function.builtin.willow",
-          "match": "\\b(print|input|len|range|ord|chr|isinstance|sorted|iter|next|abs|round|min|max|sum|any|all|enumerate|zip)\\b"
+          "match": "\\b(print|input|len|range|ord|chr|sorted|iter|next|abs|round|min|max|sum|any|all|enumerate|zip)\\b"
         },
         {
           "name": "support.type.exception.willow",

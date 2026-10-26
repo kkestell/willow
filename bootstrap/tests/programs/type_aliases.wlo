@@ -6,13 +6,26 @@ type Row = list[Maybe]
 def total(row: Row) -> float:
     sum = 0.0
     for cell in row:
-        if isinstance(cell, int):
+        if cell is int:
             sum = sum + float(cell)
-        else if isinstance(cell, float):
+        else if cell is float:
             sum = sum + cell
     return sum
 
+def classify(value: Maybe | str) -> str:
+    if value is Number:
+        if value is int:
+            return "int"
+        return "float"
+    if value is not str:
+        return "none"
+    return value
+
 def main():
+    assert classify(1) == "int"
+    assert classify(1.0) == "float"
+    assert classify(none) == "none"
+    assert classify("text") == "text"
     table: Table = {"a": [1, 2.5, none], "b": []}
     for name, row in table.items():
         print(name + " " + str(total(row)))

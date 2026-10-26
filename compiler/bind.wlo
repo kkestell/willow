@@ -206,13 +206,13 @@ class Binder:
     # Makes the types record of `decl`, whose type parameters, if any, get
     # their type variables now so that other declarations can name them.
     def declare_record(module: ast.Module, decl: ast.Decl, type_name: str) -> bool:
-        if isinstance(decl, ast.FunctionDecl):
+        if decl is ast.FunctionDecl:
             if decl.external and not module.privileged:
                 self.fail(module, decl.line, decl.col, "extern functions are only allowed in core")
                 return false
             decl.id = self.new_id()
             decl.record = types.Function(decl.id, decl.name, type_name, [], [], types.prim("none"))
-        else if isinstance(decl, ast.ClassDecl):
+        else if decl is ast.ClassDecl:
             if decl.exception and len(decl.type_params) > 0:
                 first = decl.type_params[0]
                 self.fail(module, first.line, first.col, "exception classes cannot be generic")
@@ -222,9 +222,9 @@ class Binder:
                 if not field.name.startswith("_"):
                     native = false
             decl.record = types.Class(decl.name, type_name, self.new_typevars(decl.type_params), [], [], decl.exception, native, "", module.privileged)
-        else if isinstance(decl, ast.ProtocolDecl):
+        else if decl is ast.ProtocolDecl:
             decl.record = types.Protocol(decl.name, type_name, self.new_typevars(decl.type_params), [], module.privileged)
-        else if isinstance(decl, ast.EnumDecl):
+        else if decl is ast.EnumDecl:
             members: list[str] = []
             for member in decl.members:
                 members.append(member.name)
@@ -301,7 +301,7 @@ class Binder:
             prefix = ".".join(parts[:len(parts) - 1])
             if self.has_module(module, prefix):
                 found = self.lookup(module, prefix, parts[len(parts) - 1], object.line, object.col)
-        if isinstance(found, ast.EnumDecl):
+        if found is ast.EnumDecl:
             return found
         return none
 
@@ -316,7 +316,7 @@ class Binder:
     # Types
 
     # The class, protocol, enum, or alias that `ref`, a name in a type, an
-    # `except` clause, or `isinstance`, names. These are found through
+    # `except` clause, or `is` type tests, names. These are found through
     # file-level declarations, imports, built-in exception classes, and
     # built-in protocols, which locals never shadow.
     def resolve_named(module: ast.Module, ref: ast.TypeName) -> Named | none:
@@ -348,32 +348,32 @@ class Binder:
         return named
 
     def as_named(found: Member | none, library: bool) -> Named | none:
-        if isinstance(found, ast.ClassDecl):
+        if found is ast.ClassDecl:
             return found.record
-        if isinstance(found, ast.ProtocolDecl):
+        if found is ast.ProtocolDecl:
             return found.record
-        if isinstance(found, ast.EnumDecl):
+        if found is ast.EnumDecl:
             return found.record
-        if isinstance(found, ast.AliasDecl):
+        if found is ast.AliasDecl:
             return self.aliases[types.identity(found.type_name, library)]
-        if isinstance(found, types.Class):
+        if found is types.Class:
             return found
-        if isinstance(found, ProvidedAlias):
+        if found is ProvidedAlias:
             return found
         return none
 
     # The source text of type `node`, with declarations named by their
     # type_name, which names a lazy type.
     def type_text(node: ast.TypeExpr, module: ast.Module, scope: TypeScope) -> str:
-        if isinstance(node, ast.UnionType):
+        if node is ast.UnionType:
             names: list[str] = []
             for member in node.members:
                 text = self.type_text(member, module, scope)
-                if isinstance(member, ast.CallableType):
+                if member is ast.CallableType:
                     text = "(" + text + ")"
                 names.append(text)
             return " | ".join(names)
-        if isinstance(node, ast.CallableType):
+        if node is ast.CallableType:
             return "(" + self.type_texts(node.params, module, scope) + ") -> " + self.type_text(node.result, module, scope)
         name = node.name
         if node.module == "":
@@ -393,7 +393,7 @@ class Binder:
         if named is none:
             return ""
         type_name = named_type_name(named)
-        if node.has_args and not isinstance(named, types.Enum):
+        if node.has_args and named is not types.Enum:
             return type_name + "[" + self.type_texts(node.args, module, scope) + "]"
         return type_name
 
@@ -435,7 +435,7 @@ class Binder:
         for check in checks:
             if self.error is not none:
                 return
-            if isinstance(check, Overlap):
+            if check is Overlap:
                 self.check_overlap(check)
             else:
                 self.check_bound(check)
@@ -458,7 +458,7 @@ class Binder:
             bound = params[i].bound
             if bound is not none and vars[i].bound is none and self.error is none:
                 resolved = self.resolve_type(bound, module, scope, "")
-                if not isinstance(resolved, types.ClassType) and not isinstance(resolved, types.ProtocolType):
+                if resolved is not types.ClassType and resolved is not types.ProtocolType:
                     self.fail(module, parser.type_line(bound), parser.type_col(bound), "a type parameter's bound must be a class, native type, or protocol")
                 vars[i].bound = resolved
         return scope
@@ -488,7 +488,7 @@ class Binder:
             names[decl.type_params[i].name] = args[i]
             arg_names.append(types.display(args[i]))
         union_name = ""
-        if isinstance(decl.value, ast.UnionType):
+        if decl.value is ast.UnionType:
             union_name = decl.type_name + "[" + ", ".join(arg_names) + "]"
         result = self.resolve_type(decl.value, state.module, TypeScope(names, none, depth), union_name)
         application.ty = result
@@ -508,7 +508,7 @@ class Binder:
         if state.resolved is none and not state.resolving:
             state.resolving = true
             union_name = ""
-            if isinstance(decl.value, ast.UnionType):
+            if decl.value is ast.UnionType:
                 union_name = decl.type_name
             state.resolved = self.resolve_type(decl.value, state.module, TypeScope({}, none, 0), union_name)
             state.resolving = false
@@ -520,9 +520,9 @@ class Binder:
         none_type = types.prim("none")
         if self.error is not none:
             return none_type
-        if isinstance(node, ast.UnionType):
+        if node is ast.UnionType:
             return self.resolve_union(node, module, scope, name)
-        if isinstance(node, ast.CallableType):
+        if node is ast.CallableType:
             params: list[types.Type] = []
             for param in node.params:
                 params.append(self.resolve_type(param, module, scope, ""))
@@ -558,7 +558,7 @@ class Binder:
         type_name = named_type_name(named)
         vars = named_typevars(named)
         count = len(vars)
-        if isinstance(named, AliasState):
+        if named is AliasState:
             count = len(named.decl.type_params)
         if count > 0:
             # A generic class, protocol, or alias takes all of its type
@@ -577,16 +577,16 @@ class Binder:
                     return none_type
                 if i < len(vars) and vars[i].bound is not none:
                     self.waiting.append(Bound(module, vars[i], resolved[i], parser.type_line(arg), parser.type_col(arg)))
-            if isinstance(named, AliasState):
+            if named is AliasState:
                 return self.apply_alias(named, resolved, module, node.line, node.col, scope)
-            if isinstance(named, types.Protocol):
+            if named is types.Protocol:
                 return types.ProtocolType(named, resolved)
-            if isinstance(named, types.Class):
+            if named is types.Class:
                 return types.ClassType(named, resolved)
         if node.has_args:
             self.fail(module, node.line, node.col, f"type '{type_name}' does not take type arguments")
             return none_type
-        if isinstance(named, AliasState):
+        if named is AliasState:
             if named.resolving:
                 self.fail(module, node.line, node.col, f"alias '{named.decl.name}' expands to itself")
                 return none_type
@@ -594,11 +594,11 @@ class Binder:
             if aliased is none:
                 return none_type
             return aliased
-        if isinstance(named, ProvidedAlias):
+        if named is ProvidedAlias:
             return named.ty
-        if isinstance(named, types.Class):
+        if named is types.Class:
             return types.ClassType(named, [])
-        if isinstance(named, types.Protocol):
+        if named is types.Protocol:
             return types.ProtocolType(named, [])
         return types.EnumType(named)
 
@@ -607,9 +607,9 @@ class Binder:
         # dropping members the union already has.
         substituted = false
         for member in node.members:
-            if isinstance(member, ast.TypeName) and member.module == "":
+            if member is ast.TypeName and member.module == "":
                 found = scope.find(member.name)
-                if found is not none and not isinstance(found, types.TypeVar):
+                if found is not none and found is not types.TypeVar:
                     substituted = true
         overlap = Overlap(module, [], [], [])
         has_protocol = false
@@ -627,18 +627,13 @@ class Binder:
                     overlap.members.append(m)
                     overlap.lines.append(parser.type_line(member))
                     overlap.cols.append(parser.type_col(member))
-                    if isinstance(m, types.ProtocolType):
+                    if m is types.ProtocolType:
                         has_protocol = true
         if has_protocol:
             self.waiting.append(overlap)
         else:
             self.check_overlap(overlap)
-        union = types.named_union(overlap.members, name)
-        for m in overlap.members:
-            if isinstance(m, types.TypeVar) and not (len(overlap.members) == 2 and types.has(union, "none")):
-                self.fail(module, node.line, node.col, "a type parameter can be in a union only with none")
-                return union
-        return union
+        return types.named_union(overlap.members, name)
 
     # Resolves the parameter and result types of `function` in `outer`. A
     # method's `self` has the type of its class, which, like the method's
@@ -653,12 +648,12 @@ class Binder:
         scope = outer
         self_type: types.Type = types.prim("none")
         owner = function.owner
-        if isinstance(owner, ast.ClassDecl):
+        if owner is ast.ClassDecl:
             owner_record = owner.record
             if owner_record is not none:
                 scope = self.enter_type_params(module, scope, owner.type_params, owner_record.typevars)
                 self_type = types.class_self(owner_record)
-        else if isinstance(owner, ast.ProtocolDecl):
+        else if owner is ast.ProtocolDecl:
             protocol_record = owner.record
             if protocol_record is not none:
                 scope = self.enter_type_params(module, scope, owner.type_params, protocol_record.typevars)
@@ -701,7 +696,7 @@ class Binder:
     # resolves. Parameters and locals cannot shadow an enum named there.
     def default_type(module: ast.Module, default: ast.Expr) -> types.Type | none:
         node = default.node
-        if isinstance(node, ast.Field):
+        if node is ast.Field:
             decl = self.enum_named(module, node.object, none)
             if self.error is not none:
                 return none
@@ -713,7 +708,7 @@ class Binder:
             if record is none:
                 return none
             return types.EnumType(record)
-        if isinstance(node, ast.TupleDisplay):
+        if node is ast.TupleDisplay:
             elements: list[types.Type] = []
             for element in node.elements:
                 element_type = self.default_type(module, element)
@@ -722,13 +717,13 @@ class Binder:
                 element.ty = element_type
                 elements.append(element_type)
             return types.TupleType(elements)
-        if isinstance(node, ast.Int):
+        if node is ast.Int:
             return types.prim("int")
-        if isinstance(node, ast.Float):
+        if node is ast.Float:
             return types.prim("float")
-        if isinstance(node, ast.String):
+        if node is ast.String:
             return types.prim("str")
-        if isinstance(node, ast.Constant) and node == ast.Constant.NONE:
+        if node is ast.Constant and node == ast.Constant.NONE:
             return types.prim("none")
         return types.prim("bool")
 
@@ -822,19 +817,19 @@ class Resolver:
     # Makes `expr` a function value of `found`, or reports why something
     # named `name` cannot be a value.
     def declared_value(expr: ast.Expr, found: Member, name: str, qualified: bool):
-        if isinstance(found, ast.FunctionDecl):
+        if found is ast.FunctionDecl:
             expr.node = ast.FunctionValue(found, qualified, [])
-        else if isinstance(found, ast.ClassDecl):
+        else if found is ast.ClassDecl:
             self.fail(expr.line, expr.col, f"class '{name}' cannot be used as a value")
-        else if isinstance(found, types.Class):
+        else if found is types.Class:
             self.fail(expr.line, expr.col, f"class '{name}' cannot be used as a value")
-        else if isinstance(found, stdlib.Builtin):
-            # range and isinstance have forms of their own.
-            if found.name == "range" or found.name == "isinstance":
+        else if found is stdlib.Builtin:
+            # range has a form of its own.
+            if found.name == "range":
                 self.fail(expr.line, expr.col, f"function '{name}' cannot be used as a value")
             else:
                 expr.node = ast.BuiltinValue(found, name)
-        else if isinstance(found, ProvidedConstant):
+        else if found is ProvidedConstant:
             expr.node = ast.Float(found.value)
         else:
             self.fail(expr.line, expr.col, f"{member_noun(found)} '{name}' cannot be used as a value")
@@ -867,17 +862,17 @@ class Resolver:
         if self.failed():
             return
         node = expr.node
-        if isinstance(node, ast.Call) or isinstance(node, ast.CallValue) or isinstance(node, ast.MethodCall):
+        if node is ast.Call or node is ast.CallValue or node is ast.MethodCall:
             self.calls = self.calls + 1
-        if isinstance(node, ast.Name):
+        if node is ast.Name:
             self.resolve_name(expr, node, callee)
-        else if isinstance(node, ast.Call):
+        else if node is ast.Call:
             self.resolve_call(expr, node)
-        else if isinstance(node, ast.SpecializedCall):
+        else if node is ast.SpecializedCall:
             self.resolve_specialized_call(expr, node)
-        else if isinstance(node, ast.Specialized):
+        else if node is ast.Specialized:
             self.resolve_specialized(expr, node)
-        else if isinstance(node, ast.Lambda):
+        else if node is ast.Lambda:
             # A lambda is a nested function whose body returns its expression.
             params: list[ast.Ident] = []
             for param in node.params:
@@ -900,24 +895,24 @@ class Resolver:
                 assert symbol is not none, "lambda parameter without a symbol"
                 if annotation is not none:
                     symbol.ty = self.resolve_type(annotation)
-        else if isinstance(node, ast.CallValue):
+        else if node is ast.CallValue:
             self.resolve_expr(node.callee, true)
             self.resolve_args(node.args, node.keywords)
-        else if isinstance(node, ast.MethodCall):
+        else if node is ast.MethodCall:
             self.resolve_method_call(expr, node)
-        else if isinstance(node, ast.Unary):
+        else if node is ast.Unary:
             self.resolve_expr(node.operand, false)
-        else if isinstance(node, ast.Is):
+        else if node is ast.Is:
             self.resolve_expr(node.operand, false)
-        else if isinstance(node, ast.IsInstance):
-            self.resolve_isinstance(expr, node)
-        else if isinstance(node, ast.Binary):
+        else if node is ast.TypeTest:
+            self.resolve_type_test(expr, node)
+        else if node is ast.Binary:
             self.resolve_expr(node.left, false)
             self.resolve_expr(node.right, false)
-        else if isinstance(node, ast.Index):
+        else if node is ast.Index:
             self.resolve_expr(node.object, false)
             self.resolve_expr(node.index, false)
-        else if isinstance(node, ast.Slice):
+        else if node is ast.Slice:
             self.resolve_expr(node.object, false)
             start = node.start
             if start is not none:
@@ -925,7 +920,7 @@ class Resolver:
             stop = node.stop
             if stop is not none:
                 self.resolve_expr(stop, false)
-        else if isinstance(node, ast.Await):
+        else if node is ast.Await:
             if not self.function.is_async:
                 self.fail(expr.line, expr.col, "'await' is only allowed in an async function")
                 return
@@ -933,7 +928,7 @@ class Resolver:
             # call.
             self.resolve_expr(node.operand, false)
             self.calls = self.calls + 1
-        else if isinstance(node, ast.Field):
+        else if node is ast.Field:
             enum_decl = self.binder.enum_named(self.module, node.object, self.scope)
             path = self.imported_path(node.object)
             if self.failed():
@@ -946,23 +941,23 @@ class Resolver:
                     self.declared_value(expr, member, path + "." + node.name, true)
             else:
                 self.resolve_expr(node.object, false)
-        else if isinstance(node, ast.FString):
+        else if node is ast.FString:
             self.resolve_exprs(node.parts)
-        else if isinstance(node, ast.ListDisplay):
+        else if node is ast.ListDisplay:
             self.resolve_exprs(node.elements)
-        else if isinstance(node, ast.TupleDisplay):
+        else if node is ast.TupleDisplay:
             self.resolve_exprs(node.elements)
-        else if isinstance(node, ast.DictDisplay):
+        else if node is ast.DictDisplay:
             for i in range(len(node.keys)):
                 self.resolve_expr(node.keys[i], false)
                 self.resolve_expr(node.values[i], false)
-        else if isinstance(node, ast.TypeOf):
+        else if node is ast.TypeOf:
             # Only privileged modules may name a built-in type's descriptor.
             if not self.module.privileged:
                 self.fail(expr.line, expr.col, "intrinsic '__type' is only available in core")
                 return
             target = node.target
-            if not isinstance(target, ast.TypeName) or target.module != "" or target.name not in ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple"]:
+            if target is not ast.TypeName or target.module != "" or target.name not in ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple"]:
                 self.fail(parser.type_line(target), parser.type_col(target), "'__type' takes int, float, bool, str, bytes, list, dict, or tuple")
 
     def resolve_name(expr: ast.Expr, node: ast.Name, callee: bool):
@@ -1031,7 +1026,7 @@ class Resolver:
         name = ""
         symbol: ast.Symbol | none = none
         found: Member | none = none
-        if isinstance(callee, ast.Name):
+        if callee is ast.Name:
             name = callee.name
             symbol = self.scope.find(name)
             if symbol is none:
@@ -1039,19 +1034,19 @@ class Resolver:
                     found = self.module.names[name]
                 else if name in self.binder.builtins:
                     found = self.binder.builtins[name]
-        else if isinstance(callee, ast.Field):
+        else if callee is ast.Field:
             path = self.imported_path(callee.object)
             if path != "":
                 name = path + "." + callee.name
                 found = self.lookup(path, callee.name, node.callee.line, node.callee.col)
                 if found is none:
                     return
-        if isinstance(callee, ast.Field) and found is none and self.imported_path(callee.object) == "":
+        if callee is ast.Field and found is none and self.imported_path(callee.object) == "":
             indexed = node.index
             value_index = false
             if indexed is not none:
                 index_node = indexed.node
-                assert isinstance(index_node, ast.Index), "specialized call without an index"
+                assert index_node is ast.Index, "specialized call without an index"
                 value_index = self.value_index(index_node.index)
             if not value_index:
                 type_args = self.resolve_types(node.type_args)
@@ -1068,9 +1063,9 @@ class Resolver:
                 return
             if symbol is not none:
                 expr.node = ast.CallValue(node.callee, node.args, node.keywords, type_args)
-            else if isinstance(found, ast.FunctionDecl):
+            else if found is ast.FunctionDecl:
                 expr.node = ast.Call(name, node.args, node.keywords, type_args, found, none, true)
-            else if isinstance(found, ast.ClassDecl):
+            else if found is ast.ClassDecl:
                 expr.node = ast.Call(name, node.args, node.keywords, type_args, found.record, none, true)
         else:
             # An index followed by a call, as in `handlers[i](x)`.
@@ -1086,14 +1081,14 @@ class Resolver:
 
     def value_index(expr: ast.Expr) -> bool:
         node = expr.node
-        if isinstance(node, ast.Name):
+        if node is ast.Name:
             return self.type_scope.find(node.name) is none and self.scope.find(node.name) is not none
-        if isinstance(node, ast.Field):
+        if node is ast.Field:
             path = qualified_name(node.object)
             if path != "" and self.scope.find(path.split(".")[0]) is not none:
                 return true
             return self.binder.enum_named(self.module, node.object, self.scope) is not none
-        if isinstance(node, ast.TupleDisplay):
+        if node is ast.TupleDisplay:
             for element in node.elements:
                 if self.value_index(element):
                     return true
@@ -1104,23 +1099,23 @@ class Resolver:
         callee = node.callee.node
         symbol: ast.Symbol | none = none
         found: Member | none = none
-        if isinstance(callee, ast.Name):
+        if callee is ast.Name:
             symbol = self.scope.find(callee.name)
             if symbol is not none:
                 found = symbol.function
             else if callee.name in self.module.names:
                 found = self.module.names[callee.name]
-        else if isinstance(callee, ast.Field):
+        else if callee is ast.Field:
             path = self.imported_path(callee.object)
             if path != "":
                 found = self.lookup(path, callee.name, node.callee.line, node.callee.col)
                 if found is none:
                     return
-        if isinstance(found, ast.FunctionDecl) and is_generic(found):
+        if found is ast.FunctionDecl and is_generic(found):
             if symbol is not none:
                 self.resolve_expr(node.callee, false)
             type_args = self.resolve_types(node.type_args)
-            expr.node = ast.FunctionValue(found, isinstance(callee, ast.Field), type_args, symbol)
+            expr.node = ast.FunctionValue(found, (callee is ast.Field), type_args, symbol)
             return
         index = node.index
         if index is none:
@@ -1144,7 +1139,7 @@ class Resolver:
         path = self.module_path(node.object)
         if decl is not none:
             self.fail(expr.line, expr.col, f"enum '{decl.type_name}' has no method '{node.name}'")
-        else if isinstance(receiver, ast.Name) and receiver.reserved and receiver.name == "bytes":
+        else if receiver is ast.Name and receiver.reserved and receiver.name == "bytes":
             # `bytes.fromhex(...)` is the only static method of a type.
             if node.name != "fromhex":
                 self.fail(expr.line, expr.col, f"type 'bytes' has no static method '{node.name}'")
@@ -1170,29 +1165,51 @@ class Resolver:
             self.resolve_expr(node.object, false)
             self.resolve_args(node.args, node.keywords)
 
-    def resolve_isinstance(expr: ast.Expr, node: ast.IsInstance):
-        if self.scope.find("isinstance") is not none:
-            self.fail(expr.line, expr.col, "cannot call local variable 'isinstance'")
-            return
+    def resolve_type_test(expr: ast.Expr, node: ast.TypeTest):
         self.resolve_expr(node.operand, false)
         ref = node.type_name
         if ref.module == "" and self.type_scope.find(ref.name) is not none:
-            self.fail(ref.line, ref.col, f"type parameter '{ref.name}' cannot be used in isinstance")
+            self.fail(ref.line, ref.col, f"type parameter '{ref.name}' cannot be used in a type test")
             return
         if ref.module == "" and is_builtin_type(ref.name):
+            ref.coverage = [types.prim(ref.name)]
             return
-        named = self.binder.resolve_named(self.module, ref)
-        if isinstance(named, AliasState) or isinstance(named, ProvidedAlias):
-            self.fail(ref.line, ref.col, f"alias '{ref.name}' cannot be used in isinstance")
-        else if isinstance(named, types.Protocol):
-            self.fail(ref.line, ref.col, f"protocol '{ref.name}' cannot be used in isinstance")
-        else if isinstance(named, types.Class):
-            if named.type_name == "Coroutine":
-                self.fail(ref.line, ref.col, "'Coroutine' cannot be used in isinstance")
+        # A final enum member is a value, rather than a type name.
+        if ref.module != "":
+            parts = ref.module.split(".")
+            owner = ast.TypeName(ref.line, ref.col, parts[-1], ".".join(parts[:-1]), [], false)
+            found: Member | none = none
+            if owner.module == "" and owner.name in self.module.names:
+                found = self.module.names[owner.name]
+            else if self.binder.has_module(self.module, owner.module):
+                found = self.binder.lookup(self.module, owner.module, owner.name, owner.line, owner.col)
+            if found is ast.EnumDecl:
+                self.fail(ref.line, ref.col, "an enum member cannot be used in a type test; use '=='")
                 return
+        named = self.binder.resolve_named(self.module, ref)
+        if named is types.Class:
             ref.record = named
-        else if isinstance(named, types.Enum):
+            ref.coverage = [types.ClassType(named, [])]
+        else if named is types.Enum:
             ref.record = named
+            ref.coverage = [types.EnumType(named)]
+        else if named is AliasState:
+            resolved = self.binder.resolve_alias(named)
+            if len(named.decl.type_params) > 0:
+                resolved = self.binder.apply_alias(named, types.var_types(named.typevars), self.module, ref.line, ref.col, self.type_scope)
+            if resolved is not none:
+                ref.coverage = types.members(resolved)
+        else if named is ProvidedAlias:
+            ref.coverage = types.members(named.ty)
+        else if named is types.Protocol:
+            self.fail(ref.line, ref.col, f"protocol '{ref.name}' cannot be used in a type test")
+            return
+        coverage = ref.coverage
+        if coverage is none:
+            return
+        for member in coverage:
+            if types.is_open(member):
+                self.fail(ref.line, ref.col, f"open alias '{ref.name}' cannot be used in a type test")
 
     def declare(name: str, line: int, col: int) -> ast.Symbol:
         symbol = ast.Symbol(self.binder.new_id(), name, line, col, false, self.function)
@@ -1235,7 +1252,7 @@ class Resolver:
 
     def resolve_stmt(statement: ast.Stmt, handling: ast.Try | none):
         node = statement.node
-        if isinstance(node, ast.Var):
+        if (node is ast.Var):
             annotation = node.annotation
             if annotation is not none:
                 node.declared = self.resolve_type(annotation)
@@ -1243,43 +1260,43 @@ class Resolver:
             if value is not none:
                 self.resolve_expr(value, false)
             self.declare_target(node.target)
-        else if isinstance(node, ast.Unpack):
+        else if (node is ast.Unpack):
             self.resolve_expr(node.value, false)
             self.resolve_target(node.target)
-        else if isinstance(node, ast.Assign):
+        else if node is ast.Assign:
             self.resolve_expr(node.value, false)
             assigned_target = ast.Target(statement.line, statement.col, node.name, [])
             self.resolve_target(assigned_target)
             node.symbol = assigned_target.symbol
-        else if isinstance(node, ast.FunctionDef):
+        else if (node is ast.FunctionDef):
             self.resolve_nested(node)
-        else if isinstance(node, ast.FieldAssign):
+        else if node is ast.FieldAssign:
             self.resolve_expr(node.value, false)
             enum_decl = self.binder.enum_named(self.module, node.object, self.scope)
             if enum_decl is not none:
                 self.fail(statement.line, statement.col, f"cannot assign to a member of enum '{enum_decl.type_name}'")
                 return
             self.resolve_expr(node.object, false)
-        else if isinstance(node, ast.IndexAssign):
+        else if node is ast.IndexAssign:
             self.resolve_expr(node.value, false)
             self.resolve_expr(node.object, false)
             self.resolve_expr(node.index, false)
-        else if isinstance(node, ast.CallStmt):
+        else if node is ast.CallStmt:
             self.resolve_expr(node.call, false)
-        else if isinstance(node, ast.Return):
+        else if node is ast.Return:
             value = node.value
             if value is not none:
                 self.resolve_expr(value, false)
-        else if isinstance(node, ast.If):
+        else if node is ast.If:
             self.resolve_expr(node.condition, false)
             self.resolve_block(node.body, handling)
             self.resolve_block(node.else_body, handling)
-        else if isinstance(node, ast.While):
+        else if node is ast.While:
             before = self.calls
             self.resolve_expr(node.condition, false)
             self.resolve_block(node.body, handling)
             node.calls = self.calls != before
-        else if isinstance(node, ast.For):
+        else if node is ast.For:
             self.resolve_expr(node.iterable, false)
             outer = self.scope
             self.scope = Scope({}, outer)
@@ -1288,12 +1305,12 @@ class Resolver:
             self.resolve_block(node.body, handling)
             node.calls = self.calls != before
             self.scope = outer
-        else if isinstance(node, ast.Assert):
+        else if (node is ast.Assert):
             self.resolve_expr(node.condition, false)
             message = node.message
             if message is not none:
                 self.resolve_expr(message, false)
-        else if isinstance(node, ast.Yield):
+        else if node is ast.Yield:
             if self.function.is_async:
                 self.fail(statement.line, statement.col, "'yield' cannot be used in an async function")
                 return
@@ -1301,7 +1318,7 @@ class Resolver:
             self.resolve_expr(node.value, false)
             self.function.generator = true
             self.calls = self.calls + 1
-        else if isinstance(node, ast.Raise):
+        else if node is ast.Raise:
             raised = node.value
             if raised is not none:
                 self.resolve_expr(raised, false)
@@ -1309,7 +1326,7 @@ class Resolver:
                 self.fail(statement.line, statement.col, "bare 'raise' is only allowed in an 'except' clause")
                 return
             node.handler = handling
-        else if isinstance(node, ast.With):
+        else if (node is ast.With):
             outer = self.scope
             self.scope = Scope({}, outer)
             # Entering and exiting call the managers' methods.
@@ -1321,7 +1338,7 @@ class Resolver:
                 self.calls = self.calls + 2
             self.resolve_block(node.body, handling)
             self.scope = outer
-        else if isinstance(node, ast.AsyncWith):
+        else if (node is ast.AsyncWith):
             if not self.function.is_async:
                 self.fail(statement.line, statement.col, "'async with' is only allowed in an async function")
                 return
@@ -1335,13 +1352,13 @@ class Resolver:
             self.calls = self.calls + 1
             self.resolve_block(node.body, handling)
             self.scope = outer
-        else if isinstance(node, ast.Try):
+        else if (node is ast.Try):
             self.resolve_block(node.body, handling)
             for handler in node.handlers:
                 named = self.binder.resolve_named(self.module, handler.type_name)
                 if named is none:
                     return
-                if not isinstance(named, types.Class) or not named.exception:
+                if named is not types.Class or not named.exception:
                     self.fail(handler.type_name.line, handler.type_name.col, f"'{named_name(named)}' is not an exception class")
                     return
                 handler.type_name.record = named
@@ -1394,11 +1411,11 @@ def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | no
             return binder.error
     for module in modules:
         for decl in module.declarations:
-            if isinstance(decl, ast.EnumDecl):
+            if decl is ast.EnumDecl:
                 binder.check_unique(module, decl.members, "enum member")
     for module in modules:
         for decl in module.declarations:
-            if isinstance(decl, ast.AliasDecl) and binder.error is none:
+            if decl is ast.AliasDecl and binder.error is none:
                 binder.resolve_alias(binder.aliases[types.identity(decl.type_name, module.privileged)])
     for module in modules:
         if binder.error is none:
@@ -1420,7 +1437,7 @@ def bind(sources: list[loader.Source], test: bool) -> diagnostic.Diagnostic | no
                 return binder.error
             scope = root
             owner = function.owner
-            if isinstance(owner, ast.ClassDecl):
+            if owner is ast.ClassDecl:
                 owner_record = owner.record
                 if owner_record is not none:
                     scope = binder.enter_type_params(module, scope, owner.type_params, owner_record.typevars)
@@ -1444,7 +1461,7 @@ def signatures(module: ast.Module) -> list[str]:
                     params.append(param.name + ": " + types.display(param.ty))
             lines.append(f"def {record.type_name}({', '.join(params)}) -> {types.display(record.result)}")
     for decl in module.declarations:
-        if isinstance(decl, ast.ClassDecl):
+        if decl is ast.ClassDecl:
             class_record = decl.record
             if class_record is not none:
                 for field in class_record.fields:
@@ -1457,7 +1474,7 @@ def resolve_declarations(binder: Binder, module: ast.Module):
     root = TypeScope({}, none, 0)
     for decl in module.declarations:
         record = decl_class_record(decl)
-        if isinstance(decl, ast.ClassDecl) and record is not none:
+        if decl is ast.ClassDecl and record is not none:
             fields: list[ast.Ident] = []
             for field in decl.fields:
                 fields.append(ast.Ident(field.line, field.col, field.name))
@@ -1474,7 +1491,7 @@ def resolve_declarations(binder: Binder, module: ast.Module):
                 record.methods.append(binder.declare_method(method, decl.type_name))
                 binder.resolve_signature(module, method, root)
     for decl in module.declarations:
-        if isinstance(decl, ast.ProtocolDecl):
+        if decl is ast.ProtocolDecl:
             protocol_record = decl.record
             if protocol_record is not none:
                 binder.check_unique(module, idents(decl.methods), "method")
@@ -1484,17 +1501,17 @@ def resolve_declarations(binder: Binder, module: ast.Module):
                     protocol_record.methods.append(binder.declare_method(method, decl.type_name))
                     binder.resolve_signature(module, method, root)
     for decl in module.declarations:
-        if isinstance(decl, ast.FunctionDecl):
+        if decl is ast.FunctionDecl:
             binder.resolve_signature(module, decl, root)
 
 def decl_class_record(decl: ast.Decl) -> types.Class | none:
-    if isinstance(decl, ast.ClassDecl):
+    if decl is ast.ClassDecl:
         return decl.record
     return none
 
 def check_defaults(binder: Binder, module: ast.Module):
     for decl in module.declarations:
-        if isinstance(decl, ast.ClassDecl):
+        if decl is ast.ClassDecl:
             record = decl.record
             if record is not none:
                 for i in range(len(decl.fields)):
@@ -1504,7 +1521,7 @@ def check_defaults(binder: Binder, module: ast.Module):
     for function in functions(module):
         binder.check_param_defaults(module, function)
     for decl in module.declarations:
-        if isinstance(decl, ast.ProtocolDecl):
+        if decl is ast.ProtocolDecl:
             for method in decl.methods:
                 binder.check_param_defaults(module, method)
 
@@ -1512,7 +1529,7 @@ def check_main(binder: Binder, entry: ast.Module):
     main: ast.Decl | none = none
     if "main" in entry.names:
         main = entry.names["main"]
-    if not isinstance(main, ast.FunctionDecl):
+    if main is not ast.FunctionDecl:
         binder.fail(entry, 1, 1, "program has no main function")
         return
     if len(main.params) > 0 or not returns_none(main):
@@ -1522,7 +1539,7 @@ def check_main(binder: Binder, entry: ast.Module):
 # order of name.
 def check_tests(binder: Binder, entry: ast.Module):
     for decl in entry.declarations:
-        if isinstance(decl, ast.FunctionDecl) and decl.name.startswith("test_"):
+        if decl is ast.FunctionDecl and decl.name.startswith("test_"):
             if len(decl.params) > 0 or not returns_none(decl):
                 binder.fail(entry, decl.line, decl.col, f"test function '{decl.name}' must take no parameters and return none")
                 return
@@ -1540,19 +1557,19 @@ def returns_none(function: ast.FunctionDecl) -> bool:
     if record is none:
         return false
     result = record.result
-    if function.is_async and isinstance(result, types.ClassType) and len(result.args) == 1:
+    if function.is_async and result is types.ClassType and len(result.args) == 1:
         result = result.args[0]
-    return isinstance(result, types.Prim) and result.name == "none"
+    return result is types.Prim and result.name == "none"
 
 # The functions of `module` that have bodies, followed by the methods of its
 # classes.
 def functions(module: ast.Module) -> list[ast.FunctionDecl]:
     result: list[ast.FunctionDecl] = []
     for decl in module.declarations:
-        if isinstance(decl, ast.FunctionDecl) and not decl.external:
+        if decl is ast.FunctionDecl and not decl.external:
             result.append(decl)
     for decl in module.declarations:
-        if isinstance(decl, ast.ClassDecl):
+        if decl is ast.ClassDecl:
             result.extend(decl.methods)
     return result
 
@@ -1563,103 +1580,103 @@ def idents(functions: list[ast.FunctionDecl]) -> list[ast.Ident]:
     return result
 
 def decl_ident(decl: ast.Decl) -> ast.Ident:
-    if isinstance(decl, ast.FunctionDecl):
+    if decl is ast.FunctionDecl:
         return ast.Ident(decl.line, decl.col, decl.name)
-    if isinstance(decl, ast.ClassDecl):
+    if decl is ast.ClassDecl:
         return ast.Ident(decl.line, decl.col, decl.name)
-    if isinstance(decl, ast.ProtocolDecl):
+    if decl is ast.ProtocolDecl:
         return ast.Ident(decl.line, decl.col, decl.name)
-    if isinstance(decl, ast.EnumDecl):
+    if decl is ast.EnumDecl:
         return ast.Ident(decl.line, decl.col, decl.name)
     return ast.Ident(decl.line, decl.col, decl.name)
 
 def set_type_name(decl: ast.Decl, name: str):
-    if isinstance(decl, ast.FunctionDecl):
+    if decl is ast.FunctionDecl:
         decl.type_name = name
-    else if isinstance(decl, ast.ClassDecl):
+    else if decl is ast.ClassDecl:
         decl.type_name = name
-    else if isinstance(decl, ast.ProtocolDecl):
+    else if decl is ast.ProtocolDecl:
         decl.type_name = name
-    else if isinstance(decl, ast.EnumDecl):
+    else if decl is ast.EnumDecl:
         decl.type_name = name
     else:
         decl.type_name = name
 
 # How errors name the kind of `decl`.
 def noun(decl: ast.Decl) -> str:
-    if isinstance(decl, ast.FunctionDecl):
+    if decl is ast.FunctionDecl:
         return "function"
-    if isinstance(decl, ast.ClassDecl):
+    if decl is ast.ClassDecl:
         return "class"
-    if isinstance(decl, ast.ProtocolDecl):
+    if decl is ast.ProtocolDecl:
         return "protocol"
-    if isinstance(decl, ast.EnumDecl):
+    if decl is ast.EnumDecl:
         return "enum"
     return "alias"
 
 def member_noun(found: Member) -> str:
-    if isinstance(found, ast.FunctionDecl):
+    if found is ast.FunctionDecl:
         return noun(found)
-    if isinstance(found, ast.ClassDecl):
+    if found is ast.ClassDecl:
         return noun(found)
-    if isinstance(found, ast.ProtocolDecl):
+    if found is ast.ProtocolDecl:
         return noun(found)
-    if isinstance(found, ast.EnumDecl):
+    if found is ast.EnumDecl:
         return noun(found)
-    if isinstance(found, ast.AliasDecl):
+    if found is ast.AliasDecl:
         return noun(found)
-    if isinstance(found, stdlib.Builtin):
+    if found is stdlib.Builtin:
         return "function"
-    if isinstance(found, types.Class):
+    if found is types.Class:
         return "class"
-    if isinstance(found, ProvidedAlias):
+    if found is ProvidedAlias:
         return "alias"
     return "constant"
 
 # The declarations that name no function or class to call.
 def cannot_call(found: Member) -> bool:
-    return isinstance(found, ast.AliasDecl) or isinstance(found, ast.EnumDecl) or isinstance(found, ast.ProtocolDecl) or isinstance(found, ProvidedAlias) or isinstance(found, ProvidedConstant)
+    return found is ast.AliasDecl or found is ast.EnumDecl or found is ast.ProtocolDecl or found is ProvidedAlias or found is ProvidedConstant
 
 # What a call of `found`, which can be called, reaches.
 def call_target(found: Member) -> ast.FunctionDecl | stdlib.Builtin | types.Class | none:
-    if isinstance(found, ast.FunctionDecl):
+    if found is ast.FunctionDecl:
         return found
-    if isinstance(found, ast.ClassDecl):
+    if found is ast.ClassDecl:
         return found.record
-    if isinstance(found, stdlib.Builtin):
+    if found is stdlib.Builtin:
         return found
-    if isinstance(found, types.Class):
+    if found is types.Class:
         return found
     return none
 
 def named_type_name(named: Named) -> str:
-    if isinstance(named, types.Class):
+    if named is types.Class:
         return named.type_name
-    if isinstance(named, types.Protocol):
+    if named is types.Protocol:
         return named.type_name
-    if isinstance(named, types.Enum):
+    if named is types.Enum:
         return named.type_name
-    if isinstance(named, AliasState):
+    if named is AliasState:
         return named.decl.type_name
     return named.type_name
 
 def named_name(named: Named) -> str:
-    if isinstance(named, types.Class):
+    if named is types.Class:
         return named.name
-    if isinstance(named, types.Protocol):
+    if named is types.Protocol:
         return named.name
-    if isinstance(named, types.Enum):
+    if named is types.Enum:
         return named.name
-    if isinstance(named, AliasState):
+    if named is AliasState:
         return named.decl.name
     return named.name
 
 def named_typevars(named: Named) -> list[types.TypeVar]:
-    if isinstance(named, types.Class):
+    if named is types.Class:
         return named.typevars
-    if isinstance(named, types.Protocol):
+    if named is types.Protocol:
         return named.typevars
-    if isinstance(named, AliasState):
+    if named is AliasState:
         return named.typevars
     return []
 
@@ -1672,28 +1689,28 @@ def is_generic(function: ast.FunctionDecl) -> bool:
     return len(function.type_params) > 0
 
 def is_generic_member(found: Member | none) -> bool:
-    if isinstance(found, ast.FunctionDecl):
+    if found is ast.FunctionDecl:
         return len(found.type_params) > 0
-    if isinstance(found, ast.ClassDecl):
+    if found is ast.ClassDecl:
         return len(found.type_params) > 0
     return false
 
 def is_cint(node: ast.TypeExpr) -> bool:
-    return isinstance(node, ast.TypeName) and node.module == "" and node.name == "cint"
+    return node is ast.TypeName and node.module == "" and node.name == "cint"
 
 def is_scalar(name: str) -> bool:
     return name in ["int", "float", "bool", "str", "bytes", "none"]
 
-# The type names that isinstance takes without a declaration.
+# The type names that type tests take without a declaration.
 def is_builtin_type(name: str) -> bool:
     return is_scalar(name) or name in ["list", "dict", "tuple"]
 
 # The dotted name that `expr` spells, a Name or Fields on one, or "".
 def qualified_name(expr: ast.Expr) -> str:
     node = expr.node
-    if isinstance(node, ast.Name):
+    if node is ast.Name:
         return node.name
-    if isinstance(node, ast.Field):
+    if node is ast.Field:
         path = qualified_name(node.object)
         if path == "":
             return ""

@@ -38,8 +38,8 @@ def main():
         print(line)
         i = i + 1
     maybe: int | none = none
-    print(maybe == none)
-    print(maybe != none)
+    print(maybe is none)
+    print(maybe is not none)
     maybe = 7
     print(maybe == 7)
     print(7 != maybe)

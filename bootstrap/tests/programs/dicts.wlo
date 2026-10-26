@@ -18,7 +18,6 @@ def main():
     print(ages.get("alan"))
     print(ages.get("bob"))
     print(ages.get("bob", 0))
-    print(ages.get("bob", none))
     print(ages.pop("alan"))
     show(ages)
     ages["alan"] = 42

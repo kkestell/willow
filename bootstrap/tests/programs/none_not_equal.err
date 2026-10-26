@@ -1,0 +1,1 @@
+none_not_equal.wlo:3:16: error: operator '!=' cannot take a none operand; use 'is none'

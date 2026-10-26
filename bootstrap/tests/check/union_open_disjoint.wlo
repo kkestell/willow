@@ -1,0 +1,6 @@
+protocol P:
+    def read() -> int
+def test(value: P | str):
+    pass
+def main():
+    pass

@@ -226,12 +226,12 @@ typedef struct Decl {
     } as;
 } Decl;
 
-typedef struct InstanceType {
+typedef struct TestedType {
     bool some;
     String written;
     const Type *member;
     Diag *error;
-} InstanceType;
+} TestedType;
 
 typedef struct LookupType {
     String owner;
@@ -249,7 +249,7 @@ typedef struct FieldType {
 } FieldType;
 
 static const char *const BUILTINS[] = {"print", "input", "len", "range", "int", "float", "str",
-    "bytes", "ord", "chr", "isinstance", "sorted", "abs", "round", "min", "max", "sum", "any",
+    "bytes", "ord", "chr", "sorted", "abs", "round", "min", "max", "sum", "any",
     "all", "list", "enumerate", "zip", "iter", "next"};
 
 typedef struct Intrinsic {
@@ -391,7 +391,7 @@ static TypedValue call(Checker *, const Expr *, ExprVec, const State *);
 static FactPair facts(const Checker *, const Expr *, const State *);
 static Ns namespace_of(const Checker *, const Expr *);
 static Decl decl_of(const Checker *, const Expr *);
-static InstanceType isinstance_type(const Checker *, const Expr *, const Type *);
+static TestedType tested_type(const Checker *, const Expr *, const Type *);
 static bool is_builtin(const Checker *, const Expr *, const char *);
 static Ns module_of(const Checker *, const Expr *);
 static Value fail_call(Checker *, const char *, Value);
@@ -402,7 +402,7 @@ static TypedValue method(Checker *, const Expr *, Pos, String, ExprVec, const St
 static CheckedArgs args(Checker *, ExprVec, const State *, TypeVec);
 static TypedValue construct(Checker *, Pos, const Type *, ExprVec, const State *);
 static TypedValue call_sig(const Checker *, Pos, String, String, const Sig *, CheckedArgs);
-static TypedValue isinstance(Checker *, Pos, ExprVec, const State *);
+static TypedValue type_test(Checker *, const Expr *, const Expr *, const State *);
 static TypedValue dict_get(Checker *, DictCall, ExprVec, const State *);
 static bool is_sys_exit(const Checker *, const Expr *);
 static int os_test(const Checker *, const Expr *);
@@ -1155,7 +1155,7 @@ static MethodSignature method_signature(const Type *ty, String name) {
         if (eq(name, "find")) {
             sig.function = "str_find";
             vec_push(sig.params, TY(Str));
-            sig.ret = TY(Int);
+            sig.ret = union_two(TY(Int), TY(None));
         } else if (eq(name, "startswith")) {
             sig.function = "str_startswith";
             vec_push(sig.params, TY(Str));
@@ -1469,40 +1469,42 @@ static FactPair facts(const Checker *self, const Expr *cond, const State *state)
     FactPair result = {0};
     const ExprKind *kind = &cond->kind;
     switch (kind->tag) {
-    case EXPR_IsNone: {
-        const Expr *operand = kind->as.IsNone.operand;
+    case EXPR_TypeTest: {
+        const Expr *operand = kind->as.TypeTest.operand;
         const Type *ty = narrowable(operand, state);
+        if (kind->as.TypeTest.target) {
+            if (!ty || !type_is_union(ty)) {
+                return result;
+            }
+            TestedType tested = tested_type(self, kind->as.TypeTest.target, ty);
+            if (tested.error || !tested.some || !tested.member) {
+                return result;
+            }
+            String name = operand->kind.as.Name;
+            vec_push(result.yes, (Fact){name, *tested.member});
+            Type other = type_without(ty, tested.member);
+            if (type_members(&other).len) {
+                vec_push(result.no, (Fact){name, other});
+            }
+            if (kind->as.TypeTest.negated) {
+                return (FactPair){result.no, result.yes};
+            }
+            return result;
+        }
         if (!ty || !type_is_optional(ty)) {
             return result;
         }
         Fact some = {operand->kind.as.Name, type_without(ty, &TY(None))};
-        if (kind->as.IsNone.negated) {
+        Fact absent = {operand->kind.as.Name, TY(None)};
+        if (kind->as.TypeTest.negated) {
             vec_push(result.yes, some);
+            vec_push(result.no, absent);
         } else {
+            vec_push(result.yes, absent);
             vec_push(result.no, some);
         }
         return result;
     }
-    case EXPR_Call:
-        if (is_builtin(self, kind->as.Call.callee, "isinstance")) {
-            ExprVec arguments = kind->as.Call.args;
-            if (arguments.len != 2) {
-                return result;
-            }
-            const Type *ty = narrowable(&arguments.data[0], state);
-            if (!ty) {
-                return result;
-            }
-            InstanceType class = isinstance_type(self, &arguments.data[1], ty);
-            if (class.error || !class.some || !class.member || !type_is_union(ty)) {
-                return result;
-            }
-            String name = arguments.data[0].kind.as.Name;
-            Type other = type_without(ty, class.member);
-            vec_push(result.yes, (Fact){name, *class.member});
-            vec_push(result.no, (Fact){name, other});
-        }
-        return result;
     case EXPR_Unary:
         if (strcmp(kind->as.Unary.op, "not") == 0) {
             FactPair inner = facts(self, kind->as.Unary.operand, state);
@@ -1811,14 +1813,21 @@ static TypedValue expr(Checker *self, const Expr *expression, const State *state
         return typed(constant(kind->as.Bool), TY(Bool));
     case EXPR_None:
         return typed(constant(0), TY(None));
-    case EXPR_IsNone: {
-        TypedValue checked = expr(self, kind->as.IsNone.operand, state);
-        if (!type_is_optional(&checked.ty)) {
-            fail(self->module->path, kind->as.IsNone.op_pos,
-                str_format("operator '%s' cannot be applied to " FMT,
-                    kind->as.IsNone.negated ? "is not" : "is", S(type_name(&checked.ty))));
+    case EXPR_TypeTest: {
+        if (kind->as.TypeTest.target) {
+            TypedValue tested = type_test(self, kind->as.TypeTest.operand, kind->as.TypeTest.target, state);
+            if (kind->as.TypeTest.negated) {
+                tested.value = binary_value("ceql", tested.value, constant(0));
+            }
+            return tested;
         }
-        const char *instr = kind->as.IsNone.negated ? "cnel" : "ceql";
+        TypedValue checked = expr(self, kind->as.TypeTest.operand, state);
+        if (!type_is_optional(&checked.ty) && checked.ty.tag != TYPE_None) {
+            fail(self->module->path, kind->as.TypeTest.op_pos,
+                str_format("operator '%s' cannot be applied to " FMT,
+                    kind->as.TypeTest.negated ? "is not" : "is", S(type_name(&checked.ty))));
+        }
+        const char *instr = kind->as.TypeTest.negated ? "cnel" : "ceql";
         return typed(binary_value(instr, checked.value, constant(0)), TY(Bool));
     }
     case EXPR_Str:
@@ -2094,6 +2103,10 @@ static TypedValue binary(
         return contains(self, op, pos, l, &lt, r, &rt);
     }
     bool equality = strcmp(op, "==") == 0 || strcmp(op, "!=") == 0;
+    if (equality && (lt.tag == TYPE_None || rt.tag == TYPE_None)) {
+        fail(self->module->path, pos,
+            str_format("operator '%s' cannot take a none operand; use 'is none'", op));
+    }
     if (equality &&
         (type_is_union(&lt) || lt.tag == TYPE_None || type_is_union(&rt) || rt.tag == TYPE_None) &&
         type_is_comparable(&lt) && type_is_comparable(&rt)) {
@@ -2349,53 +2362,66 @@ static FieldType field(const Checker *self, const Type *ty, Pos pos, String name
         str_format("class " FMT " has no field '" FMT "'", S(type_name(ty)), S(name)));
 }
 
-static InstanceType isinstance_type(const Checker *self, const Expr *expression, const Type *ty) {
+/* Runtime classes ignore collection arguments. L0 has no inheritance. */
+static bool same_runtime_class(const Type *a, const Type *b) {
+    if (a->tag != b->tag) {
+        return false;
+    }
+    return a->tag == TYPE_List || a->tag == TYPE_Dict || type_equal(a, b);
+}
+
+static TestedType tested_type(const Checker *self, const Expr *expression, const Type *ty) {
     String written;
-    Type class;
+    Type target;
     if (expression->kind.tag == EXPR_Name &&
         (eq(expression->kind.as.Name, "list") || eq(expression->kind.as.Name, "dict"))) {
-        String name = expression->kind.as.Name;
-        TypeSlice members = type_members(ty);
-        for (size_t i = 0; i < members.len; i++) {
-            if ((members.data[i].tag == TYPE_List && eq(name, "list")) ||
-                (members.data[i].tag == TYPE_Dict && eq(name, "dict"))) {
-                return (InstanceType){.some = true, .written = name, .member = &members.data[i]};
-            }
-        }
-        return (InstanceType){.some = true, .written = name};
-    }
-    if (expression->kind.tag == EXPR_Name &&
+        written = expression->kind.as.Name;
+        target = eq(written, "list") ? TY(List) : TY(Dict);
+    } else if (expression->kind.tag == EXPR_Name &&
         (eq(expression->kind.as.Name, "int") || eq(expression->kind.as.Name, "float") ||
             eq(expression->kind.as.Name, "bool") || eq(expression->kind.as.Name, "str"))) {
         written = expression->kind.as.Name;
-        class = eq(written, "int")     ? TY(Int)
+        target = eq(written, "int")     ? TY(Int)
                 : eq(written, "float") ? TY(Float)
                 : eq(written, "bool")  ? TY(Bool)
                                        : TY(Str);
     } else {
+        if (expression->kind.tag == EXPR_Attr) {
+            Decl owner = decl_of(self, expression->kind.as.Attr.object);
+            if (owner.tag == D_Type && owner.as.type->tag == DECL_Enum) {
+                return (TestedType){.error = diagnostic(self, root(expression)->pos,
+                    STR("an enum member cannot be used in a type test; use '=='"))};
+            }
+        }
         Decl decl = decl_of(self, expression);
         if (decl.tag == D_Error) {
-            return (InstanceType){.error = decl.as.error};
+            return (TestedType){.error = decl.as.error};
         }
         if (decl.tag != D_Type) {
-            return (InstanceType){0};
-        }
-        if (decl.as.type->tag == DECL_Alias) {
-            String name = last_name(decl.written);
-            return (InstanceType){
-                .error = diagnostic(self, root(expression)->pos,
-                    str_format("alias '" FMT "' cannot be used in isinstance", S(name)))};
+            return (TestedType){0};
         }
         written = decl.written;
-        class = decl.as.type->ty;
-    }
-    TypeSlice members = type_members(ty);
-    for (size_t i = 0; i < members.len; i++) {
-        if (type_equal(&members.data[i], &class)) {
-            return (InstanceType){.some = true, .written = written, .member = &members.data[i]};
+        target = decl.as.type->ty;
+        if (decl.as.type->tag == DECL_Alias) {
+            TypeName ref = {root(expression)->pos, written, {0}};
+            AliasStack expanding = {0};
+            target = resolve_name(self->names, self->module, &ref, &expanding);
         }
     }
-    return (InstanceType){.some = true, .written = written};
+    TypeVec kept = {0};
+    TypeSlice members = type_members(ty);
+    TypeSlice targets = type_members(&target);
+    for (size_t i = 0; i < members.len; i++) {
+        for (size_t j = 0; j < targets.len; j++) {
+            if (same_runtime_class(&members.data[i], &targets.data[j])) {
+                vec_push(kept, members.data[i]);
+                break;
+            }
+        }
+    }
+    Type selected = type_union(kept);
+    return (TestedType){.some = true, .written = written,
+        .member = kept.len ? box_copy(&selected, sizeof(Type)) : NULL};
 }
 
 static bool is_sys_exit(const Checker *self, const Expr *expression) {
@@ -2473,9 +2499,6 @@ static TypedValue call(Checker *self, const Expr *callee, ExprVec arguments, con
         TypedValue checked = expr(self, callee, state);
         fail(self->module->path, pos,
             str_format("cannot call a value of type " FMT, S(type_name(&checked.ty))));
-    }
-    if (eq(name, "isinstance")) {
-        return isinstance(self, pos, arguments, state);
     }
     if (eq(name, "range")) {
         fail(self->module->path, pos, STR("'range' can only be the source of a for loop"));
@@ -2626,40 +2649,15 @@ static TypedValue call(Checker *self, const Expr *callee, ExprVec arguments, con
     return typed(value, (Type){.tag = intrinsic->ret});
 }
 
-static TypedValue isinstance(Checker *self, Pos pos, ExprVec arguments, const State *state) {
-    arity(self, pos, STR("isinstance"), 2, arguments.len);
-    TypedValue checked = expr(self, &arguments.data[0], state);
-    const Expr *class = &arguments.data[1];
-    InstanceType found_type = isinstance_type(self, class, &checked.ty);
+static TypedValue type_test(Checker *self, const Expr *operand, const Expr *class, const State *state) {
+    TypedValue checked = expr(self, operand, state);
+    TestedType found_type = tested_type(self, class, &checked.ty);
     if (found_type.error) {
         raise_diag(found_type.error);
     }
     if (!found_type.some) {
-        const char *found;
-        switch (class->kind.tag) {
-        case EXPR_Name:
-            fail(self->module->path, class->pos,
-                str_format("unknown type '" FMT "'", S(class->kind.as.Name)));
-        case EXPR_None:
-            found = "'none'";
-            break;
-        case EXPR_Bool:
-            found = class->kind.as.Bool ? "'true'" : "'false'";
-            break;
-        case EXPR_Int:
-            found = "integer";
-            break;
-        case EXPR_Float:
-            found = "float";
-            break;
-        case EXPR_Str:
-            found = "string";
-            break;
-        default:
-            found = "an expression";
-            break;
-        }
-        fail(self->module->path, class->pos, str_format("expected a class name, found %s", found));
+        String name = class->kind.tag == EXPR_Name ? class->kind.as.Name : class->kind.as.Attr.name;
+        fail(self->module->path, class->pos, str_format("unknown type '" FMT "'", S(name)));
     }
     if (!found_type.member) {
         fail(self->module->path, root(class)->pos,
@@ -2672,8 +2670,12 @@ static TypedValue isinstance(Checker *self, Pos pos, ExprVec arguments, const St
             VAL(Seq, {box_copy(&checked.value, sizeof(Value)), box_copy(&one, sizeof(one))}),
             TY(Bool));
     }
-    Value descriptor = VAL(Global, type_descriptor(found_type.member));
-    return typed(core_call("is_instance", VALUES(checked.value, descriptor), true), TY(Bool));
+    StringVec descriptors = {0};
+    TypeSlice members = type_members(found_type.member);
+    for (size_t i = 0; i < members.len; i++) {
+        vec_push(descriptors, members.data[i].tag == TYPE_None ? STR("") : type_descriptor(&members.data[i]));
+    }
+    return typed(VAL(TypeTest, {box_copy(&checked.value, sizeof(Value)), descriptors}), TY(Bool));
 }
 
 static CheckedArgs args(Checker *self, ExprVec arguments, const State *state, TypeVec params) {
@@ -2806,25 +2808,22 @@ static TypedValue dict_get(Checker *self, DictCall call, ExprVec arguments, cons
     }
     TypedValue key = expr(self, &arguments.data[0], state);
     Value key_ir = coerce(self, arguments.data[0].pos, key.value, &key.ty, call.key);
-    TypedValue default_ = arguments.len > 1
-                              ? expr_expect(self, &arguments.data[1], state, call.value)
-                              : typed(constant(0), TY(None));
+    TypedValue default_;
     Type result;
-    if (type_assignable_to(&default_.ty, call.value)) {
+    if (arguments.len > 1) {
+        default_ = expr_expect(self, &arguments.data[1], state, call.value);
+        default_ = typed(coerce(self, arguments.data[1].pos, default_.value, &default_.ty,
+                           call.value),
+            *call.value);
         result = *call.value;
-    } else if (default_.ty.tag == TYPE_None) {
-        result = union_two(*call.value, TY(None));
     } else {
-        Type allowed = union_two(*call.value, TY(None));
-        fail(self->module->path, arguments.data[1].pos,
-            str_format("expected " FMT ", received " FMT, S(type_name(&allowed)),
-                S(type_name(&default_.ty))));
+        default_ = typed(constant(0), TY(None));
+        result = union_two(*call.value, TY(None));
     }
-    Value widened_default = widen(default_.value, &default_.ty, &result);
     Value present = widen(VAL(Item, 0), call.value, &result);
     Value get =
         VAL(DictGet, {box_copy(&call.dict, sizeof(Value)), box_copy(&key_ir, sizeof(key_ir)),
-                         box_copy(&widened_default, sizeof(widened_default)),
+                         box_copy(&default_.value, sizeof(default_.value)),
                          box_copy(&present, sizeof(present))});
     return typed(get, result);
 }

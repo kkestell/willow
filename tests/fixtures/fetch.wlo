@@ -14,7 +14,7 @@ def main():
     query: dict[str, str] = {}
     for pair in args[2:]:
         split = pair.find("=")
-        if split < 1:
+        if split is none or split < 1:
             sys.eprint(f"fetch: expected name=value, received '{pair}'")
             sys.exit(2)
         query[pair[:split]] = pair[split + 1:]

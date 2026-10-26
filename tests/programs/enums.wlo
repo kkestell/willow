@@ -18,9 +18,9 @@ def use_color(mode: ColorMode = ColorMode.AUTO) -> bool:
 def describe(value: ColorMode | Keyword | str | none) -> str:
     if value is none:
         return "nothing"
-    if isinstance(value, ColorMode):
+    if value is ColorMode:
         return "mode " + str(value)
-    if isinstance(value, Keyword):
+    if value is Keyword:
         return "keyword " + str(value)
     return "text " + value
 

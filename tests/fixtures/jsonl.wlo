@@ -7,7 +7,7 @@ import sys
 
 # The field's value as text: strings as they are, other values as JSON.
 def text_of(value: json.Json) -> str:
-    if isinstance(value, str):
+    if value is str:
         return value
     return json.dump(value)
 
@@ -27,7 +27,7 @@ def main():
         except json.JsonError as error:
             sys.eprint(f"line {number}: {error.message}")
             sys.exit(1)
-        if isinstance(record, dict) and args[0] in record:
+        if record is dict and args[0] in record:
             if text_of(record[args[0]]) == args[1]:
                 out.write_text(line + "\n")
                 kept = kept + 1

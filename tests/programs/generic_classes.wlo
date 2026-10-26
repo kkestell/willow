@@ -24,7 +24,7 @@ def length[T](node: Node[T] | none) -> int:
     return count
 
 def describe(x: Box[int] | none) -> str:
-    if isinstance(x, Box):
+    if x is Box:
         return "box " + str(x.get())
     return "none"
 
@@ -45,4 +45,4 @@ def main():
     # A float in an int | float specialization stays a float.
     f = Box[int | float](2.5)
     v = f.get()
-    print(isinstance(v, float))
+    print((v is float))

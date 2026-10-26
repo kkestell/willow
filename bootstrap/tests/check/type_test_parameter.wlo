@@ -1,0 +1,4 @@
+def test[T](value: T) -> bool:
+    return value is T
+def main():
+    pass

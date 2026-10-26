@@ -3,19 +3,25 @@ import app.models
 import app.util
 
 def check(value: app.models.Item | int) -> str:
-    if isinstance(value, app.models.Item):
+    if value is app.models.Item:
         return "item " + value.name
     return "number"
 
 def size(value: app.models.Size | str) -> str:
-    if isinstance(value, app.models.Size) and value == app.models.Size.LARGE:
+    if value is app.models.Size and value == app.models.Size.LARGE:
         return "large " + str(value)
     return "other"
 
 def size_name(value: app.models.Size = app.models.Size.SMALL) -> str:
     return str(value)
 
+def alias(value: app.models.Count | str) -> bool:
+    return value is app.models.Count
+
 def main():
+    assert alias(2)
+    assert alias(none)
+    assert not alias("text")
     items = [app.util.make("tea", count=2), app.models.Item("scone", 1)]
     print(app.models.describe(app.deep.leaf.first(items)))
     print(check(items[1]))

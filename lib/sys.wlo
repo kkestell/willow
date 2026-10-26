@@ -26,7 +26,7 @@ def environ() -> dict[str, str]:
     while not __addr_is_null(entry):
         text = core.str_from_bytes(entry, core.strlen(entry))
         split = text.find("=")
-        if split >= 0:
+        if split is not none:
             name = text[:split]
             if name not in values:
                 names.append(name)

@@ -63,7 +63,7 @@ def main():
     for name, score in scores.items():
         print(f"{name}={score}")
     print(f"{scores.get('ada', 0)} {scores.get('zoe', 0)} {scores.get('zoe')}")
-    missing: int | none = scores.get("zoe", none)
+    missing: int | none = scores.get("zoe")
     print(missing is none)
 
     stored: dict[str, int | none] = {"a": none}

@@ -30,14 +30,11 @@ enum Kind:
     CLASS
     CONTINUE
     DEF
-    DEL
     ELSE
     ENUM
     EXCEPT
     FINALLY
     FOR
-    FROM
-    GLOBAL
     IF
     IMPORT
     IN
@@ -120,15 +117,12 @@ def keywords() -> dict[str, Kind]:
         "class": Kind.CLASS,
         "continue": Kind.CONTINUE,
         "def": Kind.DEF,
-        "del": Kind.DEL,
         "else": Kind.ELSE,
         "enum": Kind.ENUM,
         "except": Kind.EXCEPT,
         "false": Kind.FALSE,
         "finally": Kind.FINALLY,
         "for": Kind.FOR,
-        "from": Kind.FROM,
-        "global": Kind.GLOBAL,
         "if": Kind.IF,
         "import": Kind.IMPORT,
         "in": Kind.IN,

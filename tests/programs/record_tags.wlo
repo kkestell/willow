@@ -4,11 +4,11 @@ class Node:
 type Value = Node | list[str] | tuple[str, int] | dict[str, int]
 
 def describe(value: Value) -> str:
-    if isinstance(value, Node):
+    if value is Node:
         return f"node {value.n}"
-    else if isinstance(value, list):
+    else if value is list:
         return f"list {len(value)}"
-    else if isinstance(value, tuple):
+    else if value is tuple:
         return "tuple"
     return "dict"
 
