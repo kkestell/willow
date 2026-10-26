@@ -97,3 +97,41 @@ establishes a fixed point for compiling the compiler's own source.
 
 The stage-specific checks live in
 [`bootstrap/tests/stage2.sh`](../bootstrap/tests/stage2.sh).
+
+## Linux in Docker
+
+Docker can run the complete bootstrap and test suite without installing the
+native dependencies on the host. From the repository root:
+
+```sh
+docker build --platform linux/amd64 -f Dockerfile.bootstrap -t willow-bootstrap-amd64 .
+docker run --rm --platform linux/amd64 willow-bootstrap-amd64
+```
+
+The same Dockerfile supports Linux arm64:
+
+```sh
+docker build --platform linux/arm64 -f Dockerfile.bootstrap -t willow-bootstrap-arm64 .
+docker run --rm --platform linux/arm64 willow-bootstrap-arm64
+```
+
+The image installs a C toolchain, QBE 1.3, libgc, pkg-config, and libcurl;
+OpenSSL supports the HTTP integration tests. The default command is
+`make bootstrap-test`. On an arm64 host, Docker needs amd64 emulation
+(Docker Desktop provides it), and the tests will run more slowly.
+
+The image contains a snapshot of the working tree, including uncommitted
+source changes. Host `build/` files and Git metadata are excluded. Builds
+and test outputs stay inside the container and are removed with `--rm`, so
+Linux binaries cannot overwrite native host builds. Rebuild the image after
+changing sources; Docker caches the dependency installation layers.
+
+To keep a container for debugging, omit `--rm` and override the command:
+
+```sh
+docker run --name willow-bootstrap-debug -it --platform linux/amd64 willow-bootstrap-amd64 sh
+# Inside the container:
+make bootstrap-test
+```
+
+Remove it afterward with `docker rm willow-bootstrap-debug`.
