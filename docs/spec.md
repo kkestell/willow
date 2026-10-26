@@ -3,6 +3,9 @@
 Willow is a small, statically typed language with Python-like syntax. It compiles
 to native code through QBE. Source files use the `.wlo` extension.
 
+Supported hosts are Linux on AArch64 or x86-64 (amd64), and macOS on
+AArch64 (Apple Silicon). Intel macOS is not supported.
+
 ## 1. Programs
 
 ```python

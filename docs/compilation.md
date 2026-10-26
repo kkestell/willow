@@ -121,7 +121,7 @@ target from the host operating system and architecture:
 | Host | AArch64 | x86-64 |
 | --- | --- | --- |
 | Linux | `arm64` | `amd64_sysv` |
-| macOS | `arm64_apple` | `amd64_apple` |
+| macOS | `arm64_apple` | unsupported |
 
 It then:
 
@@ -134,8 +134,8 @@ It then:
 4. Renames the linked output from a sibling `.tmp` file to the requested
    destination and removes the temporary intermediate files.
 
-The current coroutine stack-switch assembly is implemented for AArch64.
-The x86-64 assembly reports coroutines unavailable.
+Coroutine stack-switch assembly is implemented for AArch64 on both hosts
+and for x86-64 using the Linux System V ABI.
 
 The executable contains the emitted program, library, and core code, with
 foreign symbols resolved through the native linker. Running that

@@ -1,0 +1,19 @@
+# Reject unsupported architectures before invoking QBE or the linker.
+set -eu
+os=$(uname -s)
+case "$os" in
+    Darwin) os=darwin; arch=x86_64 ;;
+    *) os=linux; arch=unsupported ;;
+esac
+mkdir bin
+printf '#!/bin/sh\nprintf "%%s\\n" "%s"\n' "$arch" >bin/uname
+chmod +x bin/uname
+export PATH="$PWD/bin:$PATH"
+if "$WILLOW" build prog.wlo -o prog >actual 2>&1; then
+    echo "unsupported host unexpectedly built"
+    exit 1
+fi
+printf 'error: unsupported host %s %s\n' "$os" "$arch" >wanted
+cmp actual wanted
+test ! -e prog
+echo "unsupported host rejected"

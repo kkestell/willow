@@ -203,8 +203,6 @@ static String compile(String path) {
 static const char *qbe_target(void) {
 #if defined(__APPLE__) && defined(__aarch64__)
     return "arm64_apple";
-#elif defined(__APPLE__) && defined(__x86_64__)
-    return "amd64_apple";
 #elif defined(__linux__) && defined(__aarch64__)
     return "arm64";
 #elif defined(__linux__) && defined(__x86_64__)

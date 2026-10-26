@@ -354,9 +354,7 @@ def qbe_target(arch: str) -> str:
         if os == "darwin":
             return "arm64_apple"
         return "arm64"
-    if arch == "x86_64":
-        if os == "darwin":
-            return "amd64_apple"
+    if arch == "x86_64" and os == "linux":
         return "amd64_sysv"
     return ""
 
