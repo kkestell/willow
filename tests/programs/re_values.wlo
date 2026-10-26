@@ -1,0 +1,61 @@
+import re
+import json
+
+def texts(items: Iterable[str | none]) -> str:
+    var parts: list[str] = []
+    for item in items:
+        parts.append(json.dump(item))
+    return "[" + ", ".join(parts) + "]"
+
+def show(found: re.Match | none):
+    if found is none:
+        print("no match")
+    else:
+        print(f"{found.group()} {found.start()} {found.end()} {texts(found.groups())}")
+
+def main():
+    var pattern = re.compile("(?<word>é+)(x)?")
+    var saved = pattern.search("aéé!")
+    show(saved)
+    show(pattern.match("aéé!"))
+    show(pattern.match("aéé!", 1))
+    show(pattern.fullmatch("aéé!", 1))
+    show(pattern.fullmatch("aééx", 1))
+    print(texts(pattern.findall("é aééx")))
+    for found in pattern.finditer("é aééx"):
+        print(f"{found.named('word')} {found.group(2)} {found.start(2)} {found.end(2)}")
+    show(saved)
+    show(re.compile("").search("é", 1))
+    show(re.compile(".").search("😀é", 1))
+    show(re.compile("a|ab").fullmatch("ab"))
+    show(re.compile("^é$", ignore_case=true, multiline=true).search("x\nÉ\ny"))
+    print(texts(re.compile(".").findall("é\n\r😀")))
+    print(texts(re.compile(".", dotall=true).findall("é\n😀")))
+    print(texts(re.compile("\\w+|\\d+|\\s+").findall("éabc ٢2 \t")))
+    print(texts(re.compile("\\bé\\b").findall("é aéa")))
+    var empty = re.compile("|é")
+    for found in empty.finditer("é"):
+        show(found)
+    print(texts(empty.findall("é")))
+    print(texts(empty.split("é")))
+    print(empty.sub("-", "é"))
+    print(texts(re.compile("(,)").split(",a,,b,")))
+    print(texts(re.compile(",").split("a,b,c", 1)))
+    print(texts(re.compile(",").split("a,b,c", 0)))
+    print(texts(re.compile(",").split("a,b,c", -2)))
+    print(texts(re.compile("").split("")))
+    print(texts(re.compile("q").split("")))
+    print(pattern.sub("${word}:$2:$$:$0", "é aééx"))
+    print(pattern.sub("$1z", "é"))
+    print(pattern.sub("\\1", "é"))
+    print(pattern.sub("ok", "missing"))
+    var literal = "é.a[b] #\n\t\\\x00"
+    print(re.escape("a.b [c]#\n"))
+    var escaped = re.compile("(?x)" + re.escape(literal))
+    print(escaped.fullmatch(literal) is not none)
+    print(texts(re.compile("a\x00b").findall("xa\x00by")))
+    var duplicates = re.compile("(?J)(?<a>x)|(?<a>y)")
+    var duplicate = duplicates.search("y")
+    assert duplicate is not none
+    print(duplicate.named("a"))
+    print(duplicates.sub("${a}", "xy"))

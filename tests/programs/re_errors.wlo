@@ -1,0 +1,58 @@
+import re
+
+def main():
+    for source in ["é(", "\\C", "(*UCP)a"]:
+        try:
+            re.compile(source)
+        except ValueError as error:
+            print(error.message.split(":")[0])
+    var pattern = re.compile("(?<a>x)?y")
+    var found = pattern.search("y")
+    assert found is not none
+    print(f"{found.named('a')} {found.group(1)} {found.start(1)} {found.end(1)}")
+    for index in [-1, 2]:
+        try:
+            found.group(index)
+        except IndexError as error:
+            print(error.message)
+        try:
+            found.start(index)
+        except IndexError as error:
+            print(error.message)
+        try:
+            found.end(index)
+        except IndexError as error:
+            print(error.message)
+    for name in ["missing", "a\x00ignored"]:
+        try:
+            found.named(name)
+        except IndexError as error:
+            print(error.message)
+    for start in [-1, 2]:
+        try:
+            pattern.search("é", start)
+        except IndexError as error:
+            print(error.message)
+        try:
+            pattern.match("é", start)
+        except IndexError as error:
+            print(error.message)
+        try:
+            pattern.fullmatch("é", start)
+        except IndexError as error:
+            print(error.message)
+    for replacement in ["$", "$9", "${missing}", "${a", "$!", "$999999999999999999999999999"]:
+        for text in ["y", "no match"]:
+            try:
+                pattern.sub(replacement, text)
+            except ValueError as error:
+                print(error.message)
+    for source in ["(*LIMIT_MATCH=1)(a+)+$", "(*LIMIT_DEPTH=1)(a+)+$", "(*LIMIT_HEAP=0)(a+)+$"]:
+        try:
+            re.compile(source).search("aaaaaaaaaaaaaaaaaaaa!")
+        except RuntimeError as error:
+            print(error.message)
+    try:
+        re.compile("(*LIMIT_MATCH=1)(a+)+$").sub("x", "aaaaaaaaaaaaaaaaaaaa!")
+    except RuntimeError as error:
+        print(error.message)

@@ -39,7 +39,6 @@ enum Kind:
     IMPORT
     IN
     IS
-    MATCH
     NOT
     OR
     PASS
@@ -132,7 +131,6 @@ def keywords() -> dict[str, Kind]:
         "import": Kind.IMPORT,
         "in": Kind.IN,
         "is": Kind.IS,
-        "match": Kind.MATCH,
         "none": Kind.NONE,
         "not": Kind.NOT,
         "or": Kind.OR,

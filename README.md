@@ -8,7 +8,8 @@ self-hosting compiler turns `.wlo` files into native executables through QBE.
 ## Setup
 
 Requires Linux (arm64 or amd64) or macOS (Apple Silicon), a C compiler,
-QBE 1.3, and libgc (bdw-gc). Intel macOS is not supported.
+QBE 1.3, and libgc (bdw-gc). The `re` module requires PCRE2 (`libpcre2-8`);
+on macOS install it with `brew install pcre2`. Intel macOS is not supported.
 See [bootstrapping](docs/bootstrap.md) for the Linux Docker test environment.
 
 ```sh

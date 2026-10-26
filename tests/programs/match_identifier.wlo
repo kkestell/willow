@@ -1,0 +1,7 @@
+class Matcher:
+    def match() -> int:
+        return 42
+
+def main():
+    var match = Matcher().match
+    print(match())

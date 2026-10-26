@@ -3201,6 +3201,16 @@ def signal_handler_address() -> ptr:
     fail("RuntimeError", "signal handler was not emitted")
     return __ptr(__word(0))
 
+# Stages 1 and 2 replace this body with the address of a zeroed word.
+def re_cache() -> ptr:
+    fail("RuntimeError", "PCRE2 library cache was not emitted")
+    return __ptr(__word(0))
+
+def re_library_names() -> list[str]:
+    if __os == "darwin":
+        return ["/opt/homebrew/lib/libpcre2-8.0.dylib", "/usr/local/lib/libpcre2-8.0.dylib"]
+    return ["libpcre2-8.so.0"]
+
 def http_library_name() -> str:
     if __os == "darwin":
         return "/usr/lib/libcurl.4.dylib"

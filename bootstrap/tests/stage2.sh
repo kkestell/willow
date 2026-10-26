@@ -181,6 +181,7 @@ check_willow() {
     build willow || return
     check_coroutines
     WILLOW=$work/willow WILLOW1=$willow1 bootstrap/tests/http.sh || failed=1
+    WILLOW=$work/willow WILLOW1=$willow1 bootstrap/tests/re.sh || failed=1
     echo "willow2:"
     "$runner" "$work/willow" bootstrap/tests/programs/*.wlo bootstrap/tests/core/*.wlo \
         bootstrap/tests/check/*.wlo bootstrap/tests/modules/*/main.wlo || failed=1

@@ -83,11 +83,11 @@ with a digit. They are case-sensitive. These words are reserved:
 
 ```text
 and as assert async await break case class continue def else enum
-except false finally for if import in is match none not or pass protocol
+except false finally for if import in is none not or pass protocol
 raise return self true try type var while with yield
 ```
 
-`match` and `case` are reserved for future use.
+`case` is reserved for future use.
 
 The type names `int`, `float`, `bool`, `str`, `bytes`, `list`, `dict`, `tuple`,
 `Iterable`, `Iterator`, `ContextManager`, `Generator`, and `Coroutine` are also
@@ -2491,6 +2491,76 @@ secrets. `randint` accepts any `a <= b` in the `int` range. `choice` of an empty
 list and `randint` with `a > b` raise `ValueError`. `secure_bytes` with a
 negative `size` raises `ValueError`, and a failure to read the random source
 raises `OSError`.
+
+### `re`
+
+`re` provides regular expressions using PCRE2 (`libpcre2-8`) syntax.
+
+| Declaration | Meaning |
+| --- | --- |
+| `compile(pattern: str, ignore_case: bool = false, multiline: bool = false, dotall: bool = false) -> Pattern` | Compile a pattern |
+| `escape(text: str) -> str` | Escape text for literal use in a pattern |
+
+| `Pattern` method | Meaning |
+| --- | --- |
+| `search(text: str, start: int = 0) -> Match \| none` | First match at or after `start` |
+| `match(text: str, start: int = 0) -> Match \| none` | Match anchored at `start` |
+| `fullmatch(text: str, start: int = 0) -> Match \| none` | Match anchored at `start` and the end of `text` |
+| `findall(text: str) -> list[str]` | Whole matches, regardless of captures |
+| `finditer(text: str) -> list[Match]` | Match objects for all matches |
+| `sub(replacement: str, text: str) -> str` | Replace all matches |
+| `split(text: str, maxsplit: int = -1) -> list[str]` | Text between matches, without captured groups |
+
+Matches proceed left to right without overlapping. After an empty match, a
+nonempty match may occur at the same position; otherwise searching advances
+one code point. Empty matches at the ends are included. `split` preserves
+empty fields; `maxsplit` limits the number of splits, zero leaves the text
+whole, and any negative value is unlimited, as for `str.split` with a
+separator. A `start` outside 0 through `len(text)` raises `IndexError` with
+the message `start out of range`.
+
+| `Match` method | Meaning |
+| --- | --- |
+| `group(index: int = 0) -> str \| none` | Whole match (group 0), or a numbered capture |
+| `named(name: str) -> str \| none` | Named capture |
+| `groups() -> list[str \| none]` | Captures in group-number order, excluding group 0 |
+| `start(index: int = 0) -> int \| none` | Start offset of a group |
+| `end(index: int = 0) -> int \| none` | Exclusive end offset of a group |
+
+Offsets, including compile-error offsets, count Unicode code points. Unmatched
+groups return `none`; negative or nonexistent group numbers and nonexistent
+names raise `IndexError` with the message `no such group`. Match objects
+remain usable after subsequent matching calls. With duplicate capture names,
+`named` returns the first participating group in group-number order, or `none`
+if none participated.
+
+Patterns compile in UTF mode with `PCRE2_NEVER_BACKSLASH_C` (so `\C` cannot
+split a code point) and `PCRE2_NEVER_UCP` (so `(*UCP)` cannot enable Unicode
+character classes). `\d`, `\w`, `\s`, and `\b` use ASCII classes. The newline
+setting is LF: `.` matches one code point except LF unless `dotall` is true;
+`multiline` makes `^` and `$` recognize line boundaries. `ignore_case` folds
+Unicode case. PCRE2's inline pattern options retain their usual meaning.
+
+`sub` uses PCRE2's replacement syntax, including `$1`, `${name}`, and `$$`;
+backslashes are literal. An unmatched capture inserts empty text
+(`PCRE2_SUBSTITUTE_UNSET_EMPTY`). Malformed replacements and references to
+nonexistent groups raise `ValueError` with the message `invalid replacement`.
+`escape` prefixes a backslash to `\.^$|?*+()[]{}-#&~` and space, writes ASCII
+control characters as `\xHH` with lowercase hex digits, and leaves other
+characters unchanged.
+
+An invalid pattern raises `ValueError` with the message
+`invalid pattern at <offset>: <PCRE2's message>`; PCRE2's text can vary by
+version. Exceeding PCRE2's match, depth, or heap limit raises `RuntimeError`
+with the message `regex match limit exceeded`.
+
+PCRE2 is loaded when a pattern is compiled. On Linux the library is
+`libpcre2-8.so.0`; on macOS Willow tries
+`/opt/homebrew/lib/libpcre2-8.0.dylib`, then
+`/usr/local/lib/libpcre2-8.0.dylib`. Loading failure raises `OSError` with the
+message `cannot load PCRE2: <reason>`. Programs that do not compile patterns
+do not need PCRE2 installed. Matching uses no JIT. Match data is freed after
+each call; compiled patterns are retained until process exit.
 
 ### `subprocess`
 

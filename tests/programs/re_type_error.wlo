@@ -1,0 +1,4 @@
+import re
+
+def main():
+    re.compile("x").search("x", "0")
