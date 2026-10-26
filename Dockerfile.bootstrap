@@ -12,7 +12,9 @@ RUN curl -fsSL https://c9x.me/compile/release/qbe-1.3.tar.xz -o /tmp/qbe.tar.xz 
     && make -C /tmp/qbe-1.3 -j2 PREFIX=/usr/local install \
     && rm -rf /tmp/qbe-1.3 /tmp/qbe.tar.xz
 
-RUN useradd --create-home willow
+RUN useradd --create-home willow \
+    && mkdir /willow \
+    && chown willow:willow /willow
 WORKDIR /willow
 COPY --chown=willow:willow . .
 USER willow
