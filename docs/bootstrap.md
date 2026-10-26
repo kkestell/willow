@@ -12,7 +12,7 @@ commands below from the repository root.
 | Stage | Source | Written in | Executable |
 | --- | --- | --- | --- |
 | 0 | [`bootstrap/stage0/`](../bootstrap/stage0/) | C11 | `build/stage0/willow0` |
-| 1 | [`bootstrap/stage1/`](../bootstrap/stage1/) | L0, a subset of Willow | `build/willow1` |
+| 1 | [`compiler/`](../compiler/) plus [`bootstrap/stage1/`](../bootstrap/stage1/) | L0, a subset of Willow | `build/willow1` |
 | 2 | [`compiler/`](../compiler/) | Willow | `build/willow2a`, then `build/willow2b` |
 
 The [Makefile](../Makefile) builds the chain in this order:
@@ -24,9 +24,13 @@ The [Makefile](../Makefile) builds the chain in this order:
 5. `willow2b` is copied to `build/willow`, the compiler used by normal builds
    and tests.
 
-L0 is the subset of the current language that stage 0 supports. Stage 1 and
-the core runtime stay within that subset. Stage 1 supports the constructs
-needed to compile stage 2; stage 2 implements the language described in the
+L0 is the subset of the current language that stage 0 supports. The core
+runtime and every module that `bootstrap/stage1/willow1.wlo` imports, directly
+or transitively, stay within that subset, so building `willow1` enforces the
+rule. The driver modules (`willow`, `init`, `manifest`, `runner`, and
+`source`, which `bootstrap/stage1/source.wlo` replaces) and the `_files` and
+`_test` drivers use the full language. Stage 1 supports the constructs needed
+to compile stage 2; stage 2 implements the language described in the
 [specification](spec.md).
 
 Each stage emits QBE intermediate language (IL). For a native build, QBE
@@ -59,6 +63,10 @@ generates two modules:
 - `lib_source.wlo` holds the text of the modules in [`lib/`](../lib/),
   indexed by module name.
 
+The stage 1 build then copies `bootstrap/stage1/`'s `.wlo` files over them, so
+the driver is `willow1.wlo` and `source.wlo` is the L0 stand-in for the
+compiler's.
+
 The compiler loaders use these embedded sources when compiling programs.
 The compiler therefore carries its runtime and standard library sources
 with it. Edit the originals; the prepared files under `build/` are generated
@@ -81,8 +89,6 @@ establishes a fixed point for compiling the compiler's own source.
 `make bootstrap-test` runs that comparison and then:
 
 - Builds and runs the L0 programs and core tests with stage 0.
-- Runs stage 1's lexer, parser, type, and binder tests, then checks stage 1's
-  own self-compilation fixed point.
 - Runs stage 2's unit tests, compiler drivers, and program and runtime tests,
   including a self-compilation fixed-point check with test library modules
   embedded.
@@ -90,5 +96,4 @@ establishes a fixed point for compiling the compiler's own source.
   programs, module cases, and command tests.
 
 The stage-specific checks live in
-[`bootstrap/tests/stage1.sh`](../bootstrap/tests/stage1.sh) and
 [`bootstrap/tests/stage2.sh`](../bootstrap/tests/stage2.sh).

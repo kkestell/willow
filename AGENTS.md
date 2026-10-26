@@ -6,10 +6,11 @@ Willow is a small, statically typed language with Python-like syntax. Source
 files use `.wlo`. `docs/spec.md` specifies the language.
 
 The self-hosting native compiler is in `compiler/`, its standard library in
-`lib/`, and its core runtime in `bootstrap/core/`. Stages 0 and 1 under
-`bootstrap/` build it from source. Every stage and every source uses the
-current language: a language change updates each stage that parses the changed
-construct and migrates every source that uses it.
+`lib/`, and its core runtime in `bootstrap/core/`. Stage 0 under `bootstrap/`
+builds stage 1 from the compiler's core modules and the L0 driver in
+`bootstrap/stage1/`; stage 1 then builds the compiler. Every stage and every
+source uses the current language: a language change updates each stage that
+parses the changed construct and migrates every source that uses it.
 
 - Build the small language we need now. This is an early implementation, not a
   production-hardening exercise.
@@ -19,11 +20,12 @@ construct and migrates every source that uses it.
 
 - Do less. Keep correct code simple, ordinary, and cheap to change. Follow KISS
   and YAGNI.
-- Write idiomatic code for each part: C in `bootstrap/stage0/`, the L0
-  subset of Willow in `bootstrap/core/` and `bootstrap/stage1/`,
-  and Willow in `compiler/` and `lib/`. Prefer plain data, direct functions,
-  and explicit control flow. Keep responsibilities clear without turning
-  every step into an abstraction.
+- Write idiomatic code for each part: C in `bootstrap/stage0/`; the L0 subset
+  of Willow in `bootstrap/core/` and the compiler modules that
+  `bootstrap/stage1/willow1.wlo` imports; and Willow in the rest of
+  `compiler/` and `lib/`. Prefer plain data, direct functions, and explicit
+  control flow. Keep responsibilities clear without turning every step into
+  an abstraction.
 - Solve the actual problem. Do not build frameworks, extension points,
   configuration systems, or fallback paths for hypothetical future needs.
 - Handle expected invalid source and ordinary operation failures clearly. Do not
