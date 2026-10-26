@@ -116,9 +116,12 @@ docker run --rm --platform linux/arm64 willow-bootstrap-arm64
 ```
 
 The image installs a C toolchain, QBE 1.3, libgc, pkg-config, and libcurl;
-OpenSSL supports the HTTP integration tests. The default command is
-`make bootstrap-test`. On an arm64 host, Docker needs amd64 emulation
-(Docker Desktop provides it), and the tests will run more slowly.
+OpenSSL supports the HTTP integration tests, and Git and procps provide
+commands exercised by the CLI and subprocess tests. Tests run as an
+unprivileged user so filesystem permission checks remain meaningful. The
+default command is `make bootstrap-test`. On an arm64 host, Docker needs
+amd64 emulation (Docker Desktop provides it), and the tests will run more
+slowly.
 
 The image contains a snapshot of the working tree, including uncommitted
 source changes. Host `build/` files and Git metadata are excluded. Builds
