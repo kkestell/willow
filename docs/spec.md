@@ -1986,6 +1986,9 @@ kind (`'<name>' is not an int argument`). Each call to `parse` returns a separat
 | `stat(path: str, follow_symlinks: bool = true) -> Stat` | Metadata for the file |
 | `exists(path: str) -> bool` | Whether the path exists, following symlinks |
 | `mkdir(path: str, parents: bool = false, exist_ok: bool = false) -> none` | Create a directory |
+| `chmod(path: str, mode: int) -> none` | Change permission bits, following symlinks |
+| `symlink(target: str, link: str) -> none` | Create a symbolic link containing `target` at `link` |
+| `readlink(path: str) -> str` | Read a symbolic link’s target without resolving it |
 | `remove(path: str) -> none` | Remove a file or symlink |
 | `rmdir(path: str) -> none` | Remove an empty directory |
 | `rename(source: str, destination: str) -> none` | Rename a file or directory, replacing the destination where POSIX allows it |
@@ -2061,6 +2064,12 @@ modification, in seconds since the Unix epoch. When `follow_symlinks` is true,
 `stat` describes the target of a symlink rather than the symlink itself. A size
 larger than the `int` range raises `OverflowError` with the message
 `file size out of range`.
+
+`chmod` passes the low 12 bits of `mode` to the system (permissions and special
+mode bits). `symlink` stores `target` as given, including a relative or missing
+target. `readlink` returns that text, which must be valid UTF-8. Their OS failures
+raise `OSError` with `cannot change mode of <path>: <reason>`,
+`cannot create link <link>: <reason>`, or `cannot read link <path>: <reason>`.
 
 `exists` returns false for a missing path, a symlink whose target does not exist,
 or a path that passes through something that is not a directory. Any other
@@ -2215,6 +2224,8 @@ def main():
 | `write(data: bytes) -> none` | Write all of `data` |
 | `write_text(text: str) -> none` | Write the UTF-8 encoding of `text`, without adding a newline |
 | `iter() -> Iterator[str]` | Iterate over lines from the current file position |
+| `seek(position: int) -> none` | Set the position in bytes from the start |
+| `tell() -> int` | The position of the next byte read or written, counting buffered data |
 | `flush() -> none` | Write any buffered data |
 | `close() -> none` | Flush and close the file |
 | `enter() -> File` | Return this open file for scoped use |
@@ -2234,6 +2245,14 @@ and returns `""` for an empty line. If a line is not valid UTF-8, `readline`
 consumes it and then raises `ValueError` with the message `invalid UTF-8`. Byte
 reads and line reads share the same file position. A read may return fewer octets
 than requested.
+
+`seek` flushes pending writes and discards buffered input after a successful
+seek. It may position beyond the end of a regular file. A negative position
+raises `ValueError` with `negative seek position`. `seek` and `tell` on a file
+that cannot seek, such as a pipe, raise `OSError` with
+`cannot seek <path>: <reason>`. Both reject a closed file with the usual
+closed-file error. A file opened in append mode still writes at its end after
+seeking.
 
 The standard handles share their buffers with `input`, `print`, and
 `sys.eprint`, so reads and writes through either keep their relative order.
@@ -2571,6 +2590,31 @@ These cases raise `ValueError`:
 A program that cannot be found or started raises `OSError` with the message
 `cannot run <program>: <reason>`.
 
+### `signals`
+
+| Function | Meaning |
+| --- | --- |
+| `wait(signal: str) -> Coroutine[none]` | Wait for the named signal without blocking other tasks |
+| `wait_blocking(signal: str) -> none` | Wait for the named signal, blocking the calling thread |
+
+The supported names are `SIGINT`, `SIGTERM`, and `SIGHUP`. Any other name raises
+`ValueError` with `unsupported signal '<name>'`. Waiting starts when the function
+runs (when the coroutine is awaited or started for `wait`), and ends on delivery
+or cancellation. Only one waiter may wait for a particular signal at a time;
+a second raises `RuntimeError` with `<name> already has a waiter`. Different
+signals can be waited for concurrently. Repeated deliveries of a signal while
+its waiter is active may coalesce into one delivery. Signals are delivered to
+Willow code at a safe point; no Willow code runs inside a native signal handler.
+
+A signal the program has never waited for keeps its default action. After the
+first wait starts, its handler stays installed for the rest of the process. A
+delivery between waits is recorded and completes the next wait immediately;
+repeated pending deliveries coalesce. Cancellation removes the waiter without
+discarding a pending delivery. Starting a child process does not give the child
+the parent's handlers or pending deliveries. `wait` is a cancellation point.
+`wait_blocking` also works in programs without tasks. An OS failure while setting up or waiting raises
+`OSError` with `cannot wait for signal: <reason>`.
+
 ### `sys`
 
 ```python
@@ -2599,6 +2643,8 @@ def main():
 | `getenv(name: str) -> str \| none` | The value of the environment variable `name`, or `none` if it is not set |
 | `environ() -> dict[str, str]` | A new dictionary of the environment variables, ordered by name |
 | `getcwd() -> str` | The absolute path of the working directory |
+| `chdir(path: str) -> none` | Change the process working directory |
+| `getpid() -> int` | The process ID |
 
 `args` raises `ValueError` with the message `invalid UTF-8` if an argument is not
 valid UTF-8.
@@ -2606,6 +2652,10 @@ valid UTF-8.
 `exit` takes a status from 0 through 255. Any other status raises `ValueError`
 with the message `exit status out of range`. `exit` flushes stdout and stderr and
 ends the program immediately, without running pending `finally` clauses.
+
+`chdir` affects the entire process, including all tasks. A path containing NUL
+raises `ValueError` with `path contains a NUL character`; an OS failure raises
+`OSError` with `cannot change directory to <path>: <reason>`.
 
 Changing the dictionary returned by `environ` does not change the environment.
 An environment variable name that is empty or contains `=` or a NUL character
@@ -2643,11 +2693,12 @@ Both functions flush stderr, which they write through the same buffer as
 | `monotonic() -> float` | Seconds on a clock that never goes backward, measured from an unspecified starting point |
 | `sleep(seconds: float) -> none` | Wait for at least `seconds` seconds |
 | `utc(timestamp: float) -> str` | The UTC time `timestamp`, formatted as `YYYY-MM-DDTHH:MM:SSZ` |
+| `utc_offset(timestamp: float) -> int` | Seconds east of UTC in the system’s local time zone at `timestamp`, including daylight saving time |
 
 `sleep` raises `ValueError` with the message
 `sleep length must be finite and nonnegative` if the duration is negative or not
-finite. `utc` rounds down to whole seconds and supports years 0001 through 9999.
-Timestamps outside that range raise `ValueError` with the message
+finite. `utc` and `utc_offset` round down to whole seconds and accept timestamps
+from UTC year 0001 through 9999. Timestamps outside that range raise `ValueError` with the message
 `timestamp out of range`.
 
 ## 15. Asynchronous execution

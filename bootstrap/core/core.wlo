@@ -23,6 +23,11 @@ extern def lstat(path: ptr, buf: ptr) -> cint
 extern def statx(directory: cint, path: ptr, flags: cint, mask: cint, buf: ptr) -> cint
 extern def mkdir(path: ptr, mode: cint) -> cint
 extern def rmdir(path: ptr) -> cint
+extern def chmod(path: ptr, mode: cint) -> cint
+extern def symlink(target: ptr, link: ptr) -> cint
+extern def readlink(path: ptr, buffer: ptr, size: int) -> int
+extern def chdir(path: ptr) -> cint
+extern def getpid() -> cint
 extern def rename(source: ptr, destination: ptr) -> cint
 extern def getenv(name: ptr) -> ptr
 extern def getcwd(buf: ptr, size: int) -> ptr
@@ -3187,6 +3192,15 @@ def http_cache() -> ptr:
     fail("RuntimeError", "HTTP library cache was not emitted")
     return __ptr(__word(0))
 
+# Stages 1 and 2 emit static self-pipe state and an allocation-free handler.
+def signal_storage() -> ptr:
+    fail("RuntimeError", "signal storage was not emitted")
+    return __ptr(__word(0))
+
+def signal_handler_address() -> ptr:
+    fail("RuntimeError", "signal handler was not emitted")
+    return __ptr(__word(0))
+
 def http_library_name() -> str:
     if __os == "darwin":
         return "/usr/lib/libcurl.4.dylib"
@@ -3370,6 +3384,9 @@ def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, 
     if code == 0:
         sigemptyset(signals)
         sigaddset(signals, 13)
+        sigaddset(signals, 1)
+        sigaddset(signals, 2)
+        sigaddset(signals, 15)
         code = posix_spawnattr_setsigdefault(attributes, signals)
     if code == 0:
         code = posix_spawnattr_setflags(attributes, 4)

@@ -1,0 +1,101 @@
+import aio
+import io
+import signals
+import subprocess
+import sys
+import time
+
+async def send(name: str):
+    await aio.sleep(0.0)
+    subprocess.run(["kill", "-s", name[3:], str(sys.getpid())])
+
+async def receive(name: str):
+    await signals.wait(name)
+    print(name)
+
+async def concurrent():
+    for name in ["SIGINT", "SIGTERM", "SIGHUP"]:
+        async with aio.task_group() as group:
+            group.start(send(name))
+            await signals.wait(name)
+            print(name)
+    async with aio.task_group() as group:
+        group.start(receive("SIGINT"))
+        group.start(receive("SIGHUP"))
+        group.start(send("SIGINT"))
+        group.start(send("SIGHUP"))
+    async with aio.task_group() as group:
+        group.start(signals.wait("SIGTERM"))
+        await aio.sleep(0.0)
+        try:
+            await signals.wait("SIGTERM")
+        except RuntimeError as error:
+            print(error.message)
+        group.cancel()
+    # Cancellation removed the registration, so another waiter can use it.
+    async with aio.task_group() as group:
+        group.start(send("SIGTERM"))
+        await signals.wait("SIGTERM")
+        print("registered again")
+    try:
+        await signals.wait("SIGKILL")
+    except ValueError as error:
+        print(error.message)
+
+async def cancel_wait():
+    async with aio.task_group() as group:
+        group.start(signals.wait("SIGTERM"))
+        await aio.sleep(0.0)
+        group.cancel()
+
+# Deliveries between waits are retained, including after cancellation.
+async def default_child(cancel: bool):
+    if cancel:
+        await cancel_wait()
+    else:
+        async with aio.task_group() as group:
+            group.start(send("SIGTERM"))
+            await signals.wait("SIGTERM")
+    subprocess.run(["kill", "-TERM", str(sys.getpid())])
+    await signals.wait("SIGTERM")
+    print("pending delivery")
+
+async def main():
+    var args = sys.args()
+    var mode = args[0]
+    if mode == "pipe":
+        try:
+            io.stdin().tell()
+        except OSError as error:
+            print(error.message.startswith("cannot seek <stdin>: "))
+        try:
+            io.stdin().seek(0)
+        except OSError as error:
+            print(error.message.startswith("cannot seek <stdin>: "))
+    else if mode == "output":
+        var output = io.stdout()
+        output.write_text("abc")
+        assert output.tell() == 3
+        output.seek(1)
+        output.write_text("Z")
+        assert output.tell() == 2
+    else if mode == "zone":
+        print(time.utc_offset(0.0))
+        print(time.utc_offset(1593561600.0))
+        print(time.utc_offset(-0.5) == time.utc_offset(-1.0))
+        for stamp in [-62135596801.0, 253402300800.0, float("nan"), float("inf")]:
+            try:
+                time.utc_offset(stamp)
+            except ValueError as error:
+                print(error.message)
+        print(time.utc_offset(-62135596800.0))
+        print(time.utc_offset(253402300799.5))
+    else if mode == "signals":
+        await concurrent()
+    else if mode == "default":
+        for child in ["default_unused", "default_delivery", "default_cancel"]:
+            print(subprocess.run(["./program", child]).returncode)
+    else if mode == "default_unused":
+        subprocess.run(["kill", "-TERM", str(sys.getpid())])
+    else:
+        await default_child(mode == "default_cancel")

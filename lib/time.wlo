@@ -1,6 +1,8 @@
 import core
 
 extern def nanosleep(request: ptr, remaining: ptr) -> cint
+extern def localtime_r(timestamp: ptr, result: ptr) -> ptr
+extern def tzset()
 
 def time() -> float:
     var stamp = __alloc_atomic(16)
@@ -57,3 +59,16 @@ def utc(timestamp: float) -> str:
     if month <= 2:
         year = year + 1
     return _digits(year, 4) + "-" + _digits(month, 2) + "-" + _digits(day, 2) + "T" + _digits(rest // 3600, 2) + ":" + _digits(rest % 3600 // 60, 2) + ":" + _digits(rest % 60, 2) + "Z"
+
+def utc_offset(timestamp: float) -> int:
+    var seconds = core.floor(timestamp)
+    if not (seconds >= -62135596800.0 and seconds <= 253402300799.0):
+        raise ValueError("timestamp out of range")
+    var stamp = __alloc_atomic(8)
+    __store8(stamp, 0, __word(int(seconds)))
+    # struct tm's nine ints are followed by padding and the LP64 tm_gmtoff.
+    var result = __alloc_atomic(56)
+    tzset()
+    if __addr_is_null(localtime_r(stamp, result)):
+        raise ValueError("timestamp out of range")
+    return __int(__load8(result, 40))

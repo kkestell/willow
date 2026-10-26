@@ -44,3 +44,10 @@ def getcwd() -> str:
     if __addr_is_null(core.getcwd(buf, 4096)):
         raise OSError("cannot get the working directory: " + core.os_reason())
     return core.str_from_bytes(buf, core.strlen(buf))
+
+def chdir(path: str):
+    if core.chdir(core.path_bytes(path)) != 0:
+        core.fail_os("change directory to", path)
+
+def getpid() -> int:
+    return core.getpid()

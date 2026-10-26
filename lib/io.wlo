@@ -45,6 +45,31 @@ class File:
         if self._fd == 1 and not core.stdout_flush():
             core.fail_os("write", self._path)
 
+    def seek(position: int):
+        if self._closed:
+            raise ValueError("I/O operation on closed file")
+        if position < 0:
+            raise ValueError("negative seek position")
+        self.flush()
+        if core.lseek(self._fd, position, 0) < 0:
+            core.fail_os("seek", self._path)
+        if self._mode == "r":
+            __store8(self._buffer, 0, __word(0))
+            __store8(self._buffer, 8, __word(0))
+            __store8(self._buffer, 16, __word(0))
+
+    def tell() -> int:
+        if self._closed:
+            raise ValueError("I/O operation on closed file")
+        var position = core.lseek(self._fd, 0, 1)
+        if position < 0:
+            core.fail_os("seek", self._path)
+        if self._mode == "r":
+            return position - __int(__load8(self._buffer, 8)) + __int(__load8(self._buffer, 0))
+        if self._fd == 1:
+            return position + __int(__load8(self._buffer, 0))
+        return position
+
     def _isatty() -> bool:
         if self._closed:
             raise ValueError("I/O operation on closed file")
