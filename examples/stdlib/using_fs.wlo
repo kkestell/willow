@@ -1,0 +1,36 @@
+import fs
+
+def main():
+    var directory = fs.temp_dir(prefix="willow-fs-")
+    var notes = fs.join(directory, "notes")
+    try:
+        fs.mkdir(notes)
+        var draft = fs.join(notes, "draft.txt")
+        fs.write_file(draft, "Remember the milk.\n")
+        print(fs.read_file(draft).strip())
+
+        var copy = fs.join(notes, "copy.txt")
+        var final = fs.join(notes, "shopping.txt")
+        fs.copy_file(draft, copy)
+        fs.rename(copy, final)
+        print(fs.basename(final))
+        print(fs.basename(fs.dirname(final)))
+
+        var info = fs.stat(final)
+        print(f"{info.kind}: {info.size} bytes")
+        print(", ".join(fs.listdir(notes)))
+        for path in fs.glob(fs.join(notes, "*.txt")):
+            print(f"match: {fs.basename(path)}")
+
+        var data = fs.join(notes, "data.bin")
+        fs.write_bytes(data, bytes([0, 127, 255]))
+        print(f"binary bytes: {len(fs.read_bytes(data))}")
+        print(fs.normpath("notes/./old/../shopping.txt"))
+        fs.remove(draft)
+        print(f"draft exists: {fs.exists(draft)}")
+    finally:
+        if fs.exists(notes):
+            for name in fs.listdir(notes):
+                fs.remove(fs.join(notes, name))
+            fs.rmdir(notes)
+        fs.rmdir(directory)

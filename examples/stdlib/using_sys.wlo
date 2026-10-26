@@ -1,0 +1,31 @@
+import fs
+import sys
+
+def main():
+    var args = sys.args()
+    if len(args) != 0:
+        sys.eprint("usage: using_sys (no arguments)")
+        sys.exit(2)
+    print(f"arguments: {len(args)}")
+    print(f"pid is positive: {sys.getpid() > 0}")
+
+    var environment = sys.environ()
+    var matches = true
+    for name in environment:
+        if sys.getenv(name) != environment[name]:
+            matches = false
+    print(f"environment snapshot matches: {matches}")
+
+    var original = sys.getcwd()
+    var directory = fs.temp_dir(prefix="willow-sys-")
+    try:
+        sys.chdir(directory)
+        fs.write_file("message.txt", "hello from the working directory")
+        print(fs.read_file("message.txt"))
+    finally:
+        sys.chdir(original)
+        var path = fs.join(directory, "message.txt")
+        if fs.exists(path):
+            fs.remove(path)
+        fs.rmdir(directory)
+    print(f"working directory restored: {sys.getcwd() == original}")

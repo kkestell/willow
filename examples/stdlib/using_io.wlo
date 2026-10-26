@@ -1,0 +1,33 @@
+import fs
+import io
+
+def main():
+    var directory = fs.temp_dir(prefix="willow-io-")
+    var path = fs.join(directory, "lines.txt")
+    try:
+        with io.open(path, mode="w") as output:
+            output.write_text("first\n")
+            output.write("second\n".encode())
+            print(f"bytes written: {output.tell()}")
+
+        with io.open(path, mode="a") as output:
+            output.write_text("third\n")
+
+        with io.open(path) as source:
+            var first = source.readline()
+            if first is not none:
+                print(first)
+            print(f"position: {source.tell()}")
+            source.seek(0)
+            print(source.read(5).decode())
+            source.seek(0)
+            for line in source:
+                print(f"line: {line}")
+
+        var console = io.stdout()
+        console.write_text("done\n")
+        console.flush()
+    finally:
+        if fs.exists(path):
+            fs.remove(path)
+        fs.rmdir(directory)
