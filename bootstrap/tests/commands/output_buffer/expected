@@ -1,0 +1,13 @@
+file print
+bytes
+stderr
+before child
+child
+return
+flush status 0
+exit
+exit status 7
+before exception
+prog.wlo:25:9: error: ValueError: boom
+  in main at prog.wlo:25:9
+exception status 1

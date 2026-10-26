@@ -1,0 +1,33 @@
+import fs
+import io
+import subprocess
+import sys
+
+def main():
+    var mode = sys.args()[0]
+    var out = io.stdout()
+    if mode == "flush":
+        var full = ""
+        for i in range(4095):
+            full = full + "x"
+        out.write_text(full)
+        out.write_text("y")
+        full = full + "y"
+        assert fs.read_file("captured") == full
+        print("partial")
+        io.stdout().flush()
+        assert fs.read_file("captured") == full + "partial\n"
+    else if mode == "exit":
+        out.write_text("exit\n")
+        sys.exit(7)
+    else if mode == "exception":
+        print("before exception")
+        raise ValueError("boom")
+    else:
+        out.write_text("file ")
+        print("print")
+        io.stdout().write("bytes\n".encode())
+        sys.eprint("stderr")
+        out.write_text("before child\n")
+        assert subprocess.spawn(["sh", "-c", "echo child"]).wait() == 0
+        out.write_text("return\n")

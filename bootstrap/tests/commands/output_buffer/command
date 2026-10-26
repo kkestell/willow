@@ -1,0 +1,8 @@
+"$WILLOW" build prog.wlo -o prog || exit 1
+./prog order
+./prog flush > captured
+echo "flush status $?"
+./prog exit
+echo "exit status $?"
+./prog exception
+echo "exception status $?"

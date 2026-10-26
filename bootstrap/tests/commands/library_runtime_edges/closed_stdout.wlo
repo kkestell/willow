@@ -1,11 +1,30 @@
 import core
 import io
+import subprocess
 
 def main():
     core.close(1)
     var caught = false
     try:
-        io.stdout().write_text("hello")
+        var out = io.stdout()
+        out.write_text("hello")
+        out.flush()
+    except OSError as error:
+        assert error.message == "cannot write <stdout>: Bad file descriptor"
+        caught = true
+    assert caught
+    io.stdout().write_text("pending")
+    caught = false
+    try:
+        subprocess.spawn(["sh", "-c", "echo unexpected >&2"])
+    except OSError as error:
+        assert error.message == "cannot write <stdout>: Bad file descriptor"
+        caught = true
+    assert caught
+    io.stdout().write_text("prompt: ")
+    caught = false
+    try:
+        io.stdin().readline()
     except OSError as error:
         assert error.message == "cannot write <stdout>: Bad file descriptor"
         caught = true

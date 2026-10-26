@@ -6,6 +6,7 @@ extern def write(fd: cint, buf: ptr, count: int) -> int
 extern def exit(status: cint)
 extern def memcpy(dest: ptr, src: ptr, count: int) -> ptr
 extern def memcmp(a: ptr, b: ptr, count: int) -> cint
+extern def memchr(buf: ptr, byte: cint, count: int) -> ptr
 extern def snprintf(buf: ptr, size: int, format: ptr, ...) -> cint
 extern def signal(sig: cint, handler: ptr) -> ptr
 extern def strlen(s: ptr) -> int
@@ -267,9 +268,10 @@ def coroutine_switch(current: CoroutineContext, resumed: CoroutineContext):
 # is 1 on both Linux and Darwin.
 def init():
     signal(13, __ptr(__word(1)))
+    __store8(stdout_buffer(), 8, __word(isatty(1) == 1))
 
-# Both File writes and built-in output use this unbuffered path. The caller
-# decides whether a failed write raises OSError or ends the program.
+# Raw writes bypass stdout buffering. The caller decides whether a failed
+# write raises OSError or ends the program.
 def write_bytes(fd: int, buf: ptr, count: int) -> bool:
     var done = 0
     while done < count:
@@ -279,13 +281,61 @@ def write_bytes(fd: int, buf: ptr, count: int) -> bool:
         done = done + written
     return true
 
-# Failing to write stdout or stderr ends the program with status 1 (spec §10).
+# All compilers replace this body with shared storage: a byte count, a
+# terminal flag, and 4096 bytes. File handles and print share this buffer.
+def stdout_buffer() -> ptr:
+    fail("RuntimeError", "stdout buffer was not emitted")
+    return __ptr(__word(0))
+
+def stdout_flush() -> bool:
+    var buffer = stdout_buffer()
+    var count = __int(__load8(buffer, 0))
+    __store8(buffer, 0, __word(0))
+    return write_bytes(1, __offset(buffer, 16), count)
+
+# Failing to write built-in output or an implicit flush ends the program.
 # The report itself is lost when stderr is the stream that failed.
+def output_failed():
+    var report = "error: cannot write output: " + os_reason() + "\n"
+    write_bytes(2, str_bytes(report), str_size(report))
+    exit(1)
+
+def flush_stdout():
+    if not stdout_flush():
+        output_failed()
+
+def file_write(fd: int, buf: ptr, count: int) -> bool:
+    if fd == 2 and not stdout_flush():
+        fail_os("write", "<stdout>")
+    if fd != 1:
+        return write_bytes(fd, buf, count)
+    var buffer = stdout_buffer()
+    var used = __int(__load8(buffer, 0))
+    var line_flush = __bool(__load8(buffer, 8)) and not __addr_is_null(memchr(buf, 10, count))
+    var done = 0
+    while done < count:
+        if used == 0 and count - done >= 4096:
+            return write_bytes(1, __offset(buf, done), count - done)
+        var take = count - done
+        if take > 4096 - used:
+            take = 4096 - used
+        memcpy(__offset(buffer, 16 + used), __offset(buf, done), take)
+        used = used + take
+        done = done + take
+        __store8(buffer, 0, __word(used))
+        if used == 4096:
+            if not stdout_flush():
+                return false
+            used = 0
+    if line_flush:
+        return stdout_flush()
+    return true
+
 def write_all(fd: int, buf: ptr, count: int):
-    if not write_bytes(fd, buf, count):
-        var report = "error: cannot write output: " + os_reason() + "\n"
-        write_bytes(2, str_bytes(report), str_size(report))
-        exit(1)
+    if fd == 2:
+        flush_stdout()
+    if not file_write(fd, buf, count):
+        output_failed()
 
 def write_str(fd: int, s: str):
     write_all(fd, str_bytes(s), str_size(s))
@@ -2644,6 +2694,11 @@ def file_buffer() -> ptr:
     return buffer
 
 def fill_buffer(fd: int, buffer: ptr, path: str, fatal: bool) -> int:
+    if fd == 0:
+        if fatal:
+            flush_stdout()
+        else if not stdout_flush():
+            fail_os("write", "<stdout>")
     __store8(buffer, 16, __word(1))
     var count = read(fd, __offset(buffer, 24), 4096)
     if count < 0:
@@ -2715,10 +2770,10 @@ def sys_args(argc: int, argv: ptr) -> ptr:
         i = i + 1
     return args
 
-# Output is unbuffered, so there is nothing to flush.
 def sys_exit(status: int):
     if status < 0 or status > 255:
         fail("ValueError", "exit status out of range")
+    flush_stdout()
     exit(status)
 
 # The path's bytes, which libc reads up to the string's trailing zero byte.
@@ -3280,6 +3335,8 @@ def process_start(args: list[str], cwd: str | none, env: dict[str, str] | none, 
             if directory == "":
                 directory = "."
             candidates.append(directory + "/" + args[0])
+    if not stdout_flush():
+        fail_os("write", "<stdout>")
     # The opaque spawn structures fit in 512 bytes on Linux and Darwin;
     # sigset_t needs 128. No Willow code runs in the spawned child.
     var actions = __alloc_atomic(512)

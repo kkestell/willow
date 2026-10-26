@@ -28,12 +28,12 @@ class File:
 
     def write(data: bytes):
         self._usable(false)
-        if not core.write_bytes(self._fd, __offset(__ptr(__word(data)), 24), len(data)):
+        if not core.file_write(self._fd, __offset(__ptr(__word(data)), 24), len(data)):
             core.fail_os("write", self._path)
 
     def write_text(text: str):
         self._usable(false)
-        if not core.write_bytes(self._fd, core.str_bytes(text), core.str_size(text)):
+        if not core.file_write(self._fd, core.str_bytes(text), core.str_size(text)):
             core.fail_os("write", self._path)
 
     def iter() -> Iterator[str]:
@@ -42,6 +42,8 @@ class File:
     def flush():
         if self._closed:
             raise ValueError("I/O operation on closed file")
+        if self._fd == 1 and not core.stdout_flush():
+            core.fail_os("write", self._path)
 
     def _isatty() -> bool:
         if self._closed:
@@ -115,7 +117,7 @@ def stdin() -> File:
     return File(0, "<stdin>", "r", true, core.stdin_buffer())
 
 def stdout() -> File:
-    return File(1, "<stdout>", "w", true, core.file_buffer())
+    return File(1, "<stdout>", "w", true, core.stdout_buffer())
 
 def stderr() -> File:
     return File(2, "<stderr>", "w", true, core.file_buffer())

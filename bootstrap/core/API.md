@@ -69,7 +69,7 @@ Fatal failures of L0:
 | `bool_to_str(b: bool) -> str` | `true` or `false` |
 | `enum_to_str(descriptor: ptr, ordinal: int) -> str` | The member's text from the enum's descriptor |
 | `union_to_str(value: ptr) -> str` | The text of a printable union value; `none` for 0 |
-| `print_str(s: str)` | Writes `s` and a newline to stdout; reports a failed write and exits with status 1 |
+| `print_str(s: str)` | Buffers `s` and a newline on stdout; reports a failed write and exits with status 1 |
 | `eprint_str(s: str)` | Writes `s` and a newline to stderr, for `sys.eprint`; exits with status 1 if the write fails |
 
 `print(v)`, `sys.eprint(v)`, `str(v)`, and f-string fields convert `v` with
@@ -181,6 +181,15 @@ literal `"none"`.
 | --- | --- |
 | `os() -> str` | `__os`, the target's operating system |
 | `run(args: list[str]) -> int` | Runs `args[0]`, searched for in `PATH`, with the remaining arguments and no shell, through the shared `process_start` helper using `posix_spawn`; the child inherits stdin, stdout, stderr, and the environment, with SIGPIPE's default action. Waits and returns the exit status, or 128 plus the signal number if a signal ended the child |
+
+Stdout has one 4096-byte buffer shared by `print` and `io.stdout()` handles.
+`init` checks once whether stdout is a terminal; terminal writes containing a
+newline flush immediately. All stages emit the buffer's zeroed storage and
+flush it on normal program return.
+`stdout_flush` returns success for catchable File and spawn failures;
+`flush_stdout` reports a failure and exits with status 1 for built-in output,
+`input`, and program termination. Writes to stderr flush stdout first.
+`sys_exit` and `process_start` also flush before exiting or starting a child.
 
 ## Exceptions under stages 1 and 2
 
