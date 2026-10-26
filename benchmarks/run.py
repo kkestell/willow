@@ -4,8 +4,9 @@ program's output against benchmarks/expected.
 
 By default it times only Willow and prints one line per benchmark, for
 comparing Willow with itself before and after a change. `--all` also times
-the other languages, which needs cc on PATH. `--readme` times every
-language and replaces the results table in README.md.
+the other languages, which needs cc on PATH. `--readme` writes the new times
+into the results table in README.md and keeps the table's other times, so
+`--readme` alone updates the Willow column and `--readme --all` every column.
 
 Run it from anywhere after `make`.
 """
@@ -107,6 +108,19 @@ def machine():
     return f"{cpu.strip()}, {platform.system()}"
 
 
+def readme_times(table):
+    """Returns the times in the README results table, keyed by benchmark title
+    and then language."""
+    titles = [title for _, title, _ in BENCHMARKS]
+    times = {}
+    for line in table.splitlines():
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        title = cells[0].split(" (")[0]
+        if title in titles:
+            times[title] = {language: float(cell) for language, cell in zip(LANGUAGES, cells[1:])}
+    return times
+
+
 def table(results):
     lines = [
         f"Seconds of wall-clock time, best of {RUNS} runs, on {machine()}.",
@@ -125,7 +139,7 @@ def table(results):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--all", action="store_true", help="also time the other languages")
-    parser.add_argument("--readme", action="store_true", help="time every language and update README.md")
+    parser.add_argument("--readme", action="store_true", help="write the new times into README.md")
     parser.add_argument("names", nargs="*", metavar="benchmark", help="benchmarks to run (default: all)")
     args = parser.parse_args()
 
@@ -133,9 +147,7 @@ def main():
     unknown = [name for name in args.names if name not in titles]
     if unknown:
         parser.error(f"unknown benchmark {', '.join(unknown)}; choose from {', '.join(titles)}")
-    if args.readme and args.names:
-        parser.error("--readme runs every benchmark")
-    languages = LANGUAGES if args.all or args.readme else ["Willow"]
+    languages = LANGUAGES if args.all else ["Willow"]
 
     BUILD.mkdir(exist_ok=True)
     results = {}
@@ -166,8 +178,14 @@ def main():
     if args.readme:
         text = README.read_text()
         before, rest = text.split(START, 1)
-        _, after = rest.split(END, 1)
-        README.write_text(f"{before}{START}\n{table(results)}\n{END}{after}")
+        current, after = rest.split(END, 1)
+        times = readme_times(current)
+        for title, measured in results.items():
+            times.setdefault(title, {}).update(measured)
+        missing = [title for _, title, _ in BENCHMARKS if len(times.get(title, {})) < len(LANGUAGES)]
+        if missing:
+            sys.exit(f"README.md has no times for {', '.join(missing)}; run them with --all")
+        README.write_text(f"{before}{START}\n{table(times)}\n{END}{after}")
         print(f"updated {README.relative_to(ROOT)}")
 
 
