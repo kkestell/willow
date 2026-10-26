@@ -224,7 +224,7 @@ class Parser:
                 if arg.startswith("--"):
                     name = arg[2:]
                     equal = name.find("=")
-                    if equal >= 0:
+                    if equal is not none:
                         value = name[equal + 1:]
                         name = name[:equal]
                     entry = self._by_name.get(name)

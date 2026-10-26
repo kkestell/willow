@@ -9,7 +9,7 @@ import time
 async def serve(connection: aio.Connection, log: list[str]):
     with connection:
         data = bytes([])
-        while data.decode().find("\r\n\r\n") < 0:
+        while data.decode().find("\r\n\r\n") is none:
             chunk = await connection.recv(4096)
             if len(chunk) == 0:
                 return

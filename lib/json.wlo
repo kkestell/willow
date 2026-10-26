@@ -43,7 +43,7 @@ class _Parser:
             if c == "":
                 raise self.error("", self.pos)
             digit = "0123456789abcdef".find(c.lower())
-            if digit == -1:
+            if digit is none:
                 raise self.error("invalid escape", start)
             code = code * 16 + digit
             self.pos = self.pos + 1

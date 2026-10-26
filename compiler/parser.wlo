@@ -1137,7 +1137,7 @@ def parse_format_spec(text: str) -> ast.FormatSpec:
         spec.kind = text[-1]
         text = text[:-1]
     dot = text.find(".")
-    if dot >= 0:
+    if dot is not none:
         spec.precision = int(text[dot + 1:])
         text = text[:dot]
     if text != "":

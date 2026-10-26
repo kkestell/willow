@@ -33,7 +33,7 @@ def handle(connection: net.Connection, port: int):
     headers: dict[str, str] = {}
     for line in lines[1:]:
         split = line.find(":")
-        if split >= 0:
+        if split is not none:
             headers[line[:split].lower()] = line[split + 1:].strip()
     wanted = int(headers.get("content-length", "0"))
     body = reader.read_exactly(wanted)

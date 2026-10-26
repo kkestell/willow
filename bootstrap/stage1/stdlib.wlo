@@ -124,7 +124,7 @@ def str_methods() -> dict[str, Builtin]:
     table: dict[str, Builtin] = {}
     text = prim("str")
     flag = prim("bool")
-    add(table, "find", [arg("sub", text)], prim("int"))
+    add(table, "find", [arg("sub", text)], optional("int"))
     add(table, "split", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
     add(table, "rsplit", [defaulted("sep", optional("str"), none_default()), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("str"))
     add(table, "splitlines", [defaulted("keepends", flag, bool_default(false))], list_of("str"))
@@ -153,7 +153,7 @@ def bytes_methods() -> dict[str, Builtin]:
     table: dict[str, Builtin] = {}
     data = prim("bytes")
     add(table, "decode", [], prim("str"))
-    add(table, "find", [arg("sub", data)], prim("int"))
+    add(table, "find", [arg("sub", data)], optional("int"))
     add(table, "startswith", [arg("prefix", data)], prim("bool"))
     add(table, "endswith", [arg("suffix", data)], prim("bool"))
     add(table, "split", [arg("sep", data), defaulted("maxsplit", prim("int"), int_default("-1"))], list_of("bytes"))

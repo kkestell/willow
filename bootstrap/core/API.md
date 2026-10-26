@@ -101,7 +101,7 @@ literal `"none"`.
 | `str_index(s: str, i: int) -> str` | `s[i]` |
 | `str_slice(s: str, start: int, stop: int) -> str` | `s[start:stop]` |
 | `str_contains(s: str, sub: str) -> bool` | `sub in s` |
-| `str_find(s: str, sub: str) -> int` | `s.find(sub)` |
+| `str_find(s: str, sub: str) -> int \| none` | `s.find(sub)` |
 | `str_startswith(s: str, prefix: str) -> bool` | `s.startswith(prefix)` |
 | `str_endswith(s: str, suffix: str) -> bool` | `s.endswith(suffix)` |
 | `str_replace(s: str, old: str, new: str) -> str` | `s.replace(old, new)` |

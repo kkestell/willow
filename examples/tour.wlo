@@ -74,6 +74,8 @@ def split_millis(text: str) -> tuple[str, int | none]:
     if not text.endswith("ms]"):
         return (text, none)
     start = text.find(" [")
+    if start is none:
+        return (text, none)
     return (text[:start], int(text[start + 2:-3]))
 
 def parse_line(host: str, line: str, number: int) -> Entry:

@@ -1018,7 +1018,7 @@ static MethodSignature method_signature(const Type *ty, String name) {
         if (eq(name, "find")) {
             sig.function = "str_find";
             vec_push(sig.params, TY(Str));
-            sig.ret = TY(Int);
+            sig.ret = union_two(TY(Int), TY(None));
         } else if (eq(name, "startswith")) {
             sig.function = "str_startswith";
             vec_push(sig.params, TY(Str));
